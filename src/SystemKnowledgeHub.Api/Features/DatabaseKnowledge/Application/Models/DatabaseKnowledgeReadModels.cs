@@ -1,0 +1,103 @@
+namespace SystemKnowledgeHub.Api.Features.DatabaseKnowledge.Application.Models;
+
+public sealed record SystemContext(long Id, string Name);
+
+public sealed record DatabaseSourceContext(long Id, string Name, string Engine);
+
+public sealed record DatabaseObjectOverview(
+    string QualifiedName,
+    string ObjectType,
+    string? BusinessDescription,
+    string AccessMode,
+    string KnowledgeStatus);
+
+public sealed record DatabaseObjectMetadata(
+    long? EstimatedRows,
+    IReadOnlyList<string> PrimaryKeyColumns,
+    IReadOnlyList<string> BusinessKeyColumns);
+
+public sealed record DatabaseColumnSummary(
+    long Id,
+    int OrdinalPosition,
+    string ColumnName,
+    string DataType,
+    bool Nullable,
+    string? BusinessDescription,
+    int EvidenceCount,
+    int UnknownCount,
+    string KnowledgeStatus,
+    bool Selected);
+
+public sealed record UsedByFunctionSummary(
+    long Id,
+    string Name,
+    string RelationType,
+    string? Reference);
+
+public sealed record DatabaseObjectContextRail(
+    IReadOnlyList<UsedByFunctionSummary> UsedByFunctions,
+    int RelatedRuleCount,
+    int IntegrationCount,
+    int OpenUnknownCount);
+
+public sealed record SelectedColumnDrawer(long ColumnId);
+
+public sealed record DatabaseObjectDetailResponse(
+    long Id,
+    SystemContext System,
+    DatabaseSourceContext DatabaseSource,
+    string ConcurrencyToken,
+    DatabaseObjectOverview Overview,
+    DatabaseObjectMetadata Metadata,
+    IReadOnlyList<DatabaseColumnSummary> Columns,
+    DatabaseObjectContextRail ContextRail,
+    SelectedColumnDrawer? SelectedColumnDrawer,
+    IReadOnlyList<string> AvailableActions);
+
+public sealed record ColumnParent(long DatabaseObjectId, string QualifiedName);
+
+public sealed record ColumnDatabaseMetadata(
+    string ColumnName,
+    string DataType,
+    bool Nullable,
+    string? DefaultValue,
+    int OrdinalPosition);
+
+public sealed record ColumnBusinessKnowledge(string? Description, string KnowledgeStatus);
+
+public sealed record ColumnKnownValueResponse(long Id, string Value, string Meaning);
+
+public sealed record ColumnEvidenceSummary(
+    long Id,
+    string EvidenceType,
+    string SourceTitle,
+    string SupportReason);
+
+public sealed record RelatedObjectSummary(string Type, long Id, string Title);
+
+public sealed record ColumnRelationSummary(
+    long Id,
+    string RelationType,
+    RelatedObjectSummary OtherObject);
+
+public sealed record ColumnUnknownItemSummary(
+    long Id,
+    string Question,
+    string Status);
+
+public sealed record DatabaseColumnDetailResponse(
+    long Id,
+    ColumnParent Parent,
+    SystemContext System,
+    string ConcurrencyToken,
+    ColumnDatabaseMetadata DatabaseMetadata,
+    ColumnBusinessKnowledge BusinessKnowledge,
+    IReadOnlyList<ColumnKnownValueResponse> KnownValues,
+    IReadOnlyList<ColumnEvidenceSummary> Evidence,
+    IReadOnlyList<ColumnRelationSummary> Relations,
+    IReadOnlyList<ColumnUnknownItemSummary> UnknownItems,
+    IReadOnlyList<string> AvailableActions);
+
+public sealed record DatabaseObjectDetailQueryResult(
+    DatabaseObjectDetailResponse? Detail,
+    bool SelectedColumnInvalid);

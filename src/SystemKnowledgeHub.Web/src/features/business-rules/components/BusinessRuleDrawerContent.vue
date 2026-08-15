@@ -1,0 +1,2 @@
+<script setup lang="ts">import type{OverlayDescriptor}from'../../../app/stores/overlays';import BusinessRulePreviewDrawer from'./BusinessRulePreviewDrawer.vue';import EditBusinessRuleDrawer from'./EditBusinessRuleDrawer.vue';defineProps<{drawer:OverlayDescriptor}>()</script>
+<template><BusinessRulePreviewDrawer v-if="drawer.kind==='business-rule'" :rule-id="drawer.id"/><EditBusinessRuleDrawer v-else-if="drawer.kind==='edit-business-rule'" :rule-id="drawer.id"/></template>

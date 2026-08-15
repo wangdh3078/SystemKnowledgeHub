@@ -1,0 +1,2 @@
+<script setup lang="ts">import type{OverlayDescriptor}from'../../../app/stores/overlays';import AddRelationshipDrawer from'./AddRelationshipDrawer.vue';import RelationshipDetailDrawer from'./RelationshipDetailDrawer.vue';defineProps<{drawer:OverlayDescriptor}>()</script>
+<template><AddRelationshipDrawer v-if="drawer.kind==='add-relationship'" :payload="drawer.payload"/><RelationshipDetailDrawer v-else-if="drawer.kind==='relationship'" :relationship-id="drawer.id"/></template>

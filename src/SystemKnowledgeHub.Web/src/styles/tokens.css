@@ -1,0 +1,51 @@
+:root {
+  color-scheme: light;
+
+  --font-sans: Inter, 'SF Pro Text', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+
+  --color-primary: #4f46e5;
+  --color-primary-hover: #4338ca;
+  --color-primary-soft: #eef2ff;
+  --color-ink: #172033;
+  --color-text: #344054;
+  --color-muted: #667085;
+  --color-subtle: #98a2b3;
+  --color-border: #dfe4ec;
+  --color-border-strong: #cfd6e2;
+  --color-surface: #ffffff;
+  --color-surface-subtle: #f8f9fc;
+  --color-canvas: #f3f5f9;
+  --color-selected: #eef2ff;
+  --color-hover: #f5f7fb;
+
+  --status-unknown: #8b95a7;
+  --status-unknown-surface: #f2f4f7;
+  --status-inferred: #b7791f;
+  --status-inferred-surface: #fff8e7;
+  --status-confirmed: #16845b;
+  --status-confirmed-surface: #e9f7f1;
+  --status-danger: #c2415d;
+  --status-danger-surface: #fff1f4;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  --radius-sm: 4px;
+  --radius-md: 7px;
+  --radius-lg: 10px;
+
+  --sidebar-width: 196px;
+  --topbar-height: 58px;
+  --context-rail-width: 356px;
+  --content-max-width: 1500px;
+  --drawer-width: 500px;
+
+  --shadow-drawer: -10px 0 30px rgb(35 43 69 / 10%);
+  --transition-fast: 160ms ease;
+}

@@ -1,0 +1,31 @@
+# .NET
+**/bin/
+**/obj/
+TestResults/
+*.trx
+
+# SQLite runtime data
+**/App_Data/
+*.db
+*.db-shm
+*.db-wal
+
+# Frontend
+**/node_modules/
+**/dist/
+**/coverage/
+*.tsbuildinfo
+
+# IDE and OS
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+.DS_Store
+Thumbs.db
+
+# Local runtime logs
+logs/
+artifacts/
+*.log
