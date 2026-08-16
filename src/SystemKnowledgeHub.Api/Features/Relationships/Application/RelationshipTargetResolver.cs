@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SystemKnowledgeHub.Api.Features.Relationships.Application.Models;
 using SystemKnowledgeHub.Api.Features.Relationships.Domain;
+using SystemKnowledgeHub.Api.Features.Integrations.Domain;
 using SystemKnowledgeHub.Api.Persistence;
 
 namespace SystemKnowledgeHub.Api.Features.Relationships.Application;
@@ -51,6 +52,7 @@ public sealed class RelationshipTargetResolver(KnowledgeHubDbContext dbContext)
                     item.Name, "业务规则", item.Description, item.KnowledgeStatus.ToString(),
                     new[] { new SystemContextResponse(item.System.Id, item.System.Name) }))
                 .SingleOrDefaultAsync(cancellationToken),
+            KnowledgeTargetType.Integration => await ResolveIntegration(id, cancellationToken),
             _ => null,
         };
     }
@@ -127,7 +129,29 @@ public sealed class RelationshipTargetResolver(KnowledgeHubDbContext dbContext)
                     item.Name, "业务规则", item.Description, item.KnowledgeStatus.ToString()))
                 .ToArrayAsync(cancellationToken));
         }
+        if (allowedTypes.Contains(KnowledgeTargetType.Integration))
+        {
+            var integrations = await dbContext.Integrations.AsNoTracking()
+                .Include(item => item.SourceSystem).Include(item => item.TargetSystem)
+                .Where(item => item.SourceSystemId == systemId || item.TargetSystemId == systemId)
+                .Where(item => pattern == null || EF.Functions.Like(item.Name, pattern) || (item.Purpose != null && EF.Functions.Like(item.Purpose, pattern)))
+                .ToArrayAsync(cancellationToken);
+            results.AddRange(integrations.Select(item => new TargetPreviewResponse(
+                new TargetReferenceResponse("Integration", item.Id), IntegrationSystems(item), item.Name, "集成关系", item.Purpose, item.KnowledgeStatus.ToString())));
+        }
 
         return results.OrderBy(item => item.Title, StringComparer.OrdinalIgnoreCase).ToArray();
     }
+
+    private async Task<RelationshipEndpointContext?> ResolveIntegration(long id, CancellationToken cancellationToken)
+    {
+        var integration = await dbContext.Integrations.AsNoTracking().Include(item => item.SourceSystem).Include(item => item.TargetSystem)
+            .SingleOrDefaultAsync(item => item.Id == id, cancellationToken);
+        return integration is null ? null : new RelationshipEndpointContext(integration.Name, "集成关系", integration.Purpose,
+            integration.KnowledgeStatus.ToString(), IntegrationSystems(integration));
+    }
+
+    private static SystemContextResponse[] IntegrationSystems(Integration integration) =>
+        new[] { integration.SourceSystem, integration.TargetSystem }.Where(item => item is not null)
+            .Select(item => new SystemContextResponse(item!.Id, item.Name)).DistinctBy(item => item.Id).ToArray();
 }

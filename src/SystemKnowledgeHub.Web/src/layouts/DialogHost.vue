@@ -9,6 +9,7 @@ const hasFeatureDialog = computed(() =>
   || overlayStore.currentDialog?.kind === 'create-system'
   || overlayStore.currentDialog?.kind === 'create-business-function'
   || overlayStore.currentDialog?.kind === 'create-business-rule'
+  || overlayStore.currentDialog?.kind === 'create-integration'
   || overlayStore.currentDialog?.kind === 'change-knowledge-status'
   || overlayStore.currentDialog?.kind === 'create-unknown-item',
 )

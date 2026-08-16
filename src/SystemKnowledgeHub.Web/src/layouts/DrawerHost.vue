@@ -6,6 +6,7 @@ import EvidenceDrawerContent from '../features/evidence/components/EvidenceDrawe
 import RelationshipDrawerContent from '../features/relationships/components/RelationshipDrawerContent.vue'
 import BusinessRuleDrawerContent from '../features/business-rules/components/BusinessRuleDrawerContent.vue'
 import ColumnDetailDrawer from '../features/database-knowledge/components/ColumnDetailDrawer.vue'
+import IntegrationDrawerContent from '../features/integrations/components/IntegrationDrawerContent.vue'
 
 const overlayStore = useOverlayStore()
 
@@ -44,6 +45,10 @@ watch(
     />
     <BusinessRuleDrawerContent
       v-else-if="overlayStore.currentDrawer && ['business-rule', 'edit-business-rule'].includes(overlayStore.currentDrawer.kind)"
+      :drawer="overlayStore.currentDrawer"
+    />
+    <IntegrationDrawerContent
+      v-else-if="overlayStore.currentDrawer && ['integration', 'edit-integration'].includes(overlayStore.currentDrawer.kind)"
       :drawer="overlayStore.currentDrawer"
     />
     <ColumnDetailDrawer

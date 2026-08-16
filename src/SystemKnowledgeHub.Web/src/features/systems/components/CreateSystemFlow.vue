@@ -19,7 +19,7 @@ function handleCreated(system: CreateSystemResponse): void {
 
 <template>
   <Teleport v-if="overlayStore.isDialogOpen" defer to="#dialog-feature-content">
-    <CreateKnowledgeObjectChooser v-if="kind === 'create-knowledge-object'" :enabled-kinds="['system', 'business-rule']" />
+    <CreateKnowledgeObjectChooser v-if="kind === 'create-knowledge-object'" :enabled-kinds="['system', 'business-rule', 'integration']" />
     <CreateSystemDialog v-else-if="kind === 'create-system'" @created="handleCreated" />
   </Teleport>
 </template>

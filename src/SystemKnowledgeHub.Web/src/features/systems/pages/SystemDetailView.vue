@@ -5,6 +5,7 @@ import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { parseSafeApiId } from '../../../api/contracts/id'
 import { useActorStore } from '../../../app/stores/actor'
+import { useOverlayStore } from '../../../app/stores/overlays'
 import KnowledgeStatusBadge from '../../../components/data-display/KnowledgeStatusBadge.vue'
 import EmptyState from '../../../components/feedback/EmptyState.vue'
 import ErrorState from '../../../components/feedback/ErrorState.vue'
@@ -21,6 +22,7 @@ import { useSystemDetail, type SystemOverviewValues } from '../composables/useSy
 const route = useRoute()
 const router = useRouter()
 const actorStore = useActorStore()
+const overlayStore = useOverlayStore()
 const overviewEditing = ref(false)
 const {
   detail,
@@ -94,6 +96,10 @@ function handleBusinessFunctionRowClick(row: SystemBusinessFunctionSummary): voi
 
 function handleDatabaseObjectRowClick(row: SystemDatabaseObjectSummary): void {
   openDatabaseObject(row.id)
+}
+
+function openIntegration(id: number): void {
+  overlayStore.openDrawer({ kind: 'integration', id, mode: 'read' })
 }
 
 watch(() => route.params.id, () => void loadRoute())
@@ -238,7 +244,12 @@ onMounted(() => void loadRoute())
       <section class="system-detail-section system-detail-section--split">
         <div>
           <div class="system-section-heading"><h2>集成关系</h2><span>{{ detail.integrations.length }} 项</span></div>
-          <div class="system-compact-empty"><el-icon><Link /></el-icon><span>暂无集成关系记录</span></div>
+          <div v-if="detail.integrations.length" class="system-integration-list">
+            <button v-for="integration in detail.integrations" :key="integration.id" type="button" @click="openIntegration(integration.id)">
+              <el-icon><Link /></el-icon><span><strong class="technical-text">{{ integration.name }}</strong><small>{{ integration.integrationType }} · {{ integration.relatedSystem }}</small></span><KnowledgeStatusBadge :status="integration.knowledgeStatus"/><el-icon><ArrowRight /></el-icon>
+            </button>
+          </div>
+          <div v-else class="system-compact-empty"><el-icon><Link /></el-icon><span>暂无集成关系记录</span></div>
         </div>
         <div>
           <div class="system-section-heading"><h2>代码 / 仓库</h2></div>

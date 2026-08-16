@@ -161,6 +161,23 @@ public sealed class SystemQueries(
                 0))
             .ToArrayAsync(cancellationToken);
 
+        var integrations = await dbContext.Integrations
+            .AsNoTracking()
+            .Include(item => item.SourceSystem)
+            .Include(item => item.TargetSystem)
+            .Where(item => item.SourceSystemId == systemId || item.TargetSystemId == systemId)
+            .OrderBy(item => item.Name)
+            .ToArrayAsync(cancellationToken);
+        var integrationRows = integrations.Select(item => new SystemIntegrationSummaryResponse(
+            item.Id, item.Name, item.IntegrationType.ToString(),
+            item.SourceSystemId == systemId ? item.TargetPartyName : item.SourcePartyName,
+            item.KnowledgeStatus.ToString())).ToArray();
+        var relatedSystems = integrations.SelectMany(item => new[]
+            {
+                item.SourceSystemId == systemId ? item.TargetSystem : item.SourceSystem,
+            }).Where(item => item is not null).Select(item => new RelatedSystemSummaryResponse(item!.Id, item.Name))
+            .DistinctBy(item => item.Id).ToArray();
+
         var databaseObjectStatuses = await dbContext.DatabaseObjects
             .AsNoTracking()
             .Where(databaseObject => databaseObject.DatabaseSource.SystemId == systemId)
@@ -193,6 +210,7 @@ public sealed class SystemQueries(
         var statuses = databaseObjectStatuses
             .Concat(databaseColumnStatuses)
             .Concat(businessFunctionStatuses)
+            .Concat(integrations.Select(item => item.KnowledgeStatus))
             .Append(system.KnowledgeStatus)
             .ToArray();
         var knowledgeGaps = missingColumnDescriptionCount == 0
@@ -221,11 +239,11 @@ public sealed class SystemQueries(
                 0),
             businessFunctions,
             databaseObjects,
-            Array.Empty<SystemIntegrationSummaryResponse>(),
+            integrationRows,
             Array.Empty<SystemUnknownItemSummaryResponse>(),
             new SystemContextRailResponse(
-                Array.Empty<RelatedSystemSummaryResponse>(),
-                0,
+                relatedSystems,
+                integrations.Length,
                 mainDatabase,
                 0,
                 knowledgeGaps),

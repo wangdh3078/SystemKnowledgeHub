@@ -26,11 +26,6 @@ public sealed class KnowledgeStatusService(
         {
             return Unsupported(request.Target!, "DatabaseSource 第一版不持久化 KnowledgeStatus，不允许变更。");
         }
-        if (targetType == KnowledgeStatusTargetType.Integration)
-        {
-            return Unsupported(request.Target!, $"{request.Target!.Type} 尚未在当前 MVP Slice 落地，无法变更知识状态。");
-        }
-
         return targetType switch
         {
             KnowledgeStatusTargetType.System => await ChangeSystem(request, targetStatus, expectedVersion, cancellationToken),
@@ -38,6 +33,7 @@ public sealed class KnowledgeStatusService(
             KnowledgeStatusTargetType.DatabaseObject => await ChangeDatabaseObject(request, targetStatus, expectedVersion, cancellationToken),
             KnowledgeStatusTargetType.DatabaseColumn => await ChangeDatabaseColumn(request, targetStatus, expectedVersion, cancellationToken),
             KnowledgeStatusTargetType.BusinessRule => await ChangeBusinessRule(request, targetStatus, expectedVersion, cancellationToken),
+            KnowledgeStatusTargetType.Integration => await ChangeIntegration(request, targetStatus, expectedVersion, cancellationToken),
             _ => Unsupported(request.Target!, "当前目标类型不支持知识状态变更。"),
         };
     }
@@ -149,6 +145,30 @@ public sealed class KnowledgeStatusService(
         return await Apply(
             request, targetStatus, expectedVersion, entity.KnowledgeStatus, entity.Version,
             EvidenceSubjectType.BusinessRule,
+            (status, reason, changedAt, name, role, version) =>
+            {
+                entity.KnowledgeStatus = status;
+                entity.KnowledgeStatusReason = reason;
+                entity.KnowledgeStatusChangedAt = changedAt;
+                entity.KnowledgeStatusChangedByName = name;
+                entity.KnowledgeStatusChangedByRole = role;
+                entity.UpdatedAt = DateTimeOffset.UtcNow;
+                entity.Version = version;
+            },
+            cancellationToken);
+    }
+
+    private async Task<ChangeKnowledgeStatusResult> ChangeIntegration(
+        ChangeKnowledgeStatusCommand request,
+        KnowledgeStatus targetStatus,
+        long expectedVersion,
+        CancellationToken cancellationToken)
+    {
+        var entity = await dbContext.Integrations.SingleOrDefaultAsync(item => item.Id == request.Target!.Id, cancellationToken);
+        if (entity is null) return NotFound();
+        return await Apply(
+            request, targetStatus, expectedVersion, entity.KnowledgeStatus, entity.Version,
+            EvidenceSubjectType.Integration,
             (status, reason, changedAt, name, role, version) =>
             {
                 entity.KnowledgeStatus = status;

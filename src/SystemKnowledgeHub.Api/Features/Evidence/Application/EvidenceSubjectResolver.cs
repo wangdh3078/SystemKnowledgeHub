@@ -52,6 +52,10 @@ public sealed class EvidenceSubjectResolver(
                     item.System.Name + " · " + item.Name,
                     item.KnowledgeStatus))
                 .SingleOrDefaultAsync(cancellationToken),
+            EvidenceSubjectType.Integration => await dbContext.Integrations.AsNoTracking()
+                .Where(item => item.Id == subjectId)
+                .Select(item => new EvidenceSubjectContext(item.Name, item.KnowledgeStatus))
+                .SingleOrDefaultAsync(cancellationToken),
             EvidenceSubjectType.KnowledgeRelation => await ResolveRelationship(subjectId, cancellationToken),
             EvidenceSubjectType.UnknownItem => await dbContext.UnknownItems.AsNoTracking()
                 .Where(item => item.Id == subjectId)

@@ -30,7 +30,7 @@ export interface KnowledgeUpdate {
   id: ApiId; target: UnknownTarget; subjectDetailKey: string | null; changeSummary: string
   before: unknown; after: unknown; status: 'Proposed' | 'Applied'
 }
-export type KnowledgeUpdateApplyAction = 'AddColumnKnownValue' | 'UpdateDatabaseColumnKnowledge' | 'UpdateBusinessFunction' | 'UpdateBusinessRule'
+export type KnowledgeUpdateApplyAction = 'AddColumnKnownValue' | 'UpdateDatabaseColumnKnowledge' | 'UpdateBusinessFunction' | 'UpdateBusinessRule' | 'UpdateIntegration'
 export interface KnowledgeUpdateDraft {
   id: ApiId | null; target: UnknownTarget; subjectDetailKey: string | null; applyAction: KnowledgeUpdateApplyAction
   changeSummary: string; before: unknown; after: unknown; knowledgeStatusBefore: null; knowledgeStatusAfter: null

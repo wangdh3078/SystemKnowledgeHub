@@ -186,6 +186,7 @@ public sealed class BusinessFunctionQueries(
             .ToDictionaryAsync(item => item.RelationshipId, item => item.Count, cancellationToken);
         var relatedData = new List<RelatedDataResponse>();
         var businessRules = new List<BusinessRuleSummaryResponse>();
+        var integrations = new List<IntegrationSummaryResponse>();
         var adjacentFunctions = new List<string>();
         var integrationCount = 0;
         foreach (var relation in relations)
@@ -213,7 +214,11 @@ public sealed class BusinessFunctionQueries(
                 businessRules.Add(new BusinessRuleSummaryResponse(relation.Id, otherId, other.Title,
                     other.KnowledgeStatus, evidenceCount));
             }
-            if (outgoing && otherType == KnowledgeTargetType.Integration) integrationCount++;
+            if (outgoing && otherType == KnowledgeTargetType.Integration)
+            {
+                integrations.Add(new IntegrationSummaryResponse(relation.Id, otherId, other.Title, relation.RelationType.ToString()));
+                integrationCount++;
+            }
         }
 
         var callers = string.IsNullOrWhiteSpace(function.CallerSummary)
@@ -244,7 +249,7 @@ public sealed class BusinessFunctionQueries(
             processSteps,
             relatedData,
             businessRules,
-            Array.Empty<IntegrationSummaryResponse>(),
+            integrations,
             evidence,
             unknownItems,
             new BusinessFunctionContextRailResponse(

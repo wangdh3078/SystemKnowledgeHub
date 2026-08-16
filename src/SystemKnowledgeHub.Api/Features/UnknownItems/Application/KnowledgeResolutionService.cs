@@ -6,6 +6,8 @@ using SystemKnowledgeHub.Api.Features.BusinessRules.Domain;
 using SystemKnowledgeHub.Api.Features.DatabaseKnowledge.Domain;
 using SystemKnowledgeHub.Api.Features.Evidence.Domain;
 using SystemKnowledgeHub.Api.Features.Evidence.Application.Models;
+using SystemKnowledgeHub.Api.Features.Integrations.Application;
+using SystemKnowledgeHub.Api.Features.Integrations.Domain;
 using SystemKnowledgeHub.Api.Features.Relationships.Domain;
 using SystemKnowledgeHub.Api.Features.UnknownItems.Application.Models;
 using SystemKnowledgeHub.Api.Features.UnknownItems.Domain;
@@ -130,6 +132,56 @@ public sealed class KnowledgeResolutionService(KnowledgeHubDbContext dbContext, 
         rule.Version = targetVersion + 1;
         return await CompleteApply(item, update, request.Applier!, itemVersion, rule.KnowledgeStatus,
             "已应用业务规则更新", tokenCodec.Encode(rule.Version), cancellationToken);
+    }
+
+    public async Task<UnknownItemCommandResult> ApplyIntegration(
+        ApplyIntegrationCommand request, CancellationToken cancellationToken)
+    {
+        var errors = ValidateApply(request.Applier, request.ConcurrencyToken, request.TargetConcurrencyToken, out var itemVersion, out var targetVersion);
+        if (!IsSafeId(request.IntegrationId)) errors["integrationId"] = ["集成关系 ID 无效。"];
+        if (request.Integration is null) errors["integration"] = ["集成内容不能为空."];
+        else await ValidateIntegration(request.Integration, errors, cancellationToken);
+        if (errors.Count > 0) return Validation(errors);
+
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var context = await LoadApplyContext(request.UnknownItemId, request.KnowledgeUpdateId, itemVersion, cancellationToken);
+        if (context.Failure is not null) return context.Failure;
+        var (item, update) = context.Value;
+        if (update.TargetType != KnowledgeTargetType.Integration || update.TargetId != request.IntegrationId || ApplyAction(update) != "UpdateIntegration")
+            return Failure(UnknownItemFailure.ReferenceInvalid, "KnowledgeUpdate 与集成关系目标或具体 Apply 操作不匹配。");
+        var integration = await dbContext.Integrations.SingleOrDefaultAsync(value => value.Id == request.IntegrationId, cancellationToken);
+        if (integration is null) return Failure(UnknownItemFailure.NotFound, "未找到集成关系。");
+        if (integration.SourceSystemId != item.SystemId && integration.TargetSystemId != item.SystemId)
+            return Failure(UnknownItemFailure.ReferenceInvalid, "集成关系不属于当前事项的系统上下文。");
+        if (integration.Version != targetVersion) return Conflict("集成关系已被修改，请刷新知识更新预览。");
+
+        var requested = request.Integration!;
+        var before = IntegrationSnapshot(integration);
+        var after = IntegrationSnapshot(requested);
+        if (!JsonEquals(update.BeforeJson, before) || !JsonEquals(update.AfterJson, after))
+            return Conflict("KnowledgeUpdate Preview 已过期或与明确修改值不一致。");
+        var type = Enum.Parse<IntegrationType>(requested.IntegrationType, false);
+        var direction = Enum.Parse<IntegrationFlowDirection>(requested.FlowDirection, false);
+        IntegrationEndpointParser.TryParse(type, requested.Endpoint, out var endpoint, out var display, out _);
+        var duplicate = await dbContext.Integrations.AsNoTracking().AnyAsync(value => value.Id != integration.Id && value.IntegrationType == type
+            && value.Name == requested.Name.Trim() && value.SourcePartyName == requested.SourceParty!.DisplayName.Trim()
+            && value.TargetPartyName == requested.TargetParty!.DisplayName.Trim(), cancellationToken);
+        if (duplicate) return Conflict("相同类型、名称和参与方的集成已存在。");
+        var statusFailure = await ApplyKnowledgeStatus(integration.KnowledgeStatus, request.KnowledgeStatusChange, update,
+            EvidenceSubjectType.Integration, integration.Id, request.Applier!,
+            (status, reason) => SetKnowledgeStatus(integration, status, reason, request.Applier!), cancellationToken);
+        if (statusFailure is not null) return statusFailure;
+
+        integration.Name = requested.Name.Trim(); integration.IntegrationType = type;
+        integration.SourceSystemId = requested.SourceParty!.SystemId; integration.SourcePartyName = requested.SourceParty.DisplayName.Trim();
+        integration.TargetSystemId = requested.TargetParty!.SystemId; integration.TargetPartyName = requested.TargetParty.DisplayName.Trim();
+        integration.FlowDirection = direction; integration.Purpose = Normalize(requested.Purpose);
+        integration.TopicOrQueue = type == IntegrationType.RabbitMq ? endpoint.Topic ?? endpoint.Queue : null;
+        integration.EndpointDisplay = display; integration.EndpointJson = IntegrationEndpointParser.Serialize(endpoint, type);
+        integration.DatabaseSourceId = requested.DatabaseSourceId; integration.DatabaseObjectId = requested.DatabaseObjectId;
+        integration.UpdatedAt = DateTimeOffset.UtcNow; integration.Version = targetVersion + 1;
+        return await CompleteApply(item, update, request.Applier!, itemVersion, integration.KnowledgeStatus,
+            "已应用集成关系更新", tokenCodec.Encode(integration.Version), cancellationToken);
     }
 
     public async Task<UnknownItemCommandResult> ConfirmConclusion(
@@ -399,6 +451,38 @@ public sealed class KnowledgeResolutionService(KnowledgeHubDbContext dbContext, 
             errors["rule.inputData"] = ["输入数据名称不能为空。"]; 
     }
 
+    private async Task ValidateIntegration(IntegrationOverviewUpdateCommand value, IDictionary<string, string[]> errors, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(value.Name)) errors["integration.name"] = ["集成名称不能为空。"];
+        if (value.SourceParty is null || string.IsNullOrWhiteSpace(value.SourceParty.DisplayName)) errors["integration.sourceParty"] = ["必须填写来源方名称。"];
+        if (value.TargetParty is null || string.IsNullOrWhiteSpace(value.TargetParty.DisplayName)) errors["integration.targetParty"] = ["必须填写目标方名称。"];
+        if (value.SourceParty is not null && value.TargetParty is not null && value.SourceParty.SystemId is null && value.TargetParty.SystemId is null)
+            errors["integration.sourceParty.systemId"] = ["来源方或目标方至少一端必须关联已登记系统。"];
+        if (!Enum.TryParse<IntegrationType>(value.IntegrationType, false, out var type) || type.ToString() != value.IntegrationType)
+            errors["integration.integrationType"] = ["IntegrationType 无效。"];
+        if (!Enum.TryParse<IntegrationFlowDirection>(value.FlowDirection, false, out var direction) || direction.ToString() != value.FlowDirection)
+            errors["integration.flowDirection"] = ["FlowDirection 无效。"];
+        if (errors.Count > 0) return;
+        if (value.SourceParty!.SystemId is long sourceId && !await dbContext.Systems.AnyAsync(item => item.Id == sourceId, cancellationToken))
+            errors["integration.sourceParty.systemId"] = ["未找到来源方关联系统。"];
+        if (value.TargetParty!.SystemId is long targetId && !await dbContext.Systems.AnyAsync(item => item.Id == targetId, cancellationToken))
+            errors["integration.targetParty.systemId"] = ["未找到目标方关联系统。"];
+        if (!IntegrationEndpointParser.TryParse(type, value.Endpoint, out _, out _, out var endpointError)) errors["integration.endpoint"] = [endpointError!];
+        if (type != IntegrationType.DatabaseDependency && (value.DatabaseSourceId is not null || value.DatabaseObjectId is not null))
+            errors["integration.databaseSourceId"] = ["只有 DatabaseDependency 可以关联数据库来源或对象。"];
+        if (type == IntegrationType.DatabaseDependency && value.DatabaseSourceId is null && value.DatabaseObjectId is null)
+            errors["integration.databaseSourceId"] = ["DatabaseDependency 必须关联数据库来源或对象。"];
+        if (value.DatabaseSourceId is long databaseSourceId && !await dbContext.DatabaseSources.AnyAsync(item => item.Id == databaseSourceId, cancellationToken))
+            errors["integration.databaseSourceId"] = ["未找到数据库来源。"];
+        if (value.DatabaseObjectId is long databaseObjectId)
+        {
+            var databaseObject = await dbContext.DatabaseObjects.AsNoTracking().SingleOrDefaultAsync(item => item.Id == databaseObjectId, cancellationToken);
+            if (databaseObject is null) errors["integration.databaseObjectId"] = ["未找到数据库对象。"];
+            else if (value.DatabaseSourceId is long selectedSourceId && databaseObject.DatabaseSourceId != selectedSourceId)
+                errors["integration.databaseObjectId"] = ["数据库对象不属于指定数据库来源。"];
+        }
+    }
+
     private Dictionary<string, string[]> ValidateApply(PersonSnapshotCommand? person, string itemToken, string targetToken,
         out long itemVersion, out long targetVersion)
     {
@@ -474,6 +558,28 @@ public sealed class KnowledgeResolutionService(KnowledgeHubDbContext dbContext, 
             description = Normalize(item.Description),
         }),
     }, JsonOptions);
+    private static string IntegrationSnapshot(Integration value) => JsonSerializer.Serialize(new
+    {
+        name = value.Name, integrationType = value.IntegrationType.ToString(),
+        sourceParty = new { systemId = value.SourceSystemId, displayName = value.SourcePartyName },
+        targetParty = new { systemId = value.TargetSystemId, displayName = value.TargetPartyName },
+        flowDirection = value.FlowDirection.ToString(), purpose = value.Purpose,
+        endpoint = string.IsNullOrWhiteSpace(value.EndpointJson) ? new JsonObject() : JsonNode.Parse(value.EndpointJson), databaseSourceId = value.DatabaseSourceId, databaseObjectId = value.DatabaseObjectId,
+    }, JsonOptions);
+    private static string IntegrationSnapshot(IntegrationOverviewUpdateCommand value)
+    {
+        var type = Enum.Parse<IntegrationType>(value.IntegrationType, false);
+        IntegrationEndpointParser.TryParse(type, value.Endpoint, out var endpoint, out _, out _);
+        var endpointJson = IntegrationEndpointParser.Serialize(endpoint, type);
+        return JsonSerializer.Serialize(new
+        {
+            name = value.Name.Trim(), integrationType = value.IntegrationType,
+            sourceParty = new { systemId = value.SourceParty!.SystemId, displayName = value.SourceParty.DisplayName.Trim() },
+            targetParty = new { systemId = value.TargetParty!.SystemId, displayName = value.TargetParty.DisplayName.Trim() },
+            flowDirection = value.FlowDirection, purpose = Normalize(value.Purpose), endpoint = string.IsNullOrWhiteSpace(endpointJson) ? new JsonObject() : JsonNode.Parse(endpointJson),
+            databaseSourceId = value.DatabaseSourceId, databaseObjectId = value.DatabaseObjectId,
+        }, JsonOptions);
+    }
     private static bool JsonEquals(string actual, string expected) => JsonNode.DeepEquals(JsonNode.Parse(actual), JsonNode.Parse(expected));
     private static bool IsSafeId(long id) => id is >= 1 and <= 9_007_199_254_740_991;
     private static string? Normalize(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
@@ -483,6 +589,8 @@ public sealed class KnowledgeResolutionService(KnowledgeHubDbContext dbContext, 
     private static void SetKnowledgeStatus(BusinessFunction value, KnowledgeStatus status, string? reason, PersonSnapshotCommand actor)
     { value.KnowledgeStatus = status; value.KnowledgeStatusReason = reason; value.KnowledgeStatusChangedAt = actor.OccurredAt; value.KnowledgeStatusChangedByName = actor.DisplayName.Trim(); value.KnowledgeStatusChangedByRole = actor.RoleOrIdentity.Trim(); }
     private static void SetKnowledgeStatus(BusinessRule value, KnowledgeStatus status, string? reason, PersonSnapshotCommand actor)
+    { value.KnowledgeStatus = status; value.KnowledgeStatusReason = reason; value.KnowledgeStatusChangedAt = actor.OccurredAt; value.KnowledgeStatusChangedByName = actor.DisplayName.Trim(); value.KnowledgeStatusChangedByRole = actor.RoleOrIdentity.Trim(); }
+    private static void SetKnowledgeStatus(Integration value, KnowledgeStatus status, string? reason, PersonSnapshotCommand actor)
     { value.KnowledgeStatus = status; value.KnowledgeStatusReason = reason; value.KnowledgeStatusChangedAt = actor.OccurredAt; value.KnowledgeStatusChangedByName = actor.DisplayName.Trim(); value.KnowledgeStatusChangedByRole = actor.RoleOrIdentity.Trim(); }
     private static UnknownItemActivity Activity(UnknownItem item, UnknownItemActivityType type, PersonSnapshotCommand actor, string summary, string? relatedType = null, long? relatedId = null) => new()
     { UnknownItemId = item.Id, ActivityType = type, ActorName = actor.DisplayName.Trim(), ActorRole = actor.RoleOrIdentity.Trim(), ActorTeam = Normalize(actor.Team), ActorExternalKey = Normalize(actor.ExternalUserKey), ActorSource = Normalize(actor.Source), ActorNote = Normalize(actor.Note), OccurredAt = actor.OccurredAt, Note = summary, RelatedType = relatedType, RelatedId = relatedId };

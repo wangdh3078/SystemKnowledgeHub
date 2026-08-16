@@ -80,6 +80,13 @@ public sealed record BusinessRuleUpdateRequest(
 public sealed record ApplyBusinessRuleRequest(
     long BusinessRuleId, BusinessRuleUpdateRequest? Rule, KnowledgeStatusChangeRequest? KnowledgeStatusChange,
     UnknownPersonSnapshotRequest? Applier, string? ConcurrencyToken, string? TargetConcurrencyToken);
+public sealed record IntegrationPartyUpdateRequest(long? SystemId, string? DisplayName);
+public sealed record IntegrationOverviewUpdateRequest(
+    string? Name, string? IntegrationType, IntegrationPartyUpdateRequest? SourceParty, IntegrationPartyUpdateRequest? TargetParty,
+    string? FlowDirection, string? Purpose, JsonElement? Endpoint, long? DatabaseSourceId, long? DatabaseObjectId);
+public sealed record ApplyIntegrationRequest(
+    long IntegrationId, IntegrationOverviewUpdateRequest? Integration, KnowledgeStatusChangeRequest? KnowledgeStatusChange,
+    UnknownPersonSnapshotRequest? Applier, string? ConcurrencyToken, string? TargetConcurrencyToken);
 public sealed record ConfirmConclusionRequest(UnknownPersonSnapshotRequest? Confirmer, string? ConcurrencyToken);
 public sealed record CloseUnknownItemRequest(string? CloseNote, UnknownPersonSnapshotRequest? Actor, string? ConcurrencyToken);
 public sealed record ReopenUnknownItemRequest(string? Reason, UnknownPersonSnapshotRequest? Actor, string? ConcurrencyToken);

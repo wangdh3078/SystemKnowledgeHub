@@ -1,0 +1,2 @@
+<script setup lang="ts">import type{OverlayDescriptor}from'../../../app/stores/overlays';import IntegrationPreviewDrawer from'./IntegrationPreviewDrawer.vue';import EditIntegrationDrawer from'./EditIntegrationDrawer.vue';defineProps<{drawer:OverlayDescriptor}>()</script>
+<template><IntegrationPreviewDrawer v-if="drawer.kind==='integration'" :integration-id="drawer.id"/><EditIntegrationDrawer v-else-if="drawer.kind==='edit-integration'" :integration-id="drawer.id"/></template>

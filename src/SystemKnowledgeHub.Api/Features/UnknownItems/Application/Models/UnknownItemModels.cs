@@ -98,6 +98,15 @@ public sealed record ApplyBusinessRuleCommand(
     KnowledgeStatusChangeCommand? KnowledgeStatusChange, PersonSnapshotCommand? Applier,
     string ConcurrencyToken, string TargetConcurrencyToken);
 
+public sealed record IntegrationPartyUpdateCommand(long? SystemId, string DisplayName);
+public sealed record IntegrationOverviewUpdateCommand(
+    string Name, string IntegrationType, IntegrationPartyUpdateCommand? SourceParty, IntegrationPartyUpdateCommand? TargetParty,
+    string FlowDirection, string? Purpose, JsonElement? Endpoint, long? DatabaseSourceId, long? DatabaseObjectId);
+public sealed record ApplyIntegrationCommand(
+    long UnknownItemId, long KnowledgeUpdateId, long IntegrationId, IntegrationOverviewUpdateCommand? Integration,
+    KnowledgeStatusChangeCommand? KnowledgeStatusChange, PersonSnapshotCommand? Applier,
+    string ConcurrencyToken, string TargetConcurrencyToken);
+
 public sealed record ConfirmConclusionCommand(long UnknownItemId, PersonSnapshotCommand? Confirmer, string ConcurrencyToken);
 public sealed record CloseUnknownItemCommand(long UnknownItemId, string? CloseNote, PersonSnapshotCommand? Actor, string ConcurrencyToken);
 public sealed record ReopenUnknownItemCommand(long UnknownItemId, string Reason, PersonSnapshotCommand? Actor, string ConcurrencyToken);

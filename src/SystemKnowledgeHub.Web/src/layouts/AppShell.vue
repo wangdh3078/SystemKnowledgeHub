@@ -9,6 +9,7 @@ import DialogHost from './DialogHost.vue'
 import DrawerHost from './DrawerHost.vue'
 import CreateUnknownItemFlow from '../features/unknown-items/components/CreateUnknownItemFlow.vue'
 import CreateBusinessRuleFlow from '../features/business-rules/components/CreateBusinessRuleFlow.vue'
+import CreateIntegrationFlow from '../features/integrations/components/CreateIntegrationFlow.vue'
 
 const overlayStore = useOverlayStore()
 const shellClass = computed(() => ({
@@ -33,5 +34,6 @@ const shellClass = computed(() => ({
     <DialogHost />
     <CreateUnknownItemFlow />
     <CreateBusinessRuleFlow />
+    <CreateIntegrationFlow />
   </div>
 </template>

@@ -221,7 +221,7 @@
 | `.../src/features/systems/components/SystemOverviewSection.vue` | 渲染系统概览只读/内联编辑、校验与并发冲突状态。 | Systems / VS-03 | 复用 ES-01 模式实现 C02，而不新增编辑 Route。 |
 | `.../src/features/systems/components/SystemContextRail.vue` | 渲染系统级关系与缺口摘要。 | Systems / VS-03 | 保持 Context Rail 只回答系统关联与缺口，不复制 Main Content。 |
 | `.../src/features/systems/components/CreateSystemFlow.vue` | 在全局 Dialog Host 中编排知识类型选择与系统最小创建。 | Systems / VS-02 | 落实 Progressive Documentation，而非巨大表单。 |
-| `.../src/features/systems/components/CreateKnowledgeObjectChooser.vue` | 展示冻结知识对象类型入口，当前只开放 System。 | Systems / VS-02 | 保留 Golden Create Flow 信息架构且不虚构未实现能力。 |
+| `.../src/features/systems/components/CreateKnowledgeObjectChooser.vue` | 展示冻结知识对象类型入口，并按当前上下文开放 System、Business Function、Business Rule、Integration。 | Shared authoring entry / VS-02～VS-11 | 保留 Golden Create Flow 信息架构，不为尚未实现的对象类型虚构创建能力。 |
 | `.../src/features/systems/components/CreateSystemDialog.vue` | 收集 C01 最小字段、人员快照并提交创建。 | Systems / VS-02 | 创建后关闭、刷新并保持知识状态“未知”。 |
 | `.../src/features/systems/systems.css` | 定义 RP-02、RP-03、ES-01 与系统创建流程的局部样式。 | Systems / VS-02 + VS-03 | 对齐 Golden 密度且不改变 Application Shell。 |
 
@@ -302,6 +302,27 @@
 
 以上 `...` 均指 `src/SystemKnowledgeHub.Web/src/features/business-rules/`。
 
+### 2.13 Integrations — VS-11
+
+| 路径 | 一句话职责 | Feature / Vertical Slice | 为什么需要 |
+| --- | --- | --- | --- |
+| `.../Features/Integrations/Domain/Integration.cs`、`IntegrationContractField.cs` | 定义唯一的 Integration 与有序契约字段实体、类型和数据流向。 | Integrations / VS-11 | 落实已冻结 Integration 实体，避免第二套系统或端点模型。 |
+| `.../Features/Integrations/Persistence/IntegrationConfiguration.cs`、`IntegrationContractFieldConfiguration.cs` | 映射 `integrations` 与 `integration_contract_fields` 的 SQLite 结构、约束与并发版本。 | Integrations / VS-11 | 按 Database Model 增量建立当前 Slice 的 canonical schema。 |
+| `.../Features/Integrations/Application/IntegrationService.cs`、`IntegrationQueries.cs`、`IntegrationEndpointParser.cs` | 实现 C17/C18/C19 与 Q14，校验已登记 System 端点并解析受控 Endpoint JSON。 | Integrations / VS-11 | 维持具体用例和类型化端点，不引入通用知识或动态 Patch 引擎。 |
+| `.../Features/Integrations/Api/IntegrationsController.cs`、`Contracts/IntegrationRequests.cs` | 暴露冻结的 Integration detail/create/overview/contract fields routes。 | Integrations / VS-11 | Controller 不返回 EF 实体，并保持 API contract 唯一。 |
+
+以上 `...` 均指 `src/SystemKnowledgeHub.Api/`。
+
+| 路径 | 一句话职责 | Feature / Vertical Slice | 为什么需要 |
+| --- | --- | --- | --- |
+| `.../api/integrationContracts.ts`、`integrationsApi.ts` | 定义、解码并调用 Q14/C17～C19 frozen contract。 | Integrations / VS-11 | 将外部 JSON 收窄为类型化集成、端点及契约字段。 |
+| `.../pages/IntegrationDetailView.vue`、`components/IntegrationContextRail.vue` | 实现 RP-11 Main Content 与仅集成级关系/缺口的 Context Rail。 | Integrations / VS-11 | 保持 Read First，避免 Rail 复制契约和证据细节。 |
+| `.../components/CreateIntegrationFlow.vue`、`CreateIntegrationDialog.vue` | 复用统一“新增”入口完成 C17 最小创建。 | Integrations / VS-11 | 创建后保持“未知”，关系、证据和状态推进继续显式进行。 |
+| `.../components/IntegrationPreviewDrawer.vue`、`EditIntegrationDrawer.vue`、`IntegrationDrawerContent.vue` | 实现 DR-04 Preview 与 DR-13 编辑/契约字段状态，并接入单 Drawer Host。 | Integrations / VS-11 | 不增加编辑 Route 或第二套抽屉机制。 |
+| `.../integrations.css` | 定义 Integration Detail、Rail 与 Drawer 的局部高密度样式。 | Integrations / VS-11 | 继承 Frozen Design Baseline，不重设 Application Shell。 |
+
+以上 `...` 均指 `src/SystemKnowledgeHub.Web/src/features/integrations/`。
+
 ## 3. Tests
 
 ### 3.1 Backend tests
@@ -323,6 +344,7 @@
 | `.../Api/UnknownItemsApiTests.cs` | 验证创建/列表/详情、合法状态、并发、Finding、调查 Evidence 和 Resolution Draft。 | UnknownItems / VS-09A | 用 3 个真实 SQLite/HTTP 测试证明调查事务闭环且不修改目标知识。 |
 | `.../Api/KnowledgeResolutionApiTests.cs` | 验证 concrete Apply 的原子性、合法状态顺序及 Close/Reopen 后历史 Applied Update 保留。 | UnknownItems / VS-09B | 用 3 个真实 SQLite/HTTP 测试覆盖本 Slice 最高风险规则。 |
 | `.../Api/BusinessRulesApiTests.cs` | 验证 C15/Q13 唯一性、C16 保留关系/证据，以及 C32c 失败回滚与原子 Apply。 | BusinessRules / VS-10 | 用 3 个真实 SQLite/HTTP 测试覆盖本 Slice 最高风险规则。 |
+| `.../Api/IntegrationsApiTests.cs` | 验证 C17/Q14、C18/C19 保留既有知识，以及 C32d 失败原子性。 | Integrations / VS-11 | 用 3 个真实 SQLite/HTTP 测试覆盖已登记系统端点、类型化契约与具体 Apply。 |
 
 以上 `...` 均指 `tests/SystemKnowledgeHub.Api.Tests/`。
 
@@ -384,6 +406,8 @@
 | `docs/reports/VS09A_Unknown_Item_Investigation_Verification_Report.md` | 记录 VS-09A Schema、Q11/Q12、C27～C31、运行闭环和进程清理。 | UnknownItems / VS-09A | 为第九阶段调查 Slice Review 提供完成证据。 |
 | `docs/reports/VS09B_Knowledge_Resolution_Verification_Report.md` | 记录 VS-09B concrete Apply、结论状态动作、原子性测试、运行闭环和进程清理。 | UnknownItems / VS-09B | 为第九阶段知识解决 Slice Review 提供完成证据。 |
 | `docs/reports/VS10_Business_Rule_Verification_Report.md` | 记录 VS-10 Schema、Q13/C15/C16/C32c、复用能力、测试、运行闭环与进程清理。 | BusinessRules / VS-10 | 为第十条 Vertical Slice Review 提供完成证据。 |
+| `docs/reports/VS11_Integration_Verification_Report.md` | 记录 VS-11 Schema、Q14/C17～C19/C32d、测试、运行闭环、Golden Review 与进程清理。 | Integrations / VS-11 | 为第十一条 Vertical Slice Review 提供完成证据。 |
+| `docs/reports/MVP_Implementation_Audit_Preparation_Report.md` | 记录 VS-11 后的构建检查、当前结构、迁移、测试概况及临时产物清理结果。 | MVP implementation audit preparation | 作为后续审计开始前的静态基线。 |
 | `docs/reports/System_Knowledge_Hub_MVP_Final_Freeze_Validation_Report.md` | 记录 Product Design Final Freeze 的路径、引用和唯一性校验。 | Design freeze | 证明 Golden UI 包在进入实现前已冻结。 |
 | `docs/reports/design-qa.md` | 记录 VS-01 Golden UI 对比与修订结果。 | DatabaseKnowledge / VS-01 | 证明详情页实现通过视觉 QA。 |
 | `design-qa.md` | 记录 DR-08/DR-09/DR-10 与 VS-06 实现的同视口组合视觉对照。 | Evidence / VS-06 | 证明 Evidence 新增、详情和人工确认 Drawer 通过最终视觉 QA。 |
@@ -391,7 +415,7 @@
 | `product-design/archive/` | 保存已归档的重复别名/旧引用。 | Historical design assets | 避免旧资产丢失，但不得替代 Golden。 |
 | `product-design/{knowledge-discovery-navigation,knowledge-object-authoring,system-detail,unknown-item-detail,qa}/` | 保存原型生成过程、Review Board 与对比材料。 | Product Design history | 支撑设计追溯；正式实现仍以 Inventory + `final-ui/` 为准。 |
 | `docs/product-design/*_Product_Design.md` 与早期 MVP Design 文档 | 保存各阶段产品设计任务和演进记录。 | Product Design history | 解释设计来源；不高于冻结规格。 |
-| `artifacts/` | 保存本地运行截图、日志和 QA 对比生成物，且被 Git 忽略。 | Verification evidence | 便于本地复核，不属于产品源码。 |
+| `artifacts/` | 保存已评审的 UI / Verification 截图和 QA 对比生成物，且被 Git 忽略。 | Verification evidence | 便于本地复核；不保留临时浏览器 Profile 或运行日志。 |
 
 ## 6. Potentially Unnecessary / Needs Review
 

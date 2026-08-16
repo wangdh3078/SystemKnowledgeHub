@@ -9,6 +9,7 @@ import NotFoundView from '../../features/bootstrap/pages/NotFoundView.vue'
 import UnknownItemsListView from '../../features/unknown-items/pages/UnknownItemsListView.vue'
 import UnknownItemDetailView from '../../features/unknown-items/pages/UnknownItemDetailView.vue'
 import BusinessRuleDetailView from '../../features/business-rules/pages/BusinessRuleDetailView.vue'
+import IntegrationDetailView from '../../features/integrations/pages/IntegrationDetailView.vue'
 
 export const routes: readonly RouteRecordRaw[] = [
   {
@@ -74,6 +75,12 @@ export const routes: readonly RouteRecordRaw[] = [
     name: 'business-rule-detail',
     component: BusinessRuleDetailView,
     meta: { title: '业务规则详情', layout: 'app-shell', navigationKey: 'business-functions', hasContextRail: true },
+  },
+  {
+    path: '/integrations/:id',
+    name: 'integration-detail',
+    component: IntegrationDetailView,
+    meta: { title: '集成关系详情', layout: 'app-shell', navigationKey: 'systems', hasContextRail: true },
   },
   {
     path: '/unknown-items',

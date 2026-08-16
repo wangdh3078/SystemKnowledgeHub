@@ -11,7 +11,7 @@ import {
 } from '@element-plus/icons-vue'
 import { useOverlayStore } from '../../../app/stores/overlays'
 
-type SupportedCreateKind = 'system' | 'business-function' | 'business-rule'
+type SupportedCreateKind = 'system' | 'business-function' | 'business-rule' | 'integration'
 
 const props = withDefaults(defineProps<{
   enabledKinds?: readonly SupportedCreateKind[]
@@ -27,7 +27,7 @@ const choices = [
   { kind: 'business-function', label: '业务功能', description: '记录用户或系统可以完成的业务能力', icon: Files },
   { kind: null, label: '数据库知识', description: '补充表、视图或字段的业务含义', icon: Coin },
   { kind: 'business-rule', label: '业务规则', description: '记录条件、结果及其依据', icon: Tickets },
-  { kind: null, label: '集成关系', description: '记录 API、MQ、文件或数据库依赖', icon: Connection },
+  { kind: 'integration', label: '集成关系', description: '记录 API、MQ、文件或数据库依赖', icon: Connection },
   { kind: null, label: '待确认事项', description: '把未知问题纳入调查闭环', icon: QuestionFilled },
   { kind: null, label: '证据', description: '记录为什么我们相信某条知识', icon: DocumentChecked },
 ] as const

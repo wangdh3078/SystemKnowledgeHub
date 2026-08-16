@@ -6,6 +6,7 @@ import type {
   SaveResolutionResponse, UnknownItemDetailResponse, UnknownItemsListParams, UnknownItemsListResponse,
   UnknownTarget, WorkflowResponse,
 } from './unknownItemContracts'
+import type { IntegrationOverviewInput } from '../../integrations/api/integrationContracts'
 
 function queryString(params: UnknownItemsListParams): string {
   const query = new URLSearchParams()
@@ -41,6 +42,8 @@ export const unknownItemsApi = {
     apiClient.post(`/unknown-items/${id}/knowledge-updates/${updateId}/apply-business-function`, input, { decode: decodeObject<ApplyKnowledgeUpdateResponse> }),
   applyBusinessRule: (id: ApiId, updateId: ApiId, input: Record<string, unknown>) =>
     apiClient.post(`/unknown-items/${id}/knowledge-updates/${updateId}/apply-business-rule`, input, { decode: decodeObject<ApplyKnowledgeUpdateResponse> }),
+  applyIntegration: (id: ApiId, updateId: ApiId, input: { integrationId: ApiId; integration: IntegrationOverviewInput; knowledgeStatusChange: null; applier: PersonSnapshotInput; concurrencyToken: string; targetConcurrencyToken: string }) =>
+    apiClient.post(`/unknown-items/${id}/knowledge-updates/${updateId}/apply-integration`, input, { decode: decodeObject<ApplyKnowledgeUpdateResponse> }),
   confirmConclusion: (id: ApiId, confirmer: PersonSnapshotInput, concurrencyToken: string) =>
     apiClient.post(`/unknown-items/${id}/confirm-conclusion`, { confirmer, concurrencyToken }, { decode: decodeObject<WorkflowResponse> }),
   close: (id: ApiId, closeNote: string | null, actor: PersonSnapshotInput, concurrencyToken: string) =>

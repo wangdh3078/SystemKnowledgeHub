@@ -846,6 +846,33 @@
   display: block;
 }
 
+.system-integration-list {
+  display: grid;
+  gap: 2px;
+}
+
+.system-integration-list button {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto 18px;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 4px;
+  border: 0;
+  border-bottom: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.system-integration-list small {
+  display: block;
+  margin-top: 3px;
+  color: var(--color-muted);
+  font-size: 11px;
+}
+
 .system-repository-summary strong {
   color: var(--color-ink);
   font-size: 12px;

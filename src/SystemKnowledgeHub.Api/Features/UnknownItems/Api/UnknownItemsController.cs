@@ -142,6 +142,15 @@ public sealed class UnknownItemsController(
             StatusChange(request.KnowledgeStatusChange), Person(request.Applier), request.ConcurrencyToken ?? string.Empty,
             request.TargetConcurrencyToken ?? string.Empty), cancellationToken));
 
+    [HttpPost("{id:long}/knowledge-updates/{updateId:long}/apply-integration")]
+    public async Task<IActionResult> ApplyIntegration(long id, long updateId, [FromBody] ApplyIntegrationRequest request, CancellationToken cancellationToken)
+        => Command(await resolutionService.ApplyIntegration(new(id, updateId, request.IntegrationId,
+            request.Integration is null ? null : new(request.Integration.Name ?? string.Empty, request.Integration.IntegrationType ?? string.Empty,
+                Party(request.Integration.SourceParty), Party(request.Integration.TargetParty), request.Integration.FlowDirection ?? string.Empty,
+                request.Integration.Purpose, request.Integration.Endpoint, request.Integration.DatabaseSourceId, request.Integration.DatabaseObjectId),
+            StatusChange(request.KnowledgeStatusChange), Person(request.Applier), request.ConcurrencyToken ?? string.Empty,
+            request.TargetConcurrencyToken ?? string.Empty), cancellationToken));
+
     [HttpPost("{id:long}/confirm-conclusion")]
     public async Task<IActionResult> ConfirmConclusion(long id, [FromBody] ConfirmConclusionRequest request, CancellationToken cancellationToken)
         => Command(await resolutionService.ConfirmConclusion(new(id, Person(request.Confirmer), request.ConcurrencyToken ?? string.Empty), cancellationToken));
@@ -182,6 +191,8 @@ public sealed class UnknownItemsController(
         person.Note);
     private static KnowledgeStatusChangeCommand? StatusChange(KnowledgeStatusChangeRequest? change) =>
         change is null ? null : new(change.TargetStatus ?? string.Empty, change.Reason);
+    private static IntegrationPartyUpdateCommand? Party(IntegrationPartyUpdateRequest? party) =>
+        party is null ? null : new(party.SystemId, party.DisplayName ?? string.Empty);
     private static ApiErrorResponse Error(string code, string message, IReadOnlyDictionary<string, string[]>? fields = null) =>
         new(code, message, fields, null);
 }

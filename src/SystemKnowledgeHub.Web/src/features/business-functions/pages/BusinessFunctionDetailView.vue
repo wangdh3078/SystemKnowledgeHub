@@ -109,6 +109,10 @@ function handleBusinessRuleRow(row: BusinessFunctionDetailResponse['businessRule
   overlayStore.openDrawer({ kind: 'business-rule', id: row.id, mode: 'read' })
 }
 
+function handleIntegrationRow(row: BusinessFunctionDetailResponse['integrations'][number]): void {
+  overlayStore.openDrawer({ kind: 'integration', id: row.id, mode: 'read' })
+}
+
 function openAddRelationship(): void {
   if (!detail.value) return
   overlayStore.openDrawer({
@@ -270,7 +274,10 @@ onUnmounted(() => {
       <section class="business-function-section business-function-section--two-columns">
         <div>
           <div class="business-function-section__heading"><h2>集成关系</h2><span>{{ detail.integrations.length }} 项</span></div>
-          <div class="business-section-empty business-section-empty--compact"><el-icon><Link /></el-icon><span>尚未记录 MQ、API 或其他系统集成。</span></div>
+          <div v-if="detail.integrations.length" class="business-function-evidence-list">
+            <button v-for="item in detail.integrations" :key="item.relationshipId" @click="handleIntegrationRow(item)"><el-icon><Link /></el-icon><span><small>{{ getRelationTypeLabel(item.relationType) }}</small><strong class="technical-text">{{ item.name }}</strong></span><el-icon><ArrowRight /></el-icon></button>
+          </div>
+          <div v-else class="business-section-empty business-section-empty--compact"><el-icon><Link /></el-icon><span>尚未记录 MQ、API 或其他系统集成。</span></div>
         </div>
         <div>
           <div class="business-function-section__heading business-function-evidence-heading"><h2>证据</h2><div><span>{{ detail.evidence.length }} 条</span><el-button v-if="canAddEvidence" text type="primary" :icon="Plus" @click="openAddEvidence">添加证据</el-button></div></div>
