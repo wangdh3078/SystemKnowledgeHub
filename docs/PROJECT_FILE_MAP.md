@@ -1,6 +1,6 @@
 # System Knowledge Hub — Project File Map
 
-本文件描述当前仓库中主要目录和文件的职责。范围为 Bootstrap 基础设施与 **VS-01～VS-09B** 已实现的 Vertical Slice；不把 `bin/`、`obj/`、`node_modules/`、`dist/`、lock 文件、运行时 SQLite 数据、普通 Migration 生成文件逐项列入。
+本文件描述当前仓库中主要目录和文件的职责。范围为 Bootstrap 基础设施与 **VS-01～VS-13** 已实现的 Vertical Slice；不把 `bin/`、`obj/`、`node_modules/`、`dist/`、lock 文件、运行时 SQLite 数据、普通 Migration 生成文件逐项列入。
 
 ## 1. Backend
 
@@ -10,7 +10,7 @@
 | --- | --- | --- | --- |
 | `src/SystemKnowledgeHub.Api/Program.cs` | 配置 Controllers、JSON、Persistence、CORS 和应用管线。 | Backend foundation | ASP.NET Core 的组合根与运行入口。 |
 | `src/SystemKnowledgeHub.Api/SystemKnowledgeHub.Api.csproj` | 定义 .NET 8 Web 项目及 EF Core SQLite 依赖。 | Backend foundation | 让后端可还原、构建和运行。 |
-| `src/SystemKnowledgeHub.Api/Persistence/KnowledgeHubDbContext.cs` | 提供当前已落地实体的唯一 EF Core DbContext。 | Persistence foundation / VS-01～VS-09B | 连接应用查询、写入、映射和 SQLite。 |
+| `src/SystemKnowledgeHub.Api/Persistence/KnowledgeHubDbContext.cs` | 提供当前已落地实体的唯一 EF Core DbContext。 | Persistence foundation / VS-01～VS-13 | 连接应用查询、写入、映射和 SQLite。 |
 | `src/SystemKnowledgeHub.Api/Persistence/DbContextConfiguration.cs` | 解析 SQLite 路径，注册 DbContext，并集中设置 SQLite PRAGMA。 | Persistence foundation | 保证开发和运行环境使用一致的连接规则。 |
 | `src/SystemKnowledgeHub.Api/Persistence/KnowledgeHubDesignTimeDbContextFactory.cs` | 为 EF CLI 创建设计时 DbContext。 | Persistence tooling / VS-01 | 生成和检查 Migration 时不依赖启动 Web Host。 |
 | `src/SystemKnowledgeHub.Api/Persistence/Concurrency/ConcurrencyTokenCodec.cs` | 在整数版本与 opaque `concurrencyToken` 之间安全编解码。 | Concurrency foundation / VS-01 + VS-03 | 支撑详情读取与 C02 条件更新，同时避免客户端理解物理版本。 |
@@ -26,14 +26,14 @@
 | --- | --- | --- | --- |
 | `src/SystemKnowledgeHub.Api/Features/Bootstrap/BootstrapController.cs` | 暴露临时 `/api/bootstrap/status`，验证 Controller → DbContext → SQLite 基础链路。 | Implementation Bootstrap | 为业务 Slice 之前的基础工程提供可运行诊断点，并继续支撑 Bootstrap smoke test。 |
 
-### 1.3 DatabaseKnowledge — VS-01 domain/persistence model
+### 1.3 DatabaseKnowledge — VS-01 + VS-12A + VS-12B domain/persistence model
 
 | 路径 | 一句话职责 | Feature / Vertical Slice | 为什么需要 |
 | --- | --- | --- | --- |
-| `.../Domain/DatabaseSource.cs` | 表达一个系统登记的实际数据库来源。 | DatabaseKnowledge / VS-01 | DatabaseObject 必须归属明确的数据源。 |
-| `.../Domain/DatabaseObject.cs` | 表达 Table/View 及其业务说明、状态和版本。 | DatabaseKnowledge / VS-01 | 是 Database Object Detail 的主查询对象。 |
-| `.../Domain/DatabaseColumn.cs` | 表达数据库字段元数据、业务知识、状态和版本。 | DatabaseKnowledge / VS-01 | 支撑字段表与 Column Detail Drawer。 |
-| `.../Domain/ColumnKnownValue.cs` | 表达字段的一条已知值及业务含义。 | DatabaseKnowledge / VS-01 | Drawer 需要展示 `STATE_FLAG` 已知值。 |
+| `.../Domain/DatabaseSource.cs` | 表达一个系统登记的实际数据库来源。 | DatabaseKnowledge / VS-01 + VS-12A | DatabaseObject 必须归属明确的数据源，并承接 C08 的最小登记。 |
+| `.../Domain/DatabaseObject.cs` | 表达 Table/View 及其业务说明、状态和版本。 | DatabaseKnowledge / VS-01 + VS-12A + VS-12B | 是对象详情的主查询对象，并承接 C09/C11。 |
+| `.../Domain/DatabaseColumn.cs` | 表达数据库字段元数据、业务知识、状态和版本。 | DatabaseKnowledge / VS-01 + VS-12B | 支撑字段登记与 Column Detail Drawer。 |
+| `.../Domain/ColumnKnownValue.cs` | 表达字段的一条已知值及业务含义。 | DatabaseKnowledge / VS-01 + VS-12B | 支撑 C13/C14 的真实已知值维护与受控移除。 |
 | `.../Domain/DatabaseEnums.cs` | 定义数据库对象类型与访问模式枚举。 | DatabaseKnowledge / VS-01 | 保持 Table/View 与 Read/Write 值受控。 |
 | `.../Persistence/DatabaseSourceConfiguration.cs` | 映射 `database_sources` 的字段、FK、约束和索引。 | DatabaseKnowledge / VS-01 | 落实冻结 Database Model。 |
 | `.../Persistence/DatabaseObjectConfiguration.cs` | 映射 `database_objects` 及状态、JSON、版本、索引。 | DatabaseKnowledge / VS-01 | 保证详情查询建立在 canonical 物理模型上。 |
@@ -57,14 +57,16 @@
 
 以上 `...` 均指 `src/SystemKnowledgeHub.Api/Features/Systems/`。
 
-### 1.5 DatabaseKnowledge — VS-01 application/API
+### 1.5 DatabaseKnowledge — VS-01 + VS-12A + VS-12B application/API
 
 | 路径 | 一句话职责 | Feature / Vertical Slice | 为什么需要 |
 | --- | --- | --- | --- |
-| `.../Application/DatabaseKnowledgeQueries.cs` | 通过 EF Projection 实现 Q09 与 Q10 页面查询。 | DatabaseKnowledge / VS-01 | 在不加载完整 Entity Graph 的情况下构造冻结响应。 |
-| `.../Application/Models/DatabaseKnowledgeReadModels.cs` | 定义 Database Object Detail 与 Column Detail 的明确读模型。 | DatabaseKnowledge / VS-01 | 避免 Controller 直接返回 EF Entity，并匹配冻结 API Contract。 |
-| `.../Api/DatabaseObjectsController.cs` | 实现 `GET /api/database-objects/{id}` 与可选字段选择。 | DatabaseKnowledge / VS-01 | 暴露 Q09 canonical HTTP 边界。 |
-| `.../Api/DatabaseColumnsController.cs` | 实现 `GET /api/database-columns/{id}`。 | DatabaseKnowledge / VS-01 | 暴露 Q10 canonical HTTP 边界。 |
+| `.../Application/DatabaseKnowledgeQueries.cs` | 通过 EF Projection 实现 Q08、Q09 与 Q10 页面查询，并返回真实字段级证据、关系和待确认事项摘要。 | DatabaseKnowledge / VS-01 + VS-12A + VS-12B | 构造页面读模型，而不返回 EF Entity。 |
+| `.../Application/DatabaseKnowledgeService.cs`、`Models/DatabaseKnowledgeWriteModels.cs` | 实现 C08～C14 的来源/对象/字段登记及对象、字段、Known Value 专用维护操作。 | DatabaseKnowledge / VS-12A + VS-12B | 集中受控校验、并发、精确引用保护和“不自动改状态”规则。 |
+| `.../Application/Models/DatabaseKnowledgeReadModels.cs` | 定义对象列表、详情与 Column Detail 的明确读模型。 | DatabaseKnowledge / VS-01 + VS-12A + VS-12B | 避免 Controller 直接返回 EF Entity，并匹配冻结 API Contract。 |
+| `.../Api/DatabaseSourcesController.cs`、`Api/Contracts/DatabaseKnowledgeRequests.cs` | 暴露 `POST /api/database-sources` 和 C08 输入 Contract。 | DatabaseKnowledge / VS-12A | 保持来源创建是独立且唯一的 canonical route。 |
+| `.../Api/DatabaseObjectsController.cs` | 实现 Q08/Q09、C09～C11 的 canonical routes。 | DatabaseKnowledge / VS-01 + VS-12A + VS-12B | 在同一 route 下提供受控浏览、登记、对象知识维护和详情边界。 |
+| `.../Api/DatabaseColumnsController.cs` | 实现 Q10 与 C12～C14 的 canonical routes。 | DatabaseKnowledge / VS-01 + VS-12B | 暴露字段业务知识、Known Value 新增及显式移除的唯一 HTTP 边界。 |
 
 ### 1.6 BusinessFunctions — VS-04 + VS-05
 
@@ -138,6 +140,15 @@
 
 以上 `...` 均指 `src/SystemKnowledgeHub.Api/Features/BusinessRules/`；Migration 路径相对于 `src/SystemKnowledgeHub.Api/`。
 
+### 1.12 Search — VS-13
+
+| 路径 | 一句话职责 | Feature / Vertical Slice | 为什么需要 |
+| --- | --- | --- | --- |
+| `src/SystemKnowledgeHub.Api/Features/Search/Application/SearchQueries.cs`、`Models/SearchModels.cs` | 以只读 EF Projection 实现 Q02 的七类知识对象分组搜索、受控类型筛选、每组限制和字段 Drawer 导航意图。 | Search / VS-13 | 直接读取 canonical tables，不创建 Search Domain、实体或独立事实来源。 |
+| `src/SystemKnowledgeHub.Api/Features/Search/Api/SearchController.cs` | 暴露唯一 `GET /api/search` 并返回冻结的分组搜索 Contract。 | Search / VS-13 | 保持参数校验和 API 错误语义集中在具体 Controller。 |
+
+Search 第一版采用 SQLite 受限 `LIKE` 投影；未创建 FTS5 virtual table 或 Migration。
+
 ## 2. Frontend
 
 ### 2.1 Application and framework foundation
@@ -175,13 +186,13 @@
 
 | 路径 | 一句话职责 | Feature / Vertical Slice | 为什么需要 |
 | --- | --- | --- | --- |
-| `.../src/layouts/AppShell.vue` | 组合侧栏、顶部栏、主工作区、Context Rail、全局 Overlay Hosts 及全局待确认事项创建内容。 | Application Shell / VS-09B | 实现冻结的统一桌面框架，并保证 Drawer 切换为 Dialog 时创建内容仍可挂载。 |
+| `.../src/layouts/AppShell.vue` | 组合侧栏、顶部栏、主工作区、Context Rail、全局 Overlay Hosts、全局搜索与已实现的创建流程。 | Application Shell / VS-02～VS-13 | 实现冻结的统一桌面框架，并保证 Drawer 切换为 Dialog 时 Feature 内容仍可挂载。 |
 | `.../src/layouts/AppSidebar.vue` | 渲染正式产品标识与左侧导航。 | Application Shell | 提供稳定的全局知识入口。 |
-| `.../src/layouts/AppTopBar.vue` | 渲染全局搜索、新增和人员快照；在 Systems 列表接入创建入口。 | Application Shell / VS-02 | 复用冻结 Shell 并只在已实现上下文开放写入口。 |
+| `.../src/layouts/AppTopBar.vue` | 渲染可打开的全局搜索、新增和人员快照，并支持 `⌘ / Ctrl + K`。 | Application Shell / VS-02 + VS-13 | 保持唯一全局搜索入口，不创建 Search Route。 |
 | `.../src/layouts/AppContentArea.vue` | 定义 Main Content 与 Context Rail 两列区域。 | Application Shell | 维持 Detail 页统一信息架构。 |
 | `.../src/layouts/ContextRailHost.vue` | 提供 Feature 注入对象级 Context Rail 的目标。 | Application Shell / VS-01 | 避免页面创建第二套 Rail 容器。 |
 | `.../src/layouts/DrawerHost.vue` | 承载全局单实例 Element Plus Drawer。 | Application Shell / VS-01 + VS-06 + VS-08 | Column、Evidence 与 Relationship Drawer 复用同一 Overlay 状态。 |
-| `.../src/layouts/DialogHost.vue` | 承载全局单实例 Dialog 并提供 Feature 内容挂载点。 | Application Shell / VS-02 + VS-07 | 让创建与状态确认复用同一 Overlay Host，不产生页面级第二套 Dialog。 |
+| `.../src/layouts/DialogHost.vue` | 承载全局单实例 Dialog / Search Overlay 并提供 Feature 内容挂载点。 | Application Shell / VS-02 + VS-07 + VS-13 | 让创建、状态确认和全局搜索复用同一 Overlay Host，不产生第二套 Overlay 管理器。 |
 | `.../src/styles/tokens.css` | 定义颜色、尺寸、Rail/Drawer 宽度等全局 tokens。 | Design foundation | 避免 Feature 重复定义视觉体系。 |
 | `.../src/styles/typography.css` | 定义全局字体和技术标识排版。 | Design foundation | 保持 Developer Tool 的文字层级。 |
 | `.../src/styles/element-plus-overrides.css` | 约束 Element Plus 与 Golden Design Baseline 的差异。 | Design foundation | 防止页面退化为默认后台样式。 |
@@ -195,18 +206,22 @@
 | `.../src/features/bootstrap/pages/FoundationView.vue` | 展示基础工程、Drawer/Dialog Host 和连接状态。 | Implementation Bootstrap | 是 Bootstrap 阶段的人工 smoke 页面，不是正式总览。 |
 | `.../src/features/bootstrap/pages/NotFoundView.vue` | 展示未匹配 Route 的统一 404 页面。 | Frontend foundation | 避免无效地址出现空白应用。 |
 
-### 2.5 DatabaseKnowledge — VS-01
+### 2.5 DatabaseKnowledge — VS-01 + VS-12A + VS-12B
 
 | 路径 | 一句话职责 | Feature / Vertical Slice | 为什么需要 |
 | --- | --- | --- | --- |
-| `.../src/features/database-knowledge/api/databaseKnowledgeContracts.ts` | 定义并运行时解码 Q09/Q10 frozen JSON contract。 | DatabaseKnowledge / VS-01 | 外部 JSON 从 `unknown` 安全收窄为严格类型。 |
-| `.../src/features/database-knowledge/api/databaseKnowledgeApi.ts` | 提供对象/字段详情 GET 方法和安全 ID helper。 | DatabaseKnowledge / VS-01 | Feature 复用 shared apiClient 且不保存状态。 |
+| `.../src/features/database-knowledge/api/databaseKnowledgeContracts.ts`、`databaseKnowledgeApi.ts` | 定义、解码并调用 Q08～Q10、C08～C14 的 frozen contract。 | DatabaseKnowledge / VS-01 + VS-12A + VS-12B | 外部 JSON 从 `unknown` 安全收窄为严格类型，并保持 canonical routes。 |
+| `.../src/features/database-knowledge/composables/useDatabaseObjectsList.ts` | 管理对象列表的受控筛选、分页、排序、加载及取消。 | DatabaseKnowledge / VS-12A | 将 RP-06 数据保持在 Feature local state，不放入 Pinia。 |
+| `.../src/features/database-knowledge/pages/DatabaseObjectsListView.vue` | 渲染 RP-06 的 Database/Schema 浏览、对象表、筛选和详情导航。 | DatabaseKnowledge / VS-12A | List Page 专注 Find / Filter / Browse / Navigate，不复制 Detail 内容。 |
+| `.../src/features/database-knowledge/components/CreateDatabaseKnowledgeFlow.vue` | 在既有新增 Dialog Host 中分派来源登记与对象最小注册。 | DatabaseKnowledge / VS-12A | 复用渐进式创建模式，不建立全页 CRUD 表单或第二个 Overlay 管理器。 |
 | `.../src/features/database-knowledge/composables/useDatabaseObjectDetail.ts` | 管理对象详情加载、错误、取消和字段选择。 | DatabaseKnowledge / VS-01 | 页面不直接 fetch，也不建立通用 Detail abstraction。 |
 | `.../src/features/database-knowledge/composables/useDatabaseColumnDetail.ts` | 按 Drawer descriptor ID 管理字段详情请求。 | DatabaseKnowledge / VS-01 | Drawer 数据留在局部状态，不塞入 Pinia。 |
-| `.../src/features/database-knowledge/pages/DatabaseObjectDetailView.vue` | 渲染对象 Header、Metadata、Column Table，并连接 Rail/Drawer。 | DatabaseKnowledge / VS-01 | 是 RP-07 对应的正式 Route Page。 |
+| `.../src/features/database-knowledge/pages/DatabaseObjectDetailView.vue` | 渲染对象 Header、Metadata、Column Table，并响应 `selectedColumnId` 导航意图以打开字段 Drawer。 | DatabaseKnowledge / VS-01 + VS-12B + VS-13 | 是 RP-07 对应的正式 Route Page，并承接 Global Search 的字段结果导航。 |
 | `.../src/features/database-knowledge/components/DatabaseObjectContextRail.vue` | 渲染 Table-level 关系与缺口摘要。 | DatabaseKnowledge / VS-01 | 保持 Rail 与字段级 Drawer 职责分离。 |
-| `.../src/features/database-knowledge/components/ColumnDetailDrawer.vue` | 渲染 Column-level 业务知识、证据、缺口和低频折叠区。 | DatabaseKnowledge / VS-01 | 是 DR-03 对应的单实例对象详情 Drawer。 |
-| `.../src/features/database-knowledge/database-knowledge.css` | 定义 VS-01 页面、表格、Rail 和 Drawer 的局部样式。 | DatabaseKnowledge / VS-01 | 补充 Golden 特有布局，不污染全局 token。 |
+| `.../src/features/database-knowledge/components/RegisterDatabaseColumnDialog.vue` | 收集 C10 最小字段元数据并登记字段。 | DatabaseKnowledge / VS-12B | 保持字段登记是 Object Detail 中的轻量作者操作。 |
+| `.../src/features/database-knowledge/components/DatabaseObjectKnowledgeDrawer.vue` | 在现有单一 Drawer Host 中维护对象级业务说明、访问方式和业务唯一键。 | DatabaseKnowledge / VS-12B | 复用冻结的 Drawer Edit 模式，不增加编辑 Route。 |
+| `.../src/features/database-knowledge/components/ColumnDetailDrawer.vue` | 渲染 Column-level 业务知识、证据、缺口和低频折叠区，并在同一 Drawer 内维护字段知识和已知值。 | DatabaseKnowledge / VS-01 + VS-12B | 是 DR-03 / DR-11 对应的单实例对象详情与编辑 Drawer。 |
+| `.../src/features/database-knowledge/database-knowledge.css` | 定义对象列表、登记表单及既有详情/Rail/Drawer 的局部样式。 | DatabaseKnowledge / VS-01 + VS-12A + VS-12B | 补充 Golden 特有布局，不污染全局 token。 |
 
 ### 2.6 Systems — VS-02 + VS-03
 
@@ -221,7 +236,7 @@
 | `.../src/features/systems/components/SystemOverviewSection.vue` | 渲染系统概览只读/内联编辑、校验与并发冲突状态。 | Systems / VS-03 | 复用 ES-01 模式实现 C02，而不新增编辑 Route。 |
 | `.../src/features/systems/components/SystemContextRail.vue` | 渲染系统级关系与缺口摘要。 | Systems / VS-03 | 保持 Context Rail 只回答系统关联与缺口，不复制 Main Content。 |
 | `.../src/features/systems/components/CreateSystemFlow.vue` | 在全局 Dialog Host 中编排知识类型选择与系统最小创建。 | Systems / VS-02 | 落实 Progressive Documentation，而非巨大表单。 |
-| `.../src/features/systems/components/CreateKnowledgeObjectChooser.vue` | 展示冻结知识对象类型入口，并按当前上下文开放 System、Business Function、Business Rule、Integration。 | Shared authoring entry / VS-02～VS-11 | 保留 Golden Create Flow 信息架构，不为尚未实现的对象类型虚构创建能力。 |
+| `.../src/features/systems/components/CreateKnowledgeObjectChooser.vue` | 展示冻结知识对象类型入口，并按当前上下文开放已实现的 System、Database Knowledge、Business Function、Business Rule、Integration。 | Shared authoring entry / VS-02～VS-12A | 保留 Golden Create Flow 信息架构，不为尚未实现的对象类型虚构创建能力。 |
 | `.../src/features/systems/components/CreateSystemDialog.vue` | 收集 C01 最小字段、人员快照并提交创建。 | Systems / VS-02 | 创建后关闭、刷新并保持知识状态“未知”。 |
 | `.../src/features/systems/systems.css` | 定义 RP-02、RP-03、ES-01 与系统创建流程的局部样式。 | Systems / VS-02 + VS-03 | 对齐 Golden 密度且不改变 Application Shell。 |
 
@@ -323,6 +338,16 @@
 
 以上 `...` 均指 `src/SystemKnowledgeHub.Web/src/features/integrations/`。
 
+### 2.14 Search — VS-13
+
+| 路径 | 一句话职责 | Feature / Vertical Slice | 为什么需要 |
+| --- | --- | --- | --- |
+| `.../api/searchContracts.ts`、`searchApi.ts` | 解码并调用 Q02 分组搜索 Contract，包含安全 ID、状态和 Column Drawer 导航意图。 | Search / VS-13 | 让外部 JSON 在 Feature API 边界收窄，页面不直接 fetch。 |
+| `.../composables/useGlobalSearch.ts`、`searchSession.ts` | 管理 debounce、AbortSignal、键盘选择、导航与会话级最近搜索/访问。 | Search / VS-13 | 保持搜索状态 Feature-local，不持久化用户历史或引入 Pinia 实体缓存。 |
+| `.../components/GlobalSearchOverlay.vue`、`search.css` | 实现 OV-01～OV-03 的搜索 Overlay、分组结果、无结果恢复路径与高密度视觉。 | Search / VS-13 | 复用现有 Dialog Host，保持全局搜索不是独立 Route。 |
+
+以上 `...` 均指 `src/SystemKnowledgeHub.Web/src/features/search/`。
+
 ## 3. Tests
 
 ### 3.1 Backend tests
@@ -345,6 +370,9 @@
 | `.../Api/KnowledgeResolutionApiTests.cs` | 验证 concrete Apply 的原子性、合法状态顺序及 Close/Reopen 后历史 Applied Update 保留。 | UnknownItems / VS-09B | 用 3 个真实 SQLite/HTTP 测试覆盖本 Slice 最高风险规则。 |
 | `.../Api/BusinessRulesApiTests.cs` | 验证 C15/Q13 唯一性、C16 保留关系/证据，以及 C32c 失败回滚与原子 Apply。 | BusinessRules / VS-10 | 用 3 个真实 SQLite/HTTP 测试覆盖本 Slice 最高风险规则。 |
 | `.../Api/IntegrationsApiTests.cs` | 验证 C17/Q14、C18/C19 保留既有知识，以及 C32d 失败原子性。 | Integrations / VS-11 | 用 3 个真实 SQLite/HTTP 测试覆盖已登记系统端点、类型化契约与具体 Apply。 |
+| `.../Api/DatabaseObjectsListRegistrationApiTests.cs` | 验证 Q08 的 System/Source/Column 命中读取，以及 C08/C09 的 SQLite 写入与可见性。 | DatabaseKnowledge / VS-12A | 用 3 个真实 SQLite/HTTP 测试覆盖本 Slice 的核心读取与最小登记闭环。 |
+| `.../Api/DatabaseKnowledgeAuthoringApiTests.cs` | 验证 C10～C14 的 SQLite 写入、状态不自动推进、关系/证据保留和精确引用阻止移除。 | DatabaseKnowledge / VS-12B | 用 4 个真实 SQLite/HTTP 测试覆盖本 Slice 的高风险维护规则。 |
+| `.../Api/GlobalSearchApiTests.cs` | 验证 Q02 的跨类型分组、`STATE_FLAG` 技术标识/Column Drawer 导航，以及待确认事项状态隔离。 | Search / VS-13 | 用 3 个真实 SQLite/HTTP 测试覆盖本 Slice 的核心读模型。 |
 
 以上 `...` 均指 `tests/SystemKnowledgeHub.Api.Tests/`。
 
@@ -407,6 +435,9 @@
 | `docs/reports/VS09B_Knowledge_Resolution_Verification_Report.md` | 记录 VS-09B concrete Apply、结论状态动作、原子性测试、运行闭环和进程清理。 | UnknownItems / VS-09B | 为第九阶段知识解决 Slice Review 提供完成证据。 |
 | `docs/reports/VS10_Business_Rule_Verification_Report.md` | 记录 VS-10 Schema、Q13/C15/C16/C32c、复用能力、测试、运行闭环与进程清理。 | BusinessRules / VS-10 | 为第十条 Vertical Slice Review 提供完成证据。 |
 | `docs/reports/VS11_Integration_Verification_Report.md` | 记录 VS-11 Schema、Q14/C17～C19/C32d、测试、运行闭环、Golden Review 与进程清理。 | Integrations / VS-11 | 为第十一条 Vertical Slice Review 提供完成证据。 |
+| `docs/reports/VS12A_Database_Objects_List_Registration_Verification_Report.md` | 记录 VS-12A 的 Q08/C08/C09、测试、运行闭环、Golden Review 与进程清理。 | DatabaseKnowledge / VS-12A | 为数据库对象列表与最小登记 Slice Review 提供完成证据。 |
+| `docs/reports/VS12B_Database_Knowledge_Authoring_Verification_Report.md` | 记录 VS-12B 的 C10～C14、测试、运行闭环、Golden Review 与进程清理。 | DatabaseKnowledge / VS-12B | 为数据库对象/字段知识维护与 Known Value Slice Review 提供完成证据。 |
+| `docs/reports/VS13_Global_Search_Verification_Report.md` | 记录 VS-13 的 Q02 搜索策略、分组、导航、测试、运行闭环、Golden Review 与进程清理。 | Search / VS-13 | 为全局搜索 MVP 收尾 Slice Review 提供完成证据。 |
 | `docs/reports/MVP_Implementation_Audit_Preparation_Report.md` | 记录 VS-11 后的构建检查、当前结构、迁移、测试概况及临时产物清理结果。 | MVP implementation audit preparation | 作为后续审计开始前的静态基线。 |
 | `docs/reports/System_Knowledge_Hub_MVP_Final_Freeze_Validation_Report.md` | 记录 Product Design Final Freeze 的路径、引用和唯一性校验。 | Design freeze | 证明 Golden UI 包在进入实现前已冻结。 |
 | `docs/reports/design-qa.md` | 记录 VS-01 Golden UI 对比与修订结果。 | DatabaseKnowledge / VS-01 | 证明详情页实现通过视觉 QA。 |

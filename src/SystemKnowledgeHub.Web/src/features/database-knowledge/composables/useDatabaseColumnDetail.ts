@@ -45,9 +45,9 @@ export function useDatabaseColumnDetail(columnId: Ref<number | null>) {
 
   onBeforeUnmount(() => activeRequest?.abort())
 
-  function reload(): void {
+  async function reload(): Promise<void> {
     if (columnId.value !== null) {
-      void load(columnId.value)
+      await load(columnId.value)
     }
   }
 

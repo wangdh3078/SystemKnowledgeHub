@@ -126,8 +126,18 @@ button {
 }
 
 .app-sidebar__item:disabled {
-  cursor: not-allowed;
+  cursor: pointer;
   opacity: 0.68;
+}
+
+.app-topbar__search:hover {
+  border-color: var(--color-primary);
+  background: #f5f9ff;
+  color: var(--color-text);
+}
+
+.global-search-dialog.el-dialog {
+  max-width: calc(100vw - 48px);
 }
 
 .app-sidebar__item--active,

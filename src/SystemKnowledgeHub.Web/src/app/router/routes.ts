@@ -3,6 +3,7 @@ import FoundationView from '../../features/bootstrap/pages/FoundationView.vue'
 import BusinessFunctionDetailView from '../../features/business-functions/pages/BusinessFunctionDetailView.vue'
 import BusinessFunctionsListView from '../../features/business-functions/pages/BusinessFunctionsListView.vue'
 import DatabaseObjectDetailView from '../../features/database-knowledge/pages/DatabaseObjectDetailView.vue'
+import DatabaseObjectsListView from '../../features/database-knowledge/pages/DatabaseObjectsListView.vue'
 import SystemsListView from '../../features/systems/pages/SystemsListView.vue'
 import SystemDetailView from '../../features/systems/pages/SystemDetailView.vue'
 import NotFoundView from '../../features/bootstrap/pages/NotFoundView.vue'
@@ -14,7 +15,7 @@ import IntegrationDetailView from '../../features/integrations/pages/Integration
 export const routes: readonly RouteRecordRaw[] = [
   {
     path: '/',
-    redirect: { name: 'database-object-detail', params: { id: '45' } },
+    redirect: { name: 'database-objects-list' },
   },
   {
     path: '/foundation',
@@ -93,6 +94,17 @@ export const routes: readonly RouteRecordRaw[] = [
     name: 'unknown-item-detail',
     component: UnknownItemDetailView,
     meta: { title: '待确认事项详情', layout: 'app-shell', navigationKey: 'unknown-items', hasContextRail: true },
+  },
+  {
+    path: '/database-objects',
+    name: 'database-objects-list',
+    component: DatabaseObjectsListView,
+    meta: {
+      title: '数据库对象',
+      layout: 'app-shell',
+      navigationKey: 'database',
+      hasContextRail: false,
+    },
   },
   {
     path: '/database/:id',

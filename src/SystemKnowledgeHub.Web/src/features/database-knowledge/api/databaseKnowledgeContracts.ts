@@ -1,4 +1,5 @@
 import { isKnowledgeStatus, type KnowledgeStatus } from '../../../api/contracts/knowledge'
+import type { ActorContext } from '../../../app/stores/actor'
 
 export type { KnowledgeStatus } from '../../../api/contracts/knowledge'
 
@@ -11,6 +12,102 @@ export interface DatabaseSourceContext {
   readonly id: number
   readonly name: string
   readonly engine: string
+}
+
+export type DatabaseObjectType = 'Table' | 'View'
+export type DatabaseAccessMode = 'Read' | 'Write' | 'ReadWrite' | 'Unknown'
+export type DatabaseObjectsSort =
+  | 'objectName:asc'
+  | 'objectName:desc'
+  | 'schema:asc'
+  | 'schema:desc'
+  | 'estimatedRows:asc'
+  | 'estimatedRows:desc'
+  | 'knowledgeStatus:asc'
+  | 'knowledgeStatus:desc'
+  | 'unknownCount:asc'
+  | 'unknownCount:desc'
+
+export interface DatabaseObjectsListParameters {
+  readonly systemId?: number
+  readonly databaseSourceId?: number
+  readonly schema?: string
+  readonly objectType?: DatabaseObjectType
+  readonly knowledgeStatus?: KnowledgeStatus
+  readonly search?: string
+  readonly sort: DatabaseObjectsSort
+  readonly page: number
+  readonly pageSize: number
+}
+
+export interface DatabaseObjectListItem {
+  readonly id: number
+  readonly databaseSource: DatabaseSourceContext
+  readonly schema: string
+  readonly objectName: string
+  readonly objectType: DatabaseObjectType
+  readonly businessDescription: string | null
+  readonly estimatedRows: number | null
+  readonly accessMode: DatabaseAccessMode
+  readonly relatedFunctionCount: number
+  readonly unknownCount: number
+  readonly knowledgeStatus: KnowledgeStatus
+  readonly matchedColumn: { readonly id: number; readonly columnName: string } | null
+}
+
+export interface DatabaseObjectsListResponse {
+  readonly browseContext: {
+    readonly system: SystemContext | null
+    readonly databaseSources: readonly DatabaseSourceContext[]
+    readonly schemas: readonly string[]
+  }
+  readonly items: readonly DatabaseObjectListItem[]
+  readonly page: number
+  readonly pageSize: number
+  readonly total: number
+}
+
+export interface CreateDatabaseSourceRequest {
+  readonly systemId: number
+  readonly name: string
+  readonly engine: string
+  readonly environment?: string | null
+  readonly instanceName?: string | null
+  readonly serviceName?: string | null
+  readonly databaseName?: string | null
+  readonly description?: string | null
+  readonly isPrimary?: boolean
+  readonly actor: ActorContext
+}
+
+export interface CreateDatabaseSourceResponse {
+  readonly id: number
+  readonly systemId: number
+  readonly name: string
+  readonly engine: string
+  readonly concurrencyToken: string
+}
+
+export interface RegisterDatabaseObjectRequest {
+  readonly databaseSourceId: number
+  readonly schemaName: string
+  readonly objectName: string
+  readonly objectType: DatabaseObjectType
+  readonly estimatedRows?: number | null
+  readonly accessMode?: DatabaseAccessMode
+  readonly primaryKeyColumns?: readonly string[] | null
+  readonly businessKeyColumns?: readonly string[] | null
+  readonly businessDescription?: string | null
+  readonly actor: ActorContext
+}
+
+export interface RegisterDatabaseObjectResponse {
+  readonly id: number
+  readonly databaseSourceId: number
+  readonly qualifiedName: string
+  readonly objectType: DatabaseObjectType
+  readonly knowledgeStatus: KnowledgeStatus
+  readonly concurrencyToken: string
 }
 
 export interface DatabaseColumnSummary {
@@ -108,6 +205,94 @@ export interface DatabaseColumnDetailResponse {
   readonly availableActions: readonly string[]
 }
 
+export interface RegisterDatabaseColumnRequest {
+  readonly ordinalPosition: number
+  readonly columnName: string
+  readonly dataType: string
+  readonly nullable: boolean
+  readonly defaultValue?: string | null
+  readonly databaseComment?: string | null
+  readonly businessDescription?: string | null
+  readonly actor: ActorContext
+  readonly concurrencyToken: string
+}
+
+export interface RegisterDatabaseColumnResponse {
+  readonly column: {
+    readonly id: number
+    readonly columnName: string
+    readonly knowledgeStatus: KnowledgeStatus
+    readonly concurrencyToken: string
+  }
+  readonly parentConcurrencyToken: string
+}
+
+export interface UpdateDatabaseObjectKnowledgeRequest {
+  readonly businessDescription?: string | null
+  readonly accessMode: DatabaseAccessMode
+  readonly businessKeyColumns?: readonly string[] | null
+  readonly actor: ActorContext
+  readonly concurrencyToken: string
+}
+
+export interface DatabaseObjectKnowledgeResponse {
+  readonly id: number
+  readonly businessDescription: string | null
+  readonly accessMode: DatabaseAccessMode
+  readonly businessKeyColumns: readonly string[]
+  readonly knowledgeStatus: KnowledgeStatus
+  readonly concurrencyToken: string
+}
+
+export interface UpdateDatabaseColumnKnowledgeRequest {
+  readonly businessDescription?: string | null
+  readonly actor: ActorContext
+  readonly concurrencyToken: string
+}
+
+export interface DatabaseColumnKnowledgeResponse {
+  readonly id: number
+  readonly businessDescription: string | null
+  readonly knowledgeStatus: KnowledgeStatus
+  readonly concurrencyToken: string
+}
+
+export interface AddColumnKnownValueRequest {
+  readonly value: string
+  readonly meaning: string
+  readonly sortOrder?: number | null
+  readonly actor: ActorContext
+  readonly concurrencyToken: string
+}
+
+export interface AddColumnKnownValueResponse {
+  readonly knownValue: {
+    readonly id: number
+    readonly value: string
+    readonly meaning: string
+    readonly sortOrder: number
+  }
+  readonly knowledgeStatus: KnowledgeStatus
+  readonly concurrencyToken: string
+}
+
+export interface RemoveColumnKnownValueRequest {
+  readonly confirmed: boolean
+  readonly actor: ActorContext
+  readonly concurrencyToken: string
+}
+
+export interface RemoveColumnKnownValueResponse {
+  readonly columnId: number
+  readonly knownValues: readonly {
+    readonly id: number
+    readonly value: string
+    readonly meaning: string
+    readonly sortOrder: number
+  }[]
+  readonly concurrencyToken: string
+}
+
 type JsonObject = Readonly<Record<string, unknown>>
 
 function isJsonObject(value: unknown): value is JsonObject {
@@ -164,6 +349,23 @@ function readKnowledgeStatus(value: unknown, field: string): KnowledgeStatus {
   throw new Error(`${field} has an unsupported status`)
 }
 
+function readDatabaseObjectType(value: unknown, field: string): DatabaseObjectType {
+  const objectType = readString(value, field)
+  if (objectType === 'Table' || objectType === 'View') return objectType
+  throw new Error(`${field} has an unsupported object type`)
+}
+
+function readDatabaseAccessMode(value: unknown, field: string): DatabaseAccessMode {
+  const accessMode = readString(value, field)
+  if (
+    accessMode === 'Read'
+    || accessMode === 'Write'
+    || accessMode === 'ReadWrite'
+    || accessMode === 'Unknown'
+  ) return accessMode
+  throw new Error(`${field} has an unsupported access mode`)
+}
+
 function readStringArray(value: unknown, field: string): readonly string[] {
   return readArray(value, field).map((item, index) => readString(item, `${field}[${index}]`))
 }
@@ -171,6 +373,86 @@ function readStringArray(value: unknown, field: string): readonly string[] {
 function readSystemContext(value: unknown, field: string): SystemContext {
   const item = readObject(value, field)
   return { id: readId(item.id, `${field}.id`), name: readString(item.name, `${field}.name`) }
+}
+
+function readDatabaseSourceContext(value: unknown, field: string): DatabaseSourceContext {
+  const source = readObject(value, field)
+  return {
+    id: readId(source.id, `${field}.id`),
+    name: readString(source.name, `${field}.name`),
+    engine: readString(source.engine, `${field}.engine`),
+  }
+}
+
+export function decodeDatabaseObjectsList(value: unknown): DatabaseObjectsListResponse {
+  const root = readObject(value, 'databaseObjectsList')
+  const browseContext = readObject(root.browseContext, 'browseContext')
+  const system = browseContext.system === null
+    ? null
+    : readSystemContext(browseContext.system, 'browseContext.system')
+
+  return {
+    browseContext: {
+      system,
+      databaseSources: readArray(browseContext.databaseSources, 'browseContext.databaseSources')
+        .map((item, index) => readDatabaseSourceContext(item, `browseContext.databaseSources[${index}]`)),
+      schemas: readStringArray(browseContext.schemas, 'browseContext.schemas'),
+    },
+    items: readArray(root.items, 'items').map((value, index) => {
+      const item = readObject(value, `items[${index}]`)
+      const matchedColumn = item.matchedColumn === null
+        ? null
+        : (() => {
+            const column = readObject(item.matchedColumn, `items[${index}].matchedColumn`)
+            return {
+              id: readId(column.id, `items[${index}].matchedColumn.id`),
+              columnName: readString(column.columnName, `items[${index}].matchedColumn.columnName`),
+            }
+          })()
+      return {
+        id: readId(item.id, `items[${index}].id`),
+        databaseSource: readDatabaseSourceContext(item.databaseSource, `items[${index}].databaseSource`),
+        schema: readString(item.schema, `items[${index}].schema`),
+        objectName: readString(item.objectName, `items[${index}].objectName`),
+        objectType: readDatabaseObjectType(item.objectType, `items[${index}].objectType`),
+        businessDescription: readNullableString(item.businessDescription, `items[${index}].businessDescription`),
+        estimatedRows: item.estimatedRows === null
+          ? null
+          : readInteger(item.estimatedRows, `items[${index}].estimatedRows`),
+        accessMode: readDatabaseAccessMode(item.accessMode, `items[${index}].accessMode`),
+        relatedFunctionCount: readInteger(item.relatedFunctionCount, `items[${index}].relatedFunctionCount`),
+        unknownCount: readInteger(item.unknownCount, `items[${index}].unknownCount`),
+        knowledgeStatus: readKnowledgeStatus(item.knowledgeStatus, `items[${index}].knowledgeStatus`),
+        matchedColumn,
+      }
+    }),
+    page: readInteger(root.page, 'page', 1),
+    pageSize: readInteger(root.pageSize, 'pageSize', 1),
+    total: readInteger(root.total, 'total'),
+  }
+}
+
+export function decodeCreateDatabaseSource(value: unknown): CreateDatabaseSourceResponse {
+  const root = readObject(value, 'createdDatabaseSource')
+  return {
+    id: readId(root.id, 'id'),
+    systemId: readId(root.systemId, 'systemId'),
+    name: readString(root.name, 'name'),
+    engine: readString(root.engine, 'engine'),
+    concurrencyToken: readString(root.concurrencyToken, 'concurrencyToken'),
+  }
+}
+
+export function decodeRegisterDatabaseObject(value: unknown): RegisterDatabaseObjectResponse {
+  const root = readObject(value, 'registeredDatabaseObject')
+  return {
+    id: readId(root.id, 'id'),
+    databaseSourceId: readId(root.databaseSourceId, 'databaseSourceId'),
+    qualifiedName: readString(root.qualifiedName, 'qualifiedName'),
+    objectType: readDatabaseObjectType(root.objectType, 'objectType'),
+    knowledgeStatus: readKnowledgeStatus(root.knowledgeStatus, 'knowledgeStatus'),
+    concurrencyToken: readString(root.concurrencyToken, 'concurrencyToken'),
+  }
 }
 
 export function decodeDatabaseObjectDetail(value: unknown): DatabaseObjectDetailResponse {
@@ -362,5 +644,70 @@ export function decodeDatabaseColumnDetail(value: unknown): DatabaseColumnDetail
       }
     }),
     availableActions: readStringArray(root.availableActions, 'availableActions'),
+  }
+}
+
+export function decodeRegisterDatabaseColumn(value: unknown): RegisterDatabaseColumnResponse {
+  const root = readObject(value, 'registeredDatabaseColumn')
+  const column = readObject(root.column, 'column')
+  return {
+    column: {
+      id: readId(column.id, 'column.id'),
+      columnName: readString(column.columnName, 'column.columnName'),
+      knowledgeStatus: readKnowledgeStatus(column.knowledgeStatus, 'column.knowledgeStatus'),
+      concurrencyToken: readString(column.concurrencyToken, 'column.concurrencyToken'),
+    },
+    parentConcurrencyToken: readString(root.parentConcurrencyToken, 'parentConcurrencyToken'),
+  }
+}
+
+export function decodeDatabaseObjectKnowledge(value: unknown): DatabaseObjectKnowledgeResponse {
+  const root = readObject(value, 'databaseObjectKnowledge')
+  return {
+    id: readId(root.id, 'id'),
+    businessDescription: readNullableString(root.businessDescription, 'businessDescription'),
+    accessMode: readDatabaseAccessMode(root.accessMode, 'accessMode'),
+    businessKeyColumns: readStringArray(root.businessKeyColumns, 'businessKeyColumns'),
+    knowledgeStatus: readKnowledgeStatus(root.knowledgeStatus, 'knowledgeStatus'),
+    concurrencyToken: readString(root.concurrencyToken, 'concurrencyToken'),
+  }
+}
+
+export function decodeDatabaseColumnKnowledge(value: unknown): DatabaseColumnKnowledgeResponse {
+  const root = readObject(value, 'databaseColumnKnowledge')
+  return {
+    id: readId(root.id, 'id'),
+    businessDescription: readNullableString(root.businessDescription, 'businessDescription'),
+    knowledgeStatus: readKnowledgeStatus(root.knowledgeStatus, 'knowledgeStatus'),
+    concurrencyToken: readString(root.concurrencyToken, 'concurrencyToken'),
+  }
+}
+
+function readKnownValueWrite(value: unknown, field: string): { readonly id: number; readonly value: string; readonly meaning: string; readonly sortOrder: number } {
+  const item = readObject(value, field)
+  return {
+    id: readId(item.id, `${field}.id`),
+    value: readString(item.value, `${field}.value`),
+    meaning: readString(item.meaning, `${field}.meaning`),
+    sortOrder: readInteger(item.sortOrder, `${field}.sortOrder`),
+  }
+}
+
+export function decodeAddColumnKnownValue(value: unknown): AddColumnKnownValueResponse {
+  const root = readObject(value, 'addColumnKnownValue')
+  return {
+    knownValue: readKnownValueWrite(root.knownValue, 'knownValue'),
+    knowledgeStatus: readKnowledgeStatus(root.knowledgeStatus, 'knowledgeStatus'),
+    concurrencyToken: readString(root.concurrencyToken, 'concurrencyToken'),
+  }
+}
+
+export function decodeRemoveColumnKnownValue(value: unknown): RemoveColumnKnownValueResponse {
+  const root = readObject(value, 'removeColumnKnownValue')
+  return {
+    columnId: readId(root.columnId, 'columnId'),
+    knownValues: readArray(root.knownValues, 'knownValues').map((item, index) =>
+      readKnownValueWrite(item, `knownValues[${index}]`)),
+    concurrencyToken: readString(root.concurrencyToken, 'concurrencyToken'),
   }
 }

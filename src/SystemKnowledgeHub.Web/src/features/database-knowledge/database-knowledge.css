@@ -164,6 +164,16 @@
   margin-bottom: 10px;
 }
 
+.database-columns-section__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.database-columns-section__actions .el-input {
+  width: 210px;
+}
+
 .database-columns-section__toolbar > div {
   display: flex;
   align-items: baseline;
@@ -703,5 +713,348 @@
 
   .database-metadata-strip {
     grid-template-columns: 0.7fr 0.75fr 1fr 0.8fr 0.9fr;
+  }
+}
+
+.database-objects-list-page {
+  min-height: 100%;
+  padding: 26px 30px 42px;
+  background: var(--color-surface);
+}
+
+.database-objects-list-page__header,
+.database-objects-list-page__header-actions,
+.database-objects-filter-bar,
+.database-objects-pagination {
+  display: flex;
+  align-items: center;
+}
+
+.database-objects-list-page__header {
+  justify-content: space-between;
+  padding-bottom: 21px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.database-objects-list-page__header h1 {
+  margin-top: 4px;
+  font-size: 25px;
+  letter-spacing: -0.025em;
+}
+
+.database-objects-list-page__header p {
+  margin-top: 5px;
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.page-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-primary);
+  font-size: 10px;
+  font-weight: 720;
+  gap: 5px;
+  letter-spacing: 0.04em;
+}
+
+.database-objects-list-page__header-actions {
+  gap: 16px;
+}
+
+.database-objects-list-page__header-actions > span {
+  color: var(--color-muted);
+  font-size: 11px;
+}
+
+.database-objects-list-page__workspace {
+  display: grid;
+  grid-template-columns: 205px minmax(0, 1fr);
+  min-height: 520px;
+  margin-top: 18px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.database-browser {
+  padding: 15px 12px;
+  border-right: 1px solid var(--color-border);
+  background: #fbfcfe;
+}
+
+.database-browser__heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 0 5px 12px;
+}
+
+.database-browser__heading strong {
+  color: var(--color-ink);
+  font-size: 12px;
+}
+
+.database-browser__heading span,
+.database-browser__group-label {
+  color: var(--color-muted);
+  font-size: 9px;
+}
+
+.database-browser .el-select {
+  width: 100%;
+}
+
+.database-browser__error {
+  margin: 8px 5px 0;
+  color: var(--status-danger);
+  font-size: 10px;
+}
+
+.database-browser__group {
+  margin-top: 15px;
+  padding-top: 11px;
+  border-top: 1px solid var(--color-border);
+}
+
+.database-browser__group--schemas {
+  display: grid;
+  gap: 2px;
+}
+
+.database-browser__group-label {
+  margin: 0 5px 5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.database-browser__node {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 7px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--color-text);
+  font-size: 11px;
+  text-align: left;
+}
+
+.database-browser__node:hover {
+  background: #f0f4f9;
+}
+
+.database-browser__node--active {
+  background: #eaf1fc;
+  color: #235ea8;
+  font-weight: 680;
+}
+
+.database-browser__node > span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.database-browser__node small {
+  color: var(--color-muted);
+  font-size: 9px;
+}
+
+.database-objects-list-page__content {
+  min-width: 0;
+  padding: 16px 18px 18px;
+}
+
+.database-objects-filter-bar {
+  margin-bottom: 14px;
+  gap: 9px;
+}
+
+.database-objects-filter-bar .el-input {
+  width: min(360px, 42%);
+}
+
+.database-objects-filter-bar .el-select {
+  width: 145px;
+}
+
+.database-objects-table {
+  width: 100%;
+  border-top: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+  font-size: 11px;
+}
+
+.database-objects-table::before,
+.database-objects-table .el-table__inner-wrapper::before {
+  display: none;
+}
+
+.database-objects-table .el-table__header th.el-table__cell {
+  height: 35px;
+  padding: 0;
+  background: #fafbfc;
+  color: var(--color-muted);
+  font-size: 10px;
+  font-weight: 720;
+  letter-spacing: 0.03em;
+}
+
+.database-objects-table .el-table__body td.el-table__cell {
+  height: 46px;
+  padding: 0;
+  border-bottom-color: #edf0f4;
+}
+
+.database-objects-table .cell {
+  padding: 0 9px;
+  line-height: 1.35;
+}
+
+.database-objects-table .el-table__row {
+  cursor: pointer;
+}
+
+.database-objects-table .el-table__row:hover > td.el-table__cell {
+  background: #f5f8fc;
+}
+
+.database-objects-table strong.technical-text {
+  color: #24324a;
+  font-size: 11px;
+}
+
+.database-objects-table__matched {
+  display: block;
+  margin-top: 3px;
+  color: #2367bf;
+  font-size: 9px;
+}
+
+.database-objects-table__next {
+  color: var(--color-muted);
+}
+
+.database-objects-pagination {
+  justify-content: space-between;
+  padding: 13px 1px 0;
+  color: var(--color-muted);
+  font-size: 11px;
+}
+
+.database-objects-inline-error {
+  margin: 10px 0 0;
+  color: var(--status-danger);
+  font-size: 11px;
+}
+
+.create-database-knowledge-dialog,
+.create-database-form-dialog {
+  min-width: 0;
+}
+
+.database-create-choice-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  margin-top: 20px;
+  gap: 12px;
+}
+
+.database-create-choice {
+  position: relative;
+  display: grid;
+  min-height: 150px;
+  padding: 18px;
+  justify-items: start;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: #fff;
+  color: var(--color-text);
+  text-align: left;
+}
+
+.database-create-choice:hover {
+  border-color: #a9c5ee;
+  background: #f7faff;
+}
+
+.database-create-choice strong {
+  margin-top: 12px;
+  color: var(--color-ink);
+  font-size: 13px;
+}
+
+.database-create-choice span {
+  margin-top: 6px;
+  color: var(--color-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.database-create-choice > .database-create-choice__arrow {
+  position: absolute;
+  right: 15px;
+  bottom: 15px;
+  transform: rotate(180deg);
+  color: #2367bf;
+}
+
+.database-create-choice-note {
+  margin: 15px 2px 2px;
+  color: var(--color-muted);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.create-database-form-dialog .el-form {
+  padding-top: 17px;
+}
+
+.create-database-form-dialog .el-collapse {
+  margin-top: 4px;
+  border-top-color: var(--color-border);
+}
+
+.create-database-form-dialog .el-collapse-item__header {
+  color: var(--color-text);
+  font-size: 12px;
+}
+
+.create-database-form-dialog .el-collapse-item__content {
+  padding-bottom: 8px;
+}
+
+.create-database-form-dialog__row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 14px;
+}
+
+.create-database-form-dialog__row:has(.el-form-item:nth-child(3)) {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 900px) {
+  .database-objects-list-page__workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .database-browser {
+    border-right: 0;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .database-browser__group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+  }
+
+  .database-browser__node {
+    width: auto;
   }
 }

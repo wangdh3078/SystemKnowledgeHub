@@ -10,11 +10,18 @@ const hasFeatureDialog = computed(() =>
   || overlayStore.currentDialog?.kind === 'create-business-function'
   || overlayStore.currentDialog?.kind === 'create-business-rule'
   || overlayStore.currentDialog?.kind === 'create-integration'
+  || overlayStore.currentDialog?.kind === 'create-database-knowledge'
+  || overlayStore.currentDialog?.kind === 'create-database-source'
+  || overlayStore.currentDialog?.kind === 'register-database-object'
+  || overlayStore.currentDialog?.kind === 'register-database-column'
   || overlayStore.currentDialog?.kind === 'change-knowledge-status'
+  || overlayStore.currentDialog?.kind === 'global-search'
   || overlayStore.currentDialog?.kind === 'create-unknown-item',
 )
 const dialogWidth = computed(() =>
-  overlayStore.currentDialog?.kind === 'change-knowledge-status'
+  overlayStore.currentDialog?.kind === 'global-search'
+    ? '980px'
+    : overlayStore.currentDialog?.kind === 'change-knowledge-status'
     ? '620px'
     : hasFeatureDialog.value ? '780px' : '460px',
 )
@@ -27,7 +34,7 @@ const dialogWidth = computed(() =>
     append-to-body
     destroy-on-close
     :show-close="false"
-    class="authoring-dialog"
+    :class="['authoring-dialog', { 'global-search-dialog': overlayStore.currentDialog?.kind === 'global-search' }]"
     @close="overlayStore.closeDialog"
   >
     <div id="dialog-feature-content"></div>

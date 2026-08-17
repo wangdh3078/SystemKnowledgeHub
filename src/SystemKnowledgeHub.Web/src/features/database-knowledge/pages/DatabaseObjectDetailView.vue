@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { DocumentChecked, EditPen, Search } from '@element-plus/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
 import KnowledgeStatusBadge from '../../../components/data-display/KnowledgeStatusBadge.vue'
@@ -10,6 +10,7 @@ import { useOverlayStore } from '../../../app/stores/overlays'
 import { parseSafeApiId } from '../api/databaseKnowledgeApi'
 import type { DatabaseColumnSummary } from '../api/databaseKnowledgeContracts'
 import DatabaseObjectContextRail from '../components/DatabaseObjectContextRail.vue'
+import RegisterDatabaseColumnDialog from '../components/RegisterDatabaseColumnDialog.vue'
 import { useDatabaseObjectDetail } from '../composables/useDatabaseObjectDetail'
 
 const route = useRoute()
@@ -68,6 +69,30 @@ function rowClassName({ row }: { row: DatabaseColumnSummary }): string {
   return row.id === selectedColumnId.value ? 'database-column-row--selected' : ''
 }
 
+function openObjectKnowledgeEdit(): void {
+  if (!detail.value) return
+  overlayStore.openDrawer({ kind: 'edit-database-object', id: detail.value.id, mode: 'edit' })
+}
+
+function openRegisterColumn(): void {
+  if (!detail.value) return
+  const greatestOrdinal = Math.max(0, ...detail.value.columns.map((column) => column.ordinalPosition))
+  overlayStore.openDialog({
+    kind: 'register-database-column',
+    id: detail.value.id,
+    mode: 'create',
+    payload: { concurrencyToken: detail.value.concurrencyToken, nextOrdinalPosition: greatestOrdinal + 1 },
+  })
+}
+
+function handleColumnRegistered(): void {
+  void loadRoute()
+}
+
+function databaseObjectChanged(): void {
+  void loadRoute()
+}
+
 async function loadRoute(): Promise<void> {
   if (databaseObjectId.value === null) return
   await load(databaseObjectId.value, routeSelectedColumnId.value)
@@ -77,6 +102,10 @@ async function loadRoute(): Promise<void> {
     await router.replace({ query: nextQuery })
   }
 }
+
+watch([databaseObjectId, routeSelectedColumnId], () => {
+  void loadRoute()
+})
 
 watch(
   () => overlayStore.currentDrawer,
@@ -92,6 +121,13 @@ watch(
 
 onMounted(() => {
   void loadRoute()
+  window.addEventListener('database-object:changed', databaseObjectChanged)
+  window.addEventListener('database-column:changed', databaseObjectChanged)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('database-object:changed', databaseObjectChanged)
+  window.removeEventListener('database-column:changed', databaseObjectChanged)
 })
 </script>
 
@@ -121,7 +157,7 @@ onMounted(() => {
             <h1 class="technical-text">{{ detail.overview.qualifiedName }}</h1>
             <p>{{ detail.overview.businessDescription ?? '尚未记录业务说明' }}</p>
           </div>
-          <el-button text type="primary" :icon="EditPen" disabled>编辑</el-button>
+          <el-button text type="primary" :icon="EditPen" @click="openObjectKnowledgeEdit">编辑</el-button>
         </div>
         <div class="database-object-header__tags">
           <span>{{ detail.overview.objectType === 'Table' ? '表' : '视图' }}</span>
@@ -149,7 +185,7 @@ onMounted(() => {
       <section class="database-columns-section" aria-labelledby="columns-title">
         <div class="database-columns-section__toolbar">
           <div><h2 id="columns-title">字段</h2><span>{{ detail.columns.length }} 个字段</span></div>
-          <el-input v-model="filterText" clearable placeholder="筛选字段" :prefix-icon="Search" />
+          <div class="database-columns-section__actions"><el-input v-model="filterText" clearable placeholder="筛选字段" :prefix-icon="Search" /><el-button type="primary" plain @click="openRegisterColumn">登记字段</el-button></div>
         </div>
 
         <EmptyState v-if="detail.columns.length === 0" />
@@ -202,6 +238,13 @@ onMounted(() => {
       <Teleport defer to="#context-rail-content">
         <DatabaseObjectContextRail :detail="detail" />
       </Teleport>
+
+      <RegisterDatabaseColumnDialog
+        :database-object-id="detail.id"
+        :concurrency-token="detail.concurrencyToken"
+        :next-ordinal-position="Math.max(0, ...detail.columns.map((column) => column.ordinalPosition)) + 1"
+        @registered="handleColumnRegistered"
+      />
 
     </template>
   </div>

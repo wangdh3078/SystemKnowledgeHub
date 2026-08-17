@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Plus, Search } from '@element-plus/icons-vue'
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useActorStore } from '../app/stores/actor'
 import { useOverlayStore } from '../app/stores/overlays'
@@ -16,6 +16,20 @@ function openCreate(): void {
   if (!createEnabled.value) return
   overlayStore.openDialog({ kind: 'create-knowledge-object', id: null, mode: 'create' })
 }
+
+function openSearch(): void {
+  overlayStore.openDialog({ kind: 'global-search', id: null, mode: 'read' })
+}
+
+function handleGlobalSearchShortcut(event: KeyboardEvent): void {
+  if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+    event.preventDefault()
+    openSearch()
+  }
+}
+
+onMounted(() => window.addEventListener('keydown', handleGlobalSearchShortcut))
+onBeforeUnmount(() => window.removeEventListener('keydown', handleGlobalSearchShortcut))
 </script>
 
 <template>
@@ -23,8 +37,8 @@ function openCreate(): void {
     <button
       class="app-topbar__search"
       type="button"
-      disabled
-      title="全局搜索将在后续业务切片中实现"
+      title="搜索所有知识对象"
+      @click="openSearch"
     >
       <el-icon :size="17"><Search /></el-icon>
       <span>搜索系统、业务功能、表、字段…</span>

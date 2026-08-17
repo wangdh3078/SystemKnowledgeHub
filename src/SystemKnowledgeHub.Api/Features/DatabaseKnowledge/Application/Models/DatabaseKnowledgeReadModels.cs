@@ -4,6 +4,59 @@ public sealed record SystemContext(long Id, string Name);
 
 public sealed record DatabaseSourceContext(long Id, string Name, string Engine);
 
+public sealed record DatabaseObjectListQuery(
+    long? SystemId,
+    long? DatabaseSourceId,
+    string? Schema,
+    string? ObjectType,
+    string? KnowledgeStatus,
+    string? Search,
+    string? Sort,
+    int? Page,
+    int? PageSize);
+
+public sealed record DatabaseObjectMatchedColumn(long Id, string ColumnName);
+
+public sealed record DatabaseObjectListItem(
+    long Id,
+    DatabaseSourceContext DatabaseSource,
+    string Schema,
+    string ObjectName,
+    string ObjectType,
+    string? BusinessDescription,
+    long? EstimatedRows,
+    string AccessMode,
+    int RelatedFunctionCount,
+    int UnknownCount,
+    string KnowledgeStatus,
+    DatabaseObjectMatchedColumn? MatchedColumn);
+
+public sealed record DatabaseObjectBrowseContext(
+    SystemContext? System,
+    IReadOnlyList<DatabaseSourceContext> DatabaseSources,
+    IReadOnlyList<string> Schemas);
+
+public sealed record DatabaseObjectsListResponse(
+    DatabaseObjectBrowseContext BrowseContext,
+    IReadOnlyList<DatabaseObjectListItem> Items,
+    int Page,
+    int PageSize,
+    int Total);
+
+public enum DatabaseObjectsListFailure
+{
+    None,
+    Validation,
+    SystemNotFound,
+    DatabaseSourceNotFound,
+    DatabaseSourceOutsideSystem,
+}
+
+public sealed record DatabaseObjectsListQueryResult(
+    DatabaseObjectsListResponse? Response,
+    IReadOnlyDictionary<string, string[]>? FieldErrors,
+    DatabaseObjectsListFailure Failure);
+
 public sealed record DatabaseObjectOverview(
     string QualifiedName,
     string ObjectType,

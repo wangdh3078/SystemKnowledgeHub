@@ -6,6 +6,7 @@ import EvidenceDrawerContent from '../features/evidence/components/EvidenceDrawe
 import RelationshipDrawerContent from '../features/relationships/components/RelationshipDrawerContent.vue'
 import BusinessRuleDrawerContent from '../features/business-rules/components/BusinessRuleDrawerContent.vue'
 import ColumnDetailDrawer from '../features/database-knowledge/components/ColumnDetailDrawer.vue'
+import DatabaseObjectKnowledgeDrawer from '../features/database-knowledge/components/DatabaseObjectKnowledgeDrawer.vue'
 import IntegrationDrawerContent from '../features/integrations/components/IntegrationDrawerContent.vue'
 
 const overlayStore = useOverlayStore()
@@ -54,6 +55,10 @@ watch(
     <ColumnDetailDrawer
       v-else-if="overlayStore.currentDrawer?.kind === 'database-column'"
       :column-id="overlayStore.currentDrawer.id"
+    />
+    <DatabaseObjectKnowledgeDrawer
+      v-else-if="overlayStore.currentDrawer?.kind === 'edit-database-object'"
+      :database-object-id="overlayStore.currentDrawer.id"
     />
     <div v-else class="drawer-host__foundation">
       <el-icon :size="24"><DocumentChecked /></el-icon>

@@ -7,16 +7,12 @@ const route = useRoute()
 const router = useRouter()
 
 function navigateToFoundation(): void {
-  void router.push({ name: 'database-object-detail', params: { id: 45 } })
+  void router.push({ name: 'database-objects-list' })
 }
 
 function navigate(item: (typeof navigationItems)[number]): void {
   if (!item.enabled || !item.routeName) return
-  void router.push(
-    item.routeName === 'database-object-detail'
-      ? { name: item.routeName, params: { id: 45 } }
-      : { name: item.routeName },
-  )
+  void router.push({ name: item.routeName })
 }
 </script>
 

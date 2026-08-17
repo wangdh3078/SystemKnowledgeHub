@@ -188,7 +188,6 @@ onMounted(() => void load())
       </footer>
       <p v-if="error && data" class="systems-inline-error">刷新失败：{{ error }}</p>
     </section>
-
     <CreateSystemFlow @created="resetPageAndLoad" />
   </div>
 </template>

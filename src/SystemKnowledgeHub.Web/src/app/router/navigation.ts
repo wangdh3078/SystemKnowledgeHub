@@ -9,7 +9,7 @@ export interface NavigationItem {
   readonly label: string
   readonly icon: Component
   readonly enabled: boolean
-  readonly routeName?: 'foundation' | 'systems-list' | 'business-functions-list' | 'database-object-detail' | 'unknown-items-list'
+  readonly routeName?: 'foundation' | 'systems-list' | 'business-functions-list' | 'database-objects-list' | 'unknown-items-list'
 }
 
 export const navigationItems: readonly NavigationItem[] = [
@@ -27,7 +27,7 @@ export const navigationItems: readonly NavigationItem[] = [
     label: '数据库',
     icon: Coin,
     enabled: true,
-    routeName: 'database-object-detail',
+    routeName: 'database-objects-list',
   },
   {
     key: 'unknown-items',
