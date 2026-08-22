@@ -1,0 +1,128 @@
+import { apiClient } from '../../../api/client/apiClient'
+import type { ActorContext } from '../../../app/stores/actor'
+import {
+  decodeCurrentUser,
+  decodeLoginIdentities,
+  decodeKnowledgeRole,
+  decodeKnowledgeRoles,
+  decodeUserDetail,
+  decodeUserAccessLevel,
+  decodeUsersList,
+  type CurrentUserProfile,
+  type KnowledgeRole,
+  type LoginIdentity,
+  type KnowledgeRoleWriteRequest,
+  type SetActiveStateRequest,
+  type UpdateKnowledgeRoleRequest,
+  type UpdateUserRequest,
+  type UserDetail,
+  type UserAccessLevelResponse,
+  type UsersListResponse,
+  type UsersSort,
+  type UserWriteRequest,
+} from './userContracts'
+
+export function getCurrentUser(signal?: AbortSignal): Promise<CurrentUserProfile> {
+  return apiClient.get('/current-user', { signal, decode: decodeCurrentUser })
+}
+
+export interface UsersListParameters {
+  readonly keyword?: string
+  readonly isActive?: boolean
+  readonly sort: UsersSort
+  readonly page: number
+  readonly pageSize: number
+}
+
+export function getUsersList(parameters: UsersListParameters, signal?: AbortSignal): Promise<UsersListResponse> {
+  const query = new URLSearchParams({
+    sort: parameters.sort,
+    page: String(parameters.page),
+    pageSize: String(parameters.pageSize),
+  })
+  if (parameters.keyword) query.set('keyword', parameters.keyword)
+  if (parameters.isActive !== undefined) query.set('isActive', String(parameters.isActive))
+  return apiClient.get(`/users?${query.toString()}`, { signal, decode: decodeUsersList })
+}
+
+export function getUser(userId: number, signal?: AbortSignal): Promise<UserDetail> {
+  return apiClient.get(`/users/${userId}`, { signal, decode: decodeUserDetail })
+}
+
+export function createUser(request: UserWriteRequest): Promise<UserDetail> {
+  return apiClient.post('/users', request, { decode: decodeUserDetail })
+}
+
+export function updateUser(userId: number, request: UpdateUserRequest): Promise<UserDetail> {
+  return apiClient.put(`/users/${userId}`, request, { decode: decodeUserDetail })
+}
+
+export function setUserActiveState(
+  userId: number,
+  isActive: boolean,
+  concurrencyToken: string,
+  actor: ActorContext,
+): Promise<UserDetail> {
+  const request: SetActiveStateRequest = { isActive, concurrencyToken, actor }
+  return apiClient.put(`/users/${userId}/active-state`, request, { decode: decodeUserDetail })
+}
+
+export function getLoginIdentities(userId: number, signal?: AbortSignal): Promise<readonly LoginIdentity[]> {
+  return apiClient.get(`/users/${userId}/login-identities`, { signal, decode: decodeLoginIdentities })
+}
+
+export function createLoginIdentity(
+  userId: number,
+  request: { readonly provider: string; readonly subject: string },
+): Promise<LoginIdentity> {
+  return apiClient.post(`/users/${userId}/login-identities`, request, {
+    decode: (value) => decodeLoginIdentities([value])[0]!,
+  })
+}
+
+export function setLoginIdentityActiveState(
+  userId: number,
+  loginIdentity: LoginIdentity,
+  isActive: boolean,
+): Promise<LoginIdentity> {
+  return apiClient.put(`/users/${userId}/login-identities/${loginIdentity.id}/active-state`, {
+    isActive,
+    concurrencyToken: loginIdentity.concurrencyToken,
+  }, { decode: (value) => decodeLoginIdentities([value])[0]! })
+}
+
+export function setUserAccessLevel(
+  userId: number,
+  accessLevel: import('./userContracts').AccessLevel,
+  concurrencyToken: string,
+): Promise<UserAccessLevelResponse> {
+  return apiClient.put(`/users/${userId}/access-level`, { accessLevel, concurrencyToken }, {
+    decode: decodeUserAccessLevel,
+  })
+}
+
+export function getKnowledgeRoles(isActive?: boolean, signal?: AbortSignal): Promise<readonly KnowledgeRole[]> {
+  const query = isActive === undefined ? '' : `?isActive=${String(isActive)}`
+  return apiClient.get(`/knowledge-roles${query}`, { signal, decode: decodeKnowledgeRoles })
+}
+
+export function createKnowledgeRole(request: KnowledgeRoleWriteRequest): Promise<KnowledgeRole> {
+  return apiClient.post('/knowledge-roles', request, { decode: decodeKnowledgeRole })
+}
+
+export function updateKnowledgeRole(
+  knowledgeRoleId: number,
+  request: UpdateKnowledgeRoleRequest,
+): Promise<KnowledgeRole> {
+  return apiClient.put(`/knowledge-roles/${knowledgeRoleId}`, request, { decode: decodeKnowledgeRole })
+}
+
+export function setKnowledgeRoleActiveState(
+  knowledgeRoleId: number,
+  isActive: boolean,
+  concurrencyToken: string,
+  actor: ActorContext,
+): Promise<KnowledgeRole> {
+  const request: SetActiveStateRequest = { isActive, concurrencyToken, actor }
+  return apiClient.put(`/knowledge-roles/${knowledgeRoleId}/active-state`, request, { decode: decodeKnowledgeRole })
+}

@@ -9,6 +9,7 @@ namespace SystemKnowledgeHub.Api.Features.StatusProgression.Api;
 [Route("api/knowledge-status")]
 public sealed class KnowledgeStatusController(KnowledgeStatusService service) : ControllerBase
 {
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = SystemKnowledgeHub.Api.Shared.Security.AccessPolicies.Editor)]
     [HttpPut]
     [ProducesResponseType<ChangeKnowledgeStatusResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ApiErrorResponse>(StatusCodes.Status400BadRequest)]

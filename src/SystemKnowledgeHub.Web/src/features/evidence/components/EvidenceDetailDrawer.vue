@@ -10,8 +10,10 @@ import ErrorState from '../../../components/feedback/ErrorState.vue'
 import LoadingState from '../../../components/feedback/LoadingState.vue'
 import { getEvidenceDetail, updateEvidence } from '../api/evidenceApi'
 import {
+  confirmationMethodLabels,
   confidenceLabels,
   evidenceTypeLabels,
+  getHumanConfirmationMethod,
   type EvidenceConfidence,
   type EvidenceDetailResponse,
 } from '../api/evidenceContracts'
@@ -33,6 +35,11 @@ const form = reactive({
 const sourceLocatorText = computed(() =>
   detail.value?.sourceLocator ? JSON.stringify(detail.value.sourceLocator, null, 2) : null,
 )
+const confirmationMethod = computed(() => {
+  if (!detail.value) return null
+  const method = getHumanConfirmationMethod(detail.value)
+  return method === null ? null : confirmationMethodLabels[method]
+})
 const codeLocatorRows = computed(() => {
   if (detail.value?.evidenceType !== 'CodeReference' || !detail.value.sourceLocator) return []
   const labels: Readonly<Record<string, string>> = {
@@ -47,6 +54,15 @@ const codeLocatorRows = computed(() => {
 function normalize(value: string): string | null {
   const result = value.trim()
   return result.length ? result : null
+}
+
+function formatLocalDateTime(value: string): string {
+  const date = new Date(value)
+  return Number.isNaN(date.getTime())
+    ? value
+    : new Intl.DateTimeFormat('zh-CN', {
+      year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+    }).format(date)
 }
 
 function beginEdit(): void {
@@ -206,8 +222,9 @@ onMounted(() => void load())
             <div><dt>姓名</dt><dd>{{ detail.provider.displayName }}</dd></div>
             <div><dt>角色 / 身份</dt><dd>{{ detail.provider.roleOrIdentity }}</dd></div>
             <div><dt>团队</dt><dd>{{ detail.provider.team ?? '—' }}</dd></div>
-            <div><dt>提供时间</dt><dd class="technical-text">{{ detail.provider.occurredAt }}</dd></div>
-            <div><dt>快照来源</dt><dd>{{ detail.provider.source ?? '—' }}</dd></div>
+            <div><dt>提供时间</dt><dd class="technical-text">{{ formatLocalDateTime(detail.provider.occurredAt) }}</dd></div>
+            <div v-if="detail.evidenceType === 'HumanConfirmation'"><dt>确认方式</dt><dd>{{ confirmationMethod ?? '—' }}</dd></div>
+            <div v-else><dt>快照来源</dt><dd>{{ detail.provider.source ?? '—' }}</dd></div>
           </dl>
         </section>
 
@@ -218,17 +235,18 @@ onMounted(() => void load())
       </template>
 
       <el-form v-else class="evidence-form evidence-edit-form" label-position="top">
+        <el-alert v-if="errorMessage" class="evidence-form-alert" type="error" :title="errorMessage" :closable="false" show-icon />
         <section class="evidence-form-section"><h3>纠正来源与说明</h3>
-          <el-form-item label="来源标题 *"><el-input v-model="form.sourceTitle" /></el-form-item>
+          <el-form-item label="来源标题" required><el-input v-model="form.sourceTitle" /></el-form-item>
           <el-form-item label="来源引用"><el-input v-model="form.sourceReference" class="technical-input" /></el-form-item>
           <el-form-item label="来源定位（JSON Object）"><el-input v-model="form.locatorJson" type="textarea" :rows="4" class="technical-input" /></el-form-item>
           <el-form-item label="证据摘要"><el-input v-model="form.summary" type="textarea" :rows="2" /></el-form-item>
-          <el-form-item label="为什么支持当前知识 *"><el-input v-model="form.supportReason" type="textarea" :rows="3" /></el-form-item>
+          <el-form-item label="为什么支持当前知识" required><el-input v-model="form.supportReason" type="textarea" :rows="3" /></el-form-item>
           <el-form-item label="可信度"><el-select v-model="form.confidence" clearable><el-option label="高" value="High" /><el-option label="中" value="Medium" /><el-option label="低" value="Low" /></el-select></el-form-item>
         </section>
         <section class="evidence-form-section"><h3>证据提供人快照</h3><div class="evidence-person-grid">
-          <el-form-item label="姓名 *"><el-input v-model="form.providerName" /></el-form-item>
-          <el-form-item label="角色 / 身份 *"><el-input v-model="form.providerRole" /></el-form-item>
+          <el-form-item label="姓名" required><el-input v-model="form.providerName" /></el-form-item>
+          <el-form-item label="角色 / 身份" required><el-input v-model="form.providerRole" /></el-form-item>
           <el-form-item label="团队"><el-input v-model="form.team" /></el-form-item>
           <el-form-item label="External User Key"><el-input v-model="form.providerExternalKey" class="technical-input" /></el-form-item>
           <el-form-item label="快照来源"><el-input v-model="form.providerSource" /></el-form-item>
@@ -237,7 +255,7 @@ onMounted(() => void load())
         </div></section>
       </el-form>
 
-      <div v-if="errorMessage" class="evidence-drawer__error"><span>{{ errorMessage }}</span><el-button v-if="conflict" text type="primary" :icon="Refresh" @click="load">重新加载</el-button></div>
+      <div v-if="errorMessage && !editing" class="evidence-drawer__error"><span>{{ errorMessage }}</span><el-button v-if="conflict" text type="primary" :icon="Refresh" @click="load">重新加载</el-button></div>
       <footer class="evidence-drawer__footer">
         <template v-if="editing"><el-button @click="editing = false">取消</el-button><el-button type="primary" :loading="saving" @click="save">保存纠正</el-button></template>
         <template v-else><el-button @click="overlayStore.closeDrawer()">关闭</el-button><el-button v-if="detail.evidenceType !== 'HumanConfirmation'" type="primary" plain :icon="UserFilled" @click="openHumanConfirmation">添加人工确认</el-button></template>

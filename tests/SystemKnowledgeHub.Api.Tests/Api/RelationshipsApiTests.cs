@@ -9,7 +9,7 @@ public sealed class RelationshipsApiTests : IClassFixture<BootstrapWebApplicatio
 {
     private readonly HttpClient _client;
 
-    public RelationshipsApiTests(BootstrapWebApplicationFactory factory) => _client = factory.CreateClient();
+    public RelationshipsApiTests(BootstrapWebApplicationFactory factory) => _client = factory.CreateAuthenticatedClient();
 
     [Fact]
     public async Task Target_search_add_detail_and_description_update_form_one_real_read_relationship()
@@ -95,8 +95,9 @@ public sealed class RelationshipsApiTests : IClassFixture<BootstrapWebApplicatio
         using var confirmation = await _client.PostAsJsonAsync("/api/evidence/human-confirmations", new
         {
             subject = new { type = "KnowledgeRelation", id }, subjectDetailKey = (string?)null,
+            knowledgeRoleId = (long?)null, confirmationMethod = "Meeting", confirmedAt = "2026-08-22T02:30:00Z",
             confirmationStatement = "确认该功能读取 STATE_FLAG。", supportReason = "MES 业务专家确认关系属实。",
-            sourceNote = "VS-08 评审", confirmer = Person("李工", "MES 业务专家"),
+            sourceNote = "VS-08 评审",
         });
         Assert.Equal(HttpStatusCode.Created, confirmation.StatusCode);
         Assert.Equal("Inferred", (await confirmation.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("subjectKnowledgeStatus").GetString());

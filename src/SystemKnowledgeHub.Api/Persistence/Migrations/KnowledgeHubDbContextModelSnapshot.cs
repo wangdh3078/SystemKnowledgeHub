@@ -647,9 +647,21 @@ namespace SystemKnowledgeHub.Api.Persistence.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("provided_at");
 
+                    b.Property<string>("ProviderEmployeeNo")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("provider_employee_no");
+
                     b.Property<string>("ProviderExternalKey")
                         .HasColumnType("TEXT")
                         .HasColumnName("provider_external_key");
+
+                    b.Property<string>("ProviderJobTitle")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("provider_job_title");
+
+                    b.Property<long?>("ProviderKnowledgeRoleId")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("provider_knowledge_role_id");
 
                     b.Property<string>("ProviderName")
                         .IsRequired()
@@ -672,6 +684,10 @@ namespace SystemKnowledgeHub.Api.Persistence.Migrations
                     b.Property<string>("ProviderTeam")
                         .HasColumnType("TEXT")
                         .HasColumnName("provider_team");
+
+                    b.Property<long?>("ProviderUserId")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("provider_user_id");
 
                     b.Property<string>("SourceLocatorJson")
                         .HasColumnType("TEXT")
@@ -721,6 +737,10 @@ namespace SystemKnowledgeHub.Api.Persistence.Migrations
                         .HasColumnName("version");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ProviderKnowledgeRoleId");
+
+                    b.HasIndex("ProviderUserId");
 
                     b.HasIndex("SourceReference");
 
@@ -943,6 +963,124 @@ namespace SystemKnowledgeHub.Api.Persistence.Migrations
                             t.HasCheckConstraint("ck_integration_contract_fields_ordinal", "ordinal > 0");
 
                             t.HasCheckConstraint("ck_integration_contract_fields_required", "is_required IN (0,1)");
+                        });
+                });
+
+            modelBuilder.Entity("SystemKnowledgeHub.Api.Features.KnowledgeDocuments.Domain.KnowledgeDocument", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset?>("ArchivedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("archived_at");
+
+                    b.Property<string>("BodyMarkdown")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("body_markdown");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("CreatedByDisplayName")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_by_display_name");
+
+                    b.Property<long>("CreatedByUserId")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("created_by_user_id");
+
+                    b.Property<string>("DocumentType")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("document_type");
+
+                    b.Property<string>("KnowledgeStatus")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("knowledge_status");
+
+                    b.Property<DateTimeOffset>("KnowledgeStatusChangedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("knowledge_status_changed_at");
+
+                    b.Property<string>("KnowledgeStatusChangedByName")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("knowledge_status_changed_by_name");
+
+                    b.Property<string>("KnowledgeStatusChangedByRole")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("knowledge_status_changed_by_role");
+
+                    b.Property<string>("KnowledgeStatusReason")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("knowledge_status_reason");
+
+                    b.Property<string>("LifecycleStatus")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("lifecycle_status");
+
+                    b.Property<DateTimeOffset?>("PublishedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("published_at");
+
+                    b.Property<string>("Summary")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("summary");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("title")
+                        .UseCollation("NOCASE");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("updated_at");
+
+                    b.Property<string>("UpdatedByDisplayName")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("updated_by_display_name");
+
+                    b.Property<long>("UpdatedByUserId")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("updated_by_user_id");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(1L)
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("UpdatedByUserId");
+
+                    b.HasIndex("DocumentType", "LifecycleStatus", "UpdatedAt");
+
+                    b.ToTable("knowledge_documents", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_knowledge_documents_document_type", "document_type IN ('Requirement','Specification','TestCase','Sop','Troubleshooting','KnowledgeArticle','DesignNote')");
+
+                            t.HasCheckConstraint("ck_knowledge_documents_knowledge_status", "knowledge_status IN ('Unknown','Inferred','Confirmed')");
+
+                            t.HasCheckConstraint("ck_knowledge_documents_lifecycle_status", "lifecycle_status IN ('Draft','Published','Archived')");
+
+                            t.HasCheckConstraint("ck_knowledge_documents_version", "version >= 1");
                         });
                 });
 
@@ -1656,6 +1794,305 @@ namespace SystemKnowledgeHub.Api.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("SystemKnowledgeHub.Api.Features.Users.Domain.KnowledgeRole", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("description");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(true)
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("name")
+                        .UseCollation("NOCASE");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("updated_at");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(1L)
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.HasIndex("IsActive", "Name");
+
+                    b.ToTable("knowledge_roles", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_knowledge_roles_is_active", "is_active IN (0,1)");
+
+                            t.HasCheckConstraint("ck_knowledge_roles_version", "version >= 1");
+                        });
+                });
+
+            modelBuilder.Entity("SystemKnowledgeHub.Api.Features.Users.Domain.LocalLoginCredential", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_at");
+
+                    b.Property<int>("FailedLoginAttempts")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(0)
+                        .HasColumnName("failed_login_attempts");
+
+                    b.Property<DateTimeOffset?>("FailedLoginWindowStartedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("failed_login_window_started_at");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(true)
+                        .HasColumnName("is_active");
+
+                    b.Property<DateTimeOffset>("LastPasswordChangedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("last_password_changed_at");
+
+                    b.Property<DateTimeOffset?>("LockedUntil")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("locked_until");
+
+                    b.Property<string>("NormalizedUsername")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("normalized_username");
+
+                    b.Property<string>("PasswordHash")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("password_hash");
+
+                    b.Property<long>("SessionVersion")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(1L)
+                        .HasColumnName("session_version");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("updated_at");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("user_id");
+
+                    b.Property<string>("Username")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("username");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(1L)
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NormalizedUsername")
+                        .IsUnique();
+
+                    b.HasIndex("UserId")
+                        .IsUnique();
+
+                    b.ToTable("local_login_credentials", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_local_login_credentials_failed_login_attempts", "failed_login_attempts >= 0");
+
+                            t.HasCheckConstraint("ck_local_login_credentials_is_active", "is_active IN (0,1)");
+
+                            t.HasCheckConstraint("ck_local_login_credentials_session_version", "session_version >= 1");
+
+                            t.HasCheckConstraint("ck_local_login_credentials_version", "version >= 1");
+                        });
+                });
+
+            modelBuilder.Entity("SystemKnowledgeHub.Api.Features.Users.Domain.LoginIdentity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_at");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(true)
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("provider");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("subject");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("updated_at");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("user_id");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(1L)
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("Provider", "Subject")
+                        .IsUnique();
+
+                    b.ToTable("login_identities", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_login_identities_is_active", "is_active IN (0,1)");
+
+                            t.HasCheckConstraint("ck_login_identities_version", "version >= 1");
+                        });
+                });
+
+            modelBuilder.Entity("SystemKnowledgeHub.Api.Features.Users.Domain.User", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("id");
+
+                    b.Property<string>("AccessLevel")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("Viewer")
+                        .HasColumnName("access_level");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("DepartmentOrTeam")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("department_or_team");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("display_name")
+                        .UseCollation("NOCASE");
+
+                    b.Property<string>("Email")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("email")
+                        .UseCollation("NOCASE");
+
+                    b.Property<string>("EmployeeNo")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("employee_no")
+                        .UseCollation("NOCASE");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(true)
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("JobTitle")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("job_title");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("updated_at");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(1L)
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Email")
+                        .IsUnique()
+                        .HasFilter("email IS NOT NULL");
+
+                    b.HasIndex("EmployeeNo")
+                        .IsUnique()
+                        .HasFilter("employee_no IS NOT NULL");
+
+                    b.HasIndex("IsActive", "DisplayName");
+
+                    b.ToTable("users", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_users_access_level", "access_level IN ('Viewer','Editor','Administrator')");
+
+                            t.HasCheckConstraint("ck_users_is_active", "is_active IN (0,1)");
+
+                            t.HasCheckConstraint("ck_users_version", "version >= 1");
+                        });
+                });
+
+            modelBuilder.Entity("SystemKnowledgeHub.Api.Features.Users.Domain.UserKnowledgeRole", b =>
+                {
+                    b.Property<long>("UserId")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("user_id");
+
+                    b.Property<long>("KnowledgeRoleId")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("knowledge_role_id");
+
+                    b.HasKey("UserId", "KnowledgeRoleId");
+
+                    b.HasIndex("KnowledgeRoleId");
+
+                    b.ToTable("user_knowledge_roles", (string)null);
+                });
+
             modelBuilder.Entity("SystemKnowledgeHub.Api.Features.BusinessFunctions.Domain.BusinessFunction", b =>
                 {
                     b.HasOne("SystemKnowledgeHub.Api.Features.Systems.Domain.KnowledgeSystem", "System")
@@ -1733,6 +2170,19 @@ namespace SystemKnowledgeHub.Api.Persistence.Migrations
                     b.Navigation("System");
                 });
 
+            modelBuilder.Entity("SystemKnowledgeHub.Api.Features.Evidence.Domain.Evidence", b =>
+                {
+                    b.HasOne("SystemKnowledgeHub.Api.Features.Users.Domain.KnowledgeRole", null)
+                        .WithMany()
+                        .HasForeignKey("ProviderKnowledgeRoleId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("SystemKnowledgeHub.Api.Features.Users.Domain.User", null)
+                        .WithMany()
+                        .HasForeignKey("ProviderUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
             modelBuilder.Entity("SystemKnowledgeHub.Api.Features.Integrations.Domain.Integration", b =>
                 {
                     b.HasOne("SystemKnowledgeHub.Api.Features.DatabaseKnowledge.Domain.DatabaseObject", "DatabaseObject")
@@ -1773,6 +2223,21 @@ namespace SystemKnowledgeHub.Api.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("Integration");
+                });
+
+            modelBuilder.Entity("SystemKnowledgeHub.Api.Features.KnowledgeDocuments.Domain.KnowledgeDocument", b =>
+                {
+                    b.HasOne("SystemKnowledgeHub.Api.Features.Users.Domain.User", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SystemKnowledgeHub.Api.Features.Users.Domain.User", null)
+                        .WithMany()
+                        .HasForeignKey("UpdatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("SystemKnowledgeHub.Api.Features.Systems.Domain.SystemTechnologyTag", b =>
@@ -1850,6 +2315,41 @@ namespace SystemKnowledgeHub.Api.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("UnknownItem");
+                });
+
+            modelBuilder.Entity("SystemKnowledgeHub.Api.Features.Users.Domain.LocalLoginCredential", b =>
+                {
+                    b.HasOne("SystemKnowledgeHub.Api.Features.Users.Domain.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("SystemKnowledgeHub.Api.Features.Users.Domain.LoginIdentity", b =>
+                {
+                    b.HasOne("SystemKnowledgeHub.Api.Features.Users.Domain.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SystemKnowledgeHub.Api.Features.Users.Domain.UserKnowledgeRole", b =>
+                {
+                    b.HasOne("SystemKnowledgeHub.Api.Features.Users.Domain.KnowledgeRole", null)
+                        .WithMany()
+                        .HasForeignKey("KnowledgeRoleId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SystemKnowledgeHub.Api.Features.Users.Domain.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("SystemKnowledgeHub.Api.Features.BusinessFunctions.Domain.BusinessFunction", b =>

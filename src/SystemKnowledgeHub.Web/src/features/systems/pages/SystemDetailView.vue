@@ -14,9 +14,11 @@ import {
   systemLifecycleLabels,
   type SystemBusinessFunctionSummary,
   type SystemDatabaseObjectSummary,
+  type SystemLifecycle,
 } from '../api/systemsContracts'
 import SystemContextRail from '../components/SystemContextRail.vue'
 import SystemOverviewSection from '../components/SystemOverviewSection.vue'
+import SystemTechnologyLifecycleSection from '../components/SystemTechnologyLifecycleSection.vue'
 import { useSystemDetail, type SystemOverviewValues } from '../composables/useSystemDetail'
 
 const route = useRoute()
@@ -33,12 +35,20 @@ const {
   concurrencyConflict,
   load,
   saveOverview,
+  saveTechnology,
+  saveLifecycle,
   clearSaveError,
 } = useSystemDetail()
 
 const systemId = computed(() => parseSafeApiId(route.params.id))
 const canEditOverview = computed(() =>
-  detail.value?.availableActions.includes('UpdateSystemOverview') === true,
+  actorStore.canEdit && detail.value?.availableActions.includes('UpdateSystemOverview') === true,
+)
+const canEditTechnology = computed(() =>
+  actorStore.canEdit && detail.value?.availableActions.includes('UpdateSystemTechnology') === true,
+)
+const canEditLifecycle = computed(() =>
+  actorStore.canEdit && detail.value?.availableActions.includes('UpdateSystemLifecycle') === true,
 )
 const knowledgeTotal = computed(() => {
   if (!detail.value) return 0
@@ -67,6 +77,16 @@ async function loadRoute(): Promise<void> {
 async function handleSave(values: SystemOverviewValues): Promise<void> {
   const saved = await saveOverview(values, actorStore.actor)
   if (saved) ElMessage.success('系统概览已保存。')
+}
+
+async function handleSaveTechnology(technologies: string[]): Promise<void> {
+  const saved = await saveTechnology(technologies, actorStore.actor)
+  if (saved) ElMessage.success('系统技术已保存。')
+}
+
+async function handleSaveLifecycle(lifecycle: SystemLifecycle): Promise<void> {
+  const saved = await saveLifecycle(lifecycle, actorStore.actor)
+  if (saved) ElMessage.success('系统生命周期已保存。')
 }
 
 async function reloadAfterConflict(): Promise<void> {
@@ -161,6 +181,18 @@ onMounted(() => void loadRoute())
         :save-error="saveError"
         :concurrency-conflict="concurrencyConflict"
         @save="handleSave"
+        @reload="reloadAfterConflict"
+      />
+
+      <SystemTechnologyLifecycleSection
+        :overview="detail.overview"
+        :can-edit-technology="canEditTechnology"
+        :can-edit-lifecycle="canEditLifecycle"
+        :saving="saving"
+        :save-error="saveError"
+        :concurrency-conflict="concurrencyConflict"
+        @save-technology="handleSaveTechnology"
+        @save-lifecycle="handleSaveLifecycle"
         @reload="reloadAfterConflict"
       />
 

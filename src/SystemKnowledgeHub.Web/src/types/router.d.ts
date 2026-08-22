@@ -9,5 +9,6 @@ declare module 'vue-router' {
     readonly layout: 'app-shell' | 'plain'
     readonly navigationKey: NavigationKey | null
     readonly hasContextRail?: boolean
+    readonly minimumAccessLevel?: 'Administrator'
   }
 }

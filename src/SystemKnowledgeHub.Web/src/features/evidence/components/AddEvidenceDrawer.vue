@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
+import type { FormInstance, FormRules } from 'element-plus'
 import { Close, DocumentAdd, InfoFilled } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { ElRadioButton, ElRadioGroup } from 'element-plus'
 import { useOverlayStore } from '../../../app/stores/overlays'
+import { ApiError } from '../../../api/errors/ApiError'
 import KnowledgeStatusBadge from '../../../components/data-display/KnowledgeStatusBadge.vue'
 import { addEvidence } from '../api/evidenceApi'
 import {
@@ -29,6 +31,8 @@ const investigation = computed<{ unknownItemId: number; concurrencyToken: string
 })
 const saving = ref(false)
 const errorMessage = ref<string | null>(null)
+const formRef = ref<FormInstance>()
+const fieldErrors = reactive<Record<string, string>>({})
 const providerExpanded = ref(false)
 const form = reactive({
   evidenceType: 'CodeReference' as OrdinaryEvidenceType,
@@ -54,6 +58,18 @@ const form = reactive({
 const ordinaryTypes: readonly OrdinaryEvidenceType[] = [
   'CodeReference', 'Sql', 'DatabaseSample', 'DatabaseComment', 'Api', 'MqMessage', 'ExistingDocument',
 ]
+const rules: FormRules<typeof form> = {
+  sourceTitle: [{ required: true, message: '请输入来源标题', trigger: 'blur' }],
+  supportReason: [{ required: true, message: '请输入支持理由', trigger: 'blur' }],
+  providerName: [{ required: true, message: '请输入证据提供人姓名', trigger: 'blur' }],
+  providerRole: [{ required: true, message: '请输入证据提供人角色 / 身份', trigger: 'blur' }],
+}
+const hasFieldErrors = computed(() => Object.keys(fieldErrors).length > 0)
+
+function clearFieldError(field: string): void {
+  delete fieldErrors[field]
+  if (Object.keys(fieldErrors).length === 0) errorMessage.value = null
+}
 
 function normalize(value: string): string | null {
   const result = value.trim()
@@ -81,10 +97,9 @@ function sourceLocator(): Readonly<Record<string, unknown>> | null {
 async function save(): Promise<void> {
   if (!subject.value) return
   errorMessage.value = null
-  if (!form.sourceTitle.trim() || !form.supportReason.trim() || !form.providerName.trim() || !form.providerRole.trim()) {
-    errorMessage.value = '请填写来源标题、支持理由和证据提供人信息。'
-    return
-  }
+  for (const field of Object.keys(fieldErrors)) delete fieldErrors[field]
+  const valid = await formRef.value?.validate().catch(() => false)
+  if (!valid) return
   let locator: Readonly<Record<string, unknown>> | null
   try {
     locator = sourceLocator()
@@ -135,7 +150,13 @@ async function save(): Promise<void> {
       overlayStore.openDrawer({ kind: 'evidence', id: created.id, mode: 'read' })
     }
   } catch (error: unknown) {
-    errorMessage.value = error instanceof Error ? error.message : '证据保存失败。'
+    if (error instanceof ApiError) {
+      errorMessage.value = error.message
+      for (const [field, messages] of Object.entries(error.response.fieldErrors ?? {})) {
+        const message = messages[0]
+        if (message) fieldErrors[field] = message
+      }
+    } else errorMessage.value = error instanceof Error ? error.message : '证据保存失败。'
   } finally {
     saving.value = false
   }
@@ -165,10 +186,11 @@ async function save(): Promise<void> {
         </el-radio-group>
       </section>
 
-      <el-form class="evidence-form" label-position="top">
+      <el-form ref="formRef" class="evidence-form" :model="form" :rules="rules" label-position="top">
+        <el-alert v-if="errorMessage && !hasFieldErrors" class="evidence-form-alert" type="error" :title="errorMessage" :closable="false" show-icon />
         <section class="evidence-form-section">
           <h3>来源定位</h3>
-          <el-form-item label="来源标题 *"><el-input v-model="form.sourceTitle" placeholder="例如 EquipmentStatusService.cs : line 184" /></el-form-item>
+          <el-form-item label="来源标题" prop="sourceTitle" :error="fieldErrors.sourceTitle" required><el-input v-model="form.sourceTitle" placeholder="例如 EquipmentStatusService.cs : line 184" @input="clearFieldError('sourceTitle')" /></el-form-item>
           <el-form-item label="来源引用"><el-input v-model="form.sourceReference" placeholder="文件名、SQL 名、文档名或 Endpoint" /></el-form-item>
           <div v-if="form.evidenceType === 'CodeReference'" class="evidence-form__grid">
             <el-form-item label="Repository"><el-input v-model="form.repository" class="technical-input" /></el-form-item>
@@ -182,7 +204,7 @@ async function save(): Promise<void> {
         <section class="evidence-form-section">
           <h3>知识支撑</h3>
           <el-form-item label="证据摘要"><el-input v-model="form.summary" type="textarea" :rows="2" /></el-form-item>
-          <el-form-item label="为什么支持当前知识 *"><el-input v-model="form.supportReason" type="textarea" :rows="3" placeholder="说明这项来源如何支持当前含义或规则" /></el-form-item>
+          <el-form-item label="为什么支持当前知识" prop="supportReason" :error="fieldErrors.supportReason" required><el-input v-model="form.supportReason" type="textarea" :rows="3" placeholder="说明这项来源如何支持当前含义或规则" @input="clearFieldError('supportReason')" /></el-form-item>
           <el-form-item label="可信度"><el-select v-model="form.confidence"><el-option label="高" value="High" /><el-option label="中" value="Medium" /><el-option label="低" value="Low" /></el-select></el-form-item>
         </section>
 
@@ -191,8 +213,8 @@ async function save(): Promise<void> {
             <span>证据提供人</span><small>{{ form.providerName }} · {{ form.providerRole }}</small>
           </button>
           <div v-if="providerExpanded" class="evidence-person-grid">
-            <el-form-item label="姓名 *"><el-input v-model="form.providerName" /></el-form-item>
-            <el-form-item label="角色 / 身份 *"><el-input v-model="form.providerRole" /></el-form-item>
+            <el-form-item label="姓名" prop="providerName" :error="fieldErrors.providerName" required><el-input v-model="form.providerName" @input="clearFieldError('providerName')" /></el-form-item>
+            <el-form-item label="角色 / 身份" prop="providerRole" :error="fieldErrors.providerRole" required><el-input v-model="form.providerRole" @input="clearFieldError('providerRole')" /></el-form-item>
             <el-form-item label="团队"><el-input v-model="form.team" /></el-form-item>
             <el-form-item label="External User Key"><el-input v-model="form.providerExternalKey" class="technical-input" /></el-form-item>
             <el-form-item label="快照来源"><el-input v-model="form.providerSource" /></el-form-item>
@@ -203,7 +225,6 @@ async function save(): Promise<void> {
       </el-form>
 
       <div class="evidence-impact-note"><el-icon><InfoFilled /></el-icon><span><strong>知识状态保持 {{ subject.knowledgeStatus === 'Unknown' ? '未知' : subject.knowledgeStatus === 'Inferred' ? '推断' : '已确认' }}</strong><small>保存 Evidence 与推进 Knowledge Status 是两个明确操作。</small></span></div>
-      <div v-if="errorMessage" class="evidence-drawer__error">{{ errorMessage }}</div>
       <footer class="evidence-drawer__footer">
         <el-button @click="overlayStore.closeDrawer()">取消</el-button>
         <el-button type="primary" :icon="DocumentAdd" :loading="saving" @click="save">保存证据</el-button>

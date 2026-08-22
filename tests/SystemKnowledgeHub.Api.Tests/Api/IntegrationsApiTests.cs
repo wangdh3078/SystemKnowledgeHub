@@ -14,7 +14,7 @@ public sealed class IntegrationsApiTests : IClassFixture<BootstrapWebApplication
 {
     private readonly BootstrapWebApplicationFactory _factory;
     private readonly HttpClient _client;
-    public IntegrationsApiTests(BootstrapWebApplicationFactory factory) { _factory = factory; _client = factory.CreateClient(); }
+    public IntegrationsApiTests(BootstrapWebApplicationFactory factory) { _factory = factory; _client = factory.CreateAuthenticatedClient(); }
 
     [Fact]
     public async Task C17_requires_a_registered_party_and_a_type_specific_endpoint_then_Q14_reads_the_created_integration()

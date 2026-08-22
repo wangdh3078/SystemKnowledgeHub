@@ -80,7 +80,7 @@ function selectResult(item: SearchResultItem, objectType: string): void {
         <button class="global-search__close" type="button" aria-label="关闭全局搜索" @click="close">
           <el-icon><Close /></el-icon>
         </button>
-        <kbd>⌘ K</kbd>
+        <kbd>Ctrl + K</kbd>
       </div>
 
       <div class="global-search__body">

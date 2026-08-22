@@ -45,6 +45,7 @@ public sealed class UnknownItemsController(
         };
     }
 
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = SystemKnowledgeHub.Api.Shared.Security.AccessPolicies.Editor)]
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateUnknownItemRequest request, CancellationToken cancellationToken)
     {
@@ -59,6 +60,7 @@ public sealed class UnknownItemsController(
         return Command(result, created: true);
     }
 
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = SystemKnowledgeHub.Api.Shared.Security.AccessPolicies.Editor)]
     [HttpPut("{id:long}/related-targets")]
     public async Task<IActionResult> UpdateRelatedTargets(long id, [FromBody] UpdateUnknownItemRelatedTargetsRequest request, CancellationToken cancellationToken)
     {
@@ -70,14 +72,17 @@ public sealed class UnknownItemsController(
         return Command(result);
     }
 
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = SystemKnowledgeHub.Api.Shared.Security.AccessPolicies.Editor)]
     [HttpPost("{id:long}/start-investigation")]
     public async Task<IActionResult> StartInvestigation(long id, [FromBody] StartInvestigationRequest request, CancellationToken cancellationToken)
         => Command(await service.StartInvestigation(new(id, Person(request.Actor), request.ConcurrencyToken ?? string.Empty), cancellationToken));
 
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = SystemKnowledgeHub.Api.Shared.Security.AccessPolicies.Editor)]
     [HttpPost("{id:long}/findings")]
     public async Task<IActionResult> AddFinding(long id, [FromBody] AddFindingRequest request, CancellationToken cancellationToken)
         => Command(await service.AddFinding(new(id, request.Content ?? string.Empty, Person(request.Recorder), request.ConcurrencyToken ?? string.Empty), cancellationToken), created: true);
 
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = SystemKnowledgeHub.Api.Shared.Security.AccessPolicies.Editor)]
     [HttpPost("{id:long}/evidence")]
     public async Task<IActionResult> AddEvidence(long id, [FromBody] AddInvestigationEvidenceRequest request, CancellationToken cancellationToken)
     {
@@ -95,6 +100,7 @@ public sealed class UnknownItemsController(
         return Command(await service.AddEvidenceToInvestigation(new(id, evidence, request.ConcurrencyToken ?? string.Empty), cancellationToken), created: true);
     }
 
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = SystemKnowledgeHub.Api.Shared.Security.AccessPolicies.Editor)]
     [HttpPut("{id:long}/resolution")]
     public async Task<IActionResult> SaveResolution(long id, [FromBody] SaveResolutionDraftRequest request, CancellationToken cancellationToken)
     {
@@ -112,18 +118,21 @@ public sealed class UnknownItemsController(
             id, request.Conclusion ?? string.Empty, updates, Person(request.Actor), request.ConcurrencyToken ?? string.Empty), cancellationToken));
     }
 
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = SystemKnowledgeHub.Api.Shared.Security.AccessPolicies.Editor)]
     [HttpPost("{id:long}/knowledge-updates/{updateId:long}/apply-column-known-value")]
     public async Task<IActionResult> ApplyColumnKnownValue(long id, long updateId, [FromBody] ApplyColumnKnownValueRequest request, CancellationToken cancellationToken)
         => Command(await resolutionService.ApplyColumnKnownValue(new(id, updateId, request.ColumnId,
             request.Value ?? string.Empty, request.Meaning ?? string.Empty, request.SortOrder, StatusChange(request.KnowledgeStatusChange),
             Person(request.Applier), request.ConcurrencyToken ?? string.Empty, request.TargetConcurrencyToken ?? string.Empty), cancellationToken));
 
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = SystemKnowledgeHub.Api.Shared.Security.AccessPolicies.Editor)]
     [HttpPost("{id:long}/knowledge-updates/{updateId:long}/apply-column-knowledge")]
     public async Task<IActionResult> ApplyColumnKnowledge(long id, long updateId, [FromBody] ApplyDatabaseColumnKnowledgeRequest request, CancellationToken cancellationToken)
         => Command(await resolutionService.ApplyDatabaseColumnKnowledge(new(id, updateId, request.ColumnId,
             request.BusinessDescription ?? string.Empty, StatusChange(request.KnowledgeStatusChange), Person(request.Applier),
             request.ConcurrencyToken ?? string.Empty, request.TargetConcurrencyToken ?? string.Empty), cancellationToken));
 
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = SystemKnowledgeHub.Api.Shared.Security.AccessPolicies.Editor)]
     [HttpPost("{id:long}/knowledge-updates/{updateId:long}/apply-business-function")]
     public async Task<IActionResult> ApplyBusinessFunction(long id, long updateId, [FromBody] ApplyBusinessFunctionRequest request, CancellationToken cancellationToken)
         => Command(await resolutionService.ApplyBusinessFunction(new(id, updateId, request.BusinessFunctionId,
@@ -133,6 +142,7 @@ public sealed class UnknownItemsController(
             StatusChange(request.KnowledgeStatusChange), Person(request.Applier), request.ConcurrencyToken ?? string.Empty,
             request.TargetConcurrencyToken ?? string.Empty), cancellationToken));
 
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = SystemKnowledgeHub.Api.Shared.Security.AccessPolicies.Editor)]
     [HttpPost("{id:long}/knowledge-updates/{updateId:long}/apply-business-rule")]
     public async Task<IActionResult> ApplyBusinessRule(long id, long updateId, [FromBody] ApplyBusinessRuleRequest request, CancellationToken cancellationToken)
         => Command(await resolutionService.ApplyBusinessRule(new(id, updateId, request.BusinessRuleId,
@@ -142,6 +152,7 @@ public sealed class UnknownItemsController(
             StatusChange(request.KnowledgeStatusChange), Person(request.Applier), request.ConcurrencyToken ?? string.Empty,
             request.TargetConcurrencyToken ?? string.Empty), cancellationToken));
 
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = SystemKnowledgeHub.Api.Shared.Security.AccessPolicies.Editor)]
     [HttpPost("{id:long}/knowledge-updates/{updateId:long}/apply-integration")]
     public async Task<IActionResult> ApplyIntegration(long id, long updateId, [FromBody] ApplyIntegrationRequest request, CancellationToken cancellationToken)
         => Command(await resolutionService.ApplyIntegration(new(id, updateId, request.IntegrationId,
@@ -151,14 +162,17 @@ public sealed class UnknownItemsController(
             StatusChange(request.KnowledgeStatusChange), Person(request.Applier), request.ConcurrencyToken ?? string.Empty,
             request.TargetConcurrencyToken ?? string.Empty), cancellationToken));
 
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = SystemKnowledgeHub.Api.Shared.Security.AccessPolicies.Editor)]
     [HttpPost("{id:long}/confirm-conclusion")]
     public async Task<IActionResult> ConfirmConclusion(long id, [FromBody] ConfirmConclusionRequest request, CancellationToken cancellationToken)
         => Command(await resolutionService.ConfirmConclusion(new(id, Person(request.Confirmer), request.ConcurrencyToken ?? string.Empty), cancellationToken));
 
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = SystemKnowledgeHub.Api.Shared.Security.AccessPolicies.Editor)]
     [HttpPost("{id:long}/close")]
     public async Task<IActionResult> Close(long id, [FromBody] CloseUnknownItemRequest request, CancellationToken cancellationToken)
         => Command(await resolutionService.CloseUnknownItem(new(id, request.CloseNote, Person(request.Actor), request.ConcurrencyToken ?? string.Empty), cancellationToken));
 
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = SystemKnowledgeHub.Api.Shared.Security.AccessPolicies.Editor)]
     [HttpPost("{id:long}/reopen")]
     public async Task<IActionResult> Reopen(long id, [FromBody] ReopenUnknownItemRequest request, CancellationToken cancellationToken)
         => Command(await resolutionService.ReopenUnknownItem(new(id, request.Reason ?? string.Empty, Person(request.Actor), request.ConcurrencyToken ?? string.Empty), cancellationToken));

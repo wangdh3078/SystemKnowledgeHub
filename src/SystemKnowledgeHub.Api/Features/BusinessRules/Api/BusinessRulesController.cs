@@ -17,6 +17,7 @@ public sealed class BusinessRulesController(BusinessRuleQueries queries, Busines
         return response is null ? NotFound(Error("not_found", "未找到业务规则。")) : Ok(response);
     }
 
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = SystemKnowledgeHub.Api.Shared.Security.AccessPolicies.Editor)]
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateBusinessRuleRequest request, CancellationToken cancellationToken)
     {
@@ -26,6 +27,7 @@ public sealed class BusinessRulesController(BusinessRuleQueries queries, Busines
         return Command(result, true);
     }
 
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = SystemKnowledgeHub.Api.Shared.Security.AccessPolicies.Editor)]
     [HttpPut("{id:long}")]
     public async Task<IActionResult> Update(long id, [FromBody] UpdateBusinessRuleRequest request, CancellationToken cancellationToken)
     {

@@ -19,7 +19,7 @@ public sealed class UnknownItemsApiTests : IClassFixture<BootstrapWebApplication
     public UnknownItemsApiTests(BootstrapWebApplicationFactory factory)
     {
         _factory = factory;
-        _client = factory.CreateClient();
+        _client = factory.CreateAuthenticatedClient();
     }
 
     [Fact]

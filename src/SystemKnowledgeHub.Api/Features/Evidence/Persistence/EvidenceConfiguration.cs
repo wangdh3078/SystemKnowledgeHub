@@ -1,7 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using SystemKnowledgeHub.Api.Features.Evidence.Domain;
+using SystemKnowledgeHub.Api.Features.Users.Domain;
 using EvidenceEntity = SystemKnowledgeHub.Api.Features.Evidence.Domain.Evidence;
+using UserEntity = SystemKnowledgeHub.Api.Features.Users.Domain.User;
 
 namespace SystemKnowledgeHub.Api.Features.Evidence.Persistence;
 
@@ -31,9 +33,13 @@ public sealed class EvidenceConfiguration : IEntityTypeConfiguration<EvidenceEnt
         builder.Property(entity => entity.Summary).HasColumnName("summary");
         builder.Property(entity => entity.SupportReason).HasColumnName("support_reason").IsRequired();
         builder.Property(entity => entity.Confidence).HasColumnName("confidence").HasConversion<string>();
+        builder.Property(entity => entity.ProviderUserId).HasColumnName("provider_user_id");
+        builder.Property(entity => entity.ProviderKnowledgeRoleId).HasColumnName("provider_knowledge_role_id");
+        builder.Property(entity => entity.ProviderEmployeeNo).HasColumnName("provider_employee_no");
         builder.Property(entity => entity.ProviderName).HasColumnName("provider_name").IsRequired();
         builder.Property(entity => entity.ProviderRole).HasColumnName("provider_role").IsRequired();
         builder.Property(entity => entity.ProviderTeam).HasColumnName("provider_team");
+        builder.Property(entity => entity.ProviderJobTitle).HasColumnName("provider_job_title");
         builder.Property(entity => entity.ProviderExternalKey).HasColumnName("provider_external_key");
         builder.Property(entity => entity.ProviderSource).HasColumnName("provider_source");
         builder.Property(entity => entity.ProviderNote).HasColumnName("provider_note");
@@ -45,5 +51,16 @@ public sealed class EvidenceConfiguration : IEntityTypeConfiguration<EvidenceEnt
         builder.HasIndex(entity => new { entity.SubjectType, entity.SubjectId, entity.SubjectDetailKey });
         builder.HasIndex(entity => new { entity.EvidenceType, entity.ProvidedAt }).IsDescending(false, true);
         builder.HasIndex(entity => entity.SourceReference);
+        builder.HasIndex(entity => entity.ProviderUserId);
+        builder.HasIndex(entity => entity.ProviderKnowledgeRoleId);
+
+        builder.HasOne<UserEntity>()
+            .WithMany()
+            .HasForeignKey(entity => entity.ProviderUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<KnowledgeRole>()
+            .WithMany()
+            .HasForeignKey(entity => entity.ProviderKnowledgeRoleId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

@@ -17,14 +17,17 @@ public sealed class IntegrationsController(IntegrationQueries queries, Integrati
         return response is null ? NotFound(Error("not_found", "未找到集成关系。")) : Ok(response);
     }
 
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = SystemKnowledgeHub.Api.Shared.Security.AccessPolicies.Editor)]
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateIntegrationRequest request, CancellationToken cancellationToken)
         => Command(await service.Create(new(ToOverview(request), Actor(request.Actor)), cancellationToken), true);
 
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = SystemKnowledgeHub.Api.Shared.Security.AccessPolicies.Editor)]
     [HttpPut("{id:long}/overview")]
     public async Task<IActionResult> UpdateOverview(long id, [FromBody] UpdateIntegrationOverviewRequest request, CancellationToken cancellationToken)
         => Command(await service.UpdateOverview(new(id, ToOverview(request), Actor(request.Actor), request.ConcurrencyToken ?? string.Empty), cancellationToken));
 
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = SystemKnowledgeHub.Api.Shared.Security.AccessPolicies.Editor)]
     [HttpPut("{id:long}/contract-fields")]
     public async Task<IActionResult> ReplaceContractFields(long id, [FromBody] ReplaceIntegrationContractFieldsRequest request, CancellationToken cancellationToken)
         => Command(await service.ReplaceContractFields(new(id, request.Fields?.Select(item => new IntegrationContractFieldCommand(item.Order, item.FieldName ?? string.Empty, item.DataType, item.Required, item.Description, item.SampleValue)).ToArray(), Actor(request.Actor), request.ConcurrencyToken ?? string.Empty), cancellationToken));

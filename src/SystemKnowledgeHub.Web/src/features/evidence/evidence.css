@@ -85,6 +85,15 @@
   padding: 0 24px;
 }
 
+.evidence-form-alert {
+  margin-top: 16px;
+}
+
+.evidence-form-alert--outer {
+  margin-right: 24px;
+  margin-left: 24px;
+}
+
 .evidence-form-section,
 .evidence-detail-section {
   padding: 18px 0;
@@ -365,6 +374,91 @@
   border-bottom: 0;
 }
 
+.evidence-current-user {
+  margin: 16px 24px 0;
+  padding: 14px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: #fbfcfe;
+}
+
+.evidence-current-user__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.evidence-current-user__heading small,
+.evidence-current-user__heading strong,
+.evidence-current-user__role small,
+.evidence-current-user__role strong,
+.evidence-current-user__role p {
+  display: block;
+}
+
+.evidence-current-user__heading small,
+.evidence-current-user__role small {
+  color: var(--color-muted);
+  font-size: 9px;
+}
+
+.evidence-current-user__heading strong,
+.evidence-current-user__role strong {
+  margin-top: 4px;
+  color: var(--color-ink);
+  font-size: 11px;
+}
+
+.evidence-current-user__facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 14px 0 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.evidence-current-user__facts div {
+  min-width: 0;
+  padding: 9px 8px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.evidence-current-user__facts dt {
+  color: var(--color-muted);
+  font-size: 9px;
+}
+
+.evidence-current-user__facts dd {
+  margin: 3px 0 0;
+  overflow: hidden;
+  color: var(--color-ink);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.evidence-current-user__role {
+  margin-top: 12px;
+  padding: 11px;
+  border-radius: var(--radius-sm);
+  background: var(--color-primary-soft);
+}
+
+.evidence-current-user__role p {
+  margin-top: 4px;
+  color: var(--color-muted);
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.evidence-current-user__role .el-form-item {
+  margin-bottom: 0;
+}
+
+.evidence-current-user > .el-alert {
+  margin-top: 12px;
+}
+
 @media (max-width: 1440px) {
   .evidence-drawer__header {
     padding-right: 20px;
@@ -384,5 +478,11 @@
   .evidence-edit-form {
     padding-right: 20px;
     padding-left: 20px;
+  }
+
+  .evidence-current-user,
+  .evidence-form-alert--outer {
+    margin-right: 20px;
+    margin-left: 20px;
   }
 }

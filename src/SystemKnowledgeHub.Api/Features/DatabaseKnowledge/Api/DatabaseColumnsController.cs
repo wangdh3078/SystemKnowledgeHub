@@ -46,6 +46,7 @@ public sealed class DatabaseColumnsController(
         return Ok(detail);
     }
 
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = SystemKnowledgeHub.Api.Shared.Security.AccessPolicies.Editor)]
     [HttpPut("{id}/knowledge")]
     [ProducesResponseType<DatabaseColumnKnowledgeResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ApiErrorResponse>(StatusCodes.Status400BadRequest)]
@@ -75,6 +76,7 @@ public sealed class DatabaseColumnsController(
         };
     }
 
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = SystemKnowledgeHub.Api.Shared.Security.AccessPolicies.Editor)]
     [HttpPost("{id}/known-values")]
     [ProducesResponseType<AddColumnKnownValueResponse>(StatusCodes.Status201Created)]
     [ProducesResponseType<ApiErrorResponse>(StatusCodes.Status400BadRequest)]
@@ -107,6 +109,7 @@ public sealed class DatabaseColumnsController(
         };
     }
 
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = SystemKnowledgeHub.Api.Shared.Security.AccessPolicies.Editor)]
     [HttpPost("{id}/known-values/{knownValueId}/remove")]
     [ProducesResponseType<RemoveColumnKnownValueResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ApiErrorResponse>(StatusCodes.Status400BadRequest)]

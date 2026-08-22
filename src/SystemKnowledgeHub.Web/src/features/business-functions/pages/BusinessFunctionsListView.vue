@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, watch } from 'vue'
-import { ArrowRight, Search } from '@element-plus/icons-vue'
+import { Plus, Search } from '@element-plus/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
 import { parseSafeApiId } from '../../../api/contracts/id'
 import KnowledgeStatusBadge from '../../../components/data-display/KnowledgeStatusBadge.vue'
@@ -17,9 +17,13 @@ import {
 } from '../api/businessFunctionContracts'
 import { useBusinessFunctionsList } from '../composables/useBusinessFunctionsList'
 import CreateBusinessFunctionFlow from '../components/CreateBusinessFunctionFlow.vue'
+import { useOverlayStore } from '../../../app/stores/overlays'
+import { useActorStore } from '../../../app/stores/actor'
 
 const route = useRoute()
 const router = useRouter()
+const overlays = useOverlayStore()
+const actorStore = useActorStore()
 const initialSystemId = parseSafeApiId(route.query.systemId) ?? undefined
 const {
   keyword,
@@ -100,6 +104,10 @@ function handlePageChange(nextPage: number): void {
   void load()
 }
 
+function openCreate(): void {
+  overlays.openDialog({ kind: 'create-business-function', id: null, mode: 'create' })
+}
+
 async function handleCreated(created: CreateBusinessFunctionResponse): Promise<void> {
   systemId.value = created.system.id
   keyword.value = created.name
@@ -122,7 +130,10 @@ onMounted(() => {
         <h1>业务功能</h1>
         <p>查找旧系统中的业务能力、处理逻辑与改写范围。</p>
       </div>
-      <span v-if="data">共 {{ data.total }} 个业务功能</span>
+      <div class="business-functions-page__header-actions">
+        <span v-if="data">共 {{ data.total }} 个业务功能</span>
+        <el-button v-if="actorStore.canEdit" type="primary" :icon="Plus" @click="openCreate">新增业务功能</el-button>
+      </div>
     </header>
 
     <section class="business-functions-filter" aria-label="业务功能筛选">
@@ -176,7 +187,6 @@ onMounted(() => {
         <el-table-column prop="rewriteStatus" label="改写状态" width="88"><template #default="scope"><span class="rewrite-status" :class="`rewrite-status--${scope.row.rewriteStatus.toLowerCase()}`">{{ formatRewriteStatus(scope.row.rewriteStatus) }}</span></template></el-table-column>
         <el-table-column prop="knowledgeStatus" label="知识状态" width="92" sortable="custom"><template #default="scope"><KnowledgeStatusBadge :status="scope.row.knowledgeStatus" /></template></el-table-column>
         <el-table-column prop="updatedAt" label="更新于" width="108" sortable="custom"><template #default="scope">{{ formatDate(scope.row.updatedAt) }}</template></el-table-column>
-        <el-table-column width="34" align="right"><template #default><el-icon class="business-functions-table__next"><ArrowRight /></el-icon></template></el-table-column>
       </el-table>
 
       <footer v-if="data && data.total > 0" class="business-functions-pagination">
@@ -190,7 +200,6 @@ onMounted(() => {
       :systems="systemOptions"
       :initial-system-id="systemId"
       @created="handleCreated"
-      @system-created="loadSystemOptions"
     />
   </div>
 </template>

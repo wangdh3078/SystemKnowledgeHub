@@ -49,6 +49,7 @@ public sealed class BusinessFunctionsController(
         return Ok(result.Response);
     }
 
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = SystemKnowledgeHub.Api.Shared.Security.AccessPolicies.Editor)]
     [HttpPost]
     [ProducesResponseType<CreateBusinessFunctionResponse>(StatusCodes.Status201Created)]
     [ProducesResponseType<ApiErrorResponse>(StatusCodes.Status400BadRequest)]
@@ -121,6 +122,7 @@ public sealed class BusinessFunctionsController(
         return Ok(response);
     }
 
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = SystemKnowledgeHub.Api.Shared.Security.AccessPolicies.Editor)]
     [HttpPut("{id:long}/overview")]
     [ProducesResponseType<UpdateBusinessFunctionOverviewResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ApiErrorResponse>(StatusCodes.Status400BadRequest)]
@@ -156,6 +158,7 @@ public sealed class BusinessFunctionsController(
         return HandleUpdateResult(result, id);
     }
 
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = SystemKnowledgeHub.Api.Shared.Security.AccessPolicies.Editor)]
     [HttpPut("{id:long}/process-steps")]
     [ProducesResponseType<ReplaceBusinessProcessStepsResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ApiErrorResponse>(StatusCodes.Status400BadRequest)]

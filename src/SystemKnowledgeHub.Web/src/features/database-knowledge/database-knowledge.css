@@ -425,8 +425,9 @@
 }
 
 .column-drawer {
+  display: flex;
+  flex-direction: column;
   min-height: 100%;
-  padding-bottom: 72px;
   background: var(--color-surface);
 }
 
@@ -692,11 +693,6 @@
 }
 
 .column-drawer__footer {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  z-index: 2;
   display: grid;
   grid-template-columns: 1fr 1fr;
   padding: 12px 16px;

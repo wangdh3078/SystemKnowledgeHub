@@ -12,7 +12,7 @@ public sealed class DatabaseObjectsListRegistrationApiTests
 
     public DatabaseObjectsListRegistrationApiTests(BootstrapWebApplicationFactory factory)
     {
-        _client = factory.CreateClient();
+        _client = factory.CreateAuthenticatedClient();
     }
 
     [Fact]

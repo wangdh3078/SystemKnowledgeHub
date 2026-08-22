@@ -17,7 +17,7 @@ public sealed class SystemsApiTests : IClassFixture<BootstrapWebApplicationFacto
     public SystemsApiTests(BootstrapWebApplicationFactory factory)
     {
         _factory = factory;
-        _client = factory.CreateClient();
+        _client = factory.CreateAuthenticatedClient();
     }
 
     [Fact]
@@ -155,5 +155,90 @@ public sealed class SystemsApiTests : IClassFixture<BootstrapWebApplicationFacto
         Assert.Equal("MES", stored.Name);
         Assert.Equal(KnowledgeStatus.Inferred, stored.KnowledgeStatus);
         Assert.True(stored.Version > 1);
+    }
+
+    [Fact]
+    public async Task UpdateSystemTechnology_replaces_tags_without_changing_lifecycle_or_knowledge_status()
+    {
+        var created = await CreateSystemForSectionUpdate("TECH", "Running");
+        var systemId = created.GetProperty("id").GetInt64();
+        var originalToken = created.GetProperty("concurrencyToken").GetString();
+        var request = new
+        {
+            technologies = new[] { ".NET Framework 4.8", "Oracle", "RabbitMQ" },
+            actor = new { displayName = "王敏", role = "知识整理人员" },
+            concurrencyToken = originalToken,
+        };
+
+        using var updateResponse = await _client.PutAsJsonAsync($"/api/systems/{systemId}/technology", request);
+
+        Assert.Equal(HttpStatusCode.OK, updateResponse.StatusCode);
+        var updated = await updateResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.NotEqual(originalToken, updated.GetProperty("concurrencyToken").GetString());
+        Assert.Equal(
+            new[] { ".NET Framework 4.8", "Oracle", "RabbitMQ" },
+            updated.GetProperty("technologies").EnumerateArray().Select(value => value.GetString()));
+
+        using var detailResponse = await _client.GetAsync($"/api/systems/{systemId}");
+        var detail = await detailResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Running", detail.GetProperty("overview").GetProperty("lifecycle").GetString());
+        Assert.Equal("Unknown", detail.GetProperty("overview").GetProperty("knowledgeStatus").GetString());
+        Assert.Equal(
+            new[] { ".NET Framework 4.8", "Oracle", "RabbitMQ" },
+            detail.GetProperty("overview").GetProperty("technologies").EnumerateArray().Select(value => value.GetString()));
+    }
+
+    [Fact]
+    public async Task UpdateSystemLifecycle_preserves_technology_and_knowledge_status()
+    {
+        var created = await CreateSystemForSectionUpdate("LIFECYCLE", "Legacy");
+        var systemId = created.GetProperty("id").GetInt64();
+        var technologies = new
+        {
+            technologies = new[] { "Oracle" },
+            actor = new { displayName = "王敏", role = "知识整理人员" },
+            concurrencyToken = created.GetProperty("concurrencyToken").GetString(),
+        };
+        using var technologyResponse = await _client.PutAsJsonAsync($"/api/systems/{systemId}/technology", technologies);
+        var technologyUpdated = await technologyResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(HttpStatusCode.OK, technologyResponse.StatusCode);
+
+        var lifecycleRequest = new
+        {
+            targetLifecycle = "Maintaining",
+            actor = new { displayName = "王敏", role = "系统负责人" },
+            concurrencyToken = technologyUpdated.GetProperty("concurrencyToken").GetString(),
+        };
+        using var lifecycleResponse = await _client.PutAsJsonAsync($"/api/systems/{systemId}/lifecycle", lifecycleRequest);
+
+        Assert.Equal(HttpStatusCode.OK, lifecycleResponse.StatusCode);
+        var updated = await lifecycleResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Maintaining", updated.GetProperty("lifecycle").GetString());
+        Assert.Equal("Unknown", updated.GetProperty("knowledgeStatus").GetString());
+
+        using var detailResponse = await _client.GetAsync($"/api/systems/{systemId}");
+        var detail = await detailResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Maintaining", detail.GetProperty("overview").GetProperty("lifecycle").GetString());
+        Assert.Equal("Unknown", detail.GetProperty("overview").GetProperty("knowledgeStatus").GetString());
+        Assert.Equal(
+            new[] { "Oracle" },
+            detail.GetProperty("overview").GetProperty("technologies").EnumerateArray().Select(value => value.GetString()));
+    }
+
+    private async Task<JsonElement> CreateSystemForSectionUpdate(string prefix, string lifecycle)
+    {
+        var suffix = Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
+        var request = new
+        {
+            name = $"{prefix}_{suffix}",
+            displayName = "系统编辑验证",
+            systemType = "Verification System",
+            lifecycle,
+            purpose = "验证系统技术与生命周期独立编辑",
+            actor = new { displayName = "王敏", role = "知识整理人员" },
+        };
+        using var response = await _client.PostAsJsonAsync("/api/systems", request);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        return (await response.Content.ReadFromJsonAsync<JsonElement>()).Clone();
     }
 }

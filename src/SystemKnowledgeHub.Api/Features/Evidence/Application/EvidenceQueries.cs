@@ -7,11 +7,16 @@ using SystemKnowledgeHub.Api.Persistence.Concurrency;
 
 namespace SystemKnowledgeHub.Api.Features.Evidence.Application;
 
+/// <summary>读取 Evidence 详情及其 Provider Snapshot、Subject 上下文和可用操作投影。</summary>
 public sealed class EvidenceQueries(
     KnowledgeHubDbContext dbContext,
     EvidenceSubjectResolver subjectResolver,
     ConcurrencyTokenCodec concurrencyTokenCodec)
 {
+    /// <summary>按安全 Evidence ID 读取可展示详情。</summary>
+    /// <param name="evidenceId">待读取的 Evidence 标识符。</param>
+    /// <param name="cancellationToken">用于取消当前异步操作的令牌。</param>
+    /// <returns>异步完成后返回详情，或以结果分类表示 Evidence/Subject 不存在。</returns>
     public async Task<EvidenceDetailQueryResult> GetEvidenceDetail(
         long evidenceId,
         CancellationToken cancellationToken)

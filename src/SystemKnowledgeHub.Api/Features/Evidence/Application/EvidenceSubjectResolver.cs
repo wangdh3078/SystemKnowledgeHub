@@ -7,10 +7,16 @@ using SystemKnowledgeHub.Api.Shared.Domain;
 
 namespace SystemKnowledgeHub.Api.Features.Evidence.Application;
 
+/// <summary>将 Evidence Subject 映射为可验证的知识上下文。</summary>
 public sealed class EvidenceSubjectResolver(
     KnowledgeHubDbContext dbContext,
     RelationshipTargetResolver relationshipTargetResolver)
 {
+    /// <summary>解析 Subject 的显示名称与当前知识状态。</summary>
+    /// <param name="subjectType">受控 Evidence Subject 类型。</param>
+    /// <param name="subjectId">目标对象标识符。</param>
+    /// <param name="cancellationToken">用于取消当前异步操作的令牌。</param>
+    /// <returns>异步完成后返回 Subject 上下文；类型不受支持或目标不存在时返回 null。</returns>
     public async Task<EvidenceSubjectContext?> Resolve(
         EvidenceSubjectType subjectType,
         long subjectId,

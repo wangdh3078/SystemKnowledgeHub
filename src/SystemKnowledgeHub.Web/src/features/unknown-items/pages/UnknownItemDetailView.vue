@@ -21,13 +21,14 @@ import { useUnknownItemDetail } from '../composables/useUnknownItemDetail'
 
 const route = useRoute(); const router = useRouter(); const actorStore = useActorStore(); const overlays = useOverlayStore()
 const itemId = computed(() => parseSafeApiId(route.params.id)); const findingText = ref(''); const resolutionText = ref('')
+const findingError = ref<string | null>(null)
 const draftTargetKey = ref(''); const draftAction = ref<'AddColumnKnownValue' | 'UpdateDatabaseColumnKnowledge' | 'UpdateBusinessRule'>('AddColumnKnownValue')
 const draftValue = ref(''); const draftMeaning = ref(''); const draftDescription = ref('')
 const draftRuleName=ref('');const draftRuleDescription=ref('');const draftRuleCondition=ref('');const draftRuleResult=ref('');const draftRuleInputData=ref('[]')
 const draftIntegrationBase=ref<IntegrationOverviewInput|null>(null);const draftIntegrationName=ref('');const draftIntegrationPurpose=ref('')
 const { detail, loading, saving, error, load, run, person } = useUnknownItemDetail()
 const statusSteps = ['Open', 'Investigating', 'ConclusionConfirmed', 'Closed'] as const
-const can = (action: string) => detail.value?.availableActions.includes(action) === true
+const can = (action: string) => actorStore.canEdit && detail.value?.availableActions.includes(action) === true
 const columnTargets = computed(() => detail.value?.relatedObjects.filter(item => item.target.type === 'DatabaseColumn') ?? [])
 const ruleTargets = computed(() => detail.value?.relatedObjects.filter(item => item.target.type === 'BusinessRule') ?? [])
 const integrationTargets = computed(() => detail.value?.relatedObjects.filter(item => item.target.type === 'Integration') ?? [])
@@ -49,7 +50,9 @@ async function start(): Promise<void> {
   if (await run(() => unknownItemsApi.start(detail.value!.id, person(actorStore.displayName, '调查人'), detail.value!.concurrencyToken))) ElMessage.success('已开始调查。')
 }
 async function addFinding(): Promise<void> {
-  if (!detail.value || !findingText.value.trim()) return
+  if (!detail.value) return
+  if (!findingText.value.trim()) { findingError.value = '请先记录调查发现。'; return }
+  findingError.value = null
   if (await run(() => unknownItemsApi.addFinding(detail.value!.id, findingText.value.trim(), person(actorStore.displayName, '调查人'), detail.value!.concurrencyToken))) { findingText.value = ''; ElMessage.success('调查发现已记录。') }
 }
 async function saveResolution(): Promise<void> {
@@ -171,7 +174,7 @@ onUnmounted(() => window.removeEventListener('unknown-item:changed', reload))
 
       <section class="unknown-section"><header><div><small>Question</small><h2>问题上下文</h2></div></header><dl class="unknown-metadata"><div><dt>主要对象</dt><dd class="technical-text">{{ detail.relatedObjects.find(item => item.primary)?.display }}</dd></div><div><dt>对象类型</dt><dd>{{ targetTypeLabels[detail.relatedObjects.find(item => item.primary)!.target.type] }}</dd></div><div><dt>创建时间</dt><dd>{{ new Date(detail.question.createdAt).toLocaleString('zh-CN') }}</dd></div></dl></section>
 
-      <section class="unknown-section"><header><div><small>Findings</small><h2>调查发现</h2></div><span>{{ detail.findings.length }} 条</span></header><div v-if="detail.findings.length" class="finding-list"><article v-for="finding in detail.findings" :key="finding.id"><p>{{ finding.content }}</p><footer><span>{{ finding.recordedBy.displayName }} · {{ finding.recordedBy.roleOrIdentity }}</span><button @click="addEvidence(finding)">为此发现添加证据</button></footer></article></div><div v-else class="unknown-empty">Finding 用于记录调查过程中的发现，不等于最终结论。</div><div v-if="can('AddFinding')" class="finding-composer"><el-input v-model="findingText" type="textarea" :rows="3" placeholder="记录一条可核查的调查发现…" /><el-button type="primary" :icon="Plus" :loading="saving" @click="addFinding">添加调查发现</el-button></div></section>
+<section class="unknown-section"><header><div><small>Findings</small><h2>调查发现</h2></div><span>{{ detail.findings.length }} 条</span></header><div v-if="detail.findings.length" class="finding-list"><article v-for="finding in detail.findings" :key="finding.id"><p>{{ finding.content }}</p><footer><span>{{ finding.recordedBy.displayName }} · {{ finding.recordedBy.roleOrIdentity }}</span><button v-if="actorStore.canEdit" @click="addEvidence(finding)">为此发现添加证据</button></footer></article></div><div v-else class="unknown-empty">Finding 用于记录调查过程中的发现，不等于最终结论。</div><el-form v-if="can('AddFinding')" class="finding-composer" label-position="top"><el-form-item label="调查发现" :error="findingError ?? undefined" required><el-input v-model="findingText" type="textarea" :rows="3" placeholder="记录一条可核查的调查发现…" @input="findingError = null" /></el-form-item><el-button type="primary" :icon="Plus" :loading="saving" @click="addFinding">添加调查发现</el-button></el-form></section>
 
       <section class="unknown-section evidence-section"><header><div><small>Evidence</small><h2>证据</h2></div><el-button v-if="can('AddEvidenceToInvestigation')" text type="primary" :icon="DocumentAdd" @click="addEvidence()">添加证据</el-button></header><div v-if="detail.evidence.length" class="investigation-evidence"><button v-for="item in detail.evidence" :key="item.id" @click="overlays.openDrawer({ kind: 'evidence', id: item.id, mode: 'read' })"><span>{{ item.evidenceType }}</span><strong class="technical-text">{{ item.sourceTitle }}</strong><small>支持 {{ item.subject.type }} #{{ item.subject.id }}</small></button></div><div v-else class="unknown-empty">尚无证据。证据用于说明为什么相信调查发现或结论。</div></section>
 

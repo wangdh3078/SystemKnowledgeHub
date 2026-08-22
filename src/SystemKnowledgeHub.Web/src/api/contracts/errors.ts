@@ -5,6 +5,13 @@ export const apiErrorCodes = [
   'invalid_state',
   'reference_invalid',
   'business_rule_violation',
+  'unauthenticated',
+  'session_expired',
+  'forbidden',
+  'identity_unmapped',
+  'identity_inactive',
+  'account_inactive',
+  'antiforgery_failed',
 ] as const
 
 export type ApiErrorCode = (typeof apiErrorCodes)[number]

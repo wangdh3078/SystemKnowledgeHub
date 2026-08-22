@@ -7,6 +7,7 @@ import EmptyState from '../../../components/feedback/EmptyState.vue'
 import ErrorState from '../../../components/feedback/ErrorState.vue'
 import LoadingState from '../../../components/feedback/LoadingState.vue'
 import { useOverlayStore } from '../../../app/stores/overlays'
+import { useActorStore } from '../../../app/stores/actor'
 import { parseSafeApiId } from '../api/databaseKnowledgeApi'
 import type { DatabaseColumnSummary } from '../api/databaseKnowledgeContracts'
 import DatabaseObjectContextRail from '../components/DatabaseObjectContextRail.vue'
@@ -16,6 +17,7 @@ import { useDatabaseObjectDetail } from '../composables/useDatabaseObjectDetail'
 const route = useRoute()
 const router = useRouter()
 const overlayStore = useOverlayStore()
+const actorStore = useActorStore()
 const filterText = ref('')
 const {
   detail,
@@ -93,6 +95,10 @@ function databaseObjectChanged(): void {
   void loadRoute()
 }
 
+function knowledgeStatusChanged(): void {
+  void loadRoute()
+}
+
 async function loadRoute(): Promise<void> {
   if (databaseObjectId.value === null) return
   await load(databaseObjectId.value, routeSelectedColumnId.value)
@@ -123,11 +129,13 @@ onMounted(() => {
   void loadRoute()
   window.addEventListener('database-object:changed', databaseObjectChanged)
   window.addEventListener('database-column:changed', databaseObjectChanged)
+  window.addEventListener('knowledge-status:changed', knowledgeStatusChanged)
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('database-object:changed', databaseObjectChanged)
   window.removeEventListener('database-column:changed', databaseObjectChanged)
+  window.removeEventListener('knowledge-status:changed', knowledgeStatusChanged)
 })
 </script>
 
@@ -157,7 +165,7 @@ onBeforeUnmount(() => {
             <h1 class="technical-text">{{ detail.overview.qualifiedName }}</h1>
             <p>{{ detail.overview.businessDescription ?? '尚未记录业务说明' }}</p>
           </div>
-          <el-button text type="primary" :icon="EditPen" @click="openObjectKnowledgeEdit">编辑</el-button>
+          <el-button v-if="actorStore.canEdit" text type="primary" :icon="EditPen" @click="openObjectKnowledgeEdit">编辑</el-button>
         </div>
         <div class="database-object-header__tags">
           <span>{{ detail.overview.objectType === 'Table' ? '表' : '视图' }}</span>
@@ -185,7 +193,7 @@ onBeforeUnmount(() => {
       <section class="database-columns-section" aria-labelledby="columns-title">
         <div class="database-columns-section__toolbar">
           <div><h2 id="columns-title">字段</h2><span>{{ detail.columns.length }} 个字段</span></div>
-          <div class="database-columns-section__actions"><el-input v-model="filterText" clearable placeholder="筛选字段" :prefix-icon="Search" /><el-button type="primary" plain @click="openRegisterColumn">登记字段</el-button></div>
+          <div class="database-columns-section__actions"><el-input v-model="filterText" clearable placeholder="筛选字段" :prefix-icon="Search" /><el-button v-if="actorStore.canEdit" type="primary" plain @click="openRegisterColumn">登记字段</el-button></div>
         </div>
 
         <EmptyState v-if="detail.columns.length === 0" />

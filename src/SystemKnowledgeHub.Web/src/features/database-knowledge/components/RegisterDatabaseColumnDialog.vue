@@ -90,10 +90,11 @@ async function submit(): Promise<void> {
         <button class="authoring-close" type="button" aria-label="关闭" @click="overlayStore.closeDialog">×</button>
       </header>
       <el-form ref="formRef" :model="form" :rules="rules" label-position="top" @submit.prevent>
+        <el-alert v-if="submitError" class="authoring-form-alert" type="error" :title="submitError" :closable="false" show-icon />
         <div class="register-column-dialog__row">
-          <el-form-item label="字段顺序" prop="ordinalPosition"><el-input-number v-model="form.ordinalPosition" :min="1" :precision="0" controls-position="right" /></el-form-item>
-          <el-form-item label="字段名称" prop="columnName"><el-input v-model="form.columnName" class="technical-input" placeholder="例如 STATE_FLAG" /></el-form-item>
-          <el-form-item label="数据类型" prop="dataType"><el-input v-model="form.dataType" class="technical-input" placeholder="例如 VARCHAR2(20)" /></el-form-item>
+          <el-form-item label="字段顺序" prop="ordinalPosition" required><el-input-number v-model="form.ordinalPosition" :min="1" :precision="0" controls-position="right" /></el-form-item>
+          <el-form-item label="字段名称" prop="columnName" required><el-input v-model="form.columnName" class="technical-input" placeholder="例如 STATE_FLAG" /></el-form-item>
+          <el-form-item label="数据类型" prop="dataType" required><el-input v-model="form.dataType" class="technical-input" placeholder="例如 VARCHAR2(20)" /></el-form-item>
         </div>
         <el-form-item label="允许为空"><el-switch v-model="form.nullable" active-text="是" inactive-text="否" /></el-form-item>
         <el-collapse>
@@ -105,7 +106,6 @@ async function submit(): Promise<void> {
             <el-form-item label="初步业务说明"><el-input v-model="form.businessDescription" type="textarea" :rows="2" maxlength="500" show-word-limit /></el-form-item>
           </el-collapse-item>
         </el-collapse>
-        <p v-if="submitError" class="authoring-error" role="alert">{{ submitError }}</p>
       </el-form>
       <footer class="authoring-actions">
         <p>登记后知识状态保持“未知”，不会自动新增证据或关系。</p>

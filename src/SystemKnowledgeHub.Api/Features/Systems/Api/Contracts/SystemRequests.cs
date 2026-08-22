@@ -26,3 +26,13 @@ public sealed record UpdateSystemOverviewRequest(
     string? Notes,
     ActorContextRequest Actor,
     string ConcurrencyToken);
+
+public sealed record UpdateSystemTechnologyRequest(
+    IReadOnlyList<string> Technologies,
+    ActorContextRequest Actor,
+    string ConcurrencyToken);
+
+public sealed record UpdateSystemLifecycleRequest(
+    string TargetLifecycle,
+    ActorContextRequest Actor,
+    string ConcurrencyToken);

@@ -1,5 +1,6 @@
 import type { RouteRecordRaw } from 'vue-router'
 import FoundationView from '../../features/bootstrap/pages/FoundationView.vue'
+import DashboardView from '../../features/dashboard/pages/DashboardView.vue'
 import BusinessFunctionDetailView from '../../features/business-functions/pages/BusinessFunctionDetailView.vue'
 import BusinessFunctionsListView from '../../features/business-functions/pages/BusinessFunctionsListView.vue'
 import DatabaseObjectDetailView from '../../features/database-knowledge/pages/DatabaseObjectDetailView.vue'
@@ -11,11 +12,24 @@ import UnknownItemsListView from '../../features/unknown-items/pages/UnknownItem
 import UnknownItemDetailView from '../../features/unknown-items/pages/UnknownItemDetailView.vue'
 import BusinessRuleDetailView from '../../features/business-rules/pages/BusinessRuleDetailView.vue'
 import IntegrationDetailView from '../../features/integrations/pages/IntegrationDetailView.vue'
+import UsersManagementView from '../../features/users/pages/UsersManagementView.vue'
+import AccessForbiddenView from '../../features/bootstrap/pages/AccessForbiddenView.vue'
 
 export const routes: readonly RouteRecordRaw[] = [
   {
     path: '/',
-    redirect: { name: 'database-objects-list' },
+    redirect: { name: 'dashboard' },
+  },
+  {
+    path: '/dashboard',
+    name: 'dashboard',
+    component: DashboardView,
+    meta: {
+      title: '总览',
+      layout: 'app-shell',
+      navigationKey: 'dashboard',
+      hasContextRail: false,
+    },
   },
   {
     path: '/foundation',
@@ -24,7 +38,7 @@ export const routes: readonly RouteRecordRaw[] = [
     meta: {
       title: '基础工程',
       layout: 'app-shell',
-      navigationKey: 'dashboard',
+      navigationKey: null,
     },
   },
   {
@@ -116,6 +130,24 @@ export const routes: readonly RouteRecordRaw[] = [
       navigationKey: 'database',
       hasContextRail: true,
     },
+  },
+  {
+    path: '/admin/users',
+    name: 'users-management',
+    component: UsersManagementView,
+    meta: {
+      title: '用户管理',
+      layout: 'app-shell',
+      navigationKey: 'users',
+      hasContextRail: false,
+      minimumAccessLevel: 'Administrator',
+    },
+  },
+  {
+    path: '/forbidden',
+    name: 'access-forbidden',
+    component: AccessForbiddenView,
+    meta: { title: '没有访问权限', layout: 'app-shell', navigationKey: null },
   },
   {
     path: '/:pathMatch(.*)*',

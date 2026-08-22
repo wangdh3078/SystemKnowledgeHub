@@ -1,14 +1,11 @@
 <script setup lang="ts">
 import { ElMessage } from 'element-plus'
-import { computed } from 'vue'
 import { useOverlayStore } from '../../../app/stores/overlays'
 import type { CreateSystemResponse } from '../api/systemsContracts'
-import CreateKnowledgeObjectChooser from './CreateKnowledgeObjectChooser.vue'
 import CreateSystemDialog from './CreateSystemDialog.vue'
 
 const emit = defineEmits<{ created: [system: CreateSystemResponse] }>()
 const overlayStore = useOverlayStore()
-const kind = computed(() => overlayStore.currentDialog?.kind)
 
 function handleCreated(system: CreateSystemResponse): void {
   overlayStore.closeDialog()
@@ -19,7 +16,6 @@ function handleCreated(system: CreateSystemResponse): void {
 
 <template>
   <Teleport v-if="overlayStore.isDialogOpen" defer to="#dialog-feature-content">
-    <CreateKnowledgeObjectChooser v-if="kind === 'create-knowledge-object'" :enabled-kinds="['system', 'database-knowledge', 'business-rule', 'integration']" />
-    <CreateSystemDialog v-else-if="kind === 'create-system'" @created="handleCreated" />
+    <CreateSystemDialog v-if="overlayStore.currentDialog?.kind === 'create-system'" @created="handleCreated" />
   </Teleport>
 </template>

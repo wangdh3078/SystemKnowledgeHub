@@ -3,14 +3,20 @@ import {
   decodeCreateSystem,
   decodeSystemDetail,
   decodeSystemsList,
+  decodeUpdateSystemLifecycle,
   decodeUpdateSystemOverview,
+  decodeUpdateSystemTechnology,
   type CreateSystemRequest,
   type CreateSystemResponse,
   type SystemDetailResponse,
   type SystemsListParameters,
   type SystemsListResponse,
+  type UpdateSystemLifecycleRequest,
+  type UpdateSystemLifecycleResponse,
   type UpdateSystemOverviewRequest,
   type UpdateSystemOverviewResponse,
+  type UpdateSystemTechnologyRequest,
+  type UpdateSystemTechnologyResponse,
 } from './systemsContracts'
 import { isSafeApiId } from '../../../api/contracts/id'
 
@@ -63,5 +69,31 @@ export function updateSystemOverview(
 
   return apiClient.put(`/systems/${encodeURIComponent(String(id))}/overview`, request, {
     decode: decodeUpdateSystemOverview,
+  })
+}
+
+export function updateSystemTechnology(
+  id: number,
+  request: UpdateSystemTechnologyRequest,
+): Promise<UpdateSystemTechnologyResponse> {
+  if (!isSafeApiId(id)) {
+    return Promise.reject(new RangeError('ID 必须是 JavaScript 安全范围内的正整数。'))
+  }
+
+  return apiClient.put(`/systems/${encodeURIComponent(String(id))}/technology`, request, {
+    decode: decodeUpdateSystemTechnology,
+  })
+}
+
+export function updateSystemLifecycle(
+  id: number,
+  request: UpdateSystemLifecycleRequest,
+): Promise<UpdateSystemLifecycleResponse> {
+  if (!isSafeApiId(id)) {
+    return Promise.reject(new RangeError('ID 必须是 JavaScript 安全范围内的正整数。'))
+  }
+
+  return apiClient.put(`/systems/${encodeURIComponent(String(id))}/lifecycle`, request, {
+    decode: decodeUpdateSystemLifecycle,
   })
 }

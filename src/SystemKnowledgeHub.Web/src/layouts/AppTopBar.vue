@@ -1,15 +1,24 @@
 <script setup lang="ts">
-import { Plus, Search } from '@element-plus/icons-vue'
-import { computed, onBeforeUnmount, onMounted } from 'vue'
+import { Plus, Search, SwitchButton } from '@element-plus/icons-vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
+import { logout } from '../app/security/authenticationApi'
 import { useActorStore } from '../app/stores/actor'
 import { useOverlayStore } from '../app/stores/overlays'
 
 const route = useRoute()
 const actorStore = useActorStore()
 const overlayStore = useOverlayStore()
+const profileOpen = ref(false)
+const loggingOut = ref(false)
 const createEnabled = computed(() =>
-  route.name !== 'foundation' && route.name !== 'not-found',
+  actorStore.canEdit && route.name !== 'foundation' && route.name !== 'not-found',
+)
+const currentUserSubtitle = computed(() =>
+  actorStore.currentUser?.departmentOrTeam
+  ?? actorStore.currentUser?.jobTitle
+  ?? actorStore.accessLevel
+  ?? '当前用户',
 )
 
 function openCreate(): void {
@@ -22,9 +31,21 @@ function openSearch(): void {
 }
 
 function handleGlobalSearchShortcut(event: KeyboardEvent): void {
-  if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+  if (event.ctrlKey && event.key.toLowerCase() === 'k') {
     event.preventDefault()
     openSearch()
+  }
+  if (event.key === 'Escape') profileOpen.value = false
+}
+
+async function signOut(): Promise<void> {
+  if (loggingOut.value) return
+  loggingOut.value = true
+  try {
+    await logout()
+    actorStore.clearCurrentUser('unauthenticated')
+  } finally {
+    loggingOut.value = false
   }
 }
 
@@ -34,33 +55,26 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleGlobalSearchSh
 
 <template>
   <header class="app-topbar">
-    <button
-      class="app-topbar__search"
-      type="button"
-      title="搜索所有知识对象"
-      @click="openSearch"
-    >
+    <button class="app-topbar__search" type="button" title="搜索所有知识对象" @click="openSearch">
       <el-icon :size="17"><Search /></el-icon>
       <span>搜索系统、业务功能、表、字段…</span>
-      <kbd>⌘ K</kbd>
+      <kbd>Ctrl + K</kbd>
     </button>
 
     <div class="app-topbar__actions">
-      <el-button
-        type="primary"
-        :icon="Plus"
-        :disabled="!createEnabled"
-        :title="createEnabled ? '新增知识对象' : '当前页面暂未开放新增'"
-        @click="openCreate"
-      >新增</el-button>
-      <span class="app-topbar__separator" aria-hidden="true"></span>
-      <button class="app-topbar__profile" type="button" title="本地开发用户">
-        <span class="app-topbar__avatar">{{ actorStore.displayName.slice(0, 1) }}</span>
-        <span class="app-topbar__profile-copy">
-          <strong>{{ actorStore.displayName }}</strong>
-          <small>{{ actorStore.role ?? '知识整理人员' }}</small>
-        </span>
+      <el-button v-if="actorStore.canEdit" type="primary" :icon="Plus" :disabled="!createEnabled" @click="openCreate">新增</el-button>
+      <span v-if="actorStore.canEdit" class="app-topbar__separator" aria-hidden="true"></span>
+      <button class="app-topbar__profile" type="button" :aria-expanded="profileOpen" title="查看当前用户资料" @click="profileOpen = !profileOpen">
+        <span class="app-topbar__avatar">{{ actorStore.currentUser?.displayName.slice(0, 1) ?? '?' }}</span>
+        <span class="app-topbar__profile-copy"><strong>{{ actorStore.currentUser?.displayName }}</strong><small>{{ currentUserSubtitle }} · {{ actorStore.accessLevel }}</small></span>
       </button>
+
+      <section v-if="profileOpen && actorStore.currentUser" class="app-topbar__current-user-panel" aria-label="当前用户资料">
+        <div class="app-topbar__current-user-heading"><div><strong>当前用户</strong><p>身份由服务器认证并映射，不能在浏览器中切换。</p></div><button type="button" aria-label="关闭当前用户资料" @click="profileOpen = false">×</button></div>
+        <div class="app-topbar__current-user-summary"><span class="app-topbar__avatar">{{ actorStore.currentUser.displayName.slice(0, 1) }}</span><div><strong>{{ actorStore.currentUser.displayName }}</strong><span>{{ actorStore.accessLevel }}</span></div></div>
+        <dl class="app-topbar__profile-details"><div><dt>工号</dt><dd>{{ actorStore.currentUser.employeeNo ?? '—' }}</dd></div><div><dt>邮箱</dt><dd>{{ actorStore.currentUser.email ?? '—' }}</dd></div><div><dt>部门 / 团队</dt><dd>{{ actorStore.currentUser.departmentOrTeam ?? '—' }}</dd></div><div><dt>职位</dt><dd>{{ actorStore.currentUser.jobTitle ?? '—' }}</dd></div><div><dt>知识身份</dt><dd>{{ actorStore.currentUser.knowledgeRoles.map((role) => role.name).join('、') || '未配置' }}</dd></div></dl>
+        <el-button class="app-topbar__logout" :icon="SwitchButton" :loading="loggingOut" @click="signOut">退出登录</el-button>
+      </section>
     </div>
   </header>
 </template>

@@ -1,6 +1,6 @@
 # System Knowledge Hub — Project File Map
 
-本文件描述当前仓库中主要目录和文件的职责。范围为 Bootstrap 基础设施与 **VS-01～VS-13** 已实现的 Vertical Slice；不把 `bin/`、`obj/`、`node_modules/`、`dist/`、lock 文件、运行时 SQLite 数据、普通 Migration 生成文件逐项列入。
+本文件描述当前仓库中主要目录和文件的职责。范围为 Bootstrap 基础设施、**VS-01～VS-15**、UX 稳定化以及 Post-MVP **U01～U04**；不把 `bin/`、`obj/`、`node_modules/`、`dist/`、lock 文件、运行时 SQLite 数据、普通 Migration 生成文件逐项列入。
 
 ## 1. Backend
 
@@ -10,10 +10,10 @@
 | --- | --- | --- | --- |
 | `src/SystemKnowledgeHub.Api/Program.cs` | 配置 Controllers、JSON、Persistence、CORS 和应用管线。 | Backend foundation | ASP.NET Core 的组合根与运行入口。 |
 | `src/SystemKnowledgeHub.Api/SystemKnowledgeHub.Api.csproj` | 定义 .NET 8 Web 项目及 EF Core SQLite 依赖。 | Backend foundation | 让后端可还原、构建和运行。 |
-| `src/SystemKnowledgeHub.Api/Persistence/KnowledgeHubDbContext.cs` | 提供当前已落地实体的唯一 EF Core DbContext。 | Persistence foundation / VS-01～VS-13 | 连接应用查询、写入、映射和 SQLite。 |
+| `src/SystemKnowledgeHub.Api/Persistence/KnowledgeHubDbContext.cs` | 提供当前已落地实体的唯一 EF Core DbContext。 | Persistence foundation / VS-01～VS-15 + U01 | 连接应用查询、写入、映射和 SQLite。 |
 | `src/SystemKnowledgeHub.Api/Persistence/DbContextConfiguration.cs` | 解析 SQLite 路径，注册 DbContext，并集中设置 SQLite PRAGMA。 | Persistence foundation | 保证开发和运行环境使用一致的连接规则。 |
 | `src/SystemKnowledgeHub.Api/Persistence/KnowledgeHubDesignTimeDbContextFactory.cs` | 为 EF CLI 创建设计时 DbContext。 | Persistence tooling / VS-01 | 生成和检查 Migration 时不依赖启动 Web Host。 |
-| `src/SystemKnowledgeHub.Api/Persistence/Concurrency/ConcurrencyTokenCodec.cs` | 在整数版本与 opaque `concurrencyToken` 之间安全编解码。 | Concurrency foundation / VS-01 + VS-03 | 支撑详情读取与 C02 条件更新，同时避免客户端理解物理版本。 |
+| `src/SystemKnowledgeHub.Api/Persistence/Concurrency/ConcurrencyTokenCodec.cs` | 在整数版本与 opaque `concurrencyToken` 之间安全编解码。 | Concurrency foundation / VS-01 + VS-03 + U01 | 支撑具体对象条件更新，同时避免客户端理解物理版本。 |
 | `src/SystemKnowledgeHub.Api/Shared/Api/ApiIdParser.cs` | 统一校验 API 路由中的正整数 ID。 | Shared API foundation | 防止各 Controller 重复实现 ID 边界规则。 |
 | `src/SystemKnowledgeHub.Api/Shared/Api/Contracts/ApiErrorResponse.cs` | 定义冻结的 API 错误响应形状。 | Shared API foundation | 让 Controller 以一致结构返回 400/404/422。 |
 | `src/SystemKnowledgeHub.Api/Shared/Domain/KnowledgeStatus.cs` | 定义跨 Feature 共用的封闭 KnowledgeStatus 枚举。 | Shared domain vocabulary / VS-01 + VS-02 | 让 System 与 Database Knowledge 使用同一稳定英文持久化值。 |
@@ -43,7 +43,7 @@
 
 以上 `...` 均指 `src/SystemKnowledgeHub.Api/Features/DatabaseKnowledge/`。
 
-### 1.4 Systems — VS-02 + VS-03
+### 1.4 Systems — VS-02 + VS-03 + VS-15
 
 | 路径 | 一句话职责 | Feature / Vertical Slice | 为什么需要 |
 | --- | --- | --- | --- |
@@ -51,9 +51,9 @@
 | `.../Domain/SystemLifecycle.cs`、`SystemTechnologyTag.cs` | 定义系统生命周期与技术标签一对多数据。 | Systems / VS-02 | 支撑冻结列表筛选、展示和最小创建后的渐进补充。 |
 | `.../Persistence/SystemConfiguration.cs`、`SystemTechnologyTagConfiguration.cs` | 映射唯一 `systems` 表及技术标签表。 | Systems / VS-02 | 保证 canonical mapping、唯一约束、版本和受限删除行为。 |
 | `.../Application/SystemQueries.cs` | 以明确 Projection 实现 Q04 系统列表与 Q05 系统详情。 | Systems / VS-02 + VS-03 | 列表和详情不返回 EF Entity，也不建立通用查询框架。 |
-| `.../Application/SystemService.cs` | 实现 C01 最小创建与 C02 概览条件更新。 | Systems / VS-02 + VS-03 | 保持明确写用例、字段白名单和整数版本并发控制。 |
-| `.../Application/Models/SystemModels.cs` | 定义 Systems 列表、详情、创建和概览更新的应用模型。 | Systems / VS-02 + VS-03 | 让 Application 与 HTTP Contract 边界明确。 |
-| `.../Api/Contracts/SystemRequests.cs`、`.../Api/SystemsController.cs` | 实现系统列表/创建、Q05 详情与 C02 概览 canonical routes。 | Systems / VS-02 + VS-03 | 严格对齐冻结 API，并集中处理校验、404 与 409。 |
+| `.../Application/SystemService.cs` | 实现 C01、C02 以及 C03 技术标签集合、C04 生命周期的明确条件更新。 | Systems / VS-02 + VS-03 + VS-15 | 保持字段边界、整数版本并发控制，且技术与生命周期不隐式改变知识状态。 |
+| `.../Application/Models/SystemModels.cs` | 定义 Systems 列表、详情、创建和三个编辑用例的应用模型。 | Systems / VS-02 + VS-03 + VS-15 | 让 Application 与 HTTP Contract 边界明确。 |
+| `.../Api/Contracts/SystemRequests.cs`、`.../Api/SystemsController.cs` | 实现系统列表/创建、Q05 详情与 C02–C04 canonical routes。 | Systems / VS-02 + VS-03 + VS-15 | 严格对齐冻结 API，并集中处理校验、404、409 与生命周期无变化的 422。 |
 
 以上 `...` 均指 `src/SystemKnowledgeHub.Api/Features/Systems/`。
 
@@ -82,15 +82,16 @@
 
 以上 `...` 均指 `src/SystemKnowledgeHub.Api/Features/BusinessFunctions/`。
 
-### 1.7 Evidence — VS-06
+### 1.7 Evidence — VS-06 + U04
 
 | 路径 | 一句话职责 | Feature / Vertical Slice | 为什么需要 |
 | --- | --- | --- | --- |
-| `.../Domain/Evidence.cs` | 定义 canonical Evidence、受控类型、Subject 绑定、完整提供人快照与并发版本。 | Evidence / VS-06 | 持久化“为什么相信这条知识”，不建立通用附件或 Claim 框架。 |
-| `.../Persistence/EvidenceConfiguration.cs` | 映射 `evidence` 表、JSON/enum CHECK、Subject 和来源索引。 | Evidence / VS-06 | 落实冻结 SQLite Schema 及受控 `type + id`。 |
+| `.../Domain/Evidence.cs` | 定义 canonical Evidence、受控类型、Subject 绑定、primitive 提供人快照与并发版本。 | Evidence / VS-06 + U04 | 持久化“为什么相信这条知识”，并让 HumanConfirmation 保存 immutable User/KnowledgeRole snapshot；不建立导航或通用 Snapshot 框架。 |
+| `.../Persistence/EvidenceConfiguration.cs` | 映射 `evidence` 表、JSON/enum CHECK、Subject/来源索引，以及 U04 User/KnowledgeRole RESTRICT 引用与索引。 | Evidence / VS-06 + U04 | 落实冻结 SQLite Schema 与批准的 additive amendment。 |
 | `.../Application/EvidenceSubjectResolver.cs` | 对已落地 SubjectType（含 KnowledgeRelation）做显式存在性与上下文解析。 | Evidence / VS-06 + VS-08 | 保护受控多态边界，不演变为 Generic Knowledge Resolver。 |
-| `.../Application/EvidenceQueries.cs`、`EvidenceService.cs` 与 `Models/EvidenceModels.cs` | 实现 Q16 以及 C23～C25 的明确读写用例。 | Evidence / VS-06 | 保证 Update 只纠正允许字段，且保存 Evidence/人工确认不自动改变知识状态。 |
-| `.../Api/EvidenceController.cs` 与 `Api/Contracts/EvidenceContracts.cs` | 实现 Evidence 新增、详情、纠正和人工确认的 canonical routes/contracts。 | Evidence / VS-06 | 向前端暴露冻结 HTTP 边界，不增加删除、Rebind 或状态路由。 |
+| `.../Application/EvidenceQueries.cs`、`EvidenceService.cs` 与 `Models/EvidenceModels.cs` | 实现 Q16 以及 C23～C25，并在 C25 事务内重读 canonical User、解析 KnowledgeRole、生成 snapshot。 | Evidence / VS-06 + U04 | 保证 Update 只纠正允许字段，且保存 Evidence/人工确认不自动改变知识状态。 |
+| `.../Api/EvidenceController.cs` 与 `Api/Contracts/EvidenceContracts.cs` | 实现 Evidence 新增、详情、纠正和人工确认的 canonical routes/contracts，并让 C25 使用 `ICurrentUserContext`。 | Evidence / VS-06 + U04 | 保持原 route/response，删除 client confirmer 输入且复用 U03 Current User 错误语义。 |
+| `src/SystemKnowledgeHub.Api/Persistence/Migrations/20260821221206_AddHumanConfirmationCurrentUserSnapshot.cs` | 为 `evidence` 增加四个 nullable snapshot/reference columns、两个 RESTRICT FK 与两个索引。 | Evidence / U04 | additive 支撑新 C25，同时保留历史 Evidence 的 null reference 与旧 provider 字段。 |
 
 以上 `...` 均指 `src/SystemKnowledgeHub.Api/Features/Evidence/`。
 
@@ -149,6 +150,27 @@
 
 Search 第一版采用 SQLite 受限 `LIKE` 投影；未创建 FTS5 virtual table 或 Migration。
 
+### 1.13 Dashboard — VS-14
+
+| 路径 | 一句话职责 | Feature / Vertical Slice | 为什么需要 |
+| --- | --- | --- | --- |
+| `src/SystemKnowledgeHub.Api/Features/Dashboard/Application/DashboardQueries.cs`、`Models/DashboardModels.cs` | 以跨 Feature 的只读 EF Projection 实现 Q01 总览计数、知识进展、关注事项与最近整理。 | Dashboard / VS-14 | 直接读取 canonical 表，不创建 Dashboard Domain、实体、Repository 或统计框架。 |
+| `src/SystemKnowledgeHub.Api/Features/Dashboard/Api/DashboardController.cs` | 暴露唯一 `GET /api/dashboard` 并校验可选 System Context。 | Dashboard / VS-14 | 对齐冻结 Q01 API，不让前端以多个 endpoint 组装首页。 |
+
+### 1.14 Users — U01 / U03
+
+| 路径 | 一句话职责 | Feature / Vertical Slice | 为什么需要 |
+| --- | --- | --- | --- |
+| `src/SystemKnowledgeHub.Api/Features/Users/Domain/User.cs`、`KnowledgeRole.cs`、`UserKnowledgeRole.cs` | 定义本地参与者 Profile、可复用知识身份及其多对多映射。 | Users / U01 | 建立单一 User 模型，不引入 Person、认证或权限领域。 |
+| `.../Persistence/UserConfiguration.cs`、`KnowledgeRoleConfiguration.cs`、`UserKnowledgeRoleConfiguration.cs` | 映射三个 canonical 表、NOCASE 唯一约束、RESTRICT FK 与整数版本。 | Users / U01 | 落实批准的 User Foundation 持久化设计。 |
+| `.../Application/UserQueries.cs`、`UserService.cs`、`Models/UserModels.cs` | 实现 User/KnowledgeRole 的明确列表、详情、创建、资料更新和启停用例。 | Users / U01 | 保护 Active Role 分配、映射原子替换和 stale token 409，不建立通用 CRUD。 |
+| `.../Api/UsersController.cs`、`KnowledgeRolesController.cs`、`Contracts/UserRequests.cs` | 暴露 U01 canonical routes 与现有错误/Actor/opaque token 约定。 | Users / U01 | 让后续管理 UI 有稳定的 typed backend boundary，同时不实现 Current User。 |
+| `src/SystemKnowledgeHub.Api/Persistence/Migrations/20260820133249_AddUserFoundation.cs` | 增量创建 `users`、`knowledge_roles`、`user_knowledge_roles`。 | Users / U01 | 只增加本 Slice 三张表，不修改 Evidence 或既有 MVP 表。 |
+| `.../Application/CurrentUserContext.cs`、`Models/UserModels.cs` | 从 `X-Current-User-Id` 解析 canonical Active User，并以显式状态表达缺失、无效、不存在与停用。 | Users / U03 | 提供可由具体用例选择 optional / required 的最小操作者上下文，不引入 Auth 或权限框架。 |
+| `.../Api/CurrentUserController.cs` | 暴露 `GET /api/current-user`，返回最新 Profile 或稳定错误契约。 | Users / U03 | 支撑前端恢复、切换和失效处理，同时不修改 U01/U02 API。 |
+
+以上 `...` 均指 `src/SystemKnowledgeHub.Api/Features/Users/`。
+
 ## 2. Frontend
 
 ### 2.1 Application and framework foundation
@@ -157,21 +179,21 @@ Search 第一版采用 SQLite 受限 `LIKE` 投影；未创建 FTS5 virtual tabl
 | --- | --- | --- | --- |
 | `src/SystemKnowledgeHub.Web/src/main.ts` | 调用前端 Bootstrap 函数。 | Frontend foundation | 浏览器入口保持最小且明确。 |
 | `src/SystemKnowledgeHub.Web/src/App.vue` | 根据 Route Meta 包装全局 Element Plus 中文环境与 App Shell。 | Frontend foundation | 为所有 Route 提供一致根布局。 |
-| `.../src/app/bootstrap/bootstrapApp.ts` | 创建 Vue App，注册 Pinia、Router、实际使用的 Element Plus 组件和全局样式。 | Frontend foundation | 集中完成客户端组合和挂载。 |
+| `.../src/app/bootstrap/bootstrapApp.ts` | 创建 Vue App，注册 Pinia、Router、实际使用的 Element Plus 组件和全局样式，并连接 Current User Header provider。 | Frontend foundation / U03 | 集中完成客户端组合和挂载，让共享 HTTP 层从唯一 store 取得 Current UserId。 |
 | `.../src/app/config/env.ts` | 读取并规范化 `VITE_API_BASE_URL`。 | Frontend foundation | API 地址配置不散落到 Feature。 |
 | `.../src/app/config/locale.ts` | 提供 Element Plus 简体中文 locale。 | Frontend foundation | 执行冻结的中文 UI 规则。 |
 | `.../src/app/router/index.ts` | 创建 History Router 并维护页面标题。 | Frontend foundation | 提供统一 Route 运行时。 |
-| `.../src/app/router/routes.ts` | 注册 Bootstrap、已落地正式页面和 Not Found Route。 | Bootstrap + VS-01～VS-09A | 把 Database、Systems、Business Functions 与 Unknown Items 的正式 Route 绑定到页面。 |
-| `.../src/app/router/navigation.ts` | 定义当前 Shell 导航项及启用状态。 | Frontend foundation / VS-01 + VS-02 + VS-04 | 启用已实现入口，并让其他入口保持可见但不可用。 |
+| `.../src/app/router/routes.ts` | 注册正式 Route、Post-MVP 用户管理 Route、未导航的 Bootstrap 诊断页和 Not Found Route；`/` 重定向至 Dashboard。 | Bootstrap + VS-01～VS-14 + U02 | 把已实现页面绑定到唯一正式产品入口，不增加 Current User 或认证 Route。 |
+| `.../src/app/router/navigation.ts` | 定义知识浏览入口与“管理 → 用户管理”入口。 | Frontend foundation / VS-14 + U02 | 保持既有知识导航，并以单一管理入口承载 User / KnowledgeRole 维护。 |
 | `.../src/types/router.d.ts` | 扩展 Vue Router Meta 类型。 | Frontend foundation | 对 layout、navigation 和 Context Rail 元数据做类型约束。 |
 | `.../src/app/stores/overlays.ts` | 保存单实例 Drawer/Dialog 的轻量 descriptor。 | Overlay foundation / VS-01 | 实现不嵌套、可替换的全局 Overlay 规则。 |
-| `.../src/app/stores/actor.ts` | 保存第一版创建人名称与角色快照。 | Authoring foundation / VS-02 | C01 需要人员快照，但 MVP 不建立人员中心。 |
+| `.../src/app/stores/actor.ts` | 保存、恢复、切换 Current User，并从 canonical Profile 派生兼容的普通 ActorContext。 | Users / U03 + U04 | 统一“当前操作者”来源，并为 HumanConfirmation Drawer 提供唯一 profile/role 数据源。 |
 
 ### 2.2 Shared HTTP and UI foundation
 
 | 路径 | 一句话职责 | Feature / Vertical Slice | 为什么需要 |
 | --- | --- | --- | --- |
-| `.../src/api/client/apiClient.ts` | 用 native fetch 提供 typed decoder、AbortSignal、JSON 和错误规范化。 | Shared HTTP foundation | Feature API 不直接处理重复的 HTTP 细节。 |
+| `.../src/api/client/apiClient.ts` | 用 native fetch 提供 typed decoder、AbortSignal、JSON、错误规范化与统一 `X-Current-User-Id` 传播。 | Shared HTTP foundation / U03 | Feature API 不直接处理重复 HTTP 细节，各页面不手工设置 Current User Header。 |
 | `.../src/api/contracts/errors.ts` | 定义冻结 API error code/payload 的前端类型。 | Shared HTTP foundation | 让错误边界与后端契约一致。 |
 | `.../src/api/errors/ApiError.ts` | 定义业务、网络和非预期响应错误类。 | Shared HTTP foundation | 区分可解释 API 错误与连接/格式失败。 |
 | `.../src/api/errors/normalizeApiError.ts` | 把非 2xx Response 收敛成类型化错误。 | Shared HTTP foundation | 页面和 Drawer 可展示一致错误状态。 |
@@ -186,7 +208,7 @@ Search 第一版采用 SQLite 受限 `LIKE` 投影；未创建 FTS5 virtual tabl
 
 | 路径 | 一句话职责 | Feature / Vertical Slice | 为什么需要 |
 | --- | --- | --- | --- |
-| `.../src/layouts/AppShell.vue` | 组合侧栏、顶部栏、主工作区、Context Rail、全局 Overlay Hosts、全局搜索与已实现的创建流程。 | Application Shell / VS-02～VS-13 | 实现冻结的统一桌面框架，并保证 Drawer 切换为 Dialog 时 Feature 内容仍可挂载。 |
+| `.../src/layouts/AppShell.vue` | 组合侧栏、顶部栏、主工作区、Context Rail、单一全局 Overlay Host、搜索与创建流程。 | Application Shell / VS-02～VS-15 + UX stabilization | 实现冻结的统一桌面框架，并保证全局“新增知识对象”只渲染一个选择器。 |
 | `.../src/layouts/AppSidebar.vue` | 渲染正式产品标识与左侧导航。 | Application Shell | 提供稳定的全局知识入口。 |
 | `.../src/layouts/AppTopBar.vue` | 渲染可打开的全局搜索、新增和人员快照，并支持 `⌘ / Ctrl + K`。 | Application Shell / VS-02 + VS-13 | 保持唯一全局搜索入口，不创建 Search Route。 |
 | `.../src/layouts/AppContentArea.vue` | 定义 Main Content 与 Context Rail 两列区域。 | Application Shell | 维持 Detail 页统一信息架构。 |
@@ -223,22 +245,22 @@ Search 第一版采用 SQLite 受限 `LIKE` 投影；未创建 FTS5 virtual tabl
 | `.../src/features/database-knowledge/components/ColumnDetailDrawer.vue` | 渲染 Column-level 业务知识、证据、缺口和低频折叠区，并在同一 Drawer 内维护字段知识和已知值。 | DatabaseKnowledge / VS-01 + VS-12B | 是 DR-03 / DR-11 对应的单实例对象详情与编辑 Drawer。 |
 | `.../src/features/database-knowledge/database-knowledge.css` | 定义对象列表、登记表单及既有详情/Rail/Drawer 的局部样式。 | DatabaseKnowledge / VS-01 + VS-12A + VS-12B | 补充 Golden 特有布局，不污染全局 token。 |
 
-### 2.6 Systems — VS-02 + VS-03
+### 2.6 Systems — VS-02 + VS-03 + VS-15
 
 | 路径 | 一句话职责 | Feature / Vertical Slice | 为什么需要 |
 | --- | --- | --- | --- |
-| `.../src/features/systems/api/systemsContracts.ts` | 定义并运行时解码 Q04/C01/Q05/C02 frozen JSON contract。 | Systems / VS-02 + VS-03 | 把外部 JSON 安全收窄为严格 TypeScript 类型。 |
-| `.../src/features/systems/api/systemsApi.ts` | 调用系统列表、创建、详情与概览更新的 canonical routes。 | Systems / VS-02 + VS-03 | Feature 复用 native-fetch apiClient，不自行保存全局状态。 |
+| `.../src/features/systems/api/systemsContracts.ts`、`systemsApi.ts` | 定义、解码并调用 Q04/C01/Q05/C02–C04 frozen JSON contract。 | Systems / VS-02 + VS-03 + VS-15 | 把外部 JSON 安全收窄为严格 TypeScript 类型，并只访问 canonical routes。 |
 | `.../src/features/systems/composables/useSystemsList.ts` | 管理筛选、分页、加载、错误和刷新等页面局部状态。 | Systems / VS-02 | 遵守列表数据不进入 Pinia 的冻结决策。 |
-| `.../src/features/systems/composables/useSystemDetail.ts` | 管理 Q05 加载、C02 保存、冲突与重载等详情局部状态。 | Systems / VS-03 | 发生 409 时保留编辑草稿，不引入全局详情 Store。 |
+| `.../src/features/systems/composables/useSystemDetail.ts` | 管理 Q05 加载、C02–C04 保存、冲突与重载等详情局部状态。 | Systems / VS-03 + VS-15 | 发生 409 时保留编辑草稿，不引入全局详情 Store。 |
 | `.../src/features/systems/pages/SystemsListView.vue` | 渲染 RP-02 系统列表并连接新增刷新与系统详情导航。 | Systems / VS-02 + VS-03 | 是 Q04 对应的正式 Route Page 与 Q05 入口。 |
 | `.../src/features/systems/pages/SystemDetailView.vue` | 渲染 RP-03 系统详情，并导航到真实业务功能与数据库对象。 | Systems / VS-03 + VS-04 | 是 Q05 对应的正式 Route Page 与 Business Function 上层入口。 |
 | `.../src/features/systems/components/SystemOverviewSection.vue` | 渲染系统概览只读/内联编辑、校验与并发冲突状态。 | Systems / VS-03 | 复用 ES-01 模式实现 C02，而不新增编辑 Route。 |
+| `.../src/features/systems/components/SystemTechnologyLifecycleSection.vue` | 在同一 System Detail 内提供技术标签和生命周期的独立内联编辑状态。 | Systems / VS-15 + UX stabilization | 完成 C03/C04；技术标签复用当前系统数据作为可搜索、可创建的候选项，不引入技术主数据。 |
 | `.../src/features/systems/components/SystemContextRail.vue` | 渲染系统级关系与缺口摘要。 | Systems / VS-03 | 保持 Context Rail 只回答系统关联与缺口，不复制 Main Content。 |
 | `.../src/features/systems/components/CreateSystemFlow.vue` | 在全局 Dialog Host 中编排知识类型选择与系统最小创建。 | Systems / VS-02 | 落实 Progressive Documentation，而非巨大表单。 |
 | `.../src/features/systems/components/CreateKnowledgeObjectChooser.vue` | 展示冻结知识对象类型入口，并按当前上下文开放已实现的 System、Database Knowledge、Business Function、Business Rule、Integration。 | Shared authoring entry / VS-02～VS-12A | 保留 Golden Create Flow 信息架构，不为尚未实现的对象类型虚构创建能力。 |
 | `.../src/features/systems/components/CreateSystemDialog.vue` | 收集 C01 最小字段、人员快照并提交创建。 | Systems / VS-02 | 创建后关闭、刷新并保持知识状态“未知”。 |
-| `.../src/features/systems/systems.css` | 定义 RP-02、RP-03、ES-01 与系统创建流程的局部样式。 | Systems / VS-02 + VS-03 | 对齐 Golden 密度且不改变 Application Shell。 |
+| `.../src/features/systems/systems.css` | 定义 RP-02、RP-03、ES-01、系统创建及技术/生命周期内联编辑的局部样式。 | Systems / VS-02 + VS-03 + VS-15 | 对齐 Golden 密度且不改变 Application Shell。 |
 
 以上 `...` 均指 `src/SystemKnowledgeHub.Web/`。
 
@@ -251,21 +273,21 @@ Search 第一版采用 SQLite 受限 `LIKE` 投影；未创建 FTS5 virtual tabl
 | `.../pages/BusinessFunctionsListView.vue` | 渲染 RP-04 列表并连接新增业务功能后的筛选刷新。 | BusinessFunctions / VS-04 + VS-05 | 完成查找、导航与 C05 创建后的即时可见闭环。 |
 | `.../pages/BusinessFunctionDetailView.vue` | 渲染 RP-05，并编排概览、流程、知识状态和关系入口。 | BusinessFunctions / VS-04 + VS-05 + VS-07 + VS-08 | 保持 Read First，并让关系摘要和 Drawer 与既有 Evidence/状态能力形成闭环。 |
 | `.../components/BusinessFunctionContextRail.vue` | 渲染功能级调用方、相邻功能、关系摘要与开放缺口。 | BusinessFunctions / VS-04 | 保持 Context Rail 与 Main Content 职责分离。 |
-| `.../components/CreateBusinessFunctionFlow.vue`、`CreateBusinessFunctionDialog.vue` | 复用统一对象选择入口并实现 C05 最小创建表单。 | BusinessFunctions / VS-05 | 落实 Progressive Documentation，创建后仍保持“未知”。 |
+| `.../components/CreateBusinessFunctionFlow.vue`、`CreateBusinessFunctionDialog.vue` | 承接唯一全局/列表创建入口并实现 C05 最小创建表单。 | BusinessFunctions / VS-05 + UX stabilization | 落实 Progressive Documentation；无系统上下文时要求用户先选择 System，创建后仍保持“未知”。 |
 | `.../components/BusinessFunctionOverviewSection.vue` | 渲染 ES-02 概览只读/Inline Edit、保存和冲突重载。 | BusinessFunctions / VS-05 | 不新增编辑 Route，并在 409 时保留用户草稿。 |
 | `.../components/BusinessProcessSection.vue` | 渲染有序流程的新增、编辑、删除、移动与完整替换。 | BusinessFunctions / VS-05 | 落实 C07 的有序集合语义，继续保持简单可扫描流程。 |
 | `.../business-functions.css` | 定义 RP-04/RP-05、创建、Inline Edit 和流程编辑的密度与响应式样式。 | BusinessFunctions / VS-04 + VS-05 | 继承 Design Baseline，不引入新视觉体系。 |
 
 以上 `...` 均指 `src/SystemKnowledgeHub.Web/src/features/business-functions/`。
 
-### 2.8 Evidence — VS-06
+### 2.8 Evidence — VS-06 + U04
 
 | 路径 | 一句话职责 | Feature / Vertical Slice | 为什么需要 |
 | --- | --- | --- | --- |
-| `.../api/evidenceContracts.ts`、`evidenceApi.ts` | 定义、解码并调用 Q16/C23～C25 frozen contract。 | Evidence / VS-06 | 将外部 JSON 安全收窄，且只访问 canonical routes。 |
+| `.../api/evidenceContracts.ts`、`evidenceApi.ts` | 定义、解码并调用 Q16/C23～C25 contract；U04 C25 只提交确认事实和可选 `knowledgeRoleId`。 | Evidence / VS-06 + U04 | 将外部 JSON 安全收窄，只访问 canonical routes，并保留 Confirmation Method legacy fallback。 |
 | `.../components/AddEvidenceDrawer.vue` | 在固定 Subject 上收集普通 Evidence 最小必要信息与提供人快照。 | Evidence / VS-06 | 实现 DR-08，不将证据保存与知识状态推进混合。 |
-| `.../components/EvidenceDetailDrawer.vue` | 呈现 DR-09 Evidence 来源、支持理由、提供人和允许纠正项。 | Evidence / VS-06 | 支持 Q16/C24 且保持 EvidenceType/Subject 不可变。 |
-| `.../components/AddHumanConfirmationDrawer.vue` | 收集 DR-10 人工确认内容和完整确认人快照。 | Evidence / VS-06 | 实现 C25，并明示保存后知识状态不变。 |
+| `.../components/EvidenceDetailDrawer.vue` | 呈现 DR-09 Evidence 来源、支持理由、提供人和允许纠正项，并以 locator-first/provider_source-fallback 显示确认方式。 | Evidence / VS-06 + U04 | 支持 Q16/C24、保持 EvidenceType/Subject 不可变，并兼容历史 HumanConfirmation。 |
+| `.../components/AddHumanConfirmationDrawer.vue` | 继续以 DR-10 收集确认事实，只读展示 `actorStore.currentUser`，按 0/1/multiple Active Role 规则提交。 | Evidence / U04 | 身份 snapshot 由服务端生成；缺失操作者禁用保存，Role 422 后刷新 profile 且不静默重试。 |
 | `.../components/EvidenceDrawerContent.vue`、`evidence.css` | 将三类 Evidence 状态接入全局单 Drawer Host 并实现 Golden 局部样式。 | Evidence / VS-06 | 复用已冻结 Overlay 模式，避免堆叠 Drawer 或新视觉体系。 |
 
 以上 `...` 均指 `src/SystemKnowledgeHub.Web/src/features/evidence/`。
@@ -275,7 +297,7 @@ Search 第一版采用 SQLite 受限 `LIKE` 投影；未创建 FTS5 virtual tabl
 | 路径 | 一句话职责 | Feature / Vertical Slice | 为什么需要 |
 | --- | --- | --- | --- |
 | `.../api/knowledgeStatusContracts.ts`、`knowledgeStatusApi.ts` | 定义、解码并调用 C26 frozen contract。 | KnowledgeStatus / VS-07 | 保持 opaque token 和受控 Target 的严格 TypeScript 边界。 |
-| `.../components/KnowledgeStatusProgressionPanel.vue` | 在业务功能详情展示只读进展、当前门槛与显式推进入口。 | KnowledgeStatus / VS-07 | 让用户先读状态和依据，再执行明确操作。 |
+| `.../components/KnowledgeStatusProgressionPanel.vue` | 在支持的详情/字段 Drawer 展示知识进展、当前门槛与显式推进入口。 | KnowledgeStatus / VS-07 + UX stabilization | 让用户理解“为什么仍是未知/推断”、先补足 Evidence 或人工确认，再执行明确状态操作。 |
 | `.../components/KnowledgeStatusDialogContent.vue` | 在全局 Dialog Host 中确认前进目标、门槛与并发错误。 | KnowledgeStatus / VS-07 | 状态节点不可点击切换，服务端仍最终校验 Evidence/HumanConfirmation。 |
 | `.../knowledge-status.css` | 定义进展面板和确认对话框的局部样式。 | KnowledgeStatus / VS-07 | 继承现有高密度浅色设计，不引入新视觉体系。 |
 
@@ -348,6 +370,32 @@ Search 第一版采用 SQLite 受限 `LIKE` 投影；未创建 FTS5 virtual tabl
 
 以上 `...` 均指 `src/SystemKnowledgeHub.Web/src/features/search/`。
 
+### 2.15 Dashboard — VS-14
+
+| 路径 | 一句话职责 | Feature / Vertical Slice | 为什么需要 |
+| --- | --- | --- | --- |
+| `.../api/dashboardContracts.ts`、`dashboardApi.ts` | 解码并调用冻结 Q01 Dashboard 组合 Contract。 | Dashboard / VS-14 | 在 Feature API 边界收窄跨对象只读响应，页面不直接 fetch。 |
+| `.../composables/useDashboard.ts` | 管理单一 Dashboard 请求的 loading、error、data 与取消。 | Dashboard / VS-14 | 保持总览状态本地化，不把页面数据放入 Pinia。 |
+| `.../pages/DashboardView.vue`、`dashboard.css` | 实现 RP-01 的知识总览、单一进展条、需要关注、最近整理及 canonical 导航。 | Dashboard / VS-14 | 复用 Shell、Global Search 和 Global Create，不引入图表或第二套首页布局。 |
+
+以上 `...` 均指 `src/SystemKnowledgeHub.Web/src/features/dashboard/`。
+
+### 2.16 Users — U02
+
+| 路径 | 一句话职责 | Feature / Vertical Slice | 为什么需要 |
+| --- | --- | --- | --- |
+| `.../api/userContracts.ts`、`usersApi.ts` | 严格解码并调用 U01 User / KnowledgeRole canonical API。 | Users / U02 | 复用既有 routes、opaque token 和 Error Contract，不建立第二套管理 API。 |
+| `.../composables/useUsersManagement.ts` | 管理用户列表筛选、分页、排序、取消与刷新。 | Users / U02 | 保持 Server Query 与筛选状态 Feature-local，不引入新的全局状态。 |
+| `.../pages/UsersManagementView.vue` | 实现用户列表、查询、启停与 User / KnowledgeRole 管理入口。 | Users / U02 | 提供最短的管理路径，并明确该页面不是认证或权限边界。 |
+| `.../components/UserManagementDrawer.vue` | 复用一个 Drawer 完成 User Create/Edit、角色分配和 409 冲突重载。 | Users / U02 | 保留 inactive 既有映射、阻止新增停用角色分配并原样回传 token。 |
+| `.../components/KnowledgeRoleManagementDialog.vue` | 在同页小型 Dialog 中完成角色 List/Create/Edit/Active State。 | Users / U02 | 不增加独立 Role Route、Delete、层级或 Permission Mapping。 |
+| `.../users.css` | 定义用户管理表格、Drawer 与 Dialog 的局部高密度样式。 | Users / U02 | 继承现有浅色企业工具视觉，不建立新设计系统。 |
+| `.../api/userContracts.ts`、`usersApi.ts` | 增加 Current User Profile decoder 与 `GET /api/current-user` typed boundary。 | Users / U03 | 复用既有 Users Feature 与共享 API Client，不创建第二套 HTTP 层。 |
+
+`src/SystemKnowledgeHub.Web/src/layouts/AppTopBar.vue` 提供 U03 Current User Profile / Switcher；选择器只列出 Active User，并明确其为业务操作者上下文而非登录或权限身份。
+
+以上 `...` 均指 `src/SystemKnowledgeHub.Web/src/features/users/`。
+
 ## 3. Tests
 
 ### 3.1 Backend tests
@@ -363,7 +411,8 @@ Search 第一版采用 SQLite 受限 `LIKE` 投影；未创建 FTS5 virtual tabl
 | `.../Api/DatabaseKnowledgeApiTests.cs` | 验证 canonical routes、成功 shape 与 400/404/422。 | DatabaseKnowledge / VS-01 | 证明冻结 HTTP contract 的外部行为。 |
 | `.../Api/SystemsApiTests.cs` | 用真实 SQLite 验证 Q04/C01 以及 Q05/C02 持久化与 stale token 冲突。 | Systems / VS-02 + VS-03 | 以少量高价值测试覆盖系统列表、创建、详情和概览更新。 |
 | `.../Api/BusinessFunctionsApiTests.cs` | 验证 Q06/Q07，并覆盖 C05 创建、C06/C07 持久化和 stale token 409。 | BusinessFunctions / VS-04 + VS-05 | 用少量真实 SQLite/HTTP 测试证明关键读写与并发行为。 |
-| `.../Api/EvidenceApiTests.cs` | 验证普通 Evidence 新增/纠正、stale token 与人工确认快照。 | Evidence / VS-06 | 用 3 个真实 SQLite/HTTP 测试证明 Subject 绑定、可变字段和“不自动改状态”。 |
+| `.../Api/EvidenceApiTests.cs` | 验证普通 Evidence、新 C25 Current User/Role 解析、snapshot immutability、legacy read 与“不自动改状态”。 | Evidence / VS-06 + U04 | 用真实 SQLite/HTTP 聚焦覆盖 U04 的高风险 contract 与业务边界。 |
+| `.../Persistence/HumanConfirmationSnapshotMigrationTests.cs` | 从 U01 前一 Migration 升级到最新 Schema，核对历史行、四列、两 FK、五个新旧索引与约束。 | Evidence / U04 | 证明 SQLite table rebuild 未丢数据或破坏既有 Evidence 结构。 |
 | `.../Api/KnowledgeStatusApiTests.cs` | 验证 C26 前进门槛、禁止跳级、显式回退原因、stale token 与人员快照持久化。 | KnowledgeStatus / VS-07 | 用 2 个真实 SQLite/HTTP 测试覆盖最高风险状态规则。 |
 | `.../Api/RelationshipsApiTests.cs` | 验证合法/非法端点、精确去重、同系统 Calls 及关系 Evidence 状态门槛。 | Relationships / VS-08 | 用 3 个真实 SQLite/HTTP 测试覆盖本 Slice 最高风险规则。 |
 | `.../Api/UnknownItemsApiTests.cs` | 验证创建/列表/详情、合法状态、并发、Finding、调查 Evidence 和 Resolution Draft。 | UnknownItems / VS-09A | 用 3 个真实 SQLite/HTTP 测试证明调查事务闭环且不修改目标知识。 |
@@ -373,6 +422,9 @@ Search 第一版采用 SQLite 受限 `LIKE` 投影；未创建 FTS5 virtual tabl
 | `.../Api/DatabaseObjectsListRegistrationApiTests.cs` | 验证 Q08 的 System/Source/Column 命中读取，以及 C08/C09 的 SQLite 写入与可见性。 | DatabaseKnowledge / VS-12A | 用 3 个真实 SQLite/HTTP 测试覆盖本 Slice 的核心读取与最小登记闭环。 |
 | `.../Api/DatabaseKnowledgeAuthoringApiTests.cs` | 验证 C10～C14 的 SQLite 写入、状态不自动推进、关系/证据保留和精确引用阻止移除。 | DatabaseKnowledge / VS-12B | 用 4 个真实 SQLite/HTTP 测试覆盖本 Slice 的高风险维护规则。 |
 | `.../Api/GlobalSearchApiTests.cs` | 验证 Q02 的跨类型分组、`STATE_FLAG` 技术标识/Column Drawer 导航，以及待确认事项状态隔离。 | Search / VS-13 | 用 3 个真实 SQLite/HTTP 测试覆盖本 Slice 的核心读模型。 |
+| `.../Api/DashboardApiTests.cs` | 验证 Q01 真实知识汇总、两套状态隔离、关注项和最近整理的排序/限制。 | Dashboard / VS-14 | 用 2 个真实 SQLite/HTTP 测试覆盖跨 Feature 只读投影的关键风险。 |
+| `.../Api/UsersApiTests.cs` | 验证 User/KnowledgeRole 创建读取、NOCASE 唯一性、角色映射、启停语义与 stale token。 | Users / U01 | 用 3 个真实 SQLite/HTTP 测试覆盖 User Foundation 的高风险持久化和并发规则。 |
+| `.../Api/CurrentUserApiTests.cs` | 验证 Header 解析、Active Profile、缺失/无效/不存在/停用错误与无 Header Admin API 兼容。 | Users / U03 | 用 2 个真实 SQLite/HTTP 测试覆盖 Current User Context 的关键边界。 |
 
 以上 `...` 均指 `tests/SystemKnowledgeHub.Api.Tests/`。
 
@@ -383,6 +435,8 @@ Search 第一版采用 SQLite 受限 `LIKE` 投影；未创建 FTS5 virtual tabl
 | `.../src/api/client/apiClient.spec.ts`、`.../src/api/errors/normalizeApiError.spec.ts` | 验证 shared fetch 与错误边界。 | Frontend test foundation | 保护 Feature 共用的 HTTP 行为。 |
 | `.../src/app/config/env.spec.ts` | 验证 API base path 解析。 | Frontend test foundation | 防止空值或尾斜杠造成请求错误。 |
 | `.../src/app/stores/overlays.spec.ts` | 验证单实例 Drawer/Dialog 替换规则。 | Overlay foundation / VS-01 | 防止 nested overlay 回归。 |
+| `.../src/app/stores/actor.spec.ts` | 验证 Current User 恢复、ActorContext 派生、无效本地选择清理与 Active 候选约束。 | Users / U03 | 覆盖浏览器闭环不宜安全构造的不存在 UserId 边界。 |
+| `.../src/features/evidence/api/evidenceContracts.spec.ts` | 验证新 locator `confirmationMethod` 优先与历史 `provider_source` fallback。 | Evidence / U04 | 保护新旧 HumanConfirmation detail 的读取兼容。 |
 | `.../src/layouts/AppShell.spec.ts` | 验证共享 Shell 基本挂载。 | Application Shell | 保护主布局组合。 |
 | `.../src/features/database-knowledge/api/*.spec.ts` | 验证 contract decoder 和安全 ID。 | DatabaseKnowledge / VS-01 | 保护前端 frozen contract 边界。 |
 | `.../src/features/database-knowledge/composables/*.spec.ts` | 验证对象/字段加载与 Drawer descriptor。 | DatabaseKnowledge / VS-01 | 保护页面关键交互状态。 |
@@ -438,6 +492,13 @@ Search 第一版采用 SQLite 受限 `LIKE` 投影；未创建 FTS5 virtual tabl
 | `docs/reports/VS12A_Database_Objects_List_Registration_Verification_Report.md` | 记录 VS-12A 的 Q08/C08/C09、测试、运行闭环、Golden Review 与进程清理。 | DatabaseKnowledge / VS-12A | 为数据库对象列表与最小登记 Slice Review 提供完成证据。 |
 | `docs/reports/VS12B_Database_Knowledge_Authoring_Verification_Report.md` | 记录 VS-12B 的 C10～C14、测试、运行闭环、Golden Review 与进程清理。 | DatabaseKnowledge / VS-12B | 为数据库对象/字段知识维护与 Known Value Slice Review 提供完成证据。 |
 | `docs/reports/VS13_Global_Search_Verification_Report.md` | 记录 VS-13 的 Q02 搜索策略、分组、导航、测试、运行闭环、Golden Review 与进程清理。 | Search / VS-13 | 为全局搜索 MVP 收尾 Slice Review 提供完成证据。 |
+| `docs/reports/VS14_Dashboard_Product_Entry_Verification_Report.md` | 记录 VS-14 的 Q01、RP-01、正式产品入口、测试、运行闭环、Golden Review 与进程清理。 | Dashboard / VS-14 | 为 Dashboard 与导航收尾提供完成证据。 |
+| `docs/reports/U02_ADMIN_USER_MANAGEMENT_VERIFICATION_REPORT.md` | 记录 U02 的 User/KnowledgeRole 管理 UI、角色分配、并发冲突、构建、运行闭环与清理。 | Users / U02 | 为 Admin User Management Review 提供可复核完成证据，并确认未进入 Current User/Auth。 |
+| `docs/reports/U03_CURRENT_USER_VERIFICATION_REPORT.md` | 记录 U03 Current User Context、Header、Profile/Switcher、回归与清理。 | Users / U03 | 为 operator context Review 提供可复核证据，并确认它不是认证或权限身份。 |
+| `docs/design/HUMAN_CONFIRMATION_API_AMENDMENT_REVIEW.md` | 冻结 HC-A01 对 C25 request、Current User、Role resolution、snapshot、schema 与 legacy compatibility 的批准决策。 | Evidence / HC-A01 | 是 U04 的直接实施依据，不由实现自行重设计。 |
+| `docs/reports/U04_HUMAN_CONFIRMATION_CURRENT_USER_SNAPSHOT_VERIFICATION_REPORT.md` | 记录 U04 contract、transaction、snapshot、Migration、UI、legacy、测试、闭环与清理。 | Evidence / U04 | 为 U04 Verification Gate 提供完整可复核证据。 |
+| `docs/design/SECURITY_ACCESS_CONTROL_REQUIREMENT.md` | 记录未来企业访问控制的业务要求、KnowledgeRole 边界和 SEC-A01 待决项。 | Security requirement / deferred | 保留需求而不提前选择认证、授权或 RBAC 实现方案。 |
+| `docs/reports/UI_UX_ISSUE_FIX_VERIFICATION_REPORT.md` | 记录 Phase A 的状态弹窗调查、调查发现布局、用户抽屉间距、浏览器验证与清理。 | UI/UX stabilization / Phase A | 为本轮补充 UI/UX 修复提供可复核证据，并确认没有重开 U04。 |
 | `docs/reports/MVP_Implementation_Audit_Preparation_Report.md` | 记录 VS-11 后的构建检查、当前结构、迁移、测试概况及临时产物清理结果。 | MVP implementation audit preparation | 作为后续审计开始前的静态基线。 |
 | `docs/reports/System_Knowledge_Hub_MVP_Final_Freeze_Validation_Report.md` | 记录 Product Design Final Freeze 的路径、引用和唯一性校验。 | Design freeze | 证明 Golden UI 包在进入实现前已冻结。 |
 | `docs/reports/design-qa.md` | 记录 VS-01 Golden UI 对比与修订结果。 | DatabaseKnowledge / VS-01 | 证明详情页实现通过视觉 QA。 |
@@ -452,4 +513,4 @@ Search 第一版采用 SQLite 受限 `LIKE` 投影；未创建 FTS5 virtual tabl
 
 共 **1** 项；本次未删除或重构。
 
-1. **Bootstrap 诊断表面在 VS-01 后仍然保留。** `BootstrapController.cs`、`bootstrapApi.ts`、`FoundationView.vue` 及相应测试职责明确，但现在正式业务链路已经可运行；后续应确认它们继续作为长期健康诊断/开发页，还是在不再需要 Bootstrap 回归时收口。当前保留不会影响 VS-01。
+1. **Bootstrap 诊断表面仍保留但已退出正式导航。** `BootstrapController.cs`、`bootstrapApi.ts`、`FoundationView.vue` 及相应测试职责明确，VS-14 已将 `/`、品牌入口与 Sidebar 总览切换到 Dashboard；后续应确认该未导航诊断页是否继续保留为开发健康检查。当前保留不影响正式产品入口。

@@ -4,9 +4,12 @@ using SystemKnowledgeHub.Api.Features.BusinessRules.Domain;
 using SystemKnowledgeHub.Api.Features.DatabaseKnowledge.Domain;
 using SystemKnowledgeHub.Api.Features.Evidence.Domain;
 using SystemKnowledgeHub.Api.Features.Integrations.Domain;
+using SystemKnowledgeHub.Api.Features.KnowledgeDocuments.Domain;
 using SystemKnowledgeHub.Api.Features.Relationships.Domain;
 using SystemKnowledgeHub.Api.Features.Systems.Domain;
 using SystemKnowledgeHub.Api.Features.UnknownItems.Domain;
+using SystemKnowledgeHub.Api.Features.Users.Domain;
+using UserEntity = SystemKnowledgeHub.Api.Features.Users.Domain.User;
 
 namespace SystemKnowledgeHub.Api.Persistence;
 
@@ -32,6 +35,12 @@ public sealed class KnowledgeHubDbContext(DbContextOptions<KnowledgeHubDbContext
     public DbSet<Resolution> Resolutions => Set<Resolution>();
     public DbSet<KnowledgeUpdate> KnowledgeUpdates => Set<KnowledgeUpdate>();
     public DbSet<UnknownItemActivity> UnknownItemActivities => Set<UnknownItemActivity>();
+    public DbSet<UserEntity> Users => Set<UserEntity>();
+    public DbSet<KnowledgeRole> KnowledgeRoles => Set<KnowledgeRole>();
+    public DbSet<UserKnowledgeRole> UserKnowledgeRoles => Set<UserKnowledgeRole>();
+    public DbSet<LoginIdentity> LoginIdentities => Set<LoginIdentity>();
+    public DbSet<LocalLoginCredential> LocalLoginCredentials => Set<LocalLoginCredential>();
+    public DbSet<KnowledgeDocument> KnowledgeDocuments => Set<KnowledgeDocument>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

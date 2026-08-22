@@ -44,8 +44,7 @@ const actorDescription = computed(() =>
 watch(
   () => [props.initialSystemId, props.systems] as const,
   () => {
-    if (form.systemId) return
-    form.systemId = props.initialSystemId ?? props.systems[0]?.id
+    if (!form.systemId && props.initialSystemId) form.systemId = props.initialSystemId
   },
   { immediate: true },
 )
@@ -117,7 +116,8 @@ async function submit(): Promise<void> {
 
     <div class="create-business-function-dialog__body create-system-dialog__body">
       <el-form ref="formRef" :model="form" :rules="rules" label-position="top" @submit.prevent>
-        <el-form-item label="所属系统" prop="systemId" :error="fieldErrors.systemId">
+        <el-alert v-if="submitError" class="authoring-form-alert" type="error" :title="submitError" :closable="false" show-icon />
+        <el-form-item label="所属系统" prop="systemId" :error="fieldErrors.systemId" required>
           <el-select v-model="form.systemId" filterable placeholder="选择系统">
             <el-option
               v-for="system in systems"
@@ -128,14 +128,14 @@ async function submit(): Promise<void> {
           </el-select>
           <span class="form-help">系统上下文会用于后续关系与证据。</span>
         </el-form-item>
-        <el-form-item label="功能名称" prop="name" :error="fieldErrors.name">
+        <el-form-item label="功能名称" prop="name" :error="fieldErrors.name" required>
           <el-input v-model="form.name" maxlength="160" placeholder="例如 Equipment Status Query" class="technical-input" />
         </el-form-item>
         <div class="create-business-function-dialog__row create-system-dialog__row">
           <el-form-item label="显示名称（可选）" prop="displayName" :error="fieldErrors.displayName">
             <el-input v-model="form.displayName" maxlength="160" placeholder="例如 设备状态查询" />
           </el-form-item>
-          <el-form-item label="功能类型" prop="functionType" :error="fieldErrors.functionType">
+          <el-form-item label="功能类型" prop="functionType" :error="fieldErrors.functionType" required>
             <el-select v-model="form.functionType" placeholder="选择功能类型">
               <el-option v-for="item in functionTypes" :key="item.value" :label="item.label" :value="item.value" />
             </el-select>
@@ -144,7 +144,6 @@ async function submit(): Promise<void> {
         <el-form-item label="用途（可选）" prop="purpose" :error="fieldErrors.purpose">
           <el-input v-model="form.purpose" type="textarea" :rows="3" maxlength="500" show-word-limit placeholder="一句话说明该业务功能解决什么问题" />
         </el-form-item>
-        <p v-if="submitError" class="authoring-error" role="alert">{{ submitError }}</p>
       </el-form>
 
       <aside class="create-business-function-dialog__next create-system-dialog__next">

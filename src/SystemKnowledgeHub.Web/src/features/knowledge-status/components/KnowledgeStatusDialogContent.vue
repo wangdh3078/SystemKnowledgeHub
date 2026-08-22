@@ -9,7 +9,6 @@ import KnowledgeStatusBadge from '../../../components/data-display/KnowledgeStat
 import { changeKnowledgeStatus } from '../api/knowledgeStatusApi'
 import { isKnowledgeStatusDialogPayload } from '../api/knowledgeStatusContracts'
 
-const emit = defineEmits<{ changed: []; reload: [] }>()
 const overlayStore = useOverlayStore()
 const actorStore = useActorStore()
 const submitting = ref(false)
@@ -61,7 +60,7 @@ async function submit(): Promise<void> {
       concurrencyToken: payload.value.concurrencyToken,
     })
     overlayStore.closeDialog()
-    emit('changed')
+    window.dispatchEvent(new Event('knowledge-status:changed'))
   } catch (error: unknown) {
     if (error instanceof ApiError) {
       conflict.value = error.status === 409
@@ -78,13 +77,12 @@ async function submit(): Promise<void> {
 
 function reload(): void {
   overlayStore.closeDialog()
-  emit('reload')
+  window.dispatchEvent(new Event('knowledge-status:changed'))
 }
 </script>
 
 <template>
-  <Teleport v-if="payload" defer to="#dialog-feature-content">
-    <section class="knowledge-status-dialog" aria-labelledby="knowledge-status-dialog-title">
+  <section v-if="payload" class="knowledge-status-dialog" aria-labelledby="knowledge-status-dialog-title">
       <header>
         <div><small>知识状态修改</small><h2 id="knowledge-status-dialog-title">确认推进知识状态</h2><p class="technical-text">{{ payload.title }}</p></div>
         <button type="button" aria-label="关闭" @click="overlayStore.closeDialog">×</button>
@@ -104,6 +102,5 @@ function reload(): void {
         <p><el-icon><DocumentChecked /></el-icon>状态变化是显式操作，不会由证据自动触发。</p>
         <div><el-button @click="overlayStore.closeDialog">取消</el-button><el-button v-if="conflict" @click="reload">重新加载</el-button><el-button type="primary" :disabled="!requirementMet || conflict" :loading="submitting" @click="submit">确认推进为{{ knowledgeStatusLabels[targetStatus] }}</el-button></div>
       </footer>
-    </section>
-  </Teleport>
+  </section>
 </template>

@@ -14,7 +14,7 @@ public sealed class BusinessRulesApiTests : IClassFixture<BootstrapWebApplicatio
 {
     private readonly BootstrapWebApplicationFactory _factory;
     private readonly HttpClient _client;
-    public BusinessRulesApiTests(BootstrapWebApplicationFactory factory) { _factory = factory; _client = factory.CreateClient(); }
+    public BusinessRulesApiTests(BootstrapWebApplicationFactory factory) { _factory = factory; _client = factory.CreateAuthenticatedClient(); }
 
     [Fact]
     public async Task Create_and_Q13_persist_rule_and_enforce_unique_name_per_system()

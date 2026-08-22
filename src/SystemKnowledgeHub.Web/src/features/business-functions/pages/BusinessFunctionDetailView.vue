@@ -9,7 +9,6 @@ import { useOverlayStore } from '../../../app/stores/overlays'
 import KnowledgeStatusBadge from '../../../components/data-display/KnowledgeStatusBadge.vue'
 import ErrorState from '../../../components/feedback/ErrorState.vue'
 import LoadingState from '../../../components/feedback/LoadingState.vue'
-import KnowledgeStatusDialogContent from '../../knowledge-status/components/KnowledgeStatusDialogContent.vue'
 import KnowledgeStatusProgressionPanel from '../../knowledge-status/components/KnowledgeStatusProgressionPanel.vue'
 import { relationTypeLabels, relationTypes } from '../../relationships/api/relationshipContracts'
 import {
@@ -54,14 +53,14 @@ const {
 } = useBusinessFunctionDetail()
 const functionId = computed(() => parseSafeApiId(route.params.id))
 const canEditOverview = computed(() =>
-  detail.value?.availableActions.includes('UpdateBusinessFunctionOverview') === true,
+  actorStore.canEdit && detail.value?.availableActions.includes('UpdateBusinessFunctionOverview') === true,
 )
 const canEditProcess = computed(() =>
-  detail.value?.availableActions.includes('ReplaceBusinessProcessSteps') === true,
+  actorStore.canEdit && detail.value?.availableActions.includes('ReplaceBusinessProcessSteps') === true,
 )
-const canAddEvidence = computed(() => detail.value?.availableActions.includes('AddEvidence') === true)
-const canAddRelationship = computed(() => detail.value?.availableActions.includes('AddKnowledgeRelation') === true)
-const canChangeKnowledgeStatus = computed(() => detail.value?.availableActions.includes('ChangeKnowledgeStatus') === true)
+const canAddEvidence = computed(() => actorStore.canEdit && detail.value?.availableActions.includes('AddEvidence') === true)
+const canAddRelationship = computed(() => actorStore.canEdit && detail.value?.availableActions.includes('AddKnowledgeRelation') === true)
+const canChangeKnowledgeStatus = computed(() => actorStore.canEdit && detail.value?.availableActions.includes('ChangeKnowledgeStatus') === true)
 const humanConfirmationCount = computed(() =>
   detail.value?.evidence.filter((item) => item.evidenceType === 'HumanConfirmation').length ?? 0,
 )
@@ -173,10 +172,12 @@ onMounted(() => {
   void loadRoute()
   window.addEventListener('evidence:changed', reloadEvidence)
   window.addEventListener('relationship:changed', reloadRelationships)
+  window.addEventListener('knowledge-status:changed', reloadRelationships)
 })
 onUnmounted(() => {
   window.removeEventListener('evidence:changed', reloadEvidence)
   window.removeEventListener('relationship:changed', reloadRelationships)
+  window.removeEventListener('knowledge-status:changed', reloadRelationships)
 })
 </script>
 
@@ -289,7 +290,7 @@ onUnmounted(() => {
       </section>
 
       <section class="business-function-section business-function-section--last">
-        <div class="business-function-section__heading"><h2>待确认事项</h2><div><span>{{ detail.unknownItems.length }} 项</span><el-button text type="primary" :icon="Plus" @click="createUnknownItem">创建待确认事项</el-button></div></div>
+<div class="business-function-section__heading"><h2>待确认事项</h2><div><span>{{ detail.unknownItems.length }} 项</span><el-button v-if="actorStore.canEdit" text type="primary" :icon="Plus" @click="createUnknownItem">创建待确认事项</el-button></div></div>
         <div v-if="detail.unknownItems.length" class="business-function-evidence-list">
           <button v-for="item in detail.unknownItems" :key="item.id" @click="router.push({ name: 'unknown-item-detail', params: { id: String(item.id) } })"><el-icon><QuestionFilled /></el-icon><span><small>{{ item.status }}</small><strong>{{ item.question }}</strong></span><el-icon><ArrowRight /></el-icon></button>
         </div>
@@ -299,7 +300,6 @@ onUnmounted(() => {
       <Teleport defer to="#context-rail-content">
         <BusinessFunctionContextRail :function-name="detail.header.name" :context="detail.contextRail" :related-data-count="detail.relatedData.length" />
       </Teleport>
-      <KnowledgeStatusDialogContent @changed="loadRoute" @reload="loadRoute" />
     </template>
   </div>
 </template>

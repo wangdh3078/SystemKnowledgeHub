@@ -170,3 +170,53 @@ public sealed record UpdateSystemOverviewResult(
     UpdateSystemOverviewResponse? Response,
     IReadOnlyDictionary<string, string[]>? FieldErrors,
     UpdateSystemOverviewFailure Failure);
+
+public sealed record UpdateSystemTechnologyCommand(
+    long SystemId,
+    IReadOnlyList<string>? Technologies,
+    ActorContext Actor,
+    string ConcurrencyToken);
+
+public sealed record UpdateSystemTechnologyResponse(
+    long Id,
+    IReadOnlyList<string> Technologies,
+    string ConcurrencyToken);
+
+public enum UpdateSystemTechnologyFailure
+{
+    None,
+    Validation,
+    NotFound,
+    Conflict,
+}
+
+public sealed record UpdateSystemTechnologyResult(
+    UpdateSystemTechnologyResponse? Response,
+    IReadOnlyDictionary<string, string[]>? FieldErrors,
+    UpdateSystemTechnologyFailure Failure);
+
+public sealed record UpdateSystemLifecycleCommand(
+    long SystemId,
+    string TargetLifecycle,
+    ActorContext Actor,
+    string ConcurrencyToken);
+
+public sealed record UpdateSystemLifecycleResponse(
+    long Id,
+    string Lifecycle,
+    string KnowledgeStatus,
+    string ConcurrencyToken);
+
+public enum UpdateSystemLifecycleFailure
+{
+    None,
+    Validation,
+    NotFound,
+    Conflict,
+    NoChange,
+}
+
+public sealed record UpdateSystemLifecycleResult(
+    UpdateSystemLifecycleResponse? Response,
+    IReadOnlyDictionary<string, string[]>? FieldErrors,
+    UpdateSystemLifecycleFailure Failure);

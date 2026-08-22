@@ -64,6 +64,7 @@ public sealed class DatabaseObjectsController(
         };
     }
 
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = SystemKnowledgeHub.Api.Shared.Security.AccessPolicies.Editor)]
     [HttpPost]
     [ProducesResponseType<RegisterDatabaseObjectResponse>(StatusCodes.Status201Created)]
     [ProducesResponseType<ApiErrorResponse>(StatusCodes.Status400BadRequest)]
@@ -101,6 +102,7 @@ public sealed class DatabaseObjectsController(
         };
     }
 
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = SystemKnowledgeHub.Api.Shared.Security.AccessPolicies.Editor)]
     [HttpPost("{id}/columns")]
     [ProducesResponseType<RegisterDatabaseColumnResponse>(StatusCodes.Status201Created)]
     [ProducesResponseType<ApiErrorResponse>(StatusCodes.Status400BadRequest)]
@@ -139,6 +141,7 @@ public sealed class DatabaseObjectsController(
         };
     }
 
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = SystemKnowledgeHub.Api.Shared.Security.AccessPolicies.Editor)]
     [HttpPut("{id}/knowledge")]
     [ProducesResponseType<DatabaseObjectKnowledgeResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ApiErrorResponse>(StatusCodes.Status400BadRequest)]

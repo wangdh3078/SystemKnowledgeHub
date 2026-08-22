@@ -173,6 +173,148 @@ public sealed class SystemService(
             UpdateSystemOverviewFailure.None);
     }
 
+    public async Task<UpdateSystemTechnologyResult> UpdateSystemTechnology(
+        UpdateSystemTechnologyCommand request,
+        CancellationToken cancellationToken)
+    {
+        var errors = ValidateTechnology(request, out var technologies, out var expectedVersion);
+        if (errors.Count > 0)
+        {
+            return new UpdateSystemTechnologyResult(
+                null,
+                errors,
+                UpdateSystemTechnologyFailure.Validation);
+        }
+
+        var system = await dbContext.Systems
+            .Include(item => item.TechnologyTags)
+            .SingleOrDefaultAsync(item => item.Id == request.SystemId, cancellationToken);
+        if (system is null)
+        {
+            return new UpdateSystemTechnologyResult(
+                null,
+                null,
+                UpdateSystemTechnologyFailure.NotFound);
+        }
+
+        if (system.Version != expectedVersion)
+        {
+            return new UpdateSystemTechnologyResult(
+                null,
+                null,
+                UpdateSystemTechnologyFailure.Conflict);
+        }
+
+        var existingTechnologies = system.TechnologyTags
+            .Select(item => item.Technology)
+            .OrderBy(item => item, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var hasChanged = !existingTechnologies.SequenceEqual(
+            technologies,
+            StringComparer.OrdinalIgnoreCase);
+
+        if (hasChanged)
+        {
+            system.TechnologyTags.Clear();
+            foreach (var technology in technologies)
+            {
+                system.TechnologyTags.Add(new SystemTechnologyTag
+                {
+                    SystemId = system.Id,
+                    Technology = technology,
+                });
+            }
+
+            system.UpdatedAt = DateTimeOffset.UtcNow;
+            system.Version = expectedVersion + 1;
+
+            try
+            {
+                await dbContext.SaveChangesAsync(cancellationToken);
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                return new UpdateSystemTechnologyResult(
+                    null,
+                    null,
+                    UpdateSystemTechnologyFailure.Conflict);
+            }
+        }
+
+        return new UpdateSystemTechnologyResult(
+            new UpdateSystemTechnologyResponse(
+                system.Id,
+                technologies,
+                concurrencyTokenCodec.Encode(system.Version)),
+            null,
+            UpdateSystemTechnologyFailure.None);
+    }
+
+    public async Task<UpdateSystemLifecycleResult> UpdateSystemLifecycle(
+        UpdateSystemLifecycleCommand request,
+        CancellationToken cancellationToken)
+    {
+        var errors = ValidateLifecycle(request, out var lifecycle, out var expectedVersion);
+        if (errors.Count > 0)
+        {
+            return new UpdateSystemLifecycleResult(
+                null,
+                errors,
+                UpdateSystemLifecycleFailure.Validation);
+        }
+
+        var system = await dbContext.Systems
+            .SingleOrDefaultAsync(item => item.Id == request.SystemId, cancellationToken);
+        if (system is null)
+        {
+            return new UpdateSystemLifecycleResult(
+                null,
+                null,
+                UpdateSystemLifecycleFailure.NotFound);
+        }
+
+        if (system.Version != expectedVersion)
+        {
+            return new UpdateSystemLifecycleResult(
+                null,
+                null,
+                UpdateSystemLifecycleFailure.Conflict);
+        }
+
+        if (system.Lifecycle == lifecycle)
+        {
+            return new UpdateSystemLifecycleResult(
+                null,
+                null,
+                UpdateSystemLifecycleFailure.NoChange);
+        }
+
+        system.Lifecycle = lifecycle;
+        system.UpdatedAt = DateTimeOffset.UtcNow;
+        system.Version = expectedVersion + 1;
+
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return new UpdateSystemLifecycleResult(
+                null,
+                null,
+                UpdateSystemLifecycleFailure.Conflict);
+        }
+
+        return new UpdateSystemLifecycleResult(
+            new UpdateSystemLifecycleResponse(
+                system.Id,
+                system.Lifecycle.ToString(),
+                system.KnowledgeStatus.ToString(),
+                concurrencyTokenCodec.Encode(system.Version)),
+            null,
+            UpdateSystemLifecycleFailure.None);
+    }
+
     private static Dictionary<string, string[]> Validate(
         string name,
         string displayName,
@@ -282,6 +424,82 @@ public sealed class SystemService(
         }
 
         return errors;
+    }
+
+    private Dictionary<string, string[]> ValidateTechnology(
+        UpdateSystemTechnologyCommand request,
+        out string[] technologies,
+        out long expectedVersion)
+    {
+        var errors = new Dictionary<string, string[]>();
+        technologies = [];
+        expectedVersion = 0;
+
+        if (request.Technologies is null)
+        {
+            errors["technologies"] = ["技术标签必须作为完整集合提交。"];
+        }
+        else
+        {
+            var normalized = request.Technologies.Select(item => item?.Trim() ?? string.Empty).ToArray();
+            if (normalized.Any(string.IsNullOrWhiteSpace))
+            {
+                errors["technologies"] = ["技术标签不能为空。"];
+            }
+            else if (normalized.Distinct(StringComparer.OrdinalIgnoreCase).Count() != normalized.Length)
+            {
+                errors["technologies"] = ["技术标签不能重复。"];
+            }
+            else
+            {
+                technologies = normalized
+                    .OrderBy(item => item, StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+            }
+        }
+
+        ValidateActorAndToken(request.Actor, request.ConcurrencyToken, errors, out expectedVersion);
+        return errors;
+    }
+
+    private Dictionary<string, string[]> ValidateLifecycle(
+        UpdateSystemLifecycleCommand request,
+        out SystemLifecycle lifecycle,
+        out long expectedVersion)
+    {
+        var errors = new Dictionary<string, string[]>();
+        lifecycle = default;
+
+        if (!Enum.TryParse<SystemLifecycle>(request.TargetLifecycle, false, out var parsedLifecycle)
+            || parsedLifecycle.ToString() != request.TargetLifecycle)
+        {
+            errors["targetLifecycle"] = ["生命周期值无效。"];
+        }
+        else
+        {
+            lifecycle = parsedLifecycle;
+        }
+
+        ValidateActorAndToken(request.Actor, request.ConcurrencyToken, errors, out expectedVersion);
+        return errors;
+    }
+
+    private void ValidateActorAndToken(
+        ActorContext actor,
+        string concurrencyToken,
+        IDictionary<string, string[]> errors,
+        out long expectedVersion)
+    {
+        expectedVersion = 0;
+        if (string.IsNullOrWhiteSpace(actor.DisplayName))
+        {
+            errors["actor.displayName"] = ["编辑人姓名不能为空。"];
+        }
+
+        if (!concurrencyTokenCodec.TryDecode(concurrencyToken, out expectedVersion))
+        {
+            errors["concurrencyToken"] = ["并发标记无效，请重新加载后重试。"];
+        }
     }
 
     private static string[] NormalizeList(IReadOnlyList<string> values)

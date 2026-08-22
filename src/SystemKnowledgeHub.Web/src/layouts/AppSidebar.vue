@@ -2,17 +2,23 @@
 import { Connection } from '@element-plus/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
 import { navigationItems } from '../app/router/navigation'
+import { useActorStore } from '../app/stores/actor'
 
 const route = useRoute()
 const router = useRouter()
+const actorStore = useActorStore()
 
-function navigateToFoundation(): void {
-  void router.push({ name: 'database-objects-list' })
+function navigateToDashboard(): void {
+  void router.push({ name: 'dashboard' })
 }
 
 function navigate(item: (typeof navigationItems)[number]): void {
   if (!item.enabled || !item.routeName) return
   void router.push({ name: item.routeName })
+}
+
+function isVisible(item: (typeof navigationItems)[number]): boolean {
+  return item.minimumAccessLevel !== 'Administrator' || actorStore.isAdministrator
 }
 </script>
 
@@ -22,7 +28,7 @@ function navigate(item: (typeof navigationItems)[number]): void {
       class="app-sidebar__brand"
       type="button"
       aria-label="返回系统知识中心首页"
-      @click="navigateToFoundation"
+      @click="navigateToDashboard"
     >
       <span class="app-sidebar__brand-icon" aria-hidden="true">
         <el-icon :size="19"><Connection /></el-icon>
@@ -34,22 +40,26 @@ function navigate(item: (typeof navigationItems)[number]): void {
     </button>
 
     <nav class="app-sidebar__navigation">
-      <button
-        v-for="item in navigationItems"
+      <template
+        v-for="item in navigationItems.filter(isVisible)"
         :key="item.key"
-        class="app-sidebar__item"
-        :class="{
-          'app-sidebar__item--active': route.meta.navigationKey === item.key,
-        }"
-        type="button"
-        :disabled="!item.enabled"
-        :aria-current="route.meta.navigationKey === item.key ? 'page' : undefined"
-        :title="item.enabled ? item.label : `${item.label}将在业务切片中实现`"
-        @click="navigate(item)"
       >
-        <el-icon :size="17"><component :is="item.icon" /></el-icon>
-        <span>{{ item.label }}</span>
-      </button>
+        <span v-if="item.groupLabel" class="app-sidebar__group-label">{{ item.groupLabel }}</span>
+        <button
+          class="app-sidebar__item"
+          :class="{
+            'app-sidebar__item--active': route.meta.navigationKey === item.key,
+          }"
+          type="button"
+          :disabled="!item.enabled"
+          :aria-current="route.meta.navigationKey === item.key ? 'page' : undefined"
+          :title="item.enabled ? item.label : `${item.label}将在业务切片中实现`"
+          @click="navigate(item)"
+        >
+          <el-icon :size="17"><component :is="item.icon" /></el-icon>
+          <span>{{ item.label }}</span>
+        </button>
+      </template>
     </nav>
 
     <div class="app-sidebar__footer">

@@ -9,12 +9,20 @@ using EvidenceEntity = SystemKnowledgeHub.Api.Features.Evidence.Domain.Evidence;
 
 namespace SystemKnowledgeHub.Api.Features.Evidence.Application;
 
+/// <summary>执行普通 Evidence 创建、C24 correction 与 C25 HumanConfirmation 写入的应用服务。</summary>
 public sealed class EvidenceService(
     KnowledgeHubDbContext dbContext,
     EvidenceSubjectResolver subjectResolver,
     EvidenceQueries queries,
     ConcurrencyTokenCodec concurrencyTokenCodec)
 {
+    private const string KnowledgeRoleFallback = "知识提供者（未配置知识身份）";
+
+    /// <summary>保存普通 Evidence 及其客户端提供的 Provider Snapshot。</summary>
+    /// <remarks>保存可为后续显式 KnowledgeStatus 推进提供依据，但本操作不改变 Subject 的 KnowledgeStatus。</remarks>
+    /// <param name="request">普通 Evidence 的来源、支持理由和人员事实输入。</param>
+    /// <param name="cancellationToken">用于取消当前异步操作的令牌。</param>
+    /// <returns>异步完成后返回创建结果；字段无效或 Subject 不可用时以 <see cref="EvidenceCommandResult.Failure"/> 表达。</returns>
     public async Task<EvidenceCommandResult> AddEvidence(
         AddEvidenceCommand request,
         CancellationToken cancellationToken)
@@ -67,10 +75,19 @@ public sealed class EvidenceService(
             EvidenceFailure.None);
     }
 
+    /// <summary>将当前可信操作者的确认事实追加为 HumanConfirmation Evidence。</summary>
+    /// <remarks>
+    /// 在同一事务内重新读取 canonical User、解析或验证 KnowledgeRole、验证 Subject、物化历史 Snapshot 并插入 Evidence。
+    /// 创建不会自动推进 KnowledgeStatus；角色数量为 0/1/多个时分别使用 fallback、自动采用唯一角色、或要求显式选择。
+    /// </remarks>
+    /// <param name="request">由 API 从 Current User 注入 canonical User ID 的确认事实输入。</param>
+    /// <param name="cancellationToken">用于取消当前异步操作的令牌。</param>
+    /// <returns>异步完成后返回创建结果；Current User、角色或 Subject 不满足条件时以失败分类表达。</returns>
     public async Task<EvidenceCommandResult> AddHumanConfirmation(
         AddHumanConfirmationCommand request,
         CancellationToken cancellationToken)
     {
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
         var errors = new Dictionary<string, string[]>();
         if (request.Subject is null)
         {
@@ -88,10 +105,99 @@ public sealed class EvidenceService(
         {
             errors["supportReason"] = ["请说明人工确认为什么支持当前知识。"];
         }
-        ValidatePerson(request.Confirmer, "confirmer", errors);
+        if (!IsConfirmationMethod(request.ConfirmationMethod))
+        {
+            errors["confirmationMethod"] = ["确认方式无效。"];
+        }
+        if (request.ConfirmedAt is null || request.ConfirmedAt == default)
+        {
+            errors["confirmedAt"] = ["确认时间不能为空。"];
+        }
+        if (request.KnowledgeRoleId.HasValue && !ApiIdParser.IsSafePositive(request.KnowledgeRoleId.Value))
+        {
+            errors["knowledgeRoleId"] = ["知识身份 ID 必须是 JavaScript 安全范围内的正整数。"];
+        }
         if (errors.Count > 0)
         {
             return new EvidenceCommandResult(null, errors, EvidenceFailure.Validation);
+        }
+
+        var currentUser = await dbContext.Users
+            .AsNoTracking()
+            .Where(user => user.Id == request.CurrentUserId)
+            .Select(user => new
+            {
+                user.Id,
+                user.EmployeeNo,
+                user.DisplayName,
+                user.DepartmentOrTeam,
+                user.JobTitle,
+                user.IsActive,
+            })
+            .SingleOrDefaultAsync(cancellationToken);
+        if (currentUser is null)
+        {
+            return new EvidenceCommandResult(null, null, EvidenceFailure.CurrentUserNotFound);
+        }
+        if (!currentUser.IsActive)
+        {
+            return new EvidenceCommandResult(null, null, EvidenceFailure.CurrentUserInactive);
+        }
+
+        KnowledgeRoleSnapshot? selectedRole = null;
+        if (request.KnowledgeRoleId.HasValue)
+        {
+            selectedRole = await dbContext.KnowledgeRoles
+                .AsNoTracking()
+                .Where(role => role.Id == request.KnowledgeRoleId.Value)
+                .Select(role => new KnowledgeRoleSnapshot(role.Id, role.Name, role.IsActive))
+                .SingleOrDefaultAsync(cancellationToken);
+            if (selectedRole is null)
+            {
+                return new EvidenceCommandResult(null, null, EvidenceFailure.KnowledgeRoleNotFound);
+            }
+            if (!selectedRole.IsActive)
+            {
+                return new EvidenceCommandResult(null, null, EvidenceFailure.KnowledgeRoleInactive);
+            }
+
+            var assigned = await dbContext.UserKnowledgeRoles
+                .AsNoTracking()
+                .AnyAsync(
+                    assignment => assignment.UserId == currentUser.Id
+                        && assignment.KnowledgeRoleId == selectedRole.Id,
+                    cancellationToken);
+            if (!assigned)
+            {
+                return new EvidenceCommandResult(null, null, EvidenceFailure.KnowledgeRoleNotAssigned);
+            }
+        }
+        else
+        {
+            var activeRoles = await (
+                from assignment in dbContext.UserKnowledgeRoles.AsNoTracking()
+                join role in dbContext.KnowledgeRoles.AsNoTracking()
+                    on assignment.KnowledgeRoleId equals role.Id
+                where assignment.UserId == currentUser.Id && role.IsActive
+                orderby role.Name
+                select new KnowledgeRoleSnapshot(role.Id, role.Name, role.IsActive))
+                .Take(2)
+                .ToArrayAsync(cancellationToken);
+
+            if (activeRoles.Length == 1)
+            {
+                selectedRole = activeRoles[0];
+            }
+            else if (activeRoles.Length > 1)
+            {
+                return new EvidenceCommandResult(
+                    null,
+                    new Dictionary<string, string[]>
+                    {
+                        ["knowledgeRoleId"] = ["当前操作者有多个启用的知识身份，请选择本次确认身份。"],
+                    },
+                    EvidenceFailure.Validation);
+            }
         }
 
         _ = TryParseSubject(request.Subject!, errors, out var subjectType);
@@ -103,25 +209,40 @@ public sealed class EvidenceService(
 
         var locatorJson = JsonSerializer.Serialize(new
         {
+            confirmationMethod = request.ConfirmationMethod,
             confirmationStatement = request.ConfirmationStatement.Trim(),
             sourceNote = NormalizeOptional(request.SourceNote),
         });
         var timestamp = DateTimeOffset.UtcNow;
+        var confirmedAt = request.ConfirmedAt!.Value.ToUniversalTime();
+        var provider = new PersonSnapshotCommand(
+            currentUser.DisplayName,
+            selectedRole?.Name ?? KnowledgeRoleFallback,
+            confirmedAt,
+            currentUser.DepartmentOrTeam,
+            null,
+            null,
+            null);
         var item = CreateEvidence(
             EvidenceType.HumanConfirmation,
             subjectType,
             request.Subject.Id,
             request.SubjectDetailKey,
-            $"人工确认 · {request.Confirmer!.DisplayName.Trim()}",
+            $"人工确认 · {currentUser.DisplayName.Trim()}",
             NormalizeOptional(request.SourceNote),
             locatorJson,
             request.ConfirmationStatement,
             request.SupportReason,
             null,
-            request.Confirmer,
+            provider,
             timestamp);
+        item.ProviderUserId = currentUser.Id;
+        item.ProviderKnowledgeRoleId = selectedRole?.Id;
+        item.ProviderEmployeeNo = NormalizeOptional(currentUser.EmployeeNo);
+        item.ProviderJobTitle = NormalizeOptional(currentUser.JobTitle);
         dbContext.Evidence.Add(item);
         await dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
 
         return new EvidenceCommandResult(
             CreateAddResponse(item, subjectContext.KnowledgeStatus.ToString()),
@@ -129,6 +250,11 @@ public sealed class EvidenceService(
             EvidenceFailure.None);
     }
 
+    /// <summary>显式纠正既有 Evidence 的可编辑内容和 Provider Snapshot。</summary>
+    /// <remarks>这不是 canonical User 或 KnowledgeRole 的动态传播；<c>concurrencyToken</c> 过期时返回 Conflict。</remarks>
+    /// <param name="request">包含 opaque concurrencyToken 的 correction 输入。</param>
+    /// <param name="cancellationToken">用于取消当前异步操作的令牌。</param>
+    /// <returns>异步完成后返回更新后的详情；不存在、验证失败或并发冲突通过结果分类返回。</returns>
     public async Task<EvidenceCommandResult> UpdateEvidence(
         UpdateEvidenceCommand request,
         CancellationToken cancellationToken)
@@ -311,6 +437,11 @@ public sealed class EvidenceService(
         return true;
     }
 
+    private static bool IsConfirmationMethod(string value)
+    {
+        return value is "InSystem" or "OnSite" or "Meeting" or "Email" or "Document" or "Other";
+    }
+
     private static bool TryNormalizeLocator(
         string? sourceReference,
         JsonElement? sourceLocator,
@@ -355,4 +486,6 @@ public sealed class EvidenceService(
         var normalized = value?.Trim();
         return string.IsNullOrEmpty(normalized) ? null : normalized;
     }
+
+    private sealed record KnowledgeRoleSnapshot(long Id, string Name, bool IsActive);
 }

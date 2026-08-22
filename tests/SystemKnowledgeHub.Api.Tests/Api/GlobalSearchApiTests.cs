@@ -16,7 +16,7 @@ public sealed class GlobalSearchApiTests : IClassFixture<BootstrapWebApplication
     public GlobalSearchApiTests(BootstrapWebApplicationFactory factory)
     {
         _factory = factory;
-        _client = factory.CreateClient();
+        _client = factory.CreateAuthenticatedClient();
     }
 
     [Fact]

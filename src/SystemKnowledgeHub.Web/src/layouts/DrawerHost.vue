@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, watch } from 'vue'
+import { computed, nextTick, watch } from 'vue'
 import { DocumentChecked } from '@element-plus/icons-vue'
 import { useOverlayStore } from '../app/stores/overlays'
 import EvidenceDrawerContent from '../features/evidence/components/EvidenceDrawerContent.vue'
@@ -10,6 +10,7 @@ import DatabaseObjectKnowledgeDrawer from '../features/database-knowledge/compon
 import IntegrationDrawerContent from '../features/integrations/components/IntegrationDrawerContent.vue'
 
 const overlayStore = useOverlayStore()
+const hasTeleportedFeature = computed(() => overlayStore.currentDrawer?.kind === 'user-management')
 
 watch(
   () => `${overlayStore.currentDrawer?.kind ?? ''}:${overlayStore.currentDrawer?.id ?? ''}`,
@@ -60,7 +61,7 @@ watch(
       v-else-if="overlayStore.currentDrawer?.kind === 'edit-database-object'"
       :database-object-id="overlayStore.currentDrawer.id"
     />
-    <div v-else class="drawer-host__foundation">
+    <div v-else-if="!hasTeleportedFeature" class="drawer-host__foundation">
       <el-icon :size="24"><DocumentChecked /></el-icon>
       <strong>详情抽屉宿主已就绪</strong>
       <p>当前仅验证单实例 Drawer 的打开、替换与关闭。正式对象内容由后续 Feature 提供。</p>

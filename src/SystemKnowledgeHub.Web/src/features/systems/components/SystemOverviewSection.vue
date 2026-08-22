@@ -29,9 +29,11 @@ const draft = reactive({
   deploymentText: '',
   notes: '',
 })
+const displayNameError = computed(() => !draft.displayName.trim() ? '显示名称不能为空。' : null)
+const systemTypeError = computed(() => !draft.systemType.trim() ? '系统类型不能为空。' : null)
 const validationError = computed(() => {
-  if (!draft.displayName.trim()) return '显示名称不能为空。'
-  if (!draft.systemType.trim()) return '系统类型不能为空。'
+  if (displayNameError.value) return displayNameError.value
+  if (systemTypeError.value) return systemTypeError.value
   const repositoryUrl = draft.repositoryUrl.trim()
   if (repositoryUrl) {
     try {
@@ -146,10 +148,10 @@ watch(
 
     <el-form v-if="editing" label-position="top" class="system-overview-form" @submit.prevent>
       <div class="system-overview-form__grid">
-        <el-form-item label="显示名称" required>
+        <el-form-item label="显示名称" :error="displayNameError ?? undefined" required>
           <el-input v-model="draft.displayName" maxlength="120" show-word-limit />
         </el-form-item>
-        <el-form-item label="系统类型" required>
+        <el-form-item label="系统类型" :error="systemTypeError ?? undefined" required>
           <el-input v-model="draft.systemType" maxlength="120" />
         </el-form-item>
         <el-form-item label="用途">

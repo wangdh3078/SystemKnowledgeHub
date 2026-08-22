@@ -225,12 +225,13 @@ watch(kind, (nextKind) => {
       </header>
       <el-alert v-if="optionsError" type="warning" :title="optionsError" :closable="false" show-icon />
       <el-form ref="sourceFormRef" :model="sourceForm" :rules="sourceRules" label-position="top" @submit.prevent>
-        <el-form-item label="所属系统" prop="systemId" :error="fieldErrors.systemId">
+        <el-alert v-if="submitError" class="authoring-form-alert" type="error" :title="submitError" :closable="false" show-icon />
+        <el-form-item label="所属系统" prop="systemId" :error="fieldErrors.systemId" required>
           <el-select v-model="sourceForm.systemId" filterable placeholder="选择已登记系统"><el-option v-for="item in systemOptions" :key="item.id" :label="item.name" :value="item.id" /></el-select>
         </el-form-item>
         <div class="create-database-form-dialog__row">
-          <el-form-item label="数据库来源名称" prop="name" :error="fieldErrors.name"><el-input v-model="sourceForm.name" class="technical-input" placeholder="例如 MES 生产库" /></el-form-item>
-          <el-form-item label="数据库类型" prop="engine" :error="fieldErrors.engine"><el-input v-model="sourceForm.engine" class="technical-input" placeholder="例如 Oracle" /></el-form-item>
+          <el-form-item label="数据库来源名称" prop="name" :error="fieldErrors.name" required><el-input v-model="sourceForm.name" class="technical-input" placeholder="例如 MES 生产库" /></el-form-item>
+          <el-form-item label="数据库类型" prop="engine" :error="fieldErrors.engine" required><el-input v-model="sourceForm.engine" class="technical-input" placeholder="例如 Oracle" /></el-form-item>
         </div>
         <el-collapse>
           <el-collapse-item title="补充来源信息（可选）" name="optional-source">
@@ -244,7 +245,6 @@ watch(kind, (nextKind) => {
             <el-checkbox v-model="sourceForm.isPrimary">设为该系统的主数据库来源</el-checkbox>
           </el-collapse-item>
         </el-collapse>
-        <p v-if="submitError" class="authoring-error" role="alert">{{ submitError }}</p>
       </el-form>
       <footer class="authoring-actions"><p>创建人：{{ actorStore.displayName }}{{ actorStore.role ? ` · ${actorStore.role}` : '' }}</p><div><el-button @click="overlayStore.closeDialog">取消</el-button><el-button type="primary" :loading="submitting" @click="submitSource">登记数据库来源</el-button></div></footer>
     </section>
@@ -260,13 +260,14 @@ watch(kind, (nextKind) => {
       </header>
       <el-alert v-if="optionsError" type="warning" :title="optionsError" :closable="false" show-icon />
       <el-form ref="objectFormRef" :model="objectForm" :rules="objectRules" label-position="top" @submit.prevent>
-        <el-form-item label="数据库来源" prop="databaseSourceId" :error="fieldErrors.databaseSourceId">
+        <el-alert v-if="submitError" class="authoring-form-alert" type="error" :title="submitError" :closable="false" show-icon />
+        <el-form-item label="数据库来源" prop="databaseSourceId" :error="fieldErrors.databaseSourceId" required>
           <el-select v-model="objectForm.databaseSourceId" filterable placeholder="选择数据库来源"><el-option v-for="item in sourceOptions" :key="item.id" :label="`${item.name} · ${item.engine}`" :value="item.id" /></el-select>
         </el-form-item>
         <div class="create-database-form-dialog__row">
-          <el-form-item label="Schema" prop="schemaName" :error="fieldErrors.schemaName"><el-input v-model="objectForm.schemaName" class="technical-input" placeholder="例如 MES" /></el-form-item>
-          <el-form-item label="对象名称" prop="objectName" :error="fieldErrors.objectName"><el-input v-model="objectForm.objectName" class="technical-input" placeholder="例如 TABLE_EQP" /></el-form-item>
-          <el-form-item label="对象类型" prop="objectType" :error="fieldErrors.objectType"><el-select v-model="objectForm.objectType"><el-option label="表" value="Table" /><el-option label="视图" value="View" /></el-select></el-form-item>
+          <el-form-item label="Schema" prop="schemaName" :error="fieldErrors.schemaName" required><el-input v-model="objectForm.schemaName" class="technical-input" placeholder="例如 MES" /></el-form-item>
+          <el-form-item label="对象名称" prop="objectName" :error="fieldErrors.objectName" required><el-input v-model="objectForm.objectName" class="technical-input" placeholder="例如 TABLE_EQP" /></el-form-item>
+          <el-form-item label="对象类型" prop="objectType" :error="fieldErrors.objectType" required><el-select v-model="objectForm.objectType"><el-option label="表" value="Table" /><el-option label="视图" value="View" /></el-select></el-form-item>
         </div>
         <el-collapse>
           <el-collapse-item title="补充对象元数据（可选）" name="optional-object">
@@ -279,7 +280,6 @@ watch(kind, (nextKind) => {
             <el-form-item label="业务说明"><el-input v-model="objectForm.businessDescription" type="textarea" :rows="2" maxlength="500" show-word-limit placeholder="可后续在对象详情中补充" /></el-form-item>
           </el-collapse-item>
         </el-collapse>
-        <p v-if="submitError" class="authoring-error" role="alert">{{ submitError }}</p>
       </el-form>
       <footer class="authoring-actions"><p>创建后知识状态保持“未知”。</p><div><el-button @click="overlayStore.closeDialog">取消</el-button><el-button type="primary" :loading="submitting" @click="submitObject">登记对象</el-button></div></footer>
     </section>

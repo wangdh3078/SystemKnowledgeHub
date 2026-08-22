@@ -1,3 +1,3 @@
 import { bootstrapApp } from './app/bootstrap/bootstrapApp'
 
-bootstrapApp()
+void bootstrapApp()

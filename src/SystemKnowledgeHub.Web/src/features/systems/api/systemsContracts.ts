@@ -186,6 +186,31 @@ export interface UpdateSystemOverviewResponse {
   readonly concurrencyToken: string
 }
 
+export interface UpdateSystemTechnologyRequest {
+  readonly technologies: readonly string[]
+  readonly actor: ActorContext
+  readonly concurrencyToken: string
+}
+
+export interface UpdateSystemTechnologyResponse {
+  readonly id: number
+  readonly technologies: readonly string[]
+  readonly concurrencyToken: string
+}
+
+export interface UpdateSystemLifecycleRequest {
+  readonly targetLifecycle: SystemLifecycle
+  readonly actor: ActorContext
+  readonly concurrencyToken: string
+}
+
+export interface UpdateSystemLifecycleResponse {
+  readonly id: number
+  readonly lifecycle: SystemLifecycle
+  readonly knowledgeStatus: KnowledgeStatus
+  readonly concurrencyToken: string
+}
+
 type JsonObject = Readonly<Record<string, unknown>>
 
 function isJsonObject(value: unknown): value is JsonObject {
@@ -437,6 +462,25 @@ export function decodeUpdateSystemOverview(value: unknown): UpdateSystemOverview
       purpose: readNullableString(overview.purpose, 'overview.purpose'),
       notes: readNullableString(overview.notes, 'overview.notes'),
     },
+    concurrencyToken: readString(root.concurrencyToken, 'concurrencyToken'),
+  }
+}
+
+export function decodeUpdateSystemTechnology(value: unknown): UpdateSystemTechnologyResponse {
+  const root = readObject(value, 'updatedSystemTechnology')
+  return {
+    id: readInteger(root.id, 'id', 1),
+    technologies: readStringArray(root.technologies, 'technologies'),
+    concurrencyToken: readString(root.concurrencyToken, 'concurrencyToken'),
+  }
+}
+
+export function decodeUpdateSystemLifecycle(value: unknown): UpdateSystemLifecycleResponse {
+  const root = readObject(value, 'updatedSystemLifecycle')
+  return {
+    id: readInteger(root.id, 'id', 1),
+    lifecycle: readLifecycle(root.lifecycle, 'lifecycle'),
+    knowledgeStatus: readStatus(root.knowledgeStatus, 'knowledgeStatus'),
     concurrencyToken: readString(root.concurrencyToken, 'concurrencyToken'),
   }
 }

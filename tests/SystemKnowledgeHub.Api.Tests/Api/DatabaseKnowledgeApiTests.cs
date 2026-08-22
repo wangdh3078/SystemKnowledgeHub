@@ -12,7 +12,7 @@ public sealed class DatabaseKnowledgeApiTests
 
     public DatabaseKnowledgeApiTests(BootstrapWebApplicationFactory factory)
     {
-        _client = factory.CreateClient();
+        _client = factory.CreateAuthenticatedClient();
     }
 
     [Fact]

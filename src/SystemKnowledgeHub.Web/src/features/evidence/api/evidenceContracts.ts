@@ -15,6 +15,19 @@ export type EvidenceType = (typeof evidenceTypes)[number]
 export type OrdinaryEvidenceType = Exclude<EvidenceType, 'HumanConfirmation'>
 export type EvidenceConfidence = 'High' | 'Medium' | 'Low'
 
+export const confirmationMethods = [
+  { value: 'InSystem', label: '系统内确认' },
+  { value: 'OnSite', label: '现场确认' },
+  { value: 'Meeting', label: '会议确认' },
+  { value: 'Email', label: '邮件确认' },
+  { value: 'Document', label: '文档确认' },
+  { value: 'Other', label: '其他' },
+] as const
+export type ConfirmationMethod = (typeof confirmationMethods)[number]['value']
+
+export const confirmationMethodLabels: Readonly<Record<ConfirmationMethod, string>> =
+  Object.fromEntries(confirmationMethods.map((method) => [method.value, method.label])) as Readonly<Record<ConfirmationMethod, string>>
+
 export const evidenceTypeLabels: Readonly<Record<EvidenceType, string>> = {
   CodeReference: '代码引用',
   Sql: 'SQL',
@@ -102,10 +115,12 @@ export interface UpdateEvidenceRequest {
 export interface AddHumanConfirmationRequest {
   readonly subject: EvidenceTarget
   readonly subjectDetailKey: string | null
+  readonly knowledgeRoleId: number | null
+  readonly confirmationMethod: ConfirmationMethod
+  readonly confirmedAt: string
   readonly confirmationStatement: string
   readonly supportReason: string
   readonly sourceNote: string | null
-  readonly confirmer: PersonSnapshotInput
 }
 
 export interface AddEvidenceResponse {
@@ -231,4 +246,13 @@ export function decodeAddEvidence(value: unknown): AddEvidenceResponse {
     knowledgeStatusChanged: false,
     concurrencyToken: readString(root.concurrencyToken, 'concurrencyToken'),
   }
+}
+
+export function getHumanConfirmationMethod(detail: EvidenceDetailResponse): ConfirmationMethod | null {
+  if (detail.evidenceType !== 'HumanConfirmation') return null
+  const locatorMethod = detail.sourceLocator?.confirmationMethod
+  const value = typeof locatorMethod === 'string' ? locatorMethod : detail.provider.source
+  return confirmationMethods.some((method) => method.value === value)
+    ? value as ConfirmationMethod
+    : null
 }

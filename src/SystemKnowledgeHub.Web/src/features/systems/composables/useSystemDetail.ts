@@ -1,10 +1,16 @@
 import { onBeforeUnmount, ref } from 'vue'
 import type { ActorContext } from '../../../app/stores/actor'
 import { ApiError } from '../../../api/errors/ApiError'
-import { getSystemDetail, updateSystemOverview } from '../api/systemsApi'
+import {
+  getSystemDetail,
+  updateSystemLifecycle,
+  updateSystemOverview,
+  updateSystemTechnology,
+} from '../api/systemsApi'
 import type {
   SystemDeployment,
   SystemDetailResponse,
+  SystemLifecycle,
   SystemRepository,
 } from '../api/systemsContracts'
 
@@ -77,6 +83,64 @@ export function useSystemDetail() {
     }
   }
 
+  async function saveTechnology(
+    technologies: readonly string[],
+    actor: ActorContext,
+  ): Promise<boolean> {
+    if (!detail.value) return false
+    saving.value = true
+    saveError.value = null
+    concurrencyConflict.value = false
+
+    try {
+      await updateSystemTechnology(detail.value.id, {
+        technologies,
+        actor,
+        concurrencyToken: detail.value.concurrencyToken,
+      })
+      return await load(detail.value.id)
+    } catch (error: unknown) {
+      setSaveError(error, '技术信息保存失败。')
+      return false
+    } finally {
+      saving.value = false
+    }
+  }
+
+  async function saveLifecycle(
+    targetLifecycle: SystemLifecycle,
+    actor: ActorContext,
+  ): Promise<boolean> {
+    if (!detail.value) return false
+    saving.value = true
+    saveError.value = null
+    concurrencyConflict.value = false
+
+    try {
+      await updateSystemLifecycle(detail.value.id, {
+        targetLifecycle,
+        actor,
+        concurrencyToken: detail.value.concurrencyToken,
+      })
+      return await load(detail.value.id)
+    } catch (error: unknown) {
+      setSaveError(error, '生命周期保存失败。')
+      return false
+    } finally {
+      saving.value = false
+    }
+  }
+
+  function setSaveError(error: unknown, fallbackMessage: string): void {
+    if (error instanceof ApiError && error.status === 409 && error.response.code === 'conflict') {
+      concurrencyConflict.value = true
+      saveError.value = error.message
+      return
+    }
+
+    saveError.value = error instanceof Error ? error.message : fallbackMessage
+  }
+
   function clearSaveError(): void {
     saveError.value = null
     concurrencyConflict.value = false
@@ -93,6 +157,8 @@ export function useSystemDetail() {
     concurrencyConflict,
     load,
     saveOverview,
+    saveTechnology,
+    saveLifecycle,
     clearSaveError,
   }
 }

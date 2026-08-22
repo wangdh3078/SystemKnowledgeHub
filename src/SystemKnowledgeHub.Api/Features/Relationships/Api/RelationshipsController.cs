@@ -25,6 +25,7 @@ public sealed class RelationshipsController(RelationshipQueries queries, Relatio
         };
     }
 
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = SystemKnowledgeHub.Api.Shared.Security.AccessPolicies.Editor)]
     [HttpPost]
     public async Task<IActionResult> Add([FromBody] AddRelationshipRequest request, CancellationToken cancellationToken)
     {
@@ -34,6 +35,7 @@ public sealed class RelationshipsController(RelationshipQueries queries, Relatio
         return Command(result, created: true);
     }
 
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = SystemKnowledgeHub.Api.Shared.Security.AccessPolicies.Editor)]
     [HttpPut("{id}/description")]
     public async Task<IActionResult> UpdateDescription(long id, [FromBody] UpdateRelationshipDescriptionRequest request, CancellationToken cancellationToken)
     {
@@ -43,6 +45,7 @@ public sealed class RelationshipsController(RelationshipQueries queries, Relatio
         return Command(result);
     }
 
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = SystemKnowledgeHub.Api.Shared.Security.AccessPolicies.Editor)]
     [HttpPut("{id}/knowledge-status")]
     public async Task<IActionResult> ChangeStatus(long id, [FromBody] ChangeRelationshipStatusRequest request, CancellationToken cancellationToken)
     {

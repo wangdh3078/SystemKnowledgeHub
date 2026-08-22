@@ -1,5 +1,6 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
+import { useActorStore } from './actor'
 
 export type OverlayMode = 'read' | 'create' | 'edit'
 
@@ -25,6 +26,8 @@ export const useOverlayStore = defineStore('overlays', () => {
   const isDialogOpen = computed(() => currentDialog.value !== null)
 
   function openDrawer(descriptor: Omit<OverlayDescriptor, 'surface'>): void {
+    const actorStore = useActorStore()
+    if (descriptor.mode !== 'read' && actorStore.initialized && !actorStore.canEdit) return
     currentOverlay.value = { surface: 'drawer', ...descriptor }
   }
 
@@ -35,6 +38,8 @@ export const useOverlayStore = defineStore('overlays', () => {
   }
 
   function openDialog(descriptor: Omit<OverlayDescriptor, 'surface'>): void {
+    const actorStore = useActorStore()
+    if (descriptor.mode !== 'read' && actorStore.initialized && !actorStore.canEdit) return
     currentOverlay.value = { surface: 'dialog', ...descriptor }
   }
 

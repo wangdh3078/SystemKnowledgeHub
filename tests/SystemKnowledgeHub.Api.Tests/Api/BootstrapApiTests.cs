@@ -11,7 +11,7 @@ public sealed class BootstrapApiTests
 
     public BootstrapApiTests(BootstrapWebApplicationFactory factory)
     {
-        _client = factory.CreateClient();
+        _client = factory.CreateAuthenticatedClient();
     }
 
     [Fact]

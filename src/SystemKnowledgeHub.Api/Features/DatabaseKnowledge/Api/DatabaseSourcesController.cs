@@ -11,6 +11,7 @@ namespace SystemKnowledgeHub.Api.Features.DatabaseKnowledge.Api;
 [Route("api/database-sources")]
 public sealed class DatabaseSourcesController(DatabaseKnowledgeService service) : ControllerBase
 {
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = SystemKnowledgeHub.Api.Shared.Security.AccessPolicies.Editor)]
     [HttpPost]
     [ProducesResponseType<CreateDatabaseSourceResponse>(StatusCodes.Status201Created)]
     [ProducesResponseType<ApiErrorResponse>(StatusCodes.Status400BadRequest)]

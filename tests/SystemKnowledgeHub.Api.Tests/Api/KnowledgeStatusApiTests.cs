@@ -17,7 +17,7 @@ public sealed class KnowledgeStatusApiTests : IClassFixture<BootstrapWebApplicat
     public KnowledgeStatusApiTests(BootstrapWebApplicationFactory factory)
     {
         _factory = factory;
-        _client = factory.CreateClient();
+        _client = factory.CreateAuthenticatedClient();
     }
 
     [Fact]
@@ -161,10 +161,12 @@ public sealed class KnowledgeStatusApiTests : IClassFixture<BootstrapWebApplicat
     {
         subject = new { type = "BusinessFunction", id },
         subjectDetailKey = (string?)null,
+        knowledgeRoleId = (long?)null,
+        confirmationMethod = "Meeting",
+        confirmedAt = "2026-08-22T02:30:00Z",
         confirmationStatement = "确认该业务功能的用途和处理结果与当前记录一致。",
         supportReason = "MES 业务专家确认当前生产语义",
         sourceNote = "VS-07 运行验证",
-        confirmer = Person("李工", "MES 业务专家"),
     };
 
     private static object Person(string displayName = "王敏", string role = "知识整理人员") => new
@@ -178,4 +180,3 @@ public sealed class KnowledgeStatusApiTests : IClassFixture<BootstrapWebApplicat
         note = (string?)null,
     };
 }
-

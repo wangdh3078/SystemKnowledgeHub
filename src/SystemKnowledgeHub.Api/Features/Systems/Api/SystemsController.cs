@@ -74,6 +74,7 @@ public sealed class SystemsController(
         return Ok(result.Response);
     }
 
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = SystemKnowledgeHub.Api.Shared.Security.AccessPolicies.Editor)]
     [HttpPost]
     [ProducesResponseType<CreateSystemResponse>(StatusCodes.Status201Created)]
     [ProducesResponseType<ApiErrorResponse>(StatusCodes.Status400BadRequest)]
@@ -114,6 +115,7 @@ public sealed class SystemsController(
         return StatusCode(StatusCodes.Status201Created, result.Response);
     }
 
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = SystemKnowledgeHub.Api.Shared.Security.AccessPolicies.Editor)]
     [HttpPut("{id:long}/overview")]
     [ProducesResponseType<UpdateSystemOverviewResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ApiErrorResponse>(StatusCodes.Status400BadRequest)]
@@ -170,6 +172,102 @@ public sealed class SystemsController(
             _ => throw new InvalidOperationException("Unsupported System overview result."),
         };
     }
+
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = SystemKnowledgeHub.Api.Shared.Security.AccessPolicies.Editor)]
+    [HttpPut("{id:long}/technology")]
+    [ProducesResponseType<UpdateSystemTechnologyResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ApiErrorResponse>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ApiErrorResponse>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ApiErrorResponse>(StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<UpdateSystemTechnologyResponse>> UpdateSystemTechnology(
+        long id,
+        [FromBody] UpdateSystemTechnologyRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!ApiIdParser.IsSafePositive(id))
+        {
+            return BadRequest(ValidationError(new Dictionary<string, string[]>
+            {
+                ["id"] = ["系统 ID 必须是 JavaScript 安全范围内的正整数。"],
+            }));
+        }
+
+        var result = await service.UpdateSystemTechnology(
+            new UpdateSystemTechnologyCommand(
+                id,
+                request.Technologies,
+                new ActorContext(
+                    request.Actor?.DisplayName ?? string.Empty,
+                    request.Actor?.Role),
+                request.ConcurrencyToken ?? string.Empty),
+            cancellationToken);
+
+        return result.Failure switch
+        {
+            UpdateSystemTechnologyFailure.None => Ok(result.Response),
+            UpdateSystemTechnologyFailure.Validation => BadRequest(ValidationError(result.FieldErrors!)),
+            UpdateSystemTechnologyFailure.NotFound => NotFound(SystemNotFound(id)),
+            UpdateSystemTechnologyFailure.Conflict => Conflict(ConcurrencyConflict(id)),
+            _ => throw new InvalidOperationException("Unsupported System technology result."),
+        };
+    }
+
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = SystemKnowledgeHub.Api.Shared.Security.AccessPolicies.Editor)]
+    [HttpPut("{id:long}/lifecycle")]
+    [ProducesResponseType<UpdateSystemLifecycleResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ApiErrorResponse>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ApiErrorResponse>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ApiErrorResponse>(StatusCodes.Status409Conflict)]
+    [ProducesResponseType<ApiErrorResponse>(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<ActionResult<UpdateSystemLifecycleResponse>> UpdateSystemLifecycle(
+        long id,
+        [FromBody] UpdateSystemLifecycleRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!ApiIdParser.IsSafePositive(id))
+        {
+            return BadRequest(ValidationError(new Dictionary<string, string[]>
+            {
+                ["id"] = ["系统 ID 必须是 JavaScript 安全范围内的正整数。"],
+            }));
+        }
+
+        var result = await service.UpdateSystemLifecycle(
+            new UpdateSystemLifecycleCommand(
+                id,
+                request.TargetLifecycle ?? string.Empty,
+                new ActorContext(
+                    request.Actor?.DisplayName ?? string.Empty,
+                    request.Actor?.Role),
+                request.ConcurrencyToken ?? string.Empty),
+            cancellationToken);
+
+        return result.Failure switch
+        {
+            UpdateSystemLifecycleFailure.None => Ok(result.Response),
+            UpdateSystemLifecycleFailure.Validation => BadRequest(ValidationError(result.FieldErrors!)),
+            UpdateSystemLifecycleFailure.NotFound => NotFound(SystemNotFound(id)),
+            UpdateSystemLifecycleFailure.Conflict => Conflict(ConcurrencyConflict(id)),
+            UpdateSystemLifecycleFailure.NoChange => UnprocessableEntity(new ApiErrorResponse(
+                "business_rule_violation",
+                "目标生命周期与当前值相同。",
+                null,
+                new { resourceType = "System", resourceId = id })),
+            _ => throw new InvalidOperationException("Unsupported System lifecycle result."),
+        };
+    }
+
+    private static ApiErrorResponse SystemNotFound(long id) => new(
+        "not_found",
+        "未找到指定系统。",
+        null,
+        new { resourceType = "System", resourceId = id });
+
+    private static ApiErrorResponse ConcurrencyConflict(long id) => new(
+        "conflict",
+        "内容已被其他操作修改，请刷新后重试。",
+        null,
+        new { resourceType = "System", resourceId = id });
 
     private static ApiErrorResponse ValidationError(
         IReadOnlyDictionary<string, string[]> fieldErrors)

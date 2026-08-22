@@ -18,7 +18,7 @@ public sealed class KnowledgeResolutionApiTests : IClassFixture<BootstrapWebAppl
     public KnowledgeResolutionApiTests(BootstrapWebApplicationFactory factory)
     {
         _factory = factory;
-        _client = factory.CreateClient();
+        _client = factory.CreateAuthenticatedClient();
     }
 
     [Fact]

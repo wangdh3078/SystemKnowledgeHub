@@ -105,18 +105,19 @@ async function submit(): Promise<void> {
 
     <div class="create-system-dialog__body">
       <el-form ref="formRef" :model="form" :rules="rules" label-position="top" @submit.prevent>
-        <el-form-item label="系统名称" prop="name" :error="fieldErrors.name">
+        <el-alert v-if="submitError" class="authoring-form-alert" type="error" :title="submitError" :closable="false" show-icon />
+        <el-form-item label="系统名称" prop="name" :error="fieldErrors.name" required>
           <el-input v-model="form.name" maxlength="120" placeholder="例如 MES" class="technical-input" />
           <span class="form-help">稳定的技术名称，创建后不在当前 Slice 中编辑。</span>
         </el-form-item>
-        <el-form-item label="显示名称" prop="displayName" :error="fieldErrors.displayName">
+        <el-form-item label="显示名称" prop="displayName" :error="fieldErrors.displayName" required>
           <el-input v-model="form.displayName" maxlength="160" placeholder="例如 制造执行系统" />
         </el-form-item>
         <div class="create-system-dialog__row">
-          <el-form-item label="系统类型" prop="systemType" :error="fieldErrors.systemType">
+          <el-form-item label="系统类型" prop="systemType" :error="fieldErrors.systemType" required>
             <el-input v-model="form.systemType" maxlength="160" placeholder="例如 核心业务系统" />
           </el-form-item>
-          <el-form-item label="生命周期" prop="lifecycle" :error="fieldErrors.lifecycle">
+          <el-form-item label="生命周期" prop="lifecycle" :error="fieldErrors.lifecycle" required>
             <el-select v-model="form.lifecycle" placeholder="选择生命周期">
               <el-option
                 v-for="lifecycle in systemLifecycles"
@@ -137,7 +138,6 @@ async function submit(): Promise<void> {
             placeholder="一句话说明该系统解决什么问题"
           />
         </el-form-item>
-        <p v-if="submitError" class="authoring-error" role="alert">{{ submitError }}</p>
       </el-form>
 
       <aside class="create-system-dialog__next">
