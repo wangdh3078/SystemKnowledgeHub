@@ -76,6 +76,112 @@ public sealed class KnowledgeDocumentQueries(
         return item is null ? null : await ToDetail(item, cancellationToken);
     }
 
+    public async Task<KnowledgeDocumentRevisionListQueryResult> GetRevisions(
+        long knowledgeDocumentId,
+        int? requestedPage,
+        int? requestedPageSize,
+        CancellationToken cancellationToken)
+    {
+        var errors = new Dictionary<string, string[]>();
+        if (requestedPage is < 1)
+        {
+            errors["page"] = ["页码必须从 1 开始。"];
+        }
+        if (requestedPageSize is < 1 or > MaximumPageSize)
+        {
+            errors["pageSize"] = ["每页数量必须在 1 到 100 之间。"];
+        }
+        if (errors.Count > 0)
+        {
+            return new KnowledgeDocumentRevisionListQueryResult(null, errors, false);
+        }
+
+        var document = await dbContext.KnowledgeDocuments.AsNoTracking()
+            .Where(item => item.Id == knowledgeDocumentId)
+            .Select(item => new
+            {
+                item.CurrentRevisionNumber,
+                item.LatestPublishedRevisionNumber,
+            })
+            .SingleOrDefaultAsync(cancellationToken);
+        if (document is null)
+        {
+            return new KnowledgeDocumentRevisionListQueryResult(null, null, false);
+        }
+
+        var page = requestedPage ?? 1;
+        var pageSize = requestedPageSize ?? DefaultPageSize;
+        var revisions = dbContext.KnowledgeDocumentRevisions.AsNoTracking()
+            .Where(item => item.KnowledgeDocumentId == knowledgeDocumentId);
+        var total = await revisions.CountAsync(cancellationToken);
+        var offset = ((long)page - 1) * pageSize;
+        var items = offset > int.MaxValue
+            ? []
+            : await revisions
+                .OrderByDescending(item => item.RevisionNumber)
+                .Skip((int)offset)
+                .Take(pageSize)
+                .Select(item => new KnowledgeDocumentRevisionListItemResponse(
+                    item.Id,
+                    item.RevisionNumber,
+                    item.RevisionOrigin.ToString(),
+                    item.LifecycleContext.ToString(),
+                    item.AuthorUserId,
+                    item.AuthorDisplayNameSnapshot,
+                    item.CreatedAt,
+                    item.ChangeSummary,
+                    item.RestoreReason,
+                    item.RestoredFromRevisionNumber,
+                    item.RevisionNumber == document.CurrentRevisionNumber,
+                    document.LatestPublishedRevisionNumber != null
+                        && item.RevisionNumber == document.LatestPublishedRevisionNumber))
+                .ToArrayAsync(cancellationToken);
+
+        return new KnowledgeDocumentRevisionListQueryResult(
+            new KnowledgeDocumentRevisionListResponse(items, page, pageSize, total),
+            null,
+            true);
+    }
+
+    public async Task<KnowledgeDocumentRevisionDetailResponse?> GetRevisionDetail(
+        long knowledgeDocumentId,
+        long revisionNumber,
+        CancellationToken cancellationToken)
+    {
+        var document = await dbContext.KnowledgeDocuments.AsNoTracking()
+            .Where(item => item.Id == knowledgeDocumentId)
+            .Select(item => new
+            {
+                item.CurrentRevisionNumber,
+                item.LatestPublishedRevisionNumber,
+            })
+            .SingleOrDefaultAsync(cancellationToken);
+        if (document is null) return null;
+
+        return await dbContext.KnowledgeDocumentRevisions.AsNoTracking()
+            .Where(item => item.KnowledgeDocumentId == knowledgeDocumentId
+                && item.RevisionNumber == revisionNumber)
+            .Select(item => new KnowledgeDocumentRevisionDetailResponse(
+                item.Id,
+                item.KnowledgeDocumentId,
+                item.RevisionNumber,
+                item.RevisionOrigin.ToString(),
+                item.LifecycleContext.ToString(),
+                item.AuthorUserId,
+                item.AuthorDisplayNameSnapshot,
+                item.CreatedAt,
+                item.ChangeSummary,
+                item.RestoreReason,
+                item.RestoredFromRevisionNumber,
+                item.RevisionNumber == document.CurrentRevisionNumber,
+                document.LatestPublishedRevisionNumber != null
+                    && item.RevisionNumber == document.LatestPublishedRevisionNumber,
+                item.Title,
+                item.Summary,
+                item.BodyMarkdown))
+            .SingleOrDefaultAsync(cancellationToken);
+    }
+
     public async Task<KnowledgeDocumentDetailResponse> ToDetail(
         KnowledgeDocument item,
         CancellationToken cancellationToken)

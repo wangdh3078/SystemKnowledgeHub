@@ -1,9 +1,15 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ElMessageBox } from 'element-plus'
 import { ApiError } from '../../../api/errors/ApiError'
 import type { KnowledgeDocumentDetail } from '../api/knowledgeDocumentContracts'
 import KnowledgeDocumentDetailView from './KnowledgeDocumentDetailView.vue'
-import { getKnowledgeDocument, updateKnowledgeDocumentContent } from '../api/knowledgeDocumentsApi'
+import {
+  getKnowledgeDocument,
+  getKnowledgeDocumentRevision,
+  listKnowledgeDocumentRevisions,
+  updateKnowledgeDocumentContent,
+} from '../api/knowledgeDocumentsApi'
 import { getRelatedKnowledge } from '../../relationships/api/relationshipApi'
 import { getEvidenceList } from '../../evidence/api/evidenceApi'
 
@@ -39,9 +45,14 @@ vi.mock('vue-router', () => ({
   useRoute: () => ({ params: { id: '1' } }),
   useRouter: () => routerState,
 }))
-vi.mock('element-plus', () => ({ ElMessageBox: { confirm: vi.fn() } }))
+vi.mock('element-plus', () => ({
+  ElMessage: { success: vi.fn() },
+  ElMessageBox: { confirm: vi.fn() },
+}))
 vi.mock('../api/knowledgeDocumentsApi', () => ({
   getKnowledgeDocument: vi.fn(),
+  getKnowledgeDocumentRevision: vi.fn(),
+  listKnowledgeDocumentRevisions: vi.fn(),
   updateKnowledgeDocumentContent: vi.fn(),
   updateKnowledgeDocumentLifecycle: vi.fn(),
 }))
@@ -86,6 +97,7 @@ const detail: KnowledgeDocumentDetail = {
 const components = {
   ElButton: {
     props: { disabled: Boolean },
+    emits: ['click'],
     template: '<button :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
   },
   ElTag: { template: '<span><slot /></span>' },
@@ -98,6 +110,7 @@ const components = {
       '<textarea :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />',
   },
   ElIcon: { template: '<span><slot /></span>' },
+  ElPagination: { template: '<div><slot /></div>' },
   KnowledgeStatusBadge: { template: '<span>知识状态</span>' },
 }
 
@@ -114,11 +127,53 @@ describe('KnowledgeDocumentDetailView editing', () => {
     actorState.canEdit = true
     vi.mocked(getKnowledgeDocument).mockReset()
     vi.mocked(updateKnowledgeDocumentContent).mockReset()
+    vi.mocked(listKnowledgeDocumentRevisions).mockReset()
+    vi.mocked(getKnowledgeDocumentRevision).mockReset()
+    vi.mocked(ElMessageBox.confirm).mockReset()
     vi.mocked(getRelatedKnowledge).mockReset()
     vi.mocked(getEvidenceList).mockReset()
     vi.mocked(getKnowledgeDocument).mockResolvedValue(detail)
     vi.mocked(getRelatedKnowledge).mockResolvedValue([])
     vi.mocked(getEvidenceList).mockResolvedValue({ items: [] })
+    vi.mocked(listKnowledgeDocumentRevisions).mockResolvedValue({
+      items: [
+        {
+          id: 11,
+          revisionNumber: 1,
+          revisionOrigin: 'Created',
+          lifecycleContext: 'Draft',
+          authorUserId: 1,
+          authorDisplayName: '编辑者',
+          createdAt: '2026-08-22T12:00:00Z',
+          changeSummary: null,
+          restoreReason: null,
+          restoredFromRevisionNumber: null,
+          isCurrent: true,
+          isLatestPublished: false,
+        },
+      ],
+      page: 1,
+      pageSize: 20,
+      total: 1,
+    })
+    vi.mocked(getKnowledgeDocumentRevision).mockResolvedValue({
+      id: 11,
+      knowledgeDocumentId: 1,
+      revisionNumber: 1,
+      revisionOrigin: 'Created',
+      lifecycleContext: 'Draft',
+      authorUserId: 1,
+      authorDisplayName: '编辑者',
+      createdAt: '2026-08-22T12:00:00Z',
+      changeSummary: null,
+      restoreReason: null,
+      restoredFromRevisionNumber: null,
+      isCurrent: true,
+      isLatestPublished: false,
+      title: '历史标题',
+      summary: null,
+      bodyMarkdown: '## 历史正文',
+    })
     overlayState.openDrawer.mockReset()
     routerState.push.mockReset()
   })
@@ -211,6 +266,52 @@ describe('KnowledgeDocumentDetailView editing', () => {
     expect(button(wrapper, '添加关联')).toBeUndefined()
     expect(button(wrapper, '添加证据')).toBeUndefined()
     expect(button(wrapper, '添加人工确认')).toBeUndefined()
+    expect(button(wrapper, '修订历史（1）')).toBeDefined()
+  })
+
+  it('enters and returns from history mode on the existing detail route for a Viewer', async () => {
+    actorState.canEdit = false
+    const wrapper = mountView()
+    await flushPromises()
+
+    await button(wrapper, '修订历史（1）')?.trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('历史标题')
+    expect(wrapper.text()).toContain('历史正文')
+    expect(wrapper.text()).toContain('返回当前内容')
+    expect(routerState.push).not.toHaveBeenCalled()
+
+    await button(wrapper, '返回当前内容')?.trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('正文')
+    expect(wrapper.text()).toContain('检查连接')
+  })
+
+  it('reuses the dirty discard guard before entering history and preserves edits on cancel', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    await button(wrapper, '编辑')?.trigger('click')
+    await wrapper.findAll('textarea')[0].setValue('尚未保存的标题')
+    await flushPromises()
+    expect(wrapper.text()).toContain('未保存')
+
+    vi.mocked(ElMessageBox.confirm).mockImplementationOnce(() => Promise.reject('cancel'))
+    await button(wrapper, '修订历史（1）')?.trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('编辑中')
+    expect(wrapper.findAll('textarea')[0].element.value).toBe('尚未保存的标题')
+    expect(wrapper.text()).not.toContain('返回当前内容')
+
+    vi.mocked(ElMessageBox.confirm).mockImplementationOnce(() => Promise.resolve('confirm' as never))
+    await button(wrapper, '修订历史（1）')?.trigger('click')
+    await flushPromises()
+    expect(ElMessageBox.confirm).toHaveBeenCalledWith(
+      '尚有未保存的修改，确认放弃？',
+      '放弃编辑',
+      expect.objectContaining({ confirmButtonText: '放弃修改', cancelButtonText: '继续编辑' }),
+    )
+    expect(wrapper.text()).toContain('返回当前内容')
+    expect(wrapper.find('textarea').exists()).toBe(false)
   })
 
   it('loads document Evidence, opens existing drawers with a fixed document target, and keeps progression explicit', async () => {

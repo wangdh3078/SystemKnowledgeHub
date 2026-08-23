@@ -41,6 +41,49 @@ public sealed class KnowledgeDocumentsController(
         return response is null ? NotFound(NotFound(id)) : Ok(response);
     }
 
+    [HttpGet("{id:long}/revisions")]
+    public async Task<ActionResult<KnowledgeDocumentRevisionListResponse>> GetRevisions(
+        long id,
+        [FromQuery] int? page,
+        [FromQuery] int? pageSize,
+        CancellationToken cancellationToken)
+    {
+        if (!ApiIdParser.IsSafePositive(id))
+        {
+            return BadRequest(ValidationError(new Dictionary<string, string[]>
+            {
+                ["id"] = ["文档 ID 必须是 JavaScript 安全范围内的正整数。"],
+            }));
+        }
+
+        var result = await queries.GetRevisions(id, page, pageSize, cancellationToken);
+        if (result.FieldErrors is not null) return BadRequest(ValidationError(result.FieldErrors));
+        return result.DocumentExists ? Ok(result.Response) : NotFound(NotFound(id));
+    }
+
+    [HttpGet("{id:long}/revisions/{revisionNumber:long}")]
+    public async Task<ActionResult<KnowledgeDocumentRevisionDetailResponse>> GetRevisionDetail(
+        long id,
+        long revisionNumber,
+        CancellationToken cancellationToken)
+    {
+        var errors = new Dictionary<string, string[]>();
+        if (!ApiIdParser.IsSafePositive(id))
+        {
+            errors["id"] = ["文档 ID 必须是 JavaScript 安全范围内的正整数。"];
+        }
+        if (!ApiIdParser.IsSafePositive(revisionNumber))
+        {
+            errors["revisionNumber"] = ["修订号必须是 JavaScript 安全范围内的正整数。"];
+        }
+        if (errors.Count > 0) return BadRequest(ValidationError(errors));
+
+        var response = await queries.GetRevisionDetail(id, revisionNumber, cancellationToken);
+        return response is null
+            ? NotFound(RevisionNotFound(id, revisionNumber))
+            : Ok(response);
+    }
+
     [Authorize(Policy = AccessPolicies.Editor)]
     [HttpPost]
     public async Task<ActionResult<KnowledgeDocumentDetailResponse>> Create(
@@ -122,5 +165,6 @@ public sealed class KnowledgeDocumentsController(
 
     private static ApiErrorResponse ValidationError(IReadOnlyDictionary<string, string[]> fieldErrors) => new("validation_error", "请求内容无效。", fieldErrors, null);
     private static ApiErrorResponse NotFound(long id) => new("not_found", "未找到指定知识文档。", null, new { resourceType = "KnowledgeDocument", resourceId = id });
+    private static ApiErrorResponse RevisionNotFound(long id, long revisionNumber) => new("not_found", "未找到指定知识文档修订。", null, new { resourceType = "KnowledgeDocumentRevision", knowledgeDocumentId = id, revisionNumber });
     private static ApiErrorResponse CurrentUserError(string code, string message, string authStatus) => new(code, message, null, new { authStatus });
 }

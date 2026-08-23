@@ -10,9 +10,11 @@ export const documentTypes = [
   'DesignNote',
 ] as const
 export const documentLifecycleStatuses = ['Draft', 'Published', 'Archived'] as const
+export const revisionOrigins = ['Created', 'ContentSave', 'Restore', 'MigrationBaseline'] as const
 
 export type DocumentType = (typeof documentTypes)[number]
 export type DocumentLifecycleStatus = (typeof documentLifecycleStatuses)[number]
+export type RevisionOrigin = (typeof revisionOrigins)[number]
 export type ConfirmationCoverageState =
   | 'NoConfirmation'
   | 'LegacyConfirmationUnknown'
@@ -70,6 +72,35 @@ export interface KnowledgeDocumentDetail extends KnowledgeDocumentListItem {
   readonly concurrencyToken: string
 }
 
+export interface KnowledgeDocumentRevisionListItem {
+  readonly id: number
+  readonly revisionNumber: number
+  readonly revisionOrigin: RevisionOrigin
+  readonly lifecycleContext: DocumentLifecycleStatus
+  readonly authorUserId: number | null
+  readonly authorDisplayName: string | null
+  readonly createdAt: string
+  readonly changeSummary: string | null
+  readonly restoreReason: string | null
+  readonly restoredFromRevisionNumber: number | null
+  readonly isCurrent: boolean
+  readonly isLatestPublished: boolean
+}
+
+export interface KnowledgeDocumentRevisionListResponse {
+  readonly items: readonly KnowledgeDocumentRevisionListItem[]
+  readonly page: number
+  readonly pageSize: number
+  readonly total: number
+}
+
+export interface KnowledgeDocumentRevisionDetail extends KnowledgeDocumentRevisionListItem {
+  readonly knowledgeDocumentId: number
+  readonly title: string
+  readonly summary: string | null
+  readonly bodyMarkdown: string
+}
+
 export interface KnowledgeDocumentListParameters {
   readonly query?: string
   readonly documentType?: DocumentType
@@ -118,6 +149,10 @@ function readId(value: unknown, field: string): number {
 function readNullableRevisionNumber(value: unknown, field: string): number | null {
   return value === null ? null : readId(value, field)
 }
+function readBoolean(value: unknown, field: string): boolean {
+  if (typeof value !== 'boolean') throw new Error(`${field} must be a boolean`)
+  return value
+}
 function readConfirmationCoverageState(value: unknown, field: string): ConfirmationCoverageState {
   const state = readString(value, field)
   if (state === 'NoConfirmation'
@@ -136,6 +171,11 @@ function readLifecycle(value: unknown, field: string): DocumentLifecycleStatus {
   if (documentLifecycleStatuses.includes(status as DocumentLifecycleStatus))
     return status as DocumentLifecycleStatus
   throw new Error(`${field} has an unsupported lifecycle`)
+}
+function readRevisionOrigin(value: unknown, field: string): RevisionOrigin {
+  const origin = readString(value, field)
+  if (revisionOrigins.includes(origin as RevisionOrigin)) return origin as RevisionOrigin
+  throw new Error(`${field} has an unsupported revision origin`)
 }
 function readStatus(value: unknown, field: string): KnowledgeStatus {
   if (isKnowledgeStatus(value)) return value
@@ -212,5 +252,60 @@ export function decodeKnowledgeDocumentDetail(value: unknown): KnowledgeDocument
       ),
     },
     concurrencyToken: readString(root.concurrencyToken, 'concurrencyToken'),
+  }
+}
+
+function decodeKnowledgeDocumentRevisionListItem(
+  value: unknown,
+  field: string,
+): KnowledgeDocumentRevisionListItem {
+  const item = readObject(value, field)
+  return {
+    id: readId(item.id, `${field}.id`),
+    revisionNumber: readId(item.revisionNumber, `${field}.revisionNumber`),
+    revisionOrigin: readRevisionOrigin(item.revisionOrigin, `${field}.revisionOrigin`),
+    lifecycleContext: readLifecycle(item.lifecycleContext, `${field}.lifecycleContext`),
+    authorUserId: readNullableRevisionNumber(item.authorUserId, `${field}.authorUserId`),
+    authorDisplayName: readNullableString(item.authorDisplayName, `${field}.authorDisplayName`),
+    createdAt: readString(item.createdAt, `${field}.createdAt`),
+    changeSummary: readNullableString(item.changeSummary, `${field}.changeSummary`),
+    restoreReason: readNullableString(item.restoreReason, `${field}.restoreReason`),
+    restoredFromRevisionNumber: readNullableRevisionNumber(
+      item.restoredFromRevisionNumber,
+      `${field}.restoredFromRevisionNumber`,
+    ),
+    isCurrent: readBoolean(item.isCurrent, `${field}.isCurrent`),
+    isLatestPublished: readBoolean(item.isLatestPublished, `${field}.isLatestPublished`),
+  }
+}
+
+export function decodeKnowledgeDocumentRevisionList(
+  value: unknown,
+): KnowledgeDocumentRevisionListResponse {
+  const root = readObject(value, 'knowledgeDocumentRevisionList')
+  if (!Array.isArray(root.items)) throw new Error('items must be an array')
+  if (typeof root.total !== 'number' || !Number.isSafeInteger(root.total) || root.total < 0) {
+    throw new Error('total must be a non-negative integer')
+  }
+  return {
+    items: root.items.map((item, index) =>
+      decodeKnowledgeDocumentRevisionListItem(item, `items[${index}]`),
+    ),
+    page: readId(root.page, 'page'),
+    pageSize: readId(root.pageSize, 'pageSize'),
+    total: root.total,
+  }
+}
+
+export function decodeKnowledgeDocumentRevisionDetail(
+  value: unknown,
+): KnowledgeDocumentRevisionDetail {
+  const root = readObject(value, 'knowledgeDocumentRevisionDetail')
+  return {
+    ...decodeKnowledgeDocumentRevisionListItem(root, 'revision'),
+    knowledgeDocumentId: readId(root.knowledgeDocumentId, 'knowledgeDocumentId'),
+    title: readString(root.title, 'title'),
+    summary: readNullableString(root.summary, 'summary'),
+    bodyMarkdown: readString(root.bodyMarkdown, 'bodyMarkdown'),
   }
 }

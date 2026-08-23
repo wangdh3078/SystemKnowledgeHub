@@ -31,6 +31,7 @@ import {
 } from '../editor/documentEditState'
 import { ApiError } from '../../../api/errors/ApiError'
 import { getEvidenceList } from '../../evidence/api/evidenceApi'
+import KnowledgeDocumentRevisionHistory from '../components/KnowledgeDocumentRevisionHistory.vue'
 import {
   confirmationMethodLabels,
   evidenceTypeLabels,
@@ -53,6 +54,7 @@ const error = ref<string | null>(null)
 const transitionError = ref<string | null>(null)
 const saveError = ref<string | null>(null)
 const savedMessage = ref<string | null>(null)
+const historyMode = ref(false)
 const editing = ref(false)
 const previewing = ref(false)
 const saving = ref(false)
@@ -190,11 +192,22 @@ async function confirmDiscard(): Promise<boolean> {
 }
 async function cancelEdit(): Promise<void> {
   if (!(await confirmDiscard())) return
+  finishEdit()
+}
+function finishEdit(): void {
   editing.value = false
   previewing.value = false
   initialEdit.value = null
   saveError.value = null
   validationErrors.value = {}
+}
+async function enterHistory(): Promise<void> {
+  if (editing.value && !(await confirmDiscard())) return
+  if (editing.value) finishEdit()
+  historyMode.value = true
+}
+function returnToCurrentContent(): void {
+  historyMode.value = false
 }
 function fieldError(field: string): string | null {
   return validationErrors.value[field]?.[0] ?? null
@@ -296,7 +309,12 @@ async function transition(target: DocumentLifecycleStatus): Promise<void> {
 function formatDate(value: string | null): string {
   return value ? value.replace('T', ' ').slice(0, 16) : '—'
 }
-watch(id, () => { void load(); void loadRelations(); void loadEvidence() })
+watch(id, () => {
+  historyMode.value = false
+  void load()
+  void loadRelations()
+  void loadEvidence()
+})
 watch([editing, dirty], ([isEditing, isDirty]) => {
   setActiveDocumentEditDirty(isEditing && isDirty)
 }, { immediate: true })
@@ -340,34 +358,37 @@ onBeforeUnmount(() => {
             <h1>{{ data.title }}</h1>
             <p v-if="data.summary">{{ data.summary }}</p>
           </div>
-          <div v-if="editing" class="knowledge-document-detail__actions">
-            <el-button :disabled="saving" @click="cancelEdit">取消</el-button>
-            <el-button type="primary" :disabled="!canSave" :loading="saving" @click="save">{{
-              saving ? '保存中…' : '保存'
-            }}</el-button>
-          </div>
-          <div v-else-if="canEdit" class="knowledge-document-detail__actions">
-            <el-button v-if="!isArchived" type="primary" @click="beginEdit">编辑</el-button>
-            <el-button
-              v-if="data.lifecycleStatus === 'Draft'"
-              type="primary"
-              @click="transition('Published')"
-              >发布</el-button
-            ><el-button v-if="data.lifecycleStatus === 'Published'" @click="transition('Draft')"
-              >退回草稿</el-button
-            ><el-button
-              v-if="data.lifecycleStatus === 'Published'"
-              type="danger"
-              plain
-              @click="transition('Archived')"
-              >归档</el-button
-            ><el-button
-              v-if="data.lifecycleStatus === 'Archived'"
-              type="primary"
-              plain
-              @click="transition('Draft')"
-              >恢复为草稿</el-button
-            >
+          <div v-if="!historyMode" class="knowledge-document-detail__actions">
+            <el-button @click="enterHistory">修订历史（{{ data.currentRevisionNumber }}）</el-button>
+            <template v-if="editing">
+              <el-button :disabled="saving" @click="cancelEdit">取消</el-button>
+              <el-button type="primary" :disabled="!canSave" :loading="saving" @click="save">{{
+                saving ? '保存中…' : '保存'
+              }}</el-button>
+            </template>
+            <template v-else-if="canEdit">
+              <el-button v-if="!isArchived" type="primary" @click="beginEdit">编辑</el-button>
+              <el-button
+                v-if="data.lifecycleStatus === 'Draft'"
+                type="primary"
+                @click="transition('Published')"
+                >发布</el-button
+              ><el-button v-if="data.lifecycleStatus === 'Published'" @click="transition('Draft')"
+                >退回草稿</el-button
+              ><el-button
+                v-if="data.lifecycleStatus === 'Published'"
+                type="danger"
+                plain
+                @click="transition('Archived')"
+                >归档</el-button
+              ><el-button
+                v-if="data.lifecycleStatus === 'Archived'"
+                type="primary"
+                plain
+                @click="transition('Draft')"
+                >恢复为草稿</el-button
+              >
+            </template>
           </div>
         </div>
         <div class="knowledge-document-detail__tags">
@@ -376,9 +397,15 @@ onBeforeUnmount(() => {
           ><KnowledgeStatusBadge :status="data.knowledgeStatus" />
         </div>
       </header>
-      <p v-if="savedMessage" class="knowledge-document-saved">{{ savedMessage }}</p>
-      <p v-if="transitionError" class="knowledge-document-error">{{ transitionError }}</p>
-      <section v-if="editing" class="knowledge-document-edit">
+      <KnowledgeDocumentRevisionHistory
+        v-if="historyMode"
+        :document-id="data.id"
+        :current-revision-number="data.currentRevisionNumber"
+        @return="returnToCurrentContent"
+      />
+      <p v-if="!historyMode && savedMessage" class="knowledge-document-saved">{{ savedMessage }}</p>
+      <p v-if="!historyMode && transitionError" class="knowledge-document-error">{{ transitionError }}</p>
+      <section v-if="!historyMode && editing" class="knowledge-document-edit">
         <div class="knowledge-document-edit__mode">
           <span class="knowledge-document-edit__editing-state"><i></i>编辑中</span>
           <span :class="['knowledge-document-edit__save-state', { 'is-dirty': dirty, 'is-saving': saving }]">
@@ -439,19 +466,19 @@ onBeforeUnmount(() => {
           >
         </p>
       </section>
-      <section v-else class="knowledge-document-body">
+      <section v-else-if="!historyMode" class="knowledge-document-body">
         <h2>正文</h2>
         <p v-if="!data.bodyMarkdown.trim()" class="text-muted">该文档暂无正文。</p>
         <article v-else class="knowledge-document-markdown" v-html="renderedBody"></article>
       </section>
-      <section v-if="!editing" class="knowledge-document-relations">
+      <section v-if="!historyMode && !editing" class="knowledge-document-relations">
         <div class="knowledge-document-relations__heading"><h2>关联对象</h2><el-button v-if="canEdit && !isArchived" type="primary" plain size="small" @click="addRelation">添加关联</el-button></div>
         <p v-if="relationsLoading">正在加载关联对象…</p>
         <p v-else-if="relationsError" class="knowledge-document-error">无法加载关联对象 <el-button text type="primary" @click="loadRelations">重试</el-button></p>
         <p v-else-if="!relations.length" class="text-muted">暂无关联对象</p>
         <div v-else class="knowledge-document-relations__list"><div v-for="item in relations" :key="item.id" class="knowledge-document-relations__row"><span>{{ item.direction === 'Outgoing' ? '指向' : '来自' }}</span><span>{{ contextualRelationTypeLabel(item.relationType, item.direction) }}</span><button type="button" @click="openRelated(item)">{{ item.objectTypeLabel }} · {{ item.title }}</button><el-button v-if="canEdit && !isArchived" text type="danger" size="small" @click="removeRelation(item)">移除</el-button></div></div>
       </section>
-      <section v-if="!editing" class="knowledge-document-evidence">
+      <section v-if="!historyMode && !editing" class="knowledge-document-evidence">
         <div class="knowledge-document-evidence__heading">
           <div><h2>证据与人工确认</h2><p>记录支持当前知识结论的依据；保存后不会自动改变知识状态。</p></div>
           <div v-if="canEdit && !isArchived" class="knowledge-document-evidence__actions"><el-button plain size="small" @click="addEvidence">添加证据</el-button><el-button plain size="small" @click="addHumanConfirmation">添加人工确认</el-button></div>
@@ -462,7 +489,7 @@ onBeforeUnmount(() => {
         <div v-else class="knowledge-document-evidence__list"><article v-for="item in evidence" :key="item.id" class="knowledge-document-evidence__item"><div><el-tag size="small" effect="plain">{{ evidenceTypeLabels[item.evidenceType] }}</el-tag><strong>{{ item.sourceTitle }}</strong></div><p v-if="item.summary">{{ item.summary }}</p><p>{{ item.supportReason }}</p><small>提供者：{{ item.provider.displayName }} · {{ item.provider.roleOrIdentity }}<template v-if="getHumanConfirmationListMethod(item)"> · {{ confirmationMethodLabels[getHumanConfirmationListMethod(item)!] }}</template></small></article></div>
       </section>
       <KnowledgeStatusProgressionPanel
-        v-if="!editing"
+        v-if="!historyMode && !editing"
         :id="data.id"
         target-type="KnowledgeDocument"
         :title="data.title"
@@ -473,7 +500,7 @@ onBeforeUnmount(() => {
         :human-confirmation-count="humanConfirmationCount"
         :can-change="canEdit && !isArchived && !editing"
       />
-      <section class="knowledge-document-meta">
+      <section v-if="!historyMode" class="knowledge-document-meta">
         <h2>元数据</h2>
         <dl>
           <div>

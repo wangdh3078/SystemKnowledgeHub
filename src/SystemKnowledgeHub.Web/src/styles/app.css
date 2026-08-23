@@ -801,3 +801,17 @@ button {
     padding-left: 24px;
   }
 }
+
+@media (max-width: 1179px) {
+  .app-shell {
+    min-width: 0;
+  }
+
+  .app-topbar__search {
+    width: min(360px, 40vw);
+  }
+
+  .app-topbar__profile-copy {
+    display: none;
+  }
+}

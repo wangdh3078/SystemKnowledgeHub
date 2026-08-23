@@ -56,6 +56,49 @@ public sealed record KnowledgeDocumentConfirmationCoverageResponse(
     string State,
     long? LastConfirmedRevisionNumber);
 
+public sealed record KnowledgeDocumentRevisionListItemResponse(
+    long Id,
+    long RevisionNumber,
+    string RevisionOrigin,
+    string LifecycleContext,
+    long? AuthorUserId,
+    string? AuthorDisplayName,
+    DateTimeOffset CreatedAt,
+    string? ChangeSummary,
+    string? RestoreReason,
+    long? RestoredFromRevisionNumber,
+    bool IsCurrent,
+    bool IsLatestPublished);
+
+public sealed record KnowledgeDocumentRevisionListResponse(
+    IReadOnlyList<KnowledgeDocumentRevisionListItemResponse> Items,
+    int Page,
+    int PageSize,
+    int Total);
+
+public sealed record KnowledgeDocumentRevisionListQueryResult(
+    KnowledgeDocumentRevisionListResponse? Response,
+    IReadOnlyDictionary<string, string[]>? FieldErrors,
+    bool DocumentExists);
+
+public sealed record KnowledgeDocumentRevisionDetailResponse(
+    long Id,
+    long KnowledgeDocumentId,
+    long RevisionNumber,
+    string RevisionOrigin,
+    string LifecycleContext,
+    long? AuthorUserId,
+    string? AuthorDisplayName,
+    DateTimeOffset CreatedAt,
+    string? ChangeSummary,
+    string? RestoreReason,
+    long? RestoredFromRevisionNumber,
+    bool IsCurrent,
+    bool IsLatestPublished,
+    string Title,
+    string? Summary,
+    string BodyMarkdown);
+
 public sealed record KnowledgeDocumentAuthor(long UserId, string DisplayName);
 
 public sealed record CreateKnowledgeDocumentCommand(
