@@ -9,11 +9,20 @@ TestResults/
 *.db
 *.db-shm
 *.db-wal
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
 
 # Frontend
 **/node_modules/
 **/dist/
 **/coverage/
+**/.vite/
+**/playwright-report/
+**/test-results/
 *.tsbuildinfo
 
 # IDE and OS
@@ -24,6 +33,15 @@ TestResults/
 *.suo
 .DS_Store
 Thumbs.db
+
+# Local secrets, keys, and disposable task output
+**/DataProtection-Keys/
+/tmp/
+/temp/
+*.tmp
+*.bak
+.env.local
+.env.*.local
 
 # Local runtime logs
 logs/

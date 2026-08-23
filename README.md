@@ -2,6 +2,8 @@
 
 系统知识中心用于持续沉淀、关联和确认企业系统知识。
 
+文档入口：[System Knowledge Hub Documentation Index](docs/INDEX.md)
+
 当前 MVP 聚焦于把散落在代码、数据库、接口、消息、现有文档和人员经验中的系统知识，整理为**可关联、可追溯、可逐步确认**的结构化知识。
 
 > 当前阶段不是建设“万能知识库”，而是先跑通系统业务、数据、集成、证据和未知项的知识闭环。
@@ -20,6 +22,17 @@
 - 哪些内容仍然未知、推断中或等待人工确认？
 
 系统不是单纯的文档编辑器。Knowledge Object、Relationship、Evidence、Knowledge Status 和 Unknown Item 都是正式业务概念。
+
+## 当前产品基线
+
+当前产品 readiness 为 **Internal Pilot**。结构化系统知识闭环已经扩展为受控的 `KnowledgeDocument` 能力：
+
+- 支持 `Requirement`、`Specification`、`TestCase`、`Sop`、`Troubleshooting`、`KnowledgeArticle`、`DesignNote` 七种 `DocumentType`；
+- 文档复用现有 Evidence、HumanConfirmation 和显式 Knowledge Status 规则；
+- typed relationships、Markdown 内容、FTS 检索与 System Unified Knowledge View 已完成验证；
+- PHASE-REV 已启动，REV-B01 immutable revision foundation 已实现；后续 Revision History Read UX 仍需独立 Gate。
+
+Internal Pilot 不等于 Team Production 或 Enterprise Production readiness。
 
 ## 当前 MVP 范围
 
@@ -266,7 +279,7 @@ Composable
 Page / Drawer
 ```
 
-当前第一条正式业务 Slice：
+Vertical Slice 开发的首条正式基线：
 
 **VS-01 — Database Object Detail + Column Drawer**
 
@@ -373,7 +386,7 @@ MVP 不引入：
 
 但这些**暂不属于当前 MVP**。
 
-当前不要提前增加 `KnowledgeDocument`、Wiki、Markdown 知识文章、标签体系或文档目录树。待当前系统业务/数据/集成知识闭环稳定后，再单独设计。
+`KnowledgeDocument` 已作为受控知识内容能力实现；当前仍不扩展为通用 Wiki、Spaces/Page Tree、运行时标签体系、协同编辑或任意动态文档框架。这些能力需要新的产品与架构 Gate。
 
 ## Codex / Coding Agent
 
