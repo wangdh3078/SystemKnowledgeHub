@@ -15,6 +15,7 @@ import {
   type RevisionOrigin,
 } from '../api/knowledgeDocumentContracts'
 import { renderMarkdown } from '../markdown/renderMarkdown'
+import RevisionCompareView from './RevisionCompareView.vue'
 
 const props = defineProps<{
   documentId: number
@@ -32,6 +33,9 @@ const listLoading = ref(false)
 const detailLoading = ref(false)
 const listError = ref<string | null>(null)
 const detailError = ref<string | null>(null)
+const compareMode = ref(false)
+const compareInitialRevisionNumber = ref<number | null>(null)
+const compareInitialSnapshot = ref<KnowledgeDocumentRevisionDetail | null>(null)
 let listRequest: AbortController | null = null
 let detailRequest: AbortController | null = null
 
@@ -129,6 +133,17 @@ function retryDetail(): void {
     candidate.revisionNumber === selectedRevisionNumber.value)
   if (item) void selectRevision(item)
 }
+function enterCompare(): void {
+  if (selectedRevisionNumber.value === null) return
+  compareInitialRevisionNumber.value = selectedRevisionNumber.value
+  compareInitialSnapshot.value = detail.value?.revisionNumber === selectedRevisionNumber.value
+    ? detail.value
+    : null
+  compareMode.value = true
+}
+function returnToHistory(): void {
+  compareMode.value = false
+}
 
 onMounted(() => void loadList())
 onBeforeUnmount(() => {
@@ -138,13 +153,28 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section class="knowledge-document-history" aria-labelledby="revision-history-heading">
+  <RevisionCompareView
+    v-if="compareMode && compareInitialRevisionNumber !== null"
+    :document-id="documentId"
+    :revision-count="currentRevisionNumber"
+    :initial-to-revision-number="compareInitialRevisionNumber"
+    :initial-snapshot="compareInitialSnapshot"
+    @return="returnToHistory"
+  />
+  <section v-else class="knowledge-document-history" aria-labelledby="revision-history-heading">
     <header class="knowledge-document-history__header">
       <div>
         <h2 id="revision-history-heading">修订历史（{{ currentRevisionNumber }}）</h2>
         <p>查看不可变的历史快照；生命周期表示该修订生成时的文档状态。</p>
       </div>
-      <el-button type="primary" plain @click="emit('return')">返回当前内容</el-button>
+      <div class="knowledge-document-history__header-actions">
+        <el-button
+          :disabled="selectedRevisionNumber === null"
+          type="primary"
+          @click="enterCompare"
+        >比较修订</el-button>
+        <el-button type="primary" plain @click="emit('return')">返回当前内容</el-button>
+      </div>
     </header>
 
     <LoadingState

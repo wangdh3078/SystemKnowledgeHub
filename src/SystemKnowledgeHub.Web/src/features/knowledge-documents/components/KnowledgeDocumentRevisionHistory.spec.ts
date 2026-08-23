@@ -93,6 +93,15 @@ const components = {
     emits: ['current-change'],
     template: '<button type="button" @click="$emit(\'current-change\', 2)">下一页</button>',
   },
+  ElSelect: {
+    props: { modelValue: Number, id: String },
+    emits: ['change'],
+    template: '<select :id="id" :value="modelValue" @change="$emit(\'change\', +$event.target.value)"><slot /></select>',
+  },
+  ElOption: {
+    props: { label: String, value: Number },
+    template: '<option :value="value">{{ label }}</option>',
+  },
 }
 
 function response(
@@ -214,5 +223,20 @@ describe('KnowledgeDocumentRevisionHistory', () => {
     expect(getKnowledgeDocumentRevision).toHaveBeenLastCalledWith(7, 1, expect.any(AbortSignal))
     expect(wrapper.text()).toContain('修订历史（3）')
     expect(wrapper.text()).toContain('迁移标题')
+  })
+
+  it('enters compare for the selected revision and returns to the preserved history state', async () => {
+    const wrapper = mountHistory()
+    await flushPromises()
+
+    await wrapper.findAll('button').find((item) => item.text() === '比较修订')?.trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('比较修订')
+    expect(wrapper.text()).toContain('从 修订 2 到 修订 3')
+
+    await wrapper.findAll('button').find((item) => item.text() === '返回修订历史')?.trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('修订历史（3）')
+    expect(wrapper.text()).toContain('当前草稿标题')
   })
 })
