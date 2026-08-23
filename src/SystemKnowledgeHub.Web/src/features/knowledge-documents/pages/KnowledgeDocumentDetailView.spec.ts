@@ -1,3 +1,4 @@
+import { defineComponent, h } from 'vue'
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ElMessageBox } from 'element-plus'
@@ -11,11 +12,24 @@ import {
   updateKnowledgeDocumentContent,
 } from '../api/knowledgeDocumentsApi'
 import { getRelatedKnowledge } from '../../relationships/api/relationshipApi'
-import { getEvidenceList } from '../../evidence/api/evidenceApi'
+import { addHumanConfirmation, getEvidenceList } from '../../evidence/api/evidenceApi'
+import AddHumanConfirmationDrawer from '../../evidence/components/AddHumanConfirmationDrawer.vue'
 
 enableAutoUnmount(afterEach)
 
-const actorState = vi.hoisted(() => ({ canEdit: true }))
+const actorState = vi.hoisted(() => ({
+  canEdit: true,
+  currentUser: {
+    id: 1,
+    displayName: '编辑者',
+    employeeNo: 'E001',
+    departmentOrTeam: '知识组',
+    jobTitle: '专家',
+    knowledgeRoles: [],
+  },
+  initialize: vi.fn(),
+  refreshCurrentUser: vi.fn(),
+}))
 const overlayState = vi.hoisted(() => ({ openDrawer: vi.fn(), openDialog: vi.fn() }))
 const routerState = vi.hoisted(() => ({ push: vi.fn() }))
 
@@ -63,7 +77,11 @@ vi.mock('../../../app/stores/actor', () => ({
     get canEdit() {
       return actorState.canEdit
     },
-    refreshCurrentUser: vi.fn(),
+    get currentUser() {
+      return actorState.currentUser
+    },
+    initialize: actorState.initialize,
+    refreshCurrentUser: actorState.refreshCurrentUser,
   }),
 }))
 vi.mock('../../../app/stores/overlays', () => ({ useOverlayStore: () => overlayState }))
@@ -73,6 +91,7 @@ vi.mock('../../relationships/api/relationshipApi', () => ({
 }))
 vi.mock('../../evidence/api/evidenceApi', () => ({
   getEvidenceList: vi.fn().mockResolvedValue({ items: [] }),
+  addHumanConfirmation: vi.fn(),
 }))
 const detail: KnowledgeDocumentDetail = {
   id: 1,
@@ -103,14 +122,23 @@ const components = {
     template: '<button :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
   },
   ElTag: { template: '<span><slot /></span>' },
-  ElForm: { template: '<form><slot /></form>' },
-  ElFormItem: { template: '<div><slot /></div>' },
+  ElAlert: { template: '<div><span>{{ $attrs.title }}</span><slot /></div>' },
+  ElForm: defineComponent({
+    setup(_props, { slots, expose }) {
+      expose({ validate: () => Promise.resolve(true) })
+      return () => h('form', slots.default?.())
+    },
+  }),
+  ElFormItem: { template: '<label><slot /></label>' },
   ElInput: {
     props: { modelValue: { type: String, required: true } },
-    emits: ['update:modelValue'],
+    emits: ['update:modelValue', 'input'],
     template:
-      '<textarea :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />',
+      '<textarea :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value); $emit(\'input\', $event.target.value)" />',
   },
+  ElDatePicker: { props: { modelValue: String }, template: '<input :value="modelValue" />' },
+  ElSelect: { template: '<select><slot /></select>' },
+  ElOption: { template: '<option />' },
   ElIcon: { template: '<span><slot /></span>' },
   ElPagination: { template: '<div><slot /></div>' },
   KnowledgeStatusBadge: { template: '<span>知识状态</span>' },
@@ -134,6 +162,7 @@ describe('KnowledgeDocumentDetailView editing', () => {
     vi.mocked(ElMessageBox.confirm).mockReset()
     vi.mocked(getRelatedKnowledge).mockReset()
     vi.mocked(getEvidenceList).mockReset()
+    vi.mocked(addHumanConfirmation).mockReset()
     vi.mocked(getKnowledgeDocument).mockResolvedValue(detail)
     vi.mocked(getRelatedKnowledge).mockResolvedValue([])
     vi.mocked(getEvidenceList).mockResolvedValue({ items: [] })
@@ -178,6 +207,8 @@ describe('KnowledgeDocumentDetailView editing', () => {
     })
     overlayState.openDrawer.mockReset()
     overlayState.openDialog.mockReset()
+    actorState.initialize.mockReset()
+    actorState.refreshCurrentUser.mockReset()
     routerState.push.mockReset()
   })
 
@@ -354,6 +385,105 @@ describe('KnowledgeDocumentDetailView editing', () => {
     })
   })
 
+  it('carries the Detail current revision through the progression panel and HumanConfirmation drawer request', async () => {
+    const inferredDetail = {
+      ...detail,
+      knowledgeStatus: 'Inferred' as const,
+      currentRevisionNumber: 7,
+      concurrencyToken: 'token-7',
+    }
+    const confirmedDetail = {
+      ...inferredDetail,
+      confirmationCoverage: {
+        state: 'CurrentRevisionConfirmed' as const,
+        lastConfirmedRevisionNumber: 7,
+      },
+    }
+    vi.mocked(getKnowledgeDocument)
+      .mockReset()
+      .mockResolvedValueOnce(inferredDetail)
+      .mockResolvedValue(confirmedDetail)
+    vi.mocked(getEvidenceList)
+      .mockReset()
+      .mockResolvedValueOnce({ items: [] })
+      .mockResolvedValue({
+        items: [{
+          id: 72,
+          evidenceType: 'HumanConfirmation',
+          knowledgeDocumentRevisionNumberSnapshot: 7,
+          sourceTitle: inferredDetail.title,
+          sourceReference: null,
+          sourceLocator: null,
+          summary: '确认当前内容。',
+          supportReason: '专家已复核当前展示的完整内容。',
+          provider: {
+            displayName: '编辑者',
+            roleOrIdentity: '专家',
+            occurredAt: '2026-08-23T03:00:00Z',
+            team: '知识组',
+            externalUserKey: null,
+            source: null,
+            note: null,
+          },
+        }],
+      })
+    vi.mocked(addHumanConfirmation).mockResolvedValue({
+      id: 72,
+      evidenceType: 'HumanConfirmation',
+      subject: { type: 'KnowledgeDocument', id: 1 },
+      subjectDetailKey: null,
+      knowledgeDocumentRevisionNumberSnapshot: 7,
+      sourceTitle: inferredDetail.title,
+      subjectKnowledgeStatus: 'Inferred',
+      knowledgeStatusChanged: false,
+      concurrencyToken: 'evidence-token',
+    })
+
+    const wrapper = mountView()
+    await flushPromises()
+    const progressionButton = wrapper
+      .find('.knowledge-status-panel')
+      .findAll('button')
+      .find((candidate) => candidate.text() === '添加人工确认')
+    await progressionButton?.trigger('click')
+
+    const drawerDescriptor = overlayState.openDrawer.mock.calls[0]?.[0] as
+      | { readonly payload?: unknown }
+      | undefined
+    expect(drawerDescriptor).toEqual({
+      kind: 'human-confirmation',
+      id: null,
+      mode: 'create',
+      payload: {
+        subject: { type: 'KnowledgeDocument', id: 1 },
+        title: inferredDetail.title,
+        knowledgeStatus: 'Inferred',
+        subjectRevisionNumber: 7,
+      },
+    })
+
+    const drawer = mount(AddHumanConfirmationDrawer, {
+      props: { payload: drawerDescriptor?.payload },
+      global: { components },
+    })
+    const fields = drawer.findAll('textarea')
+    await fields[0].setValue('确认当前文档内容正确。')
+    await fields[1].setValue('专家已复核当前展示的完整内容。')
+    await drawer.findAll('button')
+      .find((candidate) => candidate.text() === '保存人工确认')
+      ?.trigger('click')
+    await flushPromises()
+
+    expect(addHumanConfirmation).toHaveBeenCalledTimes(1)
+    expect(addHumanConfirmation).toHaveBeenCalledWith(expect.objectContaining({
+      subject: { type: 'KnowledgeDocument', id: 1 },
+      subjectRevisionNumber: 7,
+    }))
+    expect(getKnowledgeDocument).toHaveBeenCalledTimes(2)
+    expect(getEvidenceList).toHaveBeenCalledTimes(2)
+    expect(wrapper.text()).toContain('人工确认覆盖当前修订 7')
+  })
+
   it('loads document relations once, opens the existing add-relation drawer, and routes to the related object', async () => {
     vi.mocked(getRelatedKnowledge).mockResolvedValue([
       {
@@ -507,6 +637,98 @@ describe('KnowledgeDocumentDetailView editing', () => {
       expect(wrapper.text()).toContain('知识状态')
       wrapper.unmount()
     }
+  })
+
+  it.each([
+    ['ChangedSinceConfirmation', 2, '内容在最近一次确认后已修改'],
+    ['LegacyConfirmationUnknown', null, '迁移前人工确认无法确定覆盖的修订。'],
+  ] as const)(
+    'refreshes %s coverage from the authoritative Detail after HumanConfirmation save',
+    async (initialState, lastConfirmedRevisionNumber, initialText) => {
+      const initialDetail = {
+        ...detail,
+        currentRevisionNumber: 3,
+        confirmationCoverage: {
+          state: initialState,
+          lastConfirmedRevisionNumber,
+        },
+      }
+      const refreshedDetail = {
+        ...initialDetail,
+        confirmationCoverage: {
+          state: 'CurrentRevisionConfirmed' as const,
+          lastConfirmedRevisionNumber: 3,
+        },
+      }
+      vi.mocked(getKnowledgeDocument)
+        .mockReset()
+        .mockResolvedValueOnce(initialDetail)
+        .mockResolvedValue(refreshedDetail)
+      vi.mocked(getEvidenceList).mockReset().mockResolvedValue({ items: [] })
+      const wrapper = mountView()
+      await flushPromises()
+      expect(wrapper.text()).toContain(initialText)
+
+      window.dispatchEvent(new CustomEvent('evidence:changed'))
+      window.dispatchEvent(new CustomEvent('human-confirmation:changed', {
+        detail: { subject: { type: 'KnowledgeDocument', id: 1 } },
+      }))
+      await flushPromises()
+
+      expect(wrapper.text()).toContain('人工确认覆盖当前修订 3')
+      expect(wrapper.text()).not.toContain(initialText)
+      expect(getKnowledgeDocument).toHaveBeenCalledTimes(2)
+      expect(getEvidenceList).toHaveBeenCalledTimes(2)
+    },
+  )
+
+  it('keeps the newest authoritative Detail when refresh requests complete out of order', async () => {
+    const olderRequest: { resolve: ((value: KnowledgeDocumentDetail) => void) | null } = {
+      resolve: null,
+    }
+    const newerRequest: { resolve: ((value: KnowledgeDocumentDetail) => void) | null } = {
+      resolve: null,
+    }
+    vi.mocked(getKnowledgeDocument)
+      .mockReset()
+      .mockResolvedValueOnce(detail)
+      .mockImplementationOnce(() => new Promise<KnowledgeDocumentDetail>((resolve) => {
+        olderRequest.resolve = resolve
+      }))
+      .mockImplementationOnce(() => new Promise<KnowledgeDocumentDetail>((resolve) => {
+        newerRequest.resolve = resolve
+      }))
+    const wrapper = mountView()
+    await flushPromises()
+
+    window.dispatchEvent(new CustomEvent('human-confirmation:changed', {
+      detail: { subject: { type: 'KnowledgeDocument', id: 1 } },
+    }))
+    window.dispatchEvent(new CustomEvent('knowledge-status:changed'))
+    newerRequest.resolve?.({
+      ...detail,
+      currentRevisionNumber: 3,
+      concurrencyToken: 'token-3',
+      confirmationCoverage: {
+        state: 'CurrentRevisionConfirmed',
+        lastConfirmedRevisionNumber: 3,
+      },
+    })
+    await flushPromises()
+    olderRequest.resolve?.({
+      ...detail,
+      currentRevisionNumber: 2,
+      concurrencyToken: 'token-2',
+      confirmationCoverage: {
+        state: 'ChangedSinceConfirmation',
+        lastConfirmedRevisionNumber: 1,
+      },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('修订历史（3）')
+    expect(wrapper.text()).toContain('人工确认覆盖当前修订 3')
+    expect(wrapper.text()).not.toContain('内容在最近一次确认后已修改')
   })
 
   it('adopts a successful Restore detail, exits History, and announces the new revision', async () => {

@@ -2,7 +2,6 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
-using SystemKnowledgeHub.Api.Features.Evidence.Domain;
 using SystemKnowledgeHub.Api.Features.Relationships.Domain;
 using SystemKnowledgeHub.Api.Features.Systems.Domain;
 using SystemKnowledgeHub.Api.Features.Users.Domain;
@@ -50,24 +49,49 @@ public sealed class KnowledgeDocumentMigrationTests
             Version = 1,
         };
         dbContext.KnowledgeRelations.Add(relation);
-        var confirmation = new Evidence
-        {
-            EvidenceType = EvidenceType.HumanConfirmation,
-            SubjectType = EvidenceSubjectType.System,
-            SubjectId = systemA.Id,
-            SourceTitle = "Migration HumanConfirmation",
-            SourceLocatorJson = "{\"method\":\"Meeting\"}",
-            SupportReason = "Preserve reference",
-            ProviderUserId = user.Id,
-            ProviderName = user.DisplayName,
-            ProviderRole = "知识整理人员",
-            ProvidedAt = timestamp,
-            CreatedAt = timestamp,
-            UpdatedAt = timestamp,
-            Version = 1,
-        };
-        dbContext.Evidence.Add(confirmation);
         await dbContext.SaveChangesAsync();
+        const long confirmationId = 7001;
+        await using (var command = connection.CreateCommand())
+        {
+            command.CommandText = """
+                INSERT INTO evidence (
+                    id,
+                    evidence_type,
+                    subject_type,
+                    subject_id,
+                    source_title,
+                    source_locator_json,
+                    support_reason,
+                    provider_user_id,
+                    provider_name,
+                    provider_role,
+                    provided_at,
+                    created_at,
+                    updated_at,
+                    version)
+                VALUES (
+                    $id,
+                    'HumanConfirmation',
+                    'System',
+                    $subjectId,
+                    'Migration HumanConfirmation',
+                    '{"method":"Meeting"}',
+                    'Preserve reference',
+                    $providerUserId,
+                    $providerName,
+                    '知识整理人员',
+                    $timestamp,
+                    $timestamp,
+                    $timestamp,
+                    1);
+                """;
+            command.Parameters.AddWithValue("$id", confirmationId);
+            command.Parameters.AddWithValue("$subjectId", systemA.Id);
+            command.Parameters.AddWithValue("$providerUserId", user.Id);
+            command.Parameters.AddWithValue("$providerName", user.DisplayName);
+            command.Parameters.AddWithValue("$timestamp", timestamp.ToString("O"));
+            await command.ExecuteNonQueryAsync();
+        }
 
         await migrator.MigrateAsync();
 
@@ -76,10 +100,16 @@ public sealed class KnowledgeDocumentMigrationTests
         Assert.Equal(systemA.Id, (await dbContext.Systems.SingleAsync(item => item.Name == systemA.Name)).Id);
         Assert.Equal(relation.Id, (await dbContext.KnowledgeRelations.SingleAsync()).Id);
         var preservedConfirmation = await dbContext.Evidence.SingleAsync();
-        Assert.Equal(confirmation.Id, preservedConfirmation.Id);
+        Assert.Equal(confirmationId, preservedConfirmation.Id);
         Assert.Equal(user.Id, preservedConfirmation.ProviderUserId);
         Assert.Equal("HumanConfirmation", preservedConfirmation.EvidenceType.ToString());
+        Assert.Null(preservedConfirmation.KnowledgeDocumentRevisionNumberSnapshot);
         Assert.Equal(0, await dbContext.KnowledgeDocuments.CountAsync());
+        Assert.Equal(
+            dbContext.Database.GetMigrations().ToArray(),
+            (await dbContext.Database.GetAppliedMigrationsAsync()).ToArray());
+        Assert.Equal("ok", await Scalar<string>(connection, "PRAGMA integrity_check;"));
+        Assert.Equal(0L, await Scalar<long>(connection, "SELECT count(*) FROM pragma_foreign_key_check;"));
     }
 
     private static KnowledgeSystem System(string name, DateTimeOffset timestamp) => new()
@@ -97,4 +127,12 @@ public sealed class KnowledgeDocumentMigrationTests
         KnowledgeStatusChangedByRole = "创建人",
         Version = 1,
     };
+
+    private static async Task<T?> Scalar<T>(SqliteConnection connection, string sql)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        var value = await command.ExecuteScalarAsync();
+        return value is null or DBNull ? default : (T)Convert.ChangeType(value, typeof(T));
+    }
 }

@@ -173,7 +173,11 @@ public sealed class EvidenceService(
             }
             if (currentRevisionNumber.Value != request.SubjectRevisionNumber)
             {
-                return new EvidenceCommandResult(null, null, EvidenceFailure.Conflict);
+                return new EvidenceCommandResult(
+                    null,
+                    null,
+                    EvidenceFailure.Conflict,
+                    currentRevisionNumber.Value);
             }
             knowledgeDocumentRevisionNumberSnapshot = currentRevisionNumber.Value;
         }

@@ -2,21 +2,31 @@
 
 ## Boundary
 
-PHASE-REV-VERIFY 结果为 **PASS WITH FOLLOW-UPS**。本清单包含独立阶段审计确认的 5 个 Medium、6 个 Low gap；Blocker/High 为 0。当前不在 Verification Gate 内修改 production code。
+PHASE-REV-VERIFY 的历史结果为 **PASS WITH FOLLOW-UPS**。本清单保留独立阶段审计确认的 5 个 Medium、6 个 Low gap及其原始复现/风险记录；Blocker/High 为 0。`REV-FIX-01` 已于 2026-08-23 关闭全部 5 个 Medium gap，6 个 Low gap仍为明确延期项。
 
-| ID | Severity | Area | Summary |
-|---|---|---|---|
-| REV-GAP-001 | Medium | Restore / validation | .NET 与 SQLite 对 supplementary Unicode 长度语义不同，可能把 invalid reason变成 500 |
-| REV-GAP-002 | Medium | HumanConfirmation API | stale 409 details 缺 frozen `currentRevisionNumber` |
-| REV-GAP-003 | Medium | HumanConfirmation UX | Knowledge Progression Panel 快捷入口漏传 `subjectRevisionNumber` |
-| REV-GAP-004 | Medium | Confirmation Coverage UX | HC save 后 detail coverage cache未刷新 |
-| REV-GAP-005 | Low | Editor runtime UX | `ElTooltip` 未注册，toolbar tooltip丢失并产生 Vue warnings |
-| REV-GAP-006 | Low | Accessibility | Restore ancestor dialog没有 accessible name |
-| REV-GAP-007 | Low | Accessibility | Revision History 在 shell `<main>` 内嵌套第二个 `<main>` |
-| REV-GAP-008 | Low | Single overlay | Published save的直接 `ElMessageBox` 缺现有 overlay guard |
-| REV-GAP-009 | Low | Verification evidence | Restore rollback test未直接 assert `Version` rollback |
-| REV-GAP-010 | Medium | Migration test fixture | pre-revision schema seed误用 current Evidence model，full backend suite留下 1项 deterministic failure |
-| REV-GAP-011 | Low | Test infrastructure | default parallel full backend run因 SQLite/WebApplicationFactory collection并发停滞 |
+| ID | Severity | Status | Area | Summary |
+|---|---|---|---|---|
+| REV-GAP-001 | Medium | **CLOSED — REV-FIX-01** | Restore / validation | .NET 与 SQLite 对 supplementary Unicode 长度语义不同，可能把 invalid reason变成 500 |
+| REV-GAP-002 | Medium | **CLOSED — REV-FIX-01** | HumanConfirmation API | stale 409 details 缺 frozen `currentRevisionNumber` |
+| REV-GAP-003 | Medium | **CLOSED — REV-FIX-01** | HumanConfirmation UX | Knowledge Progression Panel 快捷入口漏传 `subjectRevisionNumber` |
+| REV-GAP-004 | Medium | **CLOSED — REV-FIX-01** | Confirmation Coverage UX | HC save 后 detail coverage cache未刷新 |
+| REV-GAP-005 | Low | OPEN / Deferred | Editor runtime UX | `ElTooltip` 未注册，toolbar tooltip丢失并产生 Vue warnings |
+| REV-GAP-006 | Low | OPEN / Deferred | Accessibility | Restore ancestor dialog没有 accessible name |
+| REV-GAP-007 | Low | OPEN / Deferred | Accessibility | Revision History 在 shell `<main>` 内嵌套第二个 `<main>` |
+| REV-GAP-008 | Low | OPEN / Deferred | Single overlay | Published save的直接 `ElMessageBox` 缺现有 overlay guard |
+| REV-GAP-009 | Low | OPEN / Deferred | Verification evidence | Restore rollback test未直接 assert `Version` rollback |
+| REV-GAP-010 | Medium | **CLOSED — REV-FIX-01** | Migration test fixture | pre-revision schema seed误用 current Evidence model，full backend suite留下 1项 deterministic failure |
+| REV-GAP-011 | Low | OPEN / Deferred | Test infrastructure | default parallel full backend run因 SQLite/WebApplicationFactory collection并发停滞 |
+
+## REV-FIX-01 Closure Summary
+
+- `REV-GAP-001 CLOSED` — Restore reason 先 trim，再拒绝 NUL，并按 Unicode scalar（`EnumerateRunes()`）执行 5～500 validation；focused boundary tests、serial full backend 123/123 与 real API 3/5 emoji runtime均通过。
+- `REV-GAP-002 CLOSED` — stale HumanConfirmation 409 的 frozen details精确包含 `resourceType`、`resourceId`、`currentRevisionNumber`；exact-key/no-write test与 runtime N→N+1 probe均通过。
+- `REV-GAP-003 CLOSED` — Knowledge Progression Panel 将 Detail `currentRevisionNumber` 透传至 overlay、Drawer与 API request；跨组件 integration test和 prominent-path Browser runtime均通过。
+- `REV-GAP-004 CLOSED` — HumanConfirmation success派发定向事件，Detail重新获取 backend authoritative projection；Evidence仍独立刷新，sequence guard阻止旧 request覆盖，无 frontend coverage重算；三种旧 coverage state、error与 request-count tests及 Browser即时更新均通过。
+- `REV-GAP-010 CLOSED` — pre-revision Evidence改用 target-era explicit-column raw SQL seed；preservation、migration history、integrity/FK test通过，serial full backend 123/123。
+
+完整证据见 `docs/reports/REV_FIX_01_MEDIUM_GAPS_CORRECTION_VERIFICATION_REPORT.md`。
 
 ## REV-GAP-001 — Restore Unicode length mismatch
 
@@ -27,6 +37,7 @@ PHASE-REV-VERIFY 结果为 **PASS WITH FOLLOW-UPS**。本清单包含独立阶�
 - **Actual:** SQLite constraint拒绝；Restore只捕获 `DbUpdateConcurrencyException`，`DbUpdateException` 可上升为 500。transaction仍 rollback。
 - **Risk:** 边界 Unicode 输入得到错误 status/error shape；没有 data corruption。
 - **Recommended fix slice:** 用 SQLite-compatible Unicode scalar count统一 service/API validation并明确 NUL policy；新增 supplementary Unicode、NUL、trimmed 4/5/500/501 boundary integration tests。
+- **Closure (REV-FIX-01):** **CLOSED**。采用 trim → NUL rejection → Unicode scalar count；invalid路径在 persistence前返回 400。Focused tests覆盖 3/5 emoji、trimmed 4/5、500/501、NUL、whitespace及 head/Version/revision/FTS no-write；real API验证 3 emoji=400、5 emoji=200、无 500。
 
 ## REV-GAP-002 — HumanConfirmation stale conflict details drift
 
@@ -37,6 +48,7 @@ PHASE-REV-VERIFY 结果为 **PASS WITH FOLLOW-UPS**。本清单包含独立阶�
 - **Actual:** `EvidenceController` 只返回前两项；service拒绝与 no-write正确。
 - **Risk:** frozen wire contract漂移，client无法从 error details直接识别最新 revision；核心 persistence安全。
 - **Recommended fix slice:** 增加 `currentRevisionNumber` details并把现有 test从只断言 409/count扩展到 exact error contract。
+- **Closure (REV-FIX-01):** **CLOSED**。Application result携带 server current revision，Controller frozen 409 details只有并完整包含三个要求字段。Exact contract test与 runtime均证明 Evidence、HumanConfirmation、head token/current revision、history和 KnowledgeStatus无变化。
 
 ## REV-GAP-003 — Progression Panel omits subject revision
 
@@ -47,6 +59,7 @@ PHASE-REV-VERIFY 结果为 **PASS WITH FOLLOW-UPS**。本清单包含独立阶�
 - **Actual:** panel接收 prop但 `addHumanConfirmation()` 未放入 payload；request省略 required revision number，backend返回 400。Evidence section的独立入口正常。
 - **Risk:** 主要引导路径不可完成 HC，用户必须找到替代入口；没有错误 snapshot写入。
 - **Recommended fix slice:** 透传 prop到 overlay payload；增加 Detail → Panel → Drawer → API payload integration test。
+- **Closure (REV-FIX-01):** **CLOSED**。Panel prominent action条件式透传 `subjectRevisionNumber`，集成测试覆盖 Detail revision 7 → Panel → overlay → Drawer → API；Browser runtime从 prominent path显示并成功保存 revision 1 HumanConfirmation。
 
 ## REV-GAP-004 — Confirmation coverage remains stale after HC save
 
@@ -57,6 +70,7 @@ PHASE-REV-VERIFY 结果为 **PASS WITH FOLLOW-UPS**。本清单包含独立阶�
 - **Actual:** Drawer只派发 `evidence:changed`；Detail handler只 `loadEvidence()`，coverage来自 cached `data.confirmationCoverage`。
 - **Risk:** 用户看到已保存 HC但 coverage警告陈旧；backend projection/data正确。
 - **Recommended fix slice:** 成功事件触发 authoritative detail refresh（或返回/合并完整 projection），增加跨组件 state integration test，避免 frontend重算 coverage。
+- **Closure (REV-FIX-01):** **CLOSED**。HC success后执行一次必要 Evidence refresh与一次 authoritative Detail refresh；Detail request sequence只采用最新 server response。Tests覆盖 NoConfirmation、ChangedSinceConfirmation、LegacyConfirmationUnknown、save error、out-of-order response及 exact request count；Browser无需手工 reload即显示 current coverage。
 
 ## REV-GAP-005 — KnowledgeDocumentEditor tooltip registration
 
@@ -117,6 +131,7 @@ PHASE-REV-VERIFY 结果为 **PASS WITH FOLLOW-UPS**。本清单包含独立阶�
 - **Actual:** current model INSERT引用后续 migration才添加的 `knowledge_document_revision_number_snapshot`，SQLite Error 1；serial full suite为 120 passed / 1 failed。current schema、repository DB与其它120项测试正常。
 - **Risk:** legacy upgrade preservation assertion未被有效执行；当前失败不是 production migration/data corruption证据，但 full backend gate不能标为全 PASS。
 - **Recommended fix slice:** 在该 fixture用只包含目标 migration当时 columns的 raw SQL（或 target-era model）seed，再 migrate latest并保留现有 preservation assertions；isolated test与serial/full suite都必须通过。
+- **Closure (REV-FIX-01):** **CLOSED**。Fixture仍只先迁移至 `20260822025403_AddOidcAuthenticationFoundation`，Evidence用 target-era raw SQL seed；latest migration后 security/Evidence/System/Relationship、snapshot null、完整 migration history、`integrity_check=ok`与 FK=0全部通过。Focused migration 1/1、serial full backend 123/123。
 
 ## REV-GAP-011 — Parallel backend suite stalls
 

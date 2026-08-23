@@ -71,6 +71,7 @@ const relationsError = ref<string | null>(null)
 const evidence = ref<readonly EvidenceListItemResponse[]>([])
 const evidenceLoading = ref(false)
 const evidenceError = ref<string | null>(null)
+let detailLoadSequence = 0
 const id = computed(() => {
   const parsed = Number(route.params.id)
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null
@@ -117,18 +118,26 @@ const canSave = computed(() => editing.value
   && !saving.value
   && !saveConfirming.value)
 async function load(): Promise<void> {
-  if (id.value === null) {
+  const requestedId = id.value
+  const requestSequence = ++detailLoadSequence
+  if (requestedId === null) {
+    loading.value = false
     error.value = '文档 ID 无效。'
     return
   }
   loading.value = true
   error.value = null
   try {
-    data.value = await getKnowledgeDocument(id.value)
+    const document = await getKnowledgeDocument(requestedId)
+    if (requestSequence === detailLoadSequence && id.value === requestedId) {
+      data.value = document
+    }
   } catch (reason: unknown) {
-    error.value = reason instanceof Error ? reason.message : '无法读取知识内容。'
+    if (requestSequence === detailLoadSequence && id.value === requestedId) {
+      error.value = reason instanceof Error ? reason.message : '无法读取知识内容。'
+    }
   } finally {
-    loading.value = false
+    if (requestSequence === detailLoadSequence) loading.value = false
   }
 }
 async function loadRelations(): Promise<void> {
@@ -371,7 +380,21 @@ function readEventDocument(event: Event): KnowledgeDocumentDetail | null {
 }
 function handleCurrentRefreshed(event: Event): void {
   const document = readEventDocument(event)
-  if (document && document.id === id.value) data.value = document
+  if (document && document.id === id.value) {
+    detailLoadSequence += 1
+    loading.value = false
+    data.value = document
+  }
+}
+function handleHumanConfirmationChanged(event: Event): void {
+  if (!(event instanceof CustomEvent)) return
+  const eventDetail: unknown = event.detail
+  if (typeof eventDetail !== 'object' || eventDetail === null || !('subject' in eventDetail)) return
+  const subject: unknown = eventDetail.subject
+  if (typeof subject !== 'object' || subject === null
+    || !('type' in subject) || subject.type !== 'KnowledgeDocument'
+    || !('id' in subject) || subject.id !== id.value) return
+  void load()
 }
 function handleRestored(event: Event): void {
   const document = readEventDocument(event)
@@ -382,6 +405,8 @@ function handleRestored(event: Event): void {
     || typeof detailValue.sourceRevisionNumber !== 'number'
     || !Number.isSafeInteger(detailValue.sourceRevisionNumber)
     || detailValue.sourceRevisionNumber < 1) return
+  detailLoadSequence += 1
+  loading.value = false
   data.value = document
   historyMode.value = false
   savedMessage.value = `已从修订 ${detailValue.sourceRevisionNumber} 恢复，并创建修订 ${document.currentRevisionNumber}`
@@ -404,6 +429,7 @@ onMounted(() => {
   void loadEvidence()
   window.addEventListener('relationship:changed', loadRelations)
   window.addEventListener('evidence:changed', loadEvidence)
+  window.addEventListener('human-confirmation:changed', handleHumanConfirmationChanged)
   window.addEventListener('knowledge-status:changed', load)
   window.addEventListener('knowledge-document:current-refreshed', handleCurrentRefreshed)
   window.addEventListener('knowledge-document:restored', handleRestored)
@@ -414,6 +440,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('beforeunload', beforeUnload)
   window.removeEventListener('relationship:changed', loadRelations)
   window.removeEventListener('evidence:changed', loadEvidence)
+  window.removeEventListener('human-confirmation:changed', handleHumanConfirmationChanged)
   window.removeEventListener('knowledge-status:changed', load)
   window.removeEventListener('knowledge-document:current-refreshed', handleCurrentRefreshed)
   window.removeEventListener('knowledge-document:restored', handleRestored)

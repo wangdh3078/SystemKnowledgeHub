@@ -192,4 +192,33 @@ describe('AddHumanConfirmationDrawer revision context', () => {
     }))
     window.removeEventListener('knowledge-document:current-refreshed', refreshedListener)
   })
+
+  it('does not emit Evidence or Detail refresh events when the confirmation save fails', async () => {
+    vi.mocked(addHumanConfirmation).mockRejectedValue(new ApiError(400, {
+      code: 'validation_error',
+      message: '确认信息无效。',
+      fieldErrors: null,
+      details: null,
+    }))
+    const evidenceChanged = vi.fn()
+    const confirmationChanged = vi.fn()
+    window.addEventListener('evidence:changed', evidenceChanged)
+    window.addEventListener('human-confirmation:changed', confirmationChanged)
+
+    try {
+      const wrapper = mountDrawer()
+      await fillFacts(wrapper)
+      await button(wrapper, '保存人工确认')?.trigger('click')
+      await flushPromises()
+
+      expect(wrapper.text()).toContain('确认信息无效。')
+      expect(evidenceChanged).not.toHaveBeenCalled()
+      expect(confirmationChanged).not.toHaveBeenCalled()
+      expect(getKnowledgeDocument).not.toHaveBeenCalled()
+      expect(overlayState.openDrawer).not.toHaveBeenCalled()
+    } finally {
+      window.removeEventListener('evidence:changed', evidenceChanged)
+      window.removeEventListener('human-confirmation:changed', confirmationChanged)
+    }
+  })
 })

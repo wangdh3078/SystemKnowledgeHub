@@ -272,6 +272,51 @@ public sealed class KnowledgeDocumentRevisionApiTests : IClassFixture<BootstrapW
     }
 
     [Fact]
+    public async Task HumanConfirmation_stale_revision_returns_exact_conflict_details_without_writes()
+    {
+        var editorId = await CreateUser(AccessLevel.Editor, "REV-FIX Stale Confirmation Editor");
+        using var editor = await _factory.CreateAuthenticatedClientAsync(editorId);
+        var created = await CreateDocument(editor, "Stale confirmation contract", null, "revision one");
+        var id = created.GetProperty("id").GetInt64();
+        var current = await SaveContent(
+            editor,
+            id,
+            "Stale confirmation contract",
+            null,
+            "revision two",
+            created.GetProperty("concurrencyToken").GetString()!,
+            null);
+        var serverRevisionNumber = current.GetProperty("currentRevisionNumber").GetInt64();
+        var beforeHead = await ReadHeadAndFts(id);
+        var beforeEvidenceCount = await EvidenceCount(id);
+
+        using var stale = await AddConfirmation(editor, id, serverRevisionNumber - 1);
+
+        Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode);
+        var error = (await stale.Content.ReadFromJsonAsync<JsonElement>()).Clone();
+        Assert.Equal("conflict", error.GetProperty("code").GetString());
+        var details = error.GetProperty("details");
+        Assert.Equal(
+            ["currentRevisionNumber", "resourceId", "resourceType"],
+            details.EnumerateObject().Select(property => property.Name).OrderBy(name => name).ToArray());
+        Assert.Equal("KnowledgeDocument", details.GetProperty("resourceType").GetString());
+        Assert.Equal(id, details.GetProperty("resourceId").GetInt64());
+        Assert.Equal(serverRevisionNumber, details.GetProperty("currentRevisionNumber").GetInt64());
+        Assert.Equal(beforeEvidenceCount, await EvidenceCount(id));
+        Assert.Equal(beforeHead, await ReadHeadAndFts(id));
+
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<KnowledgeHubDbContext>();
+        Assert.False(await dbContext.Evidence.AsNoTracking().AnyAsync(item =>
+            item.SubjectType == EvidenceSubjectType.KnowledgeDocument
+            && item.SubjectId == id
+            && item.EvidenceType == EvidenceType.HumanConfirmation));
+        var head = await dbContext.KnowledgeDocuments.AsNoTracking().SingleAsync(item => item.Id == id);
+        Assert.Equal(serverRevisionNumber, head.CurrentRevisionNumber);
+        Assert.Equal(SystemKnowledgeHub.Api.Shared.Domain.KnowledgeStatus.Unknown, head.KnowledgeStatus);
+    }
+
+    [Fact]
     public async Task Create_rolls_back_document_revision_and_fts_when_revision_insert_fails()
     {
         var editorId = await CreateUser(AccessLevel.Editor, "Atomic Revision Editor");

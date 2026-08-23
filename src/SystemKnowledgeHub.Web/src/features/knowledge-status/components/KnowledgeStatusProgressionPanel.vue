@@ -67,6 +67,9 @@ function addHumanConfirmation(): void {
       subject: { type: props.targetType ?? 'BusinessFunction', id: props.id },
       title: props.title,
       knowledgeStatus: props.status,
+      ...(props.subjectRevisionNumber === undefined
+        ? {}
+        : { subjectRevisionNumber: props.subjectRevisionNumber }),
     },
   })
 }

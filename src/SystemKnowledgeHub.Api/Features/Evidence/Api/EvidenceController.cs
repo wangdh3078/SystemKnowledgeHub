@@ -174,12 +174,13 @@ public sealed class EvidenceController(
     /// </remarks>
     /// <param name="request">确认事实以及可选 KnowledgeRole 选择。</param>
     /// <param name="cancellationToken">用于取消当前异步操作的令牌。</param>
-    /// <returns>异步完成后返回 <c>201</c> 创建结果，或当前实现的 <c>400</c>、<c>403</c>、<c>404</c>、<c>422</c> API 结果。</returns>
+    /// <returns>异步完成后返回 <c>201</c> 创建结果，或当前实现的 <c>400</c>、<c>403</c>、<c>404</c>、<c>409</c>、<c>422</c> API 结果。</returns>
     [Microsoft.AspNetCore.Authorization.Authorize(Policy = SystemKnowledgeHub.Api.Shared.Security.AccessPolicies.Editor)]
     [HttpPost("human-confirmations")]
     [ProducesResponseType<AddEvidenceResponse>(StatusCodes.Status201Created)]
     [ProducesResponseType<ApiErrorResponse>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType<ApiErrorResponse>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ApiErrorResponse>(StatusCodes.Status409Conflict)]
     [ProducesResponseType<ApiErrorResponse>(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<AddEvidenceResponse>> AddHumanConfirmation(
         [FromBody] AddHumanConfirmationRequest request,
@@ -234,7 +235,12 @@ public sealed class EvidenceController(
                 "conflict",
                 "文档内容已产生新修订，请重新加载后再确认。",
                 null,
-                new { resourceType = "KnowledgeDocument", resourceId = request.Subject?.Id })),
+                new
+                {
+                    resourceType = "KnowledgeDocument",
+                    resourceId = request.Subject?.Id,
+                    currentRevisionNumber = result.CurrentRevisionNumber,
+                })),
             _ => throw new InvalidOperationException("Unsupported Add Human Confirmation result."),
         };
     }

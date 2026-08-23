@@ -180,7 +180,7 @@ public sealed class KnowledgeDocumentRestoreApiTests : IClassFixture<BootstrapWe
     }
 
     [Fact]
-    public async Task Restore_validates_token_and_trimmed_reason_boundaries()
+    public async Task Restore_reason_validation_rejects_invalid_unicode_scalar_boundaries_and_nul_without_writes()
     {
         var editorId = await CreateUser(AccessLevel.Editor, "REV-B04 Validation Editor");
         using var editor = await _factory.CreateAuthenticatedClientAsync(editorId);
@@ -188,17 +188,79 @@ public sealed class KnowledgeDocumentRestoreApiTests : IClassFixture<BootstrapWe
         var id = created.GetProperty("id").GetInt64();
         var changed = await SaveContent(editor, id, "Reason target", null, "target", created.GetProperty("concurrencyToken").GetString()!);
         var token = changed.GetProperty("concurrencyToken").GetString()!;
+        var before = await ReadRestoreState(id);
 
-        foreach (var reason in new[] { "", "    ", "四个字a" })
+        foreach (var reason in new[]
+        {
+            "",
+            "    ",
+            "  四个字a  ",
+            "😀😀😀",
+            new string('x', 500) + "😀",
+            "有效恢复\0隐藏内容",
+        })
         {
             await AssertError(Restore(editor, id, 1, token, reason), HttpStatusCode.BadRequest, "validation_error");
+            Assert.Equal(before, await ReadRestoreState(id));
         }
-        await AssertError(Restore(editor, id, 1, token, new string('x', 501)), HttpStatusCode.BadRequest, "validation_error");
         await AssertError(Restore(editor, id, 1, "not-a-token", "有效恢复原因"), HttpStatusCode.BadRequest, "validation_error");
+        Assert.Equal(before, await ReadRestoreState(id));
+    }
+
+    [Fact]
+    public async Task Restore_reason_validation_accepts_trimmed_five_and_five_hundred_unicode_scalars()
+    {
+        var editorId = await CreateUser(AccessLevel.Editor, "REV-FIX Unicode Restore Editor");
+        using var editor = await _factory.CreateAuthenticatedClientAsync(editorId);
+        var created = await CreateDocument(editor, "Unicode reason source", null, "source");
+        var id = created.GetProperty("id").GetInt64();
+        var current = await SaveContent(
+            editor,
+            id,
+            "Unicode reason target 1",
+            null,
+            "target 1",
+            created.GetProperty("concurrencyToken").GetString()!);
+        var fiveSupplementaryScalars = "😀😀😀😀😀";
+        var fiveHundredScalars = new string('x', 499) + "😀";
+        Assert.Equal(10, fiveSupplementaryScalars.Length);
+        Assert.Equal(501, fiveHundredScalars.Length);
+
+        var cases = new (string Input, string Stored)[]
+        {
+            (fiveSupplementaryScalars, fiveSupplementaryScalars),
+            ("  abcde  ", "abcde"),
+            (fiveHundredScalars, fiveHundredScalars),
+        };
+
+        for (var index = 0; index < cases.Length; index++)
+        {
+            using var response = await Restore(
+                editor,
+                id,
+                1,
+                current.GetProperty("concurrencyToken").GetString()!,
+                cases[index].Input);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            var restored = (await response.Content.ReadFromJsonAsync<JsonElement>()).Clone();
+            var revisionNumber = restored.GetProperty("currentRevisionNumber").GetInt64();
+            Assert.Equal(cases[index].Stored, await ReadRestoreReason(id, revisionNumber));
+
+            if (index < cases.Length - 1)
+            {
+                current = await SaveContent(
+                    editor,
+                    id,
+                    $"Unicode reason target {index + 2}",
+                    null,
+                    $"target {index + 2}",
+                    restored.GetProperty("concurrencyToken").GetString()!);
+            }
+        }
 
         await using var scope = _factory.Services.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<KnowledgeHubDbContext>();
-        Assert.Equal(2, await dbContext.KnowledgeDocumentRevisions.CountAsync(item => item.KnowledgeDocumentId == id));
+        Assert.Equal(7, await dbContext.KnowledgeDocumentRevisions.CountAsync(item => item.KnowledgeDocumentId == id));
     }
 
     [Fact]
@@ -457,6 +519,32 @@ public sealed class KnowledgeDocumentRestoreApiTests : IClassFixture<BootstrapWe
         return (reader.GetString(0), reader.GetString(1), reader.GetString(2));
     }
 
+    private async Task<RestoreState> ReadRestoreState(long id)
+    {
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<KnowledgeHubDbContext>();
+        var document = await dbContext.KnowledgeDocuments.AsNoTracking().SingleAsync(item => item.Id == id);
+        return new RestoreState(
+            document.Version,
+            document.CurrentRevisionNumber,
+            document.Title,
+            document.Summary,
+            document.BodyMarkdown,
+            document.UpdatedAt,
+            await dbContext.KnowledgeDocumentRevisions.CountAsync(item => item.KnowledgeDocumentId == id),
+            await ReadFts(dbContext, id));
+    }
+
+    private async Task<string?> ReadRestoreReason(long id, long revisionNumber)
+    {
+        await using var scope = _factory.Services.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<KnowledgeHubDbContext>()
+            .KnowledgeDocumentRevisions.AsNoTracking()
+            .Where(item => item.KnowledgeDocumentId == id && item.RevisionNumber == revisionNumber)
+            .Select(item => item.RestoreReason)
+            .SingleAsync();
+    }
+
     private static Task<HttpResponseMessage> Restore(
         HttpClient client,
         long id,
@@ -486,4 +574,14 @@ public sealed class KnowledgeDocumentRestoreApiTests : IClassFixture<BootstrapWe
         string KnowledgeStatusChangedByName,
         (long Id, string Type, long? Revision, long Version)[] Evidence,
         (long Id, string Description, long Version)[] Relationships);
+
+    private sealed record RestoreState(
+        long Version,
+        long CurrentRevisionNumber,
+        string Title,
+        string? Summary,
+        string BodyMarkdown,
+        DateTimeOffset UpdatedAt,
+        int RevisionCount,
+        (string Title, string Summary, string Body) Fts);
 }

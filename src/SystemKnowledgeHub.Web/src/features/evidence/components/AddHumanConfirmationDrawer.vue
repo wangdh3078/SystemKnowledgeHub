@@ -129,6 +129,9 @@ async function save(): Promise<void> {
     })
     ElMessage.success('人工确认已记录；知识状态仍需单独推进。')
     window.dispatchEvent(new CustomEvent('evidence:changed'))
+    window.dispatchEvent(new CustomEvent('human-confirmation:changed', {
+      detail: { subject: created.subject },
+    }))
     overlayStore.openDrawer({ kind: 'evidence', id: created.id, mode: 'read' })
   } catch (error: unknown) {
     if (error instanceof ApiError) {

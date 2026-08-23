@@ -153,7 +153,8 @@ public enum EvidenceFailure
 public sealed record EvidenceCommandResult(
     object? Response,
     IReadOnlyDictionary<string, string[]>? FieldErrors,
-    EvidenceFailure Failure);
+    EvidenceFailure Failure,
+    long? CurrentRevisionNumber = null);
 
 /// <summary>Evidence 详情查询的投影或未找到/Subject 无效结果。</summary>
 public sealed record EvidenceDetailQueryResult(

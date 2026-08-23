@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using System.Text;
 using SystemKnowledgeHub.Api.Features.KnowledgeDocuments.Application.Models;
 using SystemKnowledgeHub.Api.Features.KnowledgeDocuments.Domain;
 using SystemKnowledgeHub.Api.Features.Search.Application;
@@ -194,11 +195,16 @@ public sealed class KnowledgeDocumentService(
     {
         var errors = new Dictionary<string, string[]>();
         var reason = NormalizeOptional(request.Reason);
-        if (reason is null || reason.Length < RestoreReasonMinimumLength)
+        var reasonLength = reason is null ? 0 : reason.EnumerateRunes().Count();
+        if (reason?.Contains('\0') == true)
+        {
+            errors["reason"] = ["恢复原因不能包含 NUL 字符。"];
+        }
+        else if (reasonLength < RestoreReasonMinimumLength)
         {
             errors["reason"] = [$"恢复原因至少需要 {RestoreReasonMinimumLength} 个字符。"];
         }
-        else if (reason.Length > RestoreReasonMaximumLength)
+        else if (reasonLength > RestoreReasonMaximumLength)
         {
             errors["reason"] = [$"恢复原因不能超过 {RestoreReasonMaximumLength} 个字符。"];
         }
