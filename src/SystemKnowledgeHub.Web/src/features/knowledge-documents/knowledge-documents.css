@@ -217,6 +217,7 @@
 .knowledge-document-editor__toolbar {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 5px;
   padding: 9px 11px;
   border-bottom: 1px solid var(--color-border);
@@ -228,18 +229,30 @@
 .knowledge-document-editor__icon-button { width: 30px; height: 30px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--color-text); font-size: 15px; }
 .knowledge-document-editor__icon-button:hover, .knowledge-document-editor__icon-button:focus-visible { background: rgb(99 91 197 / 10%); color: var(--color-primary); }
 .knowledge-document-editor__heading-button, .knowledge-document-editor__numbered-button { width: auto; min-width: 32px; padding: 0 7px; font-family: var(--font-mono); font-size: 11px; font-weight: 720; }
+.knowledge-document-editor__strike-button { text-decoration: line-through; }
+.knowledge-document-editor__code-label { width: auto; min-width: 34px; padding: 0 6px; font-family: var(--font-mono); font-size: 11px; font-weight: 720; }
 .knowledge-document-editor__surface {
+  min-width: 0;
   min-height: 500px;
-  padding: 24px clamp(20px, 4vw, 54px);
+  padding: 20px 24px;
   color: var(--color-text);
   font-size: 14px;
   line-height: 1.75;
+  text-align: left;
+}
+.knowledge-document-editor__surface .milkdown {
+  width: 100%;
+  min-width: 0;
 }
 .knowledge-document-editor__surface .ProseMirror {
-  max-width: 1040px;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: none;
   min-height: 455px;
-  margin: 0 auto;
+  margin: 0;
   outline: none;
+  text-align: left;
+  white-space: pre-wrap;
 }
 .knowledge-document-editor__surface .ProseMirror h1,
 .knowledge-document-editor__surface .ProseMirror h2,

@@ -193,6 +193,32 @@ describe('KnowledgeDocumentRevisionHistory', () => {
     expect(wrapper.text()).toContain('迁移正文')
   })
 
+  it('renders a legacy BR snapshot safely without mutating its immutable raw body', async () => {
+    const rawBody = [
+      'A',
+      '',
+      '<br />',
+      '',
+      'B',
+      '',
+      '<script>alert(1)</script>',
+      '<img src=x onerror=alert(1)>',
+    ].join('\n')
+    const legacyRevision = { ...details[3], bodyMarkdown: rawBody }
+    vi.mocked(getKnowledgeDocumentRevision).mockResolvedValue(legacyRevision)
+
+    const wrapper = mountHistory()
+    await flushPromises()
+
+    expect(wrapper.html()).toContain('<p><br>')
+    expect(wrapper.html()).not.toContain('&lt;br /&gt;')
+    expect(wrapper.html()).toContain('&lt;script&gt;alert(1)&lt;/script&gt;')
+    expect(wrapper.html()).toContain('&lt;img src=x onerror=alert(1)&gt;')
+    expect(wrapper.html()).not.toContain('<script>')
+    expect(wrapper.html()).not.toContain('<img src=')
+    expect(legacyRevision.bodyMarkdown).toBe(rawBody)
+  })
+
   it('shows list loading and a defensive empty state without inventing a revision', async () => {
     let complete: ((value: KnowledgeDocumentRevisionListResponse) => void) | undefined
     vi.mocked(listKnowledgeDocumentRevisions).mockImplementation(

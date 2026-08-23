@@ -10,7 +10,7 @@ PHASE-REV-VERIFY 的历史结果为 **PASS WITH FOLLOW-UPS**。本清单保留�
 | REV-GAP-002 | Medium | **CLOSED — REV-FIX-01** | HumanConfirmation API | stale 409 details 缺 frozen `currentRevisionNumber` |
 | REV-GAP-003 | Medium | **CLOSED — REV-FIX-01** | HumanConfirmation UX | Knowledge Progression Panel 快捷入口漏传 `subjectRevisionNumber` |
 | REV-GAP-004 | Medium | **CLOSED — REV-FIX-01** | Confirmation Coverage UX | HC save 后 detail coverage cache未刷新 |
-| REV-GAP-005 | Low | OPEN / Deferred | Editor runtime UX | `ElTooltip` 未注册，toolbar tooltip丢失并产生 Vue warnings |
+| REV-GAP-005 | Low | **CLOSED — UI-KC-FIX-01** | Editor runtime UX | `ElTooltip` 已在 selective bootstrap注册；15项 toolbar均有 hover/focus tooltip与 aria-label，Browser fresh console clean |
 | REV-GAP-006 | Low | OPEN / Deferred | Accessibility | Restore ancestor dialog没有 accessible name |
 | REV-GAP-007 | Low | OPEN / Deferred | Accessibility | Revision History 在 shell `<main>` 内嵌套第二个 `<main>` |
 | REV-GAP-008 | Low | OPEN / Deferred | Single overlay | Published save的直接 `ElMessageBox` 缺现有 overlay guard |
@@ -81,6 +81,7 @@ PHASE-REV-VERIFY 的历史结果为 **PASS WITH FOLLOW-UPS**。本清单保留�
 - **Actual:** editor模板使用 `<el-tooltip>`，selective bootstrap未注册 `ElTooltip`；unit test局部 stub掩盖 production问题。按钮仍可操作，hover help丢失。
 - **Risk:** 辅助提示和运行时日志质量降低；不影响 content persistence。
 - **Recommended fix slice:** 在现有 selective bootstrap注册 component/style，并增加 production-like mount smoke而非只依赖 stub。
+- **Closure (UI-KC-FIX-01):** **CLOSED**。`ElTooltip` component与style已通过既有 selective bootstrap正式注册；15个可见 toolbar action逐项具备中文 tooltip、`aria-label`及明确 disabled state，tooltip显式支持 mouse hover与keyboard focus。Production-like mount、focused tests与隔离 Browser均通过；Browser实测 hover“加粗”、keyboard focus“代码块”提示可见，重新初始化 editor后的 fresh warning/error log为0，未再出现 `Failed to resolve component: el-tooltip`。
 
 ## REV-GAP-006 — Restore dialog landmark is unnamed
 

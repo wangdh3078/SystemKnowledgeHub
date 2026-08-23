@@ -88,3 +88,18 @@ describe('revision comparison limits', () => {
     expect(result.limits.combinedBodyLines).toBe(maximumCombinedBodyLines + 1)
   })
 })
+
+describe('revision raw Markdown comparison', () => {
+  it('compares a legacy BR snapshot as immutable raw source', () => {
+    const legacyBody = 'A\n\n<br />\n\nB'
+    const from = revision({ bodyMarkdown: legacyBody })
+    const to = revision({ bodyMarkdown: 'A\n\n\\\nB', revisionNumber: 2 })
+    const result = compareRevisionSnapshots(from, to)
+
+    expect(result.kind).toBe('ready')
+    if (result.kind !== 'ready') return
+    expect(result.body.some((segment) => segment.kind === 'removed'
+      && segment.lines.includes('<br />'))).toBe(true)
+    expect(from.bodyMarkdown).toBe(legacyBody)
+  })
+})

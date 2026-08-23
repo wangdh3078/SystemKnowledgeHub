@@ -23,6 +23,7 @@ import {
   ElTableColumn,
   ElSwitch,
   ElTag,
+  ElTooltip,
 } from 'element-plus'
 import 'element-plus/es/components/button/style/css'
 import 'element-plus/es/components/alert/style/css'
@@ -50,6 +51,7 @@ import 'element-plus/es/components/table/style/css'
 import 'element-plus/es/components/table-column/style/css'
 import 'element-plus/es/components/switch/style/css'
 import 'element-plus/es/components/tag/style/css'
+import 'element-plus/es/components/tooltip/style/css'
 import { createPinia } from 'pinia'
 import { createApp } from 'vue'
 import App from '../../App.vue'
@@ -101,6 +103,7 @@ export async function bootstrapApp(): Promise<void> {
   app.use(ElTableColumn)
   app.use(ElSwitch)
   app.use(ElTag)
+  app.use(ElTooltip)
   await router.isReady()
   app.mount('#app')
 }

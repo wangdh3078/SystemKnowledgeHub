@@ -251,6 +251,34 @@ describe('KnowledgeDocumentDetailView editing', () => {
     expect(wrapper.text()).toContain('更新后的 SOP')
   })
 
+  it('uses the shared safe legacy line-break boundary in read and unsaved preview modes', async () => {
+    const legacyBody = [
+      '第一段',
+      '',
+      '<br />',
+      '',
+      '第二段',
+      '',
+      '<script>alert(1)</script>',
+    ].join('\n')
+    vi.mocked(getKnowledgeDocument).mockResolvedValue({ ...detail, bodyMarkdown: legacyBody })
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.html()).toContain('<p><br>')
+    expect(wrapper.html()).not.toContain('&lt;br /&gt;')
+    expect(wrapper.html()).toContain('&lt;script&gt;alert(1)&lt;/script&gt;')
+    expect(wrapper.html()).not.toContain('<script>')
+
+    await button(wrapper, '编辑')?.trigger('click')
+    await button(wrapper, '预览')?.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.html()).toContain('<p><br>')
+    expect(wrapper.html()).not.toContain('&lt;br /&gt;')
+    expect(wrapper.html()).not.toContain('<script>')
+  })
+
   it('shows the in-progress save state while the existing content request is pending', async () => {
     const deferredSave: { complete: ((value: KnowledgeDocumentDetail) => void) | null } = { complete: null }
     vi.mocked(updateKnowledgeDocumentContent).mockImplementation(
