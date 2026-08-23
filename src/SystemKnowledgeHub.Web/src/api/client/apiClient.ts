@@ -137,10 +137,10 @@ export function createApiClient(
       return request(path, 'DELETE', options)
     },
 
-    async postRoot(path: string): Promise<void> {
+    async postRoot<TRequest>(path: string, body?: TRequest): Promise<void> {
       let response: Response
       try {
-        response = await fetchImplementation(path, createRequestInit('POST', undefined, undefined, undefined, getAntiforgeryToken()))
+        response = await fetchImplementation(path, createRequestInit('POST', undefined, body, undefined, getAntiforgeryToken()))
       } catch {
         throw new NetworkRequestError()
       }

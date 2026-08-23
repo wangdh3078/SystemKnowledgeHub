@@ -38,6 +38,26 @@ const unknownItemStatusLabels: Readonly<Record<UnknownItemStatus, string>> = {
 
 const totalLabel = computed(() => result.value?.total ?? 0)
 
+const documentTypeLabels: Readonly<Record<string, string>> = {
+  Requirement: '需求',
+  Specification: '规格',
+  TestCase: '测试用例',
+  Sop: 'SOP',
+  Troubleshooting: '故障排查',
+  KnowledgeArticle: '知识文章',
+  DesignNote: '设计说明',
+}
+
+const lifecycleLabels: Readonly<Record<NonNullable<SearchResultItem['lifecycleStatus']>, string>> = {
+  Draft: '草稿',
+  Published: '已发布',
+  Archived: '已归档',
+}
+
+function resultTypeLabel(item: SearchResultItem, groupLabel: string): string {
+  return item.contentType ? documentTypeLabels[item.contentType] ?? groupLabel : groupLabel
+}
+
 function selectableIndex(item: SearchResultItem): number {
   return selectableItems.value.findIndex(selectable => selectable.kind === 'result' && selectable.item.id === item.id && selectable.item.navigation.drawerObjectId === item.navigation.drawerObjectId)
 }
@@ -73,7 +93,7 @@ function selectResult(item: SearchResultItem, objectType: string): void {
           v-model="query"
           size="large"
           :prefix-icon="Search"
-          placeholder="搜索系统、业务功能、数据库对象、字段、业务规则、集成关系或待确认事项"
+          placeholder="搜索系统、业务功能、数据库对象、知识内容或待确认事项"
           aria-label="搜索所有知识对象"
           @keydown.stop="onKeydown"
         />
@@ -141,12 +161,13 @@ function selectResult(item: SearchResultItem, objectType: string): void {
               @mouseenter="activeIndex = selectableIndex(item)"
               @click="selectResult(item, group.objectType)"
             >
-              <span class="global-search__type">{{ group.label }}</span>
+              <span class="global-search__type">{{ resultTypeLabel(item, group.label) }}</span>
               <strong class="technical-text">{{ item.title }}</strong>
               <span class="global-search__context">{{ item.systemContext }}</span>
               <span class="global-search__description">{{ item.shortDescription }}</span>
               <KnowledgeStatusBadge v-if="item.knowledgeStatus" :status="item.knowledgeStatus" />
               <span v-else-if="item.unknownItemStatus" class="global-search__unknown-status">{{ unknownItemStatusLabels[item.unknownItemStatus] }}</span>
+              <span v-if="item.lifecycleStatus" class="global-search__lifecycle">{{ lifecycleLabels[item.lifecycleStatus] }}</span>
               <el-icon><ArrowRight /></el-icon>
             </button>
           </section>
@@ -155,7 +176,7 @@ function selectResult(item: SearchResultItem, objectType: string): void {
         <template v-else-if="isNoResult">
           <section class="global-search__empty">
             <h3>未找到匹配的知识对象</h3>
-            <p>没有找到与 <strong class="technical-text">{{ query.trim() }}</strong> 匹配的系统、业务功能、数据库对象、字段、业务规则、集成关系或待确认事项。</p>
+            <p>没有找到与 <strong class="technical-text">{{ query.trim() }}</strong> 匹配的系统、业务功能、数据库对象、知识内容或待确认事项。</p>
             <ul>
               <li>检查技术标识的拼写</li>
               <li>尝试搜索更短的名称，例如 <code>STATE_FLAG</code></li>

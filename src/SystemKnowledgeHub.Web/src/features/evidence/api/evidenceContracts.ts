@@ -55,6 +55,7 @@ export interface EvidenceSubjectPayload {
   readonly title: string
   readonly knowledgeStatus: KnowledgeStatus
   readonly subjectDetailKey?: string | null
+  readonly subjectRevisionNumber?: number
 }
 
 export interface PersonSnapshotInput {
@@ -73,6 +74,7 @@ export interface EvidenceDetailResponse {
   readonly evidenceType: EvidenceType
   readonly subject: EvidenceTarget
   readonly subjectDetailKey: string | null
+  readonly knowledgeDocumentRevisionNumberSnapshot: number | null
   readonly sourceTitle: string
   readonly sourceReference: string | null
   readonly sourceLocator: Readonly<Record<string, unknown>> | null
@@ -85,6 +87,22 @@ export interface EvidenceDetailResponse {
     readonly knowledgeStatus: KnowledgeStatus
   }
   readonly availableActions: readonly string[]
+}
+
+export interface EvidenceListItemResponse {
+  readonly id: number
+  readonly evidenceType: EvidenceType
+  readonly knowledgeDocumentRevisionNumberSnapshot: number | null
+  readonly sourceTitle: string
+  readonly sourceReference: string | null
+  readonly sourceLocator: Readonly<Record<string, unknown>> | null
+  readonly summary: string | null
+  readonly supportReason: string
+  readonly provider: PersonSnapshotInput
+}
+
+export interface EvidenceListResponse {
+  readonly items: readonly EvidenceListItemResponse[]
 }
 
 export interface AddEvidenceRequest {
@@ -114,6 +132,7 @@ export interface UpdateEvidenceRequest {
 
 export interface AddHumanConfirmationRequest {
   readonly subject: EvidenceTarget
+  readonly subjectRevisionNumber?: number
   readonly subjectDetailKey: string | null
   readonly knowledgeRoleId: number | null
   readonly confirmationMethod: ConfirmationMethod
@@ -128,6 +147,7 @@ export interface AddEvidenceResponse {
   readonly evidenceType: EvidenceType
   readonly subject: EvidenceTarget
   readonly subjectDetailKey: string | null
+  readonly knowledgeDocumentRevisionNumberSnapshot: number | null
   readonly sourceTitle: string
   readonly subjectKnowledgeStatus: KnowledgeStatus
   readonly knowledgeStatusChanged: false
@@ -159,6 +179,10 @@ function readId(value: unknown, field: string): number {
     throw new Error(`${field} must be a safe positive integer`)
   }
   return value
+}
+
+function readNullableRevisionNumber(value: unknown, field: string): number | null {
+  return value === null ? null : readId(value, field)
 }
 
 function readTarget(value: unknown, field: string): EvidenceTarget {
@@ -205,6 +229,10 @@ export function isEvidenceSubjectPayload(value: unknown): value is EvidenceSubje
     && typeof value.subject.id === 'number'
     && Number.isSafeInteger(value.subject.id)
     && value.subject.id > 0
+    && (value.subjectRevisionNumber === undefined
+      || (typeof value.subjectRevisionNumber === 'number'
+        && Number.isSafeInteger(value.subjectRevisionNumber)
+        && value.subjectRevisionNumber > 0))
 }
 
 export function decodeEvidenceDetail(value: unknown): EvidenceDetailResponse {
@@ -218,6 +246,10 @@ export function decodeEvidenceDetail(value: unknown): EvidenceDetailResponse {
     evidenceType: readEvidenceType(root.evidenceType, 'evidenceType'),
     subject: readTarget(root.subject, 'subject'),
     subjectDetailKey: readNullableString(root.subjectDetailKey, 'subjectDetailKey'),
+    knowledgeDocumentRevisionNumberSnapshot: readNullableRevisionNumber(
+      root.knowledgeDocumentRevisionNumberSnapshot,
+      'knowledgeDocumentRevisionNumberSnapshot',
+    ),
     sourceTitle: readString(root.sourceTitle, 'sourceTitle'),
     sourceReference: readNullableString(root.sourceReference, 'sourceReference'),
     sourceLocator,
@@ -233,6 +265,30 @@ export function decodeEvidenceDetail(value: unknown): EvidenceDetailResponse {
   }
 }
 
+export function decodeEvidenceList(value: unknown): EvidenceListResponse {
+  const root = readObject(value, 'evidenceList')
+  if (!Array.isArray(root.items)) throw new Error('items must be an array')
+  return {
+    items: root.items.map((value, index) => {
+      const item = readObject(value, `items[${index}]`)
+      return {
+        id: readId(item.id, `items[${index}].id`),
+        evidenceType: readEvidenceType(item.evidenceType, `items[${index}].evidenceType`),
+        knowledgeDocumentRevisionNumberSnapshot: readNullableRevisionNumber(
+          item.knowledgeDocumentRevisionNumberSnapshot,
+          `items[${index}].knowledgeDocumentRevisionNumberSnapshot`,
+        ),
+        sourceTitle: readString(item.sourceTitle, `items[${index}].sourceTitle`),
+        sourceReference: readNullableString(item.sourceReference, `items[${index}].sourceReference`),
+        sourceLocator: item.sourceLocator === null ? null : readObject(item.sourceLocator, `items[${index}].sourceLocator`),
+        summary: readNullableString(item.summary, `items[${index}].summary`),
+        supportReason: readString(item.supportReason, `items[${index}].supportReason`),
+        provider: readPerson(item.provider, `items[${index}].provider`),
+      }
+    }),
+  }
+}
+
 export function decodeAddEvidence(value: unknown): AddEvidenceResponse {
   const root = readObject(value, 'addedEvidence')
   if (root.knowledgeStatusChanged !== false) throw new Error('knowledgeStatusChanged must be false')
@@ -241,6 +297,10 @@ export function decodeAddEvidence(value: unknown): AddEvidenceResponse {
     evidenceType: readEvidenceType(root.evidenceType, 'evidenceType'),
     subject: readTarget(root.subject, 'subject'),
     subjectDetailKey: readNullableString(root.subjectDetailKey, 'subjectDetailKey'),
+    knowledgeDocumentRevisionNumberSnapshot: readNullableRevisionNumber(
+      root.knowledgeDocumentRevisionNumberSnapshot,
+      'knowledgeDocumentRevisionNumberSnapshot',
+    ),
     sourceTitle: readString(root.sourceTitle, 'sourceTitle'),
     subjectKnowledgeStatus: readStatus(root.subjectKnowledgeStatus, 'subjectKnowledgeStatus'),
     knowledgeStatusChanged: false,
@@ -252,6 +312,15 @@ export function getHumanConfirmationMethod(detail: EvidenceDetailResponse): Conf
   if (detail.evidenceType !== 'HumanConfirmation') return null
   const locatorMethod = detail.sourceLocator?.confirmationMethod
   const value = typeof locatorMethod === 'string' ? locatorMethod : detail.provider.source
+  return confirmationMethods.some((method) => method.value === value)
+    ? value as ConfirmationMethod
+    : null
+}
+
+export function getHumanConfirmationListMethod(item: EvidenceListItemResponse): ConfirmationMethod | null {
+  if (item.evidenceType !== 'HumanConfirmation') return null
+  const locatorMethod = item.sourceLocator?.confirmationMethod
+  const value = typeof locatorMethod === 'string' ? locatorMethod : item.provider.source
   return confirmationMethods.some((method) => method.value === value)
     ? value as ConfirmationMethod
     : null

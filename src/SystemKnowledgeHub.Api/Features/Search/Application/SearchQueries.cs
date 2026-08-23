@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using System.Data;
 using SystemKnowledgeHub.Api.Features.Relationships.Domain;
 using SystemKnowledgeHub.Api.Features.Search.Application.Models;
 using SystemKnowledgeHub.Api.Persistence;
@@ -41,7 +42,7 @@ public sealed class SearchQueries(KnowledgeHubDbContext dbContext)
                     system.Purpose ?? system.DisplayName,
                     system.KnowledgeStatus.ToString(),
                     null,
-                    new SearchNavigation("System", system.Id, null, null)))
+                    new SearchNavigation("System", system.Id, null, null), null, null, null))
                 .ToArrayAsync(cancellationToken);
             total += rows.Length;
             AddGroup(groups, "System", "系统", rows, query!, limitPerGroup);
@@ -64,7 +65,7 @@ public sealed class SearchQueries(KnowledgeHubDbContext dbContext)
                     function.Purpose ?? function.DisplayName ?? function.FunctionType,
                     function.KnowledgeStatus.ToString(),
                     null,
-                    new SearchNavigation("BusinessFunction", function.Id, null, null)))
+                    new SearchNavigation("BusinessFunction", function.Id, null, null), null, null, null))
                 .ToArrayAsync(cancellationToken);
             total += rows.Length;
             AddGroup(groups, "BusinessFunction", "业务功能", rows, query!, limitPerGroup);
@@ -86,7 +87,7 @@ public sealed class SearchQueries(KnowledgeHubDbContext dbContext)
                     item.BusinessDescription ?? item.ObjectType.ToString(),
                     item.KnowledgeStatus.ToString(),
                     null,
-                    new SearchNavigation("DatabaseObject", item.Id, null, null)))
+                    new SearchNavigation("DatabaseObject", item.Id, null, null), null, null, null))
                 .ToArrayAsync(cancellationToken);
             total += rows.Length;
             AddGroup(groups, "DatabaseObject", "数据库对象", rows, query!, limitPerGroup);
@@ -112,7 +113,7 @@ public sealed class SearchQueries(KnowledgeHubDbContext dbContext)
                     column.BusinessDescription ?? column.DatabaseComment ?? column.DataType,
                     column.KnowledgeStatus.ToString(),
                     null,
-                    new SearchNavigation("DatabaseObject", column.DatabaseObjectId, "DatabaseColumn", column.Id)))
+                    new SearchNavigation("DatabaseObject", column.DatabaseObjectId, "DatabaseColumn", column.Id), null, null, null))
                 .ToArrayAsync(cancellationToken);
             total += rows.Length;
             AddGroup(groups, "DatabaseColumn", "字段", rows, query!, limitPerGroup);
@@ -135,7 +136,7 @@ public sealed class SearchQueries(KnowledgeHubDbContext dbContext)
                     rule.Description,
                     rule.KnowledgeStatus.ToString(),
                     null,
-                    new SearchNavigation("BusinessRule", rule.Id, null, null)))
+                    new SearchNavigation("BusinessRule", rule.Id, null, null), null, null, null))
                 .ToArrayAsync(cancellationToken);
             total += rows.Length;
             AddGroup(groups, "BusinessRule", "业务规则", rows, query!, limitPerGroup);
@@ -174,7 +175,7 @@ public sealed class SearchQueries(KnowledgeHubDbContext dbContext)
                 row.Purpose ?? row.EndpointDisplay ?? row.TopicOrQueue ?? $"{row.SourcePartyName} → {row.TargetPartyName}",
                 row.KnowledgeStatus,
                 null,
-                new SearchNavigation("Integration", row.Id, null, null))).ToArray();
+                new SearchNavigation("Integration", row.Id, null, null), null, null, null)).ToArray();
             total += items.Length;
             AddGroup(groups, "Integration", "集成关系", items, query!, limitPerGroup);
         }
@@ -194,10 +195,17 @@ public sealed class SearchQueries(KnowledgeHubDbContext dbContext)
                     item.Context ?? item.Targets.Where(target => target.IsPrimary).Select(target => target.DisplaySnapshot).FirstOrDefault() ?? "待补充调查上下文",
                     null,
                     item.Status.ToString(),
-                    new SearchNavigation("UnknownItem", item.Id, null, null)))
+                    new SearchNavigation("UnknownItem", item.Id, null, null), null, null, null))
                 .ToArrayAsync(cancellationToken);
             total += rows.Length;
             AddGroup(groups, "UnknownItem", "待确认事项", rows, query!, limitPerGroup);
+        }
+
+        if (objectTypes.Contains("KnowledgeDocument"))
+        {
+            var rows = await SearchKnowledgeDocuments(query!, limitPerGroup, cancellationToken);
+            total += await CountKnowledgeDocuments(query!, cancellationToken);
+            AddGroup(groups, "KnowledgeDocument", "知识内容", rows, query!, limitPerGroup);
         }
 
         return new SearchKnowledgeQueryResult(
@@ -250,11 +258,13 @@ public sealed class SearchQueries(KnowledgeHubDbContext dbContext)
         string query,
         int limitPerGroup)
     {
-        var items = rows
-            .OrderBy(item => SearchRank(item, query))
-            .ThenBy(item => item.Title, StringComparer.OrdinalIgnoreCase)
-            .Take(limitPerGroup)
-            .ToArray();
+        var items = objectType == "KnowledgeDocument"
+            ? rows.Take(limitPerGroup).ToArray()
+            : rows
+                .OrderBy(item => SearchRank(item, query))
+                .ThenBy(item => item.Title, StringComparer.OrdinalIgnoreCase)
+                .Take(limitPerGroup)
+                .ToArray();
         if (items.Length > 0)
         {
             groups.Add(new SearchResultGroup(objectType, label, items));
@@ -288,7 +298,100 @@ public sealed class SearchQueries(KnowledgeHubDbContext dbContext)
         "BusinessRule",
         "Integration",
         "UnknownItem",
+        "KnowledgeDocument",
     ];
+
+    private async Task<IReadOnlyList<SearchResultItem>> SearchKnowledgeDocuments(
+        string query,
+        int limitPerGroup,
+        CancellationToken cancellationToken)
+    {
+        var ftsQuery = KnowledgeDocumentSearchText.BuildQuery(query);
+        if (string.IsNullOrWhiteSpace(ftsQuery)) return [];
+
+        var connection = dbContext.Database.GetDbConnection();
+        var closeConnection = connection.State != ConnectionState.Open;
+        if (closeConnection) await connection.OpenAsync(cancellationToken);
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = """
+                SELECT d.id, d.document_type, d.title, d.summary, d.body_markdown, d.lifecycle_status, d.knowledge_status, d.updated_at
+                FROM knowledge_documents_fts
+                INNER JOIN knowledge_documents AS d ON d.id = knowledge_documents_fts.rowid
+                WHERE knowledge_documents_fts MATCH $query
+                  AND d.lifecycle_status <> 'Archived'
+                ORDER BY bm25(knowledge_documents_fts, 10.0, 4.0, 1.0), d.updated_at DESC
+                LIMIT $limit;
+                """;
+            AddParameter(command, "$query", ftsQuery);
+            AddParameter(command, "$limit", limitPerGroup);
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            var items = new List<SearchResultItem>();
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                var id = reader.GetInt64(0);
+                var documentType = reader.GetString(1);
+                var title = reader.GetString(2);
+                var summary = reader.IsDBNull(3) ? null : reader.GetString(3);
+                var bodyMarkdown = reader.GetString(4);
+                var lifecycleStatus = reader.GetString(5);
+                var knowledgeStatus = reader.GetString(6);
+                var updatedAt = reader.GetFieldValue<DateTimeOffset>(7);
+                items.Add(new SearchResultItem(
+                    id,
+                    "知识内容",
+                    title,
+                    KnowledgeDocumentSearchText.CreateSnippet(title, summary, bodyMarkdown, query),
+                    knowledgeStatus,
+                    null,
+                    new SearchNavigation("KnowledgeDocument", id, null, null),
+                    documentType,
+                    lifecycleStatus,
+                    updatedAt));
+            }
+            return items;
+        }
+        finally
+        {
+            if (closeConnection) await connection.CloseAsync();
+        }
+    }
+
+    private async Task<int> CountKnowledgeDocuments(string query, CancellationToken cancellationToken)
+    {
+        var ftsQuery = KnowledgeDocumentSearchText.BuildQuery(query);
+        if (string.IsNullOrWhiteSpace(ftsQuery)) return 0;
+
+        var connection = dbContext.Database.GetDbConnection();
+        var closeConnection = connection.State != ConnectionState.Open;
+        if (closeConnection) await connection.OpenAsync(cancellationToken);
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = """
+                SELECT count(*)
+                FROM knowledge_documents_fts
+                INNER JOIN knowledge_documents AS d ON d.id = knowledge_documents_fts.rowid
+                WHERE knowledge_documents_fts MATCH $query
+                  AND d.lifecycle_status <> 'Archived';
+                """;
+            AddParameter(command, "$query", ftsQuery);
+            return Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken));
+        }
+        finally
+        {
+            if (closeConnection) await connection.CloseAsync();
+        }
+    }
+
+    private static void AddParameter(IDbCommand command, string name, object value)
+    {
+        var parameter = command.CreateParameter();
+        parameter.ParameterName = name;
+        parameter.Value = value;
+        command.Parameters.Add(parameter);
+    }
 
     private sealed record IntegrationSearchRow(
         long Id,

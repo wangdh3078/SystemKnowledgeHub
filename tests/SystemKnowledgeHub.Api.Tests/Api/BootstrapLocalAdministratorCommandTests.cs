@@ -14,7 +14,7 @@ public sealed class BootstrapLocalAdministratorCommandTests
     {
         await using var database = new TemporaryDatabase();
         using var services = database.CreateServices();
-        const string password = "安全本地管理员密码 2026!";
+        const string password = "12345678";
 
         var exitCode = await BootstrapLocalAdministratorCommand.RunAsync(
             ["bootstrap-local-admin", "--username", "王大虎01", "--display-name", "本地管理员", "--password-stdin"],
@@ -75,7 +75,7 @@ public sealed class BootstrapLocalAdministratorCommandTests
             ["bootstrap-local-admin", "--username", "local-admin", "--password-stdin"],
             services,
             new LocalAuthenticationOptions { Enabled = true },
-            new StringReader("too-short" + Environment.NewLine),
+            new StringReader("shorter" + Environment.NewLine),
             new StringWriter(),
             new StringWriter());
         Assert.Equal(1, shortPassword);

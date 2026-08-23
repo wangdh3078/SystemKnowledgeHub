@@ -12,6 +12,9 @@ export const apiErrorCodes = [
   'identity_inactive',
   'account_inactive',
   'antiforgery_failed',
+  'invalid_credentials',
+  'too_many_requests',
+  'already_authenticated',
 ] as const
 
 export type ApiErrorCode = (typeof apiErrorCodes)[number]

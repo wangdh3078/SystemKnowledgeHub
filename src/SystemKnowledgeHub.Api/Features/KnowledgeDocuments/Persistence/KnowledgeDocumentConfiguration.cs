@@ -37,6 +37,8 @@ public sealed class KnowledgeDocumentConfiguration : IEntityTypeConfiguration<Kn
         builder.Property(entity => entity.UpdatedAt).HasColumnName("updated_at").IsRequired();
         builder.Property(entity => entity.PublishedAt).HasColumnName("published_at");
         builder.Property(entity => entity.ArchivedAt).HasColumnName("archived_at");
+        builder.Property(entity => entity.CurrentRevisionNumber).HasColumnName("current_revision_number").HasDefaultValue(1L).IsRequired();
+        builder.Property(entity => entity.LatestPublishedRevisionNumber).HasColumnName("latest_published_revision_number");
         builder.Property(entity => entity.Version).HasColumnName("version").HasDefaultValue(1L).IsConcurrencyToken().IsRequired();
 
         builder.HasOne<User>()

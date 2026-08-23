@@ -1,0 +1,17 @@
+# PHASE-KC-VERIFY — Gap Register
+
+## Current Status — R01
+
+- **KC-GAP-001 — CLOSED.** KC-FIX-01 repaired the deferred-save test typing; the R01 `npm run type-check` and `npm run build` gates both pass.
+- **KC-GAP-002 — CLOSED.** SEC-KC-FIX-02 removes request-body actor attribution; the R01 integration regression and isolated authenticated runtime confirm server-side timestamping and canonical-user attribution.
+- **KC-GAP-003 — CLOSED.** KC-C02 removed the three non-approved values, enforced the KC-C01 DocumentType matrix in backend validation and target search, tightened the SQLite CHECK through a tested table rebuild, corrected frontend picker/labels, and passed focused automated plus authenticated browser verification.
+
+The historical entries below are retained unchanged.
+
+| ID | Severity | Area | Description | Evidence | Impact | Recommended Action | Suggested Slice | Blocking Next Phase |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| KC-GAP-001 | High | Frontend verification gate | `npm run type-check` and therefore `npm run build` fail in `KnowledgeDocumentDetailView.spec.ts:174`: optional invocation of a value inferred as `never`. | 2026-08-23 local commands both returned TS2349; the targeted Vitest run still passed 31/31. | The production frontend build gate is red, so the current web deliverable cannot be accepted. | Correct the test’s deferred-save typing/narrowing and rerun type-check, build, focused tests and lint. | KC-FIX-01 — Frontend Build Gate Repair | **Yes** — block any next implementation/acceptance gate. |
+| KC-GAP-002 | High | Trusted identity / audit integrity | `PUT /api/knowledge-status` accepts `actor.displayName`, role, time and identity metadata from the request body. The controller passes these values to `KnowledgeStatusService`; it does not resolve `ICurrentUserContext`. | `KnowledgeStatusController.cs`; frontend `knowledgeStatusContracts.ts`; direct source audit. HumanConfirmation is separately principal-backed and was verified correct. | An authenticated Editor can forge the recorded actor identity for KnowledgeDocument (and other target) KnowledgeStatus transitions, weakening confirmation/audit trust. | Replace request-supplied actor attribution with server-resolved canonical Current User and server timestamp; update contracts/tests and preserve only genuine factual fields from clients. | SEC/KC cross-cutting security correction | **Yes** for any phase that relies on trusted status-audit attribution; do not broaden authoring until corrected. |
+| KC-GAP-003 | Medium | Architecture conformance | KC-B04 added `RelatedTo`, `Implements`, and `Resolves` document relationship vocabulary. The approved architecture plan explicitly says not to add `RelatedTo` in the first phase and specifies a narrower vocabulary. | `docs/design/KNOWLEDGE_CONTENT_DOCUMENT_ARCHITECTURE_PLAN.md` §17; `KnowledgeRelation.cs`, endpoint policy and migration `20260822124136_AddKnowledgeDocumentRelationships`. | `RelatedTo` permits semantically weak graph edges and the implementation diverges from the approved boundary. | Hold a focused relationship-contract decision: remove/reject `RelatedTo` or amend the architecture plan with precise semantics and migration compatibility. | KC-C relationship vocabulary amendment | No for revision-history work; **yes** for further relationship-vocabulary expansion. |
+
+No production code was changed while identifying these gaps.

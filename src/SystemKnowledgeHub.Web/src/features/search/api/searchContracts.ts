@@ -9,6 +9,7 @@ export const searchObjectTypes = [
   'BusinessRule',
   'Integration',
   'UnknownItem',
+  'KnowledgeDocument',
 ] as const
 
 export type SearchObjectType = (typeof searchObjectTypes)[number]
@@ -34,6 +35,9 @@ export interface SearchResultItem {
   readonly knowledgeStatus: KnowledgeStatus | null
   readonly unknownItemStatus: UnknownItemStatus | null
   readonly navigation: SearchNavigation
+  readonly contentType: string | null
+  readonly lifecycleStatus: 'Draft' | 'Published' | 'Archived' | null
+  readonly updatedAt: string | null
 }
 
 export interface SearchResultGroup {
@@ -109,6 +113,24 @@ function readNullableUnknownItemStatus(value: unknown, field: string): UnknownIt
   throw new Error(`${field} has an unsupported unknown item status`)
 }
 
+function readNullableDocumentType(value: unknown, field: string): string | null {
+  return value === null ? null : readString(value, field)
+}
+
+function readNullableLifecycleStatus(value: unknown, field: string): SearchResultItem['lifecycleStatus'] {
+  if (value === null) return null
+  const status = readString(value, field)
+  if (status === 'Draft' || status === 'Published' || status === 'Archived') return status
+  throw new Error(`${field} has an unsupported lifecycle status`)
+}
+
+function readNullableDateTime(value: unknown, field: string): string | null {
+  if (value === null) return null
+  const dateTime = readString(value, field)
+  if (Number.isNaN(Date.parse(dateTime))) throw new Error(`${field} must be an ISO date-time`)
+  return dateTime
+}
+
 function readNavigation(value: unknown, field: string): SearchNavigation {
   const navigation = readObject(value, field)
   const openDrawer = navigation.openDrawer === null ? null : readString(navigation.openDrawer, `${field}.openDrawer`)
@@ -143,6 +165,9 @@ export function decodeSearchKnowledge(value: unknown): SearchKnowledgeResponse {
             knowledgeStatus: readNullableKnowledgeStatus(item.knowledgeStatus, `groups[${groupIndex}].items[${itemIndex}].knowledgeStatus`),
             unknownItemStatus: readNullableUnknownItemStatus(item.unknownItemStatus, `groups[${groupIndex}].items[${itemIndex}].unknownItemStatus`),
             navigation: readNavigation(item.navigation, `groups[${groupIndex}].items[${itemIndex}].navigation`),
+            contentType: readNullableDocumentType(item.contentType, `groups[${groupIndex}].items[${itemIndex}].contentType`),
+            lifecycleStatus: readNullableLifecycleStatus(item.lifecycleStatus, `groups[${groupIndex}].items[${itemIndex}].lifecycleStatus`),
+            updatedAt: readNullableDateTime(item.updatedAt, `groups[${groupIndex}].items[${itemIndex}].updatedAt`),
           }
         }),
       }

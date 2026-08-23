@@ -66,7 +66,6 @@ public sealed class RelationshipService(
     {
         var errors = new Dictionary<string, string[]>();
         if (!ApiIdParser.IsSafePositive(request.RelationshipId)) errors["id"] = ["Relationship ID 无效。"];
-        if (request.Actor is null || string.IsNullOrWhiteSpace(request.Actor.DisplayName)) errors["actor.displayName"] = ["操作人不能为空。"];
         if (!tokenCodec.TryDecode(request.ConcurrencyToken, out var expectedVersion)) errors["concurrencyToken"] = ["并发标记无效，请重新加载。"];
         if (errors.Count > 0) return new(null, errors, RelationshipFailure.Validation);
 
@@ -82,14 +81,27 @@ public sealed class RelationshipService(
         return new(new UpdateRelationshipDescriptionResponse(item.Id, item.Description, item.KnowledgeStatus.ToString(), tokenCodec.Encode(item.Version)), null, RelationshipFailure.None);
     }
 
+    public async Task<RelationshipCommandResult> Delete(long relationshipId, CancellationToken cancellationToken)
+    {
+        if (!ApiIdParser.IsSafePositive(relationshipId))
+        {
+            return new(null, new Dictionary<string, string[]> { ["id"] = ["Relationship ID 无效。"] }, RelationshipFailure.Validation);
+        }
+        var item = await dbContext.KnowledgeRelations.SingleOrDefaultAsync(x => x.Id == relationshipId, cancellationToken);
+        if (item is null) return new(null, null, RelationshipFailure.NotFound);
+        dbContext.KnowledgeRelations.Remove(item);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return new(null, null, RelationshipFailure.None);
+    }
+
     public async Task<RelationshipCommandResult> ChangeStatus(ChangeRelationshipStatusCommand request, CancellationToken cancellationToken)
     {
         var errors = new Dictionary<string, string[]>();
         if (!ApiIdParser.IsSafePositive(request.RelationshipId)) errors["id"] = ["Relationship ID 无效。"];
         if (!RelationshipQueries.TryParseExact(request.TargetStatus, out KnowledgeStatus targetStatus)) errors["targetStatus"] = ["目标知识状态无效。"];
-        if (request.Actor is null || string.IsNullOrWhiteSpace(request.Actor.DisplayName)) errors["actor.displayName"] = ["操作人姓名不能为空。"];
-        if (request.Actor is null || string.IsNullOrWhiteSpace(request.Actor.RoleOrIdentity)) errors["actor.roleOrIdentity"] = ["操作人角色 / 身份不能为空。"];
-        if (request.Actor is null || request.Actor.OccurredAt == default) errors["actor.occurredAt"] = ["状态变更时间不能为空。"];
+        if (string.IsNullOrWhiteSpace(request.Actor.DisplayName)) errors["actor"] = ["当前操作者不能为空。"];
+        if (string.IsNullOrWhiteSpace(request.Actor.RoleOrIdentity)) errors["actor"] = ["当前操作者身份不能为空。"];
+        if (request.Actor.OccurredAt == default) errors["actor"] = ["当前操作者时间不能为空。"];
         if (!tokenCodec.TryDecode(request.ConcurrencyToken, out var expectedVersion)) errors["concurrencyToken"] = ["并发标记无效，请重新加载。"];
         if (errors.Count > 0) return new(null, errors, RelationshipFailure.Validation);
 
@@ -117,7 +129,7 @@ public sealed class RelationshipService(
         var previous = item.KnowledgeStatus;
         item.KnowledgeStatus = targetStatus;
         item.KnowledgeStatusReason = reason;
-        item.KnowledgeStatusChangedAt = request.Actor!.OccurredAt;
+        item.KnowledgeStatusChangedAt = request.Actor.OccurredAt;
         item.KnowledgeStatusChangedByName = request.Actor.DisplayName.Trim();
         item.KnowledgeStatusChangedByRole = request.Actor.RoleOrIdentity.Trim();
         item.UpdatedAt = DateTimeOffset.UtcNow;

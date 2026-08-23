@@ -8,7 +8,7 @@ namespace SystemKnowledgeHub.Api.Features.Users.Application;
 
 public static class LocalCredentialSecurity
 {
-    public const int MinimumPasswordLength = 15;
+    public const int MinimumPasswordLength = 8;
     public const int MaximumPasswordLength = 128;
     public const int MinimumUsernameLength = 3;
     public const int MaximumUsernameLength = 64;

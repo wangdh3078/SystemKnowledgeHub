@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using SystemKnowledgeHub.Api.Features.Evidence.Domain;
 using SystemKnowledgeHub.Api.Features.KnowledgeDocuments.Application.Models;
 using SystemKnowledgeHub.Api.Features.KnowledgeDocuments.Domain;
 using SystemKnowledgeHub.Api.Persistence;
@@ -72,26 +73,58 @@ public sealed class KnowledgeDocumentQueries(
     {
         var item = await dbContext.KnowledgeDocuments.AsNoTracking()
             .SingleOrDefaultAsync(document => document.Id == id, cancellationToken);
-        return item is null ? null : ToDetail(item);
+        return item is null ? null : await ToDetail(item, cancellationToken);
     }
 
-    public KnowledgeDocumentDetailResponse ToDetail(KnowledgeDocument item) => new(
-        item.Id,
-        item.DocumentType.ToString(),
-        item.Title,
-        item.Summary,
-        item.BodyMarkdown,
-        item.LifecycleStatus.ToString(),
-        item.KnowledgeStatus.ToString(),
-        item.CreatedByUserId,
-        item.CreatedByDisplayName,
-        item.UpdatedByUserId,
-        item.UpdatedByDisplayName,
-        item.CreatedAt,
-        item.UpdatedAt,
-        item.PublishedAt,
-        item.ArchivedAt,
-        concurrencyTokenCodec.Encode(item.Version));
+    public async Task<KnowledgeDocumentDetailResponse> ToDetail(
+        KnowledgeDocument item,
+        CancellationToken cancellationToken)
+    {
+        var confirmation = await dbContext.Evidence.AsNoTracking()
+            .Where(evidence => evidence.EvidenceType == EvidenceType.HumanConfirmation
+                && evidence.SubjectType == EvidenceSubjectType.KnowledgeDocument
+                && evidence.SubjectId == item.Id)
+            .GroupBy(_ => 1)
+            .Select(group => new
+            {
+                Count = group.Count(),
+                LastConfirmedRevisionNumber = group.Max(evidence => evidence.KnowledgeDocumentRevisionNumberSnapshot),
+            })
+            .SingleOrDefaultAsync(cancellationToken);
+
+        var coverage = confirmation switch
+        {
+            null => new KnowledgeDocumentConfirmationCoverageResponse("NoConfirmation", null),
+            { LastConfirmedRevisionNumber: null } => new KnowledgeDocumentConfirmationCoverageResponse("LegacyConfirmationUnknown", null),
+            { LastConfirmedRevisionNumber: var revision } when revision == item.CurrentRevisionNumber =>
+                new KnowledgeDocumentConfirmationCoverageResponse("CurrentRevisionConfirmed", revision),
+            { LastConfirmedRevisionNumber: var revision } when revision < item.CurrentRevisionNumber =>
+                new KnowledgeDocumentConfirmationCoverageResponse("ChangedSinceConfirmation", revision),
+            _ => throw new InvalidOperationException(
+                $"KnowledgeDocument {item.Id} has a HumanConfirmation snapshot newer than current revision {item.CurrentRevisionNumber}."),
+        };
+
+        return new KnowledgeDocumentDetailResponse(
+            item.Id,
+            item.DocumentType.ToString(),
+            item.Title,
+            item.Summary,
+            item.BodyMarkdown,
+            item.LifecycleStatus.ToString(),
+            item.KnowledgeStatus.ToString(),
+            item.CurrentRevisionNumber,
+            item.LatestPublishedRevisionNumber,
+            coverage,
+            item.CreatedByUserId,
+            item.CreatedByDisplayName,
+            item.UpdatedByUserId,
+            item.UpdatedByDisplayName,
+            item.CreatedAt,
+            item.UpdatedAt,
+            item.PublishedAt,
+            item.ArchivedAt,
+            concurrencyTokenCodec.Encode(item.Version));
+    }
 
     private static Dictionary<string, string[]> Validate(
         KnowledgeDocumentListQuery request,

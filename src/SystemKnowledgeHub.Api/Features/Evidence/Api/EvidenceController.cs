@@ -18,6 +18,31 @@ public sealed class EvidenceController(
     EvidenceService service,
     ICurrentUserContext currentUserContext) : ControllerBase
 {
+    /// <summary>返回指定现有知识对象的 Evidence 摘要，包括普通依据与 HumanConfirmation。</summary>
+    /// <remarks>读取需要 Viewer。该 API 只展示支持依据；Evidence 的创建和读取不会自动推进 KnowledgeStatus。</remarks>
+    /// <param name="subjectType">受控 Evidence Subject 类型。</param>
+    /// <param name="subjectId">Subject 的 JavaScript 安全正整数标识符。</param>
+    /// <param name="cancellationToken">用于取消当前异步操作的令牌。</param>
+    /// <returns>异步完成后返回 <c>200</c> Evidence 集合，或当前实现的 <c>400</c>、<c>404</c> API 结果。</returns>
+    [HttpGet]
+    [ProducesResponseType<EvidenceListResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ApiErrorResponse>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ApiErrorResponse>(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<EvidenceListResponse>> GetEvidenceList(
+        [FromQuery] string? subjectType,
+        [FromQuery] long subjectId,
+        CancellationToken cancellationToken)
+    {
+        var result = await queries.GetEvidenceList(subjectType, subjectId, cancellationToken);
+        return result.Failure switch
+        {
+            EvidenceFailure.None => Ok(result.Response),
+            EvidenceFailure.Validation => BadRequest(ValidationError(result.FieldErrors!)),
+            EvidenceFailure.SubjectNotFound => NotFound(ReferenceInvalidError()),
+            _ => throw new InvalidOperationException("Unsupported Evidence list result."),
+        };
+    }
+
     /// <summary>返回一条 Evidence 的可读详情投影。</summary>
     /// <param name="id">JavaScript 安全范围内的 Evidence 标识符。</param>
     /// <param name="cancellationToken">用于取消当前异步操作的令牌。</param>
@@ -170,6 +195,7 @@ public sealed class EvidenceController(
             new AddHumanConfirmationCommand(
                 currentUser.CurrentUser!.Id,
                 ToTarget(request.Subject),
+                request.SubjectRevisionNumber,
                 request.SubjectDetailKey,
                 request.KnowledgeRoleId,
                 request.ConfirmationMethod ?? string.Empty,
@@ -204,6 +230,11 @@ public sealed class EvidenceController(
                 "reference_invalid",
                 "指定的知识身份未分配给当前操作者，请刷新后重新选择。",
                 request.KnowledgeRoleId)),
+            EvidenceFailure.Conflict => Conflict(new ApiErrorResponse(
+                "conflict",
+                "文档内容已产生新修订，请重新加载后再确认。",
+                null,
+                new { resourceType = "KnowledgeDocument", resourceId = request.Subject?.Id })),
             _ => throw new InvalidOperationException("Unsupported Add Human Confirmation result."),
         };
     }

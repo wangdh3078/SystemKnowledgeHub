@@ -131,10 +131,11 @@ public sealed class EvidenceApiTests : IClassFixture<BootstrapWebApplicationFact
         Assert.Equal("HumanConfirmation", created.GetProperty("evidenceType").GetString());
         Assert.Equal("Inferred", created.GetProperty("subjectKnowledgeStatus").GetString());
         Assert.False(created.GetProperty("knowledgeStatusChanged").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, created.GetProperty("knowledgeDocumentRevisionNumberSnapshot").ValueKind);
         Assert.Equal(
             new[]
             {
-                "concurrencyToken", "evidenceType", "id", "knowledgeStatusChanged",
+                "concurrencyToken", "evidenceType", "id", "knowledgeDocumentRevisionNumberSnapshot", "knowledgeStatusChanged",
                 "sourceTitle", "subject", "subjectDetailKey", "subjectKnowledgeStatus",
             },
             created.EnumerateObject().Select(property => property.Name).Order().ToArray());

@@ -54,6 +54,7 @@ public sealed record UpdateEvidenceCommand(
 public sealed record AddHumanConfirmationCommand(
     long CurrentUserId,
     EvidenceTargetCommand? Subject,
+    long? SubjectRevisionNumber,
     string? SubjectDetailKey,
     long? KnowledgeRoleId,
     string ConfirmationMethod,
@@ -85,6 +86,7 @@ public sealed record EvidenceDetailResponse(
     string EvidenceType,
     EvidenceTargetResponse Subject,
     string? SubjectDetailKey,
+    long? KnowledgeDocumentRevisionNumberSnapshot,
     string SourceTitle,
     string? SourceReference,
     JsonElement? SourceLocator,
@@ -95,6 +97,22 @@ public sealed record EvidenceDetailResponse(
     EvidenceSubjectContextResponse SubjectContext,
     IReadOnlyList<string> AvailableActions);
 
+/// <summary>某一知识对象的 Evidence 摘要投影，用于详情页展示其支持依据与人工确认记录。</summary>
+/// <remarks>该投影不包含可编辑并发令牌；状态推进仍由独立的显式 KnowledgeStatus 操作执行。</remarks>
+public sealed record EvidenceListItemResponse(
+    long Id,
+    string EvidenceType,
+    long? KnowledgeDocumentRevisionNumberSnapshot,
+    string SourceTitle,
+    string? SourceReference,
+    JsonElement? SourceLocator,
+    string? Summary,
+    string SupportReason,
+    PersonSnapshotResponse Provider);
+
+/// <summary>按明确 Subject 返回的 Evidence 摘要集合。</summary>
+public sealed record EvidenceListResponse(IReadOnlyList<EvidenceListItemResponse> Items);
+
 /// <summary>创建普通 Evidence 或 HumanConfirmation 后返回的简要结果。</summary>
 /// <remarks>KnowledgeStatusChanged 对创建操作保持 false；Evidence 可作为后续显式状态推进的依据，但不执行推进。</remarks>
 public sealed record AddEvidenceResponse(
@@ -102,6 +120,7 @@ public sealed record AddEvidenceResponse(
     string EvidenceType,
     EvidenceTargetResponse Subject,
     string? SubjectDetailKey,
+    long? KnowledgeDocumentRevisionNumberSnapshot,
     string SourceTitle,
     string SubjectKnowledgeStatus,
     bool KnowledgeStatusChanged,
@@ -139,4 +158,10 @@ public sealed record EvidenceCommandResult(
 /// <summary>Evidence 详情查询的投影或未找到/Subject 无效结果。</summary>
 public sealed record EvidenceDetailQueryResult(
     EvidenceDetailResponse? Response,
+    EvidenceFailure Failure);
+
+/// <summary>Evidence 列表查询的投影或 Subject 无效结果。</summary>
+public sealed record EvidenceListQueryResult(
+    EvidenceListResponse? Response,
+    IReadOnlyDictionary<string, string[]>? FieldErrors,
     EvidenceFailure Failure);

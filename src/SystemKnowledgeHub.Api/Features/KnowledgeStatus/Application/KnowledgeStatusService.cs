@@ -34,6 +34,7 @@ public sealed class KnowledgeStatusService(
             KnowledgeStatusTargetType.DatabaseColumn => await ChangeDatabaseColumn(request, targetStatus, expectedVersion, cancellationToken),
             KnowledgeStatusTargetType.BusinessRule => await ChangeBusinessRule(request, targetStatus, expectedVersion, cancellationToken),
             KnowledgeStatusTargetType.Integration => await ChangeIntegration(request, targetStatus, expectedVersion, cancellationToken),
+            KnowledgeStatusTargetType.KnowledgeDocument => await ChangeKnowledgeDocument(request, targetStatus, expectedVersion, cancellationToken),
             _ => Unsupported(request.Target!, "当前目标类型不支持知识状态变更。"),
         };
     }
@@ -182,6 +183,30 @@ public sealed class KnowledgeStatusService(
             cancellationToken);
     }
 
+    private async Task<ChangeKnowledgeStatusResult> ChangeKnowledgeDocument(
+        ChangeKnowledgeStatusCommand request,
+        KnowledgeStatus targetStatus,
+        long expectedVersion,
+        CancellationToken cancellationToken)
+    {
+        var entity = await dbContext.KnowledgeDocuments.SingleOrDefaultAsync(item => item.Id == request.Target!.Id, cancellationToken);
+        if (entity is null) return NotFound();
+        return await Apply(
+            request, targetStatus, expectedVersion, entity.KnowledgeStatus, entity.Version,
+            EvidenceSubjectType.KnowledgeDocument,
+            (status, reason, changedAt, name, role, version) =>
+            {
+                entity.KnowledgeStatus = status;
+                entity.KnowledgeStatusReason = reason;
+                entity.KnowledgeStatusChangedAt = changedAt;
+                entity.KnowledgeStatusChangedByName = name;
+                entity.KnowledgeStatusChangedByRole = role;
+                entity.UpdatedAt = DateTimeOffset.UtcNow;
+                entity.Version = version;
+            },
+            cancellationToken);
+    }
+
     private async Task<ChangeKnowledgeStatusResult> Apply(
         ChangeKnowledgeStatusCommand request,
         KnowledgeStatus targetStatus,
@@ -237,7 +262,7 @@ public sealed class KnowledgeStatusService(
                 });
         }
 
-        var actor = request.Actor!;
+        var actor = request.Actor;
         var nextVersion = expectedVersion + 1;
         apply(
             targetStatus,
@@ -301,18 +326,6 @@ public sealed class KnowledgeStatusService(
         {
             errors["targetStatus"] = ["目标知识状态无效。"];
         }
-        if (request.Actor is null || string.IsNullOrWhiteSpace(request.Actor.DisplayName))
-        {
-            errors["actor.displayName"] = ["操作人姓名不能为空。"];
-        }
-        if (request.Actor is null || string.IsNullOrWhiteSpace(request.Actor.RoleOrIdentity))
-        {
-            errors["actor.roleOrIdentity"] = ["操作人角色 / 身份不能为空。"];
-        }
-        if (request.Actor is null || request.Actor.OccurredAt == default)
-        {
-            errors["actor.occurredAt"] = ["状态变更时间不能为空。"];
-        }
         if (!concurrencyTokenCodec.TryDecode(request.ConcurrencyToken, out expectedVersion))
         {
             errors["concurrencyToken"] = ["并发标记无效，请重新加载后重试。"];
@@ -345,5 +358,6 @@ public sealed class KnowledgeStatusService(
         DatabaseColumn,
         BusinessRule,
         Integration,
+        KnowledgeDocument,
     }
 }

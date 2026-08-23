@@ -643,6 +643,10 @@ namespace SystemKnowledgeHub.Api.Persistence.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("evidence_type");
 
+                    b.Property<long?>("KnowledgeDocumentRevisionNumberSnapshot")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("knowledge_document_revision_number_snapshot");
+
                     b.Property<DateTimeOffset>("ProvidedAt")
                         .HasColumnType("TEXT")
                         .HasColumnName("provided_at");
@@ -757,7 +761,7 @@ namespace SystemKnowledgeHub.Api.Persistence.Migrations
 
                             t.HasCheckConstraint("ck_evidence_source_locator_json", "source_locator_json IS NULL OR (json_valid(source_locator_json) AND json_type(source_locator_json) = 'object')");
 
-                            t.HasCheckConstraint("ck_evidence_subject_type", "subject_type IN ('System','DatabaseSource','BusinessFunction','DatabaseObject','DatabaseColumn','BusinessRule','Integration','KnowledgeRelation','UnknownItem','Finding','Resolution','KnowledgeUpdate')");
+                            t.HasCheckConstraint("ck_evidence_subject_type", "subject_type IN ('System','DatabaseSource','BusinessFunction','DatabaseObject','DatabaseColumn','BusinessRule','Integration','KnowledgeDocument','KnowledgeRelation','UnknownItem','Finding','Resolution','KnowledgeUpdate')");
 
                             t.HasCheckConstraint("ck_evidence_type", "evidence_type IN ('CodeReference','Sql','DatabaseSample','DatabaseComment','Api','MqMessage','ExistingDocument','HumanConfirmation')");
 
@@ -995,6 +999,12 @@ namespace SystemKnowledgeHub.Api.Persistence.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("created_by_user_id");
 
+                    b.Property<long>("CurrentRevisionNumber")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(1L)
+                        .HasColumnName("current_revision_number");
+
                     b.Property<string>("DocumentType")
                         .IsRequired()
                         .HasColumnType("TEXT")
@@ -1022,6 +1032,10 @@ namespace SystemKnowledgeHub.Api.Persistence.Migrations
                     b.Property<string>("KnowledgeStatusReason")
                         .HasColumnType("TEXT")
                         .HasColumnName("knowledge_status_reason");
+
+                    b.Property<long?>("LatestPublishedRevisionNumber")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("latest_published_revision_number");
 
                     b.Property<string>("LifecycleStatus")
                         .IsRequired()
@@ -1081,6 +1095,102 @@ namespace SystemKnowledgeHub.Api.Persistence.Migrations
                             t.HasCheckConstraint("ck_knowledge_documents_lifecycle_status", "lifecycle_status IN ('Draft','Published','Archived')");
 
                             t.HasCheckConstraint("ck_knowledge_documents_version", "version >= 1");
+                        });
+                });
+
+            modelBuilder.Entity("SystemKnowledgeHub.Api.Features.KnowledgeDocuments.Domain.KnowledgeDocumentRevision", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("id");
+
+                    b.Property<string>("AuthorDisplayNameSnapshot")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("author_display_name_snapshot");
+
+                    b.Property<long?>("AuthorUserId")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("author_user_id");
+
+                    b.Property<string>("BodyMarkdown")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("body_markdown");
+
+                    b.Property<string>("ChangeSummary")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("change_summary");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_at");
+
+                    b.Property<long>("KnowledgeDocumentId")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("knowledge_document_id");
+
+                    b.Property<string>("LifecycleContext")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("lifecycle_context");
+
+                    b.Property<string>("RestoreReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("restore_reason");
+
+                    b.Property<long?>("RestoredFromRevisionNumber")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("restored_from_revision_number");
+
+                    b.Property<long>("RevisionNumber")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("revision_number");
+
+                    b.Property<string>("RevisionOrigin")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("revision_origin");
+
+                    b.Property<string>("Summary")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("summary");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("title");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AuthorUserId");
+
+                    b.HasIndex("KnowledgeDocumentId", "RevisionNumber")
+                        .IsUnique();
+
+                    b.ToTable("knowledge_document_revisions", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_knowledge_document_revisions_actor", "(revision_origin = 'MigrationBaseline' AND author_user_id IS NULL AND author_display_name_snapshot IS NULL) OR (revision_origin <> 'MigrationBaseline' AND author_user_id IS NOT NULL AND author_display_name_snapshot IS NOT NULL AND length(trim(author_display_name_snapshot)) > 0)");
+
+                            t.HasCheckConstraint("ck_knowledge_document_revisions_body", "length(body_markdown) <= 1000000");
+
+                            t.HasCheckConstraint("ck_knowledge_document_revisions_change_summary", "change_summary IS NULL OR length(change_summary) <= 500");
+
+                            t.HasCheckConstraint("ck_knowledge_document_revisions_lifecycle", "lifecycle_context IN ('Draft','Published','Archived')");
+
+                            t.HasCheckConstraint("ck_knowledge_document_revisions_origin", "revision_origin IN ('Created','ContentSave','Restore','MigrationBaseline')");
+
+                            t.HasCheckConstraint("ck_knowledge_document_revisions_restore", "(revision_origin = 'Restore' AND restore_reason IS NOT NULL AND length(trim(restore_reason)) BETWEEN 5 AND 500 AND restored_from_revision_number IS NOT NULL AND restored_from_revision_number > 0 AND restored_from_revision_number < revision_number) OR (revision_origin <> 'Restore' AND restore_reason IS NULL AND restored_from_revision_number IS NULL)");
+
+                            t.HasCheckConstraint("ck_knowledge_document_revisions_revision_number", "revision_number > 0");
+
+                            t.HasCheckConstraint("ck_knowledge_document_revisions_summary", "summary IS NULL OR length(summary) <= 2000");
+
+                            t.HasCheckConstraint("ck_knowledge_document_revisions_title", "length(title) BETWEEN 1 AND 300");
                         });
                 });
 
@@ -1180,13 +1290,13 @@ namespace SystemKnowledgeHub.Api.Persistence.Migrations
                         {
                             t.HasCheckConstraint("ck_knowledge_relations_distinct_endpoints", "source_type <> target_type OR source_id <> target_id");
 
-                            t.HasCheckConstraint("ck_knowledge_relations_relation_type", "relation_type IN ('Calls','Reads','Writes','UsesField','AppliesRule','PublishesVia','ConsumesVia','UsesIntegration','DependsOn')");
+                            t.HasCheckConstraint("ck_knowledge_relations_relation_type", "relation_type IN ('Calls','Reads','Writes','UsesField','AppliesRule','PublishesVia','ConsumesVia','UsesIntegration','DependsOn','Documents','References','AppliesTo','SpecifiedBy','VerifiedBy','Supersedes')");
 
-                            t.HasCheckConstraint("ck_knowledge_relations_source_type", "source_type IN ('System','DatabaseSource','BusinessFunction','DatabaseObject','DatabaseColumn','BusinessRule','Integration')");
+                            t.HasCheckConstraint("ck_knowledge_relations_source_type", "source_type IN ('System','DatabaseSource','BusinessFunction','DatabaseObject','DatabaseColumn','BusinessRule','Integration','KnowledgeDocument')");
 
                             t.HasCheckConstraint("ck_knowledge_relations_status", "knowledge_status IN ('Unknown','Inferred','Confirmed')");
 
-                            t.HasCheckConstraint("ck_knowledge_relations_target_type", "target_type IN ('System','DatabaseSource','BusinessFunction','DatabaseObject','DatabaseColumn','BusinessRule','Integration')");
+                            t.HasCheckConstraint("ck_knowledge_relations_target_type", "target_type IN ('System','DatabaseSource','BusinessFunction','DatabaseObject','DatabaseColumn','BusinessRule','Integration','KnowledgeDocument')");
 
                             t.HasCheckConstraint("ck_knowledge_relations_version", "version >= 1");
                         });
@@ -2236,6 +2346,20 @@ namespace SystemKnowledgeHub.Api.Persistence.Migrations
                     b.HasOne("SystemKnowledgeHub.Api.Features.Users.Domain.User", null)
                         .WithMany()
                         .HasForeignKey("UpdatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SystemKnowledgeHub.Api.Features.KnowledgeDocuments.Domain.KnowledgeDocumentRevision", b =>
+                {
+                    b.HasOne("SystemKnowledgeHub.Api.Features.Users.Domain.User", null)
+                        .WithMany()
+                        .HasForeignKey("AuthorUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("SystemKnowledgeHub.Api.Features.KnowledgeDocuments.Domain.KnowledgeDocument", null)
+                        .WithMany()
+                        .HasForeignKey("KnowledgeDocumentId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

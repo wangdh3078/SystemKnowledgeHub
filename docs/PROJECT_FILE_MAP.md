@@ -2,6 +2,16 @@
 
 本文件描述当前仓库中主要目录和文件的职责。范围为 Bootstrap 基础设施、**VS-01～VS-15**、UX 稳定化以及 Post-MVP **U01～U04**；不把 `bin/`、`obj/`、`node_modules/`、`dist/`、lock 文件、运行时 SQLite 数据、普通 Migration 生成文件逐项列入。
 
+## Documentation placement
+
+- Verification Reports → `docs/reports/`
+- Architecture Plans and Design Reviews → `docs/design/`
+- Specifications and requirements → `docs/specifications/`
+- Standards → `docs/standards/`
+- Product, UI, and UX design material → `docs/product-design/`
+
+新的 Codex Verification Report 必须直接生成到 `docs/reports/`，例如 `docs/reports/AUTH_B02_LOGIN_UI_AUTH_OPTIONS_VERIFICATION_REPORT.md`。
+
 ## 1. Backend
 
 ### 1.1 Application foundation
@@ -469,6 +479,7 @@ Search 第一版采用 SQLite 受限 `LIKE` 投影；未创建 FTS5 virtual tabl
 | --- | --- | --- | --- |
 | `AGENTS.md` | 定义 Coding Agent 的强制架构、范围和验证规则。 | Repository governance | 防止后续 Slice 破坏冻结规格或过度设计。 |
 | `README.md` | 提供产品目标、技术栈和当前开发方式概览。 | Repository documentation | 新参与者的入口说明。 |
+| `docs/PROJECT_FILE_MAP.md` | 说明主要仓库文件职责与文档归档位置。 | Repository documentation | 让后续任务能定位设计、规格、标准和验证历史。 |
 | `docs/specifications/System_Knowledge_Hub_MVP_Final_UI_Inventory.md` | 指定正式 UI、状态及唯一 Golden Reference。 | Frozen product specification | 防止引用 SUPERSEDED/DEPRECATED 原型。 |
 | `docs/specifications/System_Knowledge_Hub_MVP_Design_Baseline.md` | 冻结 UI 语言、布局和交互原则。 | Frozen product specification | 后续页面/实现共用视觉规则。 |
 | `docs/specifications/System_Knowledge_Hub_MVP_Domain_Model.md` | 冻结 MVP 核心领域对象和边界。 | Frozen domain specification | 防止实现发明通用知识框架。 |
@@ -497,6 +508,13 @@ Search 第一版采用 SQLite 受限 `LIKE` 投影；未创建 FTS5 virtual tabl
 | `docs/reports/U03_CURRENT_USER_VERIFICATION_REPORT.md` | 记录 U03 Current User Context、Header、Profile/Switcher、回归与清理。 | Users / U03 | 为 operator context Review 提供可复核证据，并确认它不是认证或权限身份。 |
 | `docs/design/HUMAN_CONFIRMATION_API_AMENDMENT_REVIEW.md` | 冻结 HC-A01 对 C25 request、Current User、Role resolution、snapshot、schema 与 legacy compatibility 的批准决策。 | Evidence / HC-A01 | 是 U04 的直接实施依据，不由实现自行重设计。 |
 | `docs/reports/U04_HUMAN_CONFIRMATION_CURRENT_USER_SNAPSHOT_VERIFICATION_REPORT.md` | 记录 U04 contract、transaction、snapshot、Migration、UI、legacy、测试、闭环与清理。 | Evidence / U04 | 为 U04 Verification Gate 提供完整可复核证据。 |
+| `docs/design/AUTH_A01_LOCAL_LOGIN_OIDC_COEXISTENCE_DESIGN_REVIEW.md` | 记录 Local Login 与 OIDC 共存的已批准设计决策。 | Authentication / AUTH-A01 | 为后续认证实施和验证提供设计依据。 |
+| `docs/design/KNOWLEDGE_CONTENT_DOCUMENT_ARCHITECTURE_PLAN.md` | 记录 Knowledge Content 文档能力的领域、API、持久化、搜索和实施规划。 | Knowledge Content | 保留跨层架构规划，避免作为纯 UI 文档处理。 |
+| `docs/reports/AUTH_B01_LOCAL_CREDENTIAL_FOUNDATION_VERIFICATION_REPORT.md` | 记录 AUTH-B01 Local Credential Foundation 的验证结果。 | Authentication / AUTH-B01 | 提供该认证基础阶段的可复核验证历史。 |
+| `docs/reports/KC_B01_KNOWLEDGE_DOCUMENT_FOUNDATION_VERIFICATION_REPORT.md` | 记录 KC-B01 Knowledge Document Foundation 的验证结果。 | Knowledge Content / KC-B01 | 提供该内容基础阶段的可复核验证历史。 |
+| `docs/reports/SEC_01_OIDC_AUTHENTICATION_FOUNDATION_VERIFICATION_REPORT.md` 至 `docs/reports/SEC_04_SECURITY_ROLLOUT_VERIFICATION_REPORT.md` | 记录 OIDC 认证、后端访问控制、前端登录访问 UX 与安全 rollout 的验证结果。 | Security / SEC-01～SEC-04 | 保留安全阶段的连续验证历史。 |
+| `docs/reports/UI_B02_LAYOUT_DIALOG_VERIFICATION_REPORT.md` | 记录 UI-B02 Layout/Dialog 修复的验证结果。 | UI stabilization / UI-B02 | 保留布局修复的可复核证据。 |
+| `docs/reports/XML_DOC_B01_SHARED_CONTRACTS_VERIFICATION_REPORT.md` 至 `docs/reports/XML_DOC_B04_EVIDENCE_HUMAN_CONFIRMATION_VERIFICATION_REPORT.md` | 记录 XML Documentation B01～B04 批次的验证结果。 | XML Documentation | 保留已完成文档批次的验证历史。 |
 | `docs/design/SECURITY_ACCESS_CONTROL_REQUIREMENT.md` | 记录未来企业访问控制的业务要求、KnowledgeRole 边界和 SEC-A01 待决项。 | Security requirement / deferred | 保留需求而不提前选择认证、授权或 RBAC 实现方案。 |
 | `docs/reports/UI_UX_ISSUE_FIX_VERIFICATION_REPORT.md` | 记录 Phase A 的状态弹窗调查、调查发现布局、用户抽屉间距、浏览器验证与清理。 | UI/UX stabilization / Phase A | 为本轮补充 UI/UX 修复提供可复核证据，并确认没有重开 U04。 |
 | `docs/reports/MVP_Implementation_Audit_Preparation_Report.md` | 记录 VS-11 后的构建检查、当前结构、迁移、测试概况及临时产物清理结果。 | MVP implementation audit preparation | 作为后续审计开始前的静态基线。 |

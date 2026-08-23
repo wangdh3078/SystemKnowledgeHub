@@ -4,6 +4,7 @@ import {
   Coin,
   Connection,
   DocumentChecked,
+  DocumentAdd,
   Files,
   Grid,
   QuestionFilled,
@@ -11,7 +12,7 @@ import {
 } from '@element-plus/icons-vue'
 import { useOverlayStore } from '../../../app/stores/overlays'
 
-type SupportedCreateKind = 'system' | 'business-function' | 'database-knowledge' | 'business-rule' | 'integration'
+type SupportedCreateKind = 'system' | 'business-function' | 'database-knowledge' | 'business-rule' | 'integration' | 'knowledge-document'
 
 const props = withDefaults(defineProps<{
   enabledKinds?: readonly SupportedCreateKind[]
@@ -21,6 +22,7 @@ const props = withDefaults(defineProps<{
   systemContext: '无',
 })
 const overlayStore = useOverlayStore()
+const emit = defineEmits<{ chooseKnowledgeDocument: [] }>()
 
 const choices = [
   { kind: 'system', label: '系统', description: '记录一个系统及其基本上下文', icon: Grid },
@@ -28,6 +30,7 @@ const choices = [
   { kind: 'database-knowledge', label: '数据库知识', description: '登记数据库来源、表或视图', icon: Coin },
   { kind: 'business-rule', label: '业务规则', description: '记录条件、结果及其依据', icon: Tickets },
   { kind: 'integration', label: '集成关系', description: '记录 API、MQ、文件或数据库依赖', icon: Connection },
+  { kind: 'knowledge-document', label: '知识内容', description: '记录需求、规格、测试用例、SOP、故障排查和知识文章', icon: DocumentAdd },
   { kind: null, label: '待确认事项', description: '把未知问题纳入调查闭环', icon: QuestionFilled },
   { kind: null, label: '证据', description: '记录为什么我们相信某条知识', icon: DocumentChecked },
 ] as const
@@ -38,6 +41,11 @@ function isEnabled(kind: SupportedCreateKind | null): boolean {
 
 function choose(kind: SupportedCreateKind | null): void {
   if (!isEnabled(kind)) return
+  if (kind === 'knowledge-document') {
+    overlayStore.closeDialog()
+    emit('chooseKnowledgeDocument')
+    return
+  }
   overlayStore.openDialog({ kind: `create-${kind}`, id: null, mode: 'create' })
 }
 </script>

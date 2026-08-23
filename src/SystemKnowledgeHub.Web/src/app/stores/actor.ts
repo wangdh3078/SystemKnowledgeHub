@@ -80,12 +80,11 @@ export const useActorStore = defineStore('actor', () => {
   }
 
   async function refreshAntiforgeryToken(): Promise<boolean> {
-    if (!isAuthenticated.value) return false
     try {
       antiforgeryToken.value = await getAntiforgeryToken()
       return true
     } catch (error: unknown) {
-      handleSecurityError(error)
+      if (isAuthenticated.value) handleSecurityError(error)
       message.value = error instanceof Error ? error.message : '无法建立请求验证，请重试。'
       return false
     }

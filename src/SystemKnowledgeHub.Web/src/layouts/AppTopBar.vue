@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { Plus, Search, SwitchButton } from '@element-plus/icons-vue'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { ElMessageBox } from 'element-plus'
 import { useRoute } from 'vue-router'
 import { logout } from '../app/security/authenticationApi'
 import { useActorStore } from '../app/stores/actor'
 import { useOverlayStore } from '../app/stores/overlays'
+import { confirmDocumentEditDiscard, hasActiveDirtyDocumentEdit } from '../features/knowledge-documents/editor/documentEditState'
 
 const route = useRoute()
 const actorStore = useActorStore()
@@ -40,6 +42,17 @@ function handleGlobalSearchShortcut(event: KeyboardEvent): void {
 
 async function signOut(): Promise<void> {
   if (loggingOut.value) return
+  try {
+    await ElMessageBox.confirm('退出后需要重新登录才能继续访问系统。', '退出登录？', {
+      confirmButtonText: '退出登录',
+      cancelButtonText: '取消',
+      type: 'warning',
+      confirmButtonClass: 'el-button--danger',
+    })
+  } catch {
+    return
+  }
+  if (hasActiveDirtyDocumentEdit.value && !(await confirmDocumentEditDiscard())) return
   loggingOut.value = true
   try {
     await logout()

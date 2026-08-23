@@ -3,10 +3,12 @@ import { isSafeApiId } from '../../../api/contracts/id'
 import {
   decodeAddEvidence,
   decodeEvidenceDetail,
+  decodeEvidenceList,
   type AddEvidenceRequest,
   type AddEvidenceResponse,
   type AddHumanConfirmationRequest,
   type EvidenceDetailResponse,
+  type EvidenceListResponse,
   type UpdateEvidenceRequest,
 } from './evidenceContracts'
 
@@ -15,6 +17,18 @@ export function getEvidenceDetail(id: number, signal?: AbortSignal): Promise<Evi
   return apiClient.get(`/evidence/${encodeURIComponent(String(id))}`, {
     signal,
     decode: decodeEvidenceDetail,
+  })
+}
+
+export function getEvidenceList(
+  subjectType: string,
+  subjectId: number,
+  signal?: AbortSignal,
+): Promise<EvidenceListResponse> {
+  if (!isSafeApiId(subjectId)) return Promise.reject(new RangeError('证据关联对象 ID 无效。'))
+  return apiClient.get(`/evidence?subjectType=${encodeURIComponent(subjectType)}&subjectId=${encodeURIComponent(String(subjectId))}`, {
+    signal,
+    decode: decodeEvidenceList,
   })
 }
 

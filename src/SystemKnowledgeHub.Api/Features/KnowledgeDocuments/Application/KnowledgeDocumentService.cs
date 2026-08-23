@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SystemKnowledgeHub.Api.Features.KnowledgeDocuments.Application.Models;
 using SystemKnowledgeHub.Api.Features.KnowledgeDocuments.Domain;
+using SystemKnowledgeHub.Api.Features.Search.Application;
 using SystemKnowledgeHub.Api.Persistence;
 using SystemKnowledgeHub.Api.Persistence.Concurrency;
 using SystemKnowledgeHub.Api.Shared.Domain;
@@ -10,11 +11,13 @@ namespace SystemKnowledgeHub.Api.Features.KnowledgeDocuments.Application;
 public sealed class KnowledgeDocumentService(
     KnowledgeHubDbContext dbContext,
     KnowledgeDocumentQueries queries,
-    ConcurrencyTokenCodec concurrencyTokenCodec)
+    ConcurrencyTokenCodec concurrencyTokenCodec,
+    KnowledgeDocumentSearchIndex searchIndex)
 {
     public const int TitleMaximumLength = 300;
     public const int SummaryMaximumLength = 2_000;
     public const int BodyMarkdownMaximumLength = 1_000_000;
+    public const int ChangeSummaryMaximumLength = 500;
 
     public async Task<KnowledgeDocumentWriteResult> Create(
         CreateKnowledgeDocumentCommand request,
@@ -41,11 +44,24 @@ public sealed class KnowledgeDocumentService(
             UpdatedByDisplayName = request.Author.DisplayName,
             CreatedAt = timestamp,
             UpdatedAt = timestamp,
+            CurrentRevisionNumber = 1,
+            LatestPublishedRevisionNumber = null,
             Version = 1,
         };
         dbContext.KnowledgeDocuments.Add(document);
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
         await dbContext.SaveChangesAsync(cancellationToken);
-        return new KnowledgeDocumentWriteResult(queries.ToDetail(document), null, KnowledgeDocumentWriteFailure.None);
+        dbContext.KnowledgeDocumentRevisions.Add(CreateRevision(
+            document,
+            1,
+            request.Author,
+            timestamp,
+            RevisionOrigin.Created,
+            null));
+        await dbContext.SaveChangesAsync(cancellationToken);
+        await searchIndex.Upsert(document, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return new KnowledgeDocumentWriteResult(await queries.ToDetail(document, cancellationToken), null, KnowledgeDocumentWriteFailure.None);
     }
 
     public async Task<KnowledgeDocumentWriteResult> UpdateContent(
@@ -53,19 +69,111 @@ public sealed class KnowledgeDocumentService(
         CancellationToken cancellationToken)
     {
         var errors = ValidateContent(null, request.Title, request.Summary, request.BodyMarkdown, out _, out var title, out var summary, out var bodyMarkdown);
+        var changeSummary = NormalizeOptional(request.ChangeSummary);
+        if (changeSummary?.Length > ChangeSummaryMaximumLength)
+        {
+            errors["changeSummary"] = [$"修订说明不能超过 {ChangeSummaryMaximumLength} 个字符。"];
+        }
         if (!concurrencyTokenCodec.TryDecode(request.ConcurrencyToken, out var expectedVersion)) errors["concurrencyToken"] = ["并发标记无效，请重新加载后重试。"];
         if (errors.Count > 0) return new KnowledgeDocumentWriteResult(null, errors, KnowledgeDocumentWriteFailure.Validation);
 
         var document = await dbContext.KnowledgeDocuments.SingleOrDefaultAsync(item => item.Id == request.KnowledgeDocumentId, cancellationToken);
         if (document is null) return new KnowledgeDocumentWriteResult(null, null, KnowledgeDocumentWriteFailure.NotFound);
         if (document.Version != expectedVersion) return new KnowledgeDocumentWriteResult(null, null, KnowledgeDocumentWriteFailure.Conflict);
+        if (document.LifecycleStatus == DocumentLifecycleStatus.Archived)
+        {
+            return new KnowledgeDocumentWriteResult(null, null, KnowledgeDocumentWriteFailure.InvalidState);
+        }
+        if (string.Equals(document.Title, title, StringComparison.Ordinal)
+            && string.Equals(document.Summary, summary, StringComparison.Ordinal)
+            && string.Equals(document.BodyMarkdown, bodyMarkdown, StringComparison.Ordinal))
+        {
+            return new KnowledgeDocumentWriteResult(
+                await queries.ToDetail(document, cancellationToken),
+                null,
+                KnowledgeDocumentWriteFailure.None);
+        }
 
+        var timestamp = DateTimeOffset.UtcNow;
+        var nextRevisionNumber = checked(document.CurrentRevisionNumber + 1);
         document.Title = title;
         document.Summary = summary;
         document.BodyMarkdown = bodyMarkdown;
         document.UpdatedByUserId = request.Author.UserId;
         document.UpdatedByDisplayName = request.Author.DisplayName;
-        document.UpdatedAt = DateTimeOffset.UtcNow;
+        document.UpdatedAt = timestamp;
+        document.CurrentRevisionNumber = nextRevisionNumber;
+        if (document.LifecycleStatus == DocumentLifecycleStatus.Published)
+        {
+            document.LatestPublishedRevisionNumber = nextRevisionNumber;
+            document.PublishedAt = timestamp;
+        }
+        document.Version = expectedVersion + 1;
+        dbContext.KnowledgeDocumentRevisions.Add(CreateRevision(
+            document,
+            nextRevisionNumber,
+            request.Author,
+            timestamp,
+            RevisionOrigin.ContentSave,
+            changeSummary));
+        try
+        {
+            await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+            await dbContext.SaveChangesAsync(cancellationToken);
+            await searchIndex.Upsert(document, cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return new KnowledgeDocumentWriteResult(null, null, KnowledgeDocumentWriteFailure.Conflict);
+        }
+        return new KnowledgeDocumentWriteResult(await queries.ToDetail(document, cancellationToken), null, KnowledgeDocumentWriteFailure.None);
+    }
+
+    public async Task<KnowledgeDocumentWriteResult> UpdateLifecycle(
+        UpdateKnowledgeDocumentLifecycleCommand request,
+        CancellationToken cancellationToken)
+    {
+        var errors = new Dictionary<string, string[]>();
+        if (!Enum.TryParse<DocumentLifecycleStatus>(request.TargetLifecycleStatus, false, out var target)
+            || target.ToString() != request.TargetLifecycleStatus)
+        {
+            errors["targetLifecycleStatus"] = ["文档生命周期状态无效。"];
+        }
+        if (!concurrencyTokenCodec.TryDecode(request.ConcurrencyToken, out var expectedVersion))
+        {
+            errors["concurrencyToken"] = ["并发标记无效，请重新加载后重试。"];
+        }
+        if (errors.Count > 0) return new KnowledgeDocumentWriteResult(null, errors, KnowledgeDocumentWriteFailure.Validation);
+
+        var document = await dbContext.KnowledgeDocuments.SingleOrDefaultAsync(item => item.Id == request.KnowledgeDocumentId, cancellationToken);
+        if (document is null) return new KnowledgeDocumentWriteResult(null, null, KnowledgeDocumentWriteFailure.NotFound);
+        if (document.Version != expectedVersion) return new KnowledgeDocumentWriteResult(null, null, KnowledgeDocumentWriteFailure.Conflict);
+        if (!IsAllowedLifecycleTransition(document.LifecycleStatus, target))
+        {
+            return new KnowledgeDocumentWriteResult(null, new Dictionary<string, string[]>
+            {
+                ["targetLifecycleStatus"] = [$"不允许从 {document.LifecycleStatus} 转换到 {target}。"],
+            }, KnowledgeDocumentWriteFailure.Validation);
+        }
+        if (target == DocumentLifecycleStatus.Published)
+        {
+            if (string.IsNullOrWhiteSpace(document.Title)) errors["title"] = ["发布前标题不能为空。"];
+            if (string.IsNullOrWhiteSpace(document.BodyMarkdown)) errors["bodyMarkdown"] = ["发布前正文不能为空。"];
+            if (errors.Count > 0) return new KnowledgeDocumentWriteResult(null, errors, KnowledgeDocumentWriteFailure.Validation);
+        }
+
+        var timestamp = DateTimeOffset.UtcNow;
+        document.LifecycleStatus = target;
+        if (target == DocumentLifecycleStatus.Published)
+        {
+            document.LatestPublishedRevisionNumber = document.CurrentRevisionNumber;
+            document.PublishedAt = timestamp;
+        }
+        document.ArchivedAt = target == DocumentLifecycleStatus.Archived ? timestamp : null;
+        document.UpdatedByUserId = request.Author.UserId;
+        document.UpdatedByDisplayName = request.Author.DisplayName;
+        document.UpdatedAt = timestamp;
         document.Version = expectedVersion + 1;
         try
         {
@@ -75,8 +183,39 @@ public sealed class KnowledgeDocumentService(
         {
             return new KnowledgeDocumentWriteResult(null, null, KnowledgeDocumentWriteFailure.Conflict);
         }
-        return new KnowledgeDocumentWriteResult(queries.ToDetail(document), null, KnowledgeDocumentWriteFailure.None);
+        return new KnowledgeDocumentWriteResult(await queries.ToDetail(document, cancellationToken), null, KnowledgeDocumentWriteFailure.None);
     }
+
+    private static KnowledgeDocumentRevision CreateRevision(
+        KnowledgeDocument document,
+        long revisionNumber,
+        KnowledgeDocumentAuthor author,
+        DateTimeOffset timestamp,
+        RevisionOrigin origin,
+        string? changeSummary) => new()
+    {
+        KnowledgeDocumentId = document.Id,
+        RevisionNumber = revisionNumber,
+        Title = document.Title,
+        Summary = document.Summary,
+        BodyMarkdown = document.BodyMarkdown,
+        AuthorUserId = author.UserId,
+        AuthorDisplayNameSnapshot = author.DisplayName,
+        CreatedAt = timestamp,
+        LifecycleContext = document.LifecycleStatus,
+        ChangeSummary = changeSummary,
+        RevisionOrigin = origin,
+    };
+
+    private static bool IsAllowedLifecycleTransition(DocumentLifecycleStatus current, DocumentLifecycleStatus target) =>
+        (current, target) switch
+        {
+            (DocumentLifecycleStatus.Draft, DocumentLifecycleStatus.Published) => true,
+            (DocumentLifecycleStatus.Published, DocumentLifecycleStatus.Draft) => true,
+            (DocumentLifecycleStatus.Published, DocumentLifecycleStatus.Archived) => true,
+            (DocumentLifecycleStatus.Archived, DocumentLifecycleStatus.Draft) => true,
+            _ => false,
+        };
 
     private static Dictionary<string, string[]> ValidateContent(
         string? documentTypeValue,

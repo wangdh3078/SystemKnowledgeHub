@@ -7,11 +7,12 @@ import { useActorStore } from '../../../app/stores/actor'
 import KnowledgeProgression from '../../../components/data-display/KnowledgeProgression.vue'
 
 const props = defineProps<{
-  targetType?: 'System' | 'BusinessFunction' | 'DatabaseObject' | 'DatabaseColumn' | 'BusinessRule' | 'Integration'
+  targetType?: 'System' | 'BusinessFunction' | 'DatabaseObject' | 'DatabaseColumn' | 'BusinessRule' | 'Integration' | 'KnowledgeDocument'
   id: number
   title: string
   status: KnowledgeStatus
   concurrencyToken: string
+  subjectRevisionNumber?: number
   evidenceCount: number
   humanConfirmationCount: number
   canChange: boolean
@@ -47,6 +48,9 @@ function openChangeDialog(): void {
       target: { type: props.targetType ?? 'BusinessFunction', id: props.id },
       title: props.title,
       knowledgeStatus: props.status,
+      ...(props.subjectRevisionNumber === undefined
+        ? {}
+        : { subjectRevisionNumber: props.subjectRevisionNumber }),
       concurrencyToken: props.concurrencyToken,
       evidenceCount: props.evidenceCount,
       humanConfirmationCount: props.humanConfirmationCount,

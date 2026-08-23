@@ -1,30 +1,24 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { ArrowRight, EditPen, Link, OfficeBuilding } from '@element-plus/icons-vue'
+import { EditPen } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { parseSafeApiId } from '../../../api/contracts/id'
 import { useActorStore } from '../../../app/stores/actor'
-import { useOverlayStore } from '../../../app/stores/overlays'
 import KnowledgeStatusBadge from '../../../components/data-display/KnowledgeStatusBadge.vue'
-import EmptyState from '../../../components/feedback/EmptyState.vue'
 import ErrorState from '../../../components/feedback/ErrorState.vue'
 import LoadingState from '../../../components/feedback/LoadingState.vue'
-import {
-  systemLifecycleLabels,
-  type SystemBusinessFunctionSummary,
-  type SystemDatabaseObjectSummary,
-  type SystemLifecycle,
-} from '../api/systemsContracts'
+import { systemLifecycleLabels, type SystemLifecycle } from '../api/systemsContracts'
 import SystemContextRail from '../components/SystemContextRail.vue'
 import SystemOverviewSection from '../components/SystemOverviewSection.vue'
 import SystemTechnologyLifecycleSection from '../components/SystemTechnologyLifecycleSection.vue'
+import SystemUnifiedKnowledgeView from '../components/SystemUnifiedKnowledgeView.vue'
 import { useSystemDetail, type SystemOverviewValues } from '../composables/useSystemDetail'
+import { useSystemKnowledgeView } from '../composables/useSystemKnowledgeView'
 
 const route = useRoute()
 const router = useRouter()
 const actorStore = useActorStore()
-const overlayStore = useOverlayStore()
 const overviewEditing = ref(false)
 const {
   detail,
@@ -39,6 +33,7 @@ const {
   saveLifecycle,
   clearSaveError,
 } = useSystemDetail()
+const { view: knowledgeView, loading: knowledgeViewLoading, error: knowledgeViewError, load: loadKnowledgeView } = useSystemKnowledgeView()
 
 const systemId = computed(() => parseSafeApiId(route.params.id))
 const canEditOverview = computed(() =>
@@ -71,7 +66,7 @@ async function loadRoute(): Promise<void> {
   if (systemId.value === null) return
   overviewEditing.value = false
   clearSaveError()
-  await load(systemId.value)
+  await Promise.all([load(systemId.value), loadKnowledgeView(systemId.value)])
 }
 
 async function handleSave(values: SystemOverviewValues): Promise<void> {
@@ -102,25 +97,10 @@ function openBusinessFunction(id: number): void {
   void router.push({ name: 'business-function-detail', params: { id: String(id) } })
 }
 
-function openBusinessFunctionsList(): void {
-  if (!detail.value) return
-  void router.push({
-    name: 'business-functions-list',
-    query: { systemId: String(detail.value.id) },
-  })
-}
-
-function handleBusinessFunctionRowClick(row: SystemBusinessFunctionSummary): void {
-  openBusinessFunction(row.id)
-}
-
-function handleDatabaseObjectRowClick(row: SystemDatabaseObjectSummary): void {
-  openDatabaseObject(row.id)
-}
-
-function openIntegration(id: number): void {
-  overlayStore.openDrawer({ kind: 'integration', id, mode: 'read' })
-}
+function openBusinessRule(id: number): void { void router.push({ name: 'business-rule-detail', params: { id: String(id) } }) }
+function openIntegration(id: number): void { void router.push({ name: 'integration-detail', params: { id: String(id) } }) }
+function openDocument(id: number): void { void router.push({ name: 'knowledge-document-detail', params: { id: String(id) } }) }
+function openUnknownItem(id: number): void { void router.push({ name: 'unknown-item-detail', params: { id: String(id) } }) }
 
 watch(() => route.params.id, () => void loadRoute())
 watch(overviewEditing, (editing) => {
@@ -215,87 +195,17 @@ onMounted(() => void loadRoute())
         </div>
       </section>
 
-      <section class="system-detail-section">
-        <div class="system-section-heading">
-          <h2>业务功能</h2>
-          <span>{{ detail.businessFunctions.length }} 项 · <button type="button" @click="openBusinessFunctionsList">查看全部</button></span>
-        </div>
-        <EmptyState
-          v-if="detail.businessFunctions.length === 0"
-          title="暂无业务功能"
-          description="当前 Slice 不提前创建业务功能；后续可在系统上下文中渐进补充。"
-        />
-        <el-table
-          v-else
-          :data="detail.businessFunctions"
-          row-key="id"
-          class="system-object-table"
-          @row-click="handleBusinessFunctionRowClick"
-        >
-          <el-table-column prop="name" label="功能名称" min-width="210">
-            <template #default="scope"><strong class="technical-text">{{ scope.row.name }}</strong></template>
-          </el-table-column>
-          <el-table-column prop="purpose" label="用途" min-width="260" show-overflow-tooltip>
-            <template #default="scope"><span :class="{ 'text-muted': !scope.row.purpose }">{{ scope.row.purpose ?? '尚未记录' }}</span></template>
-          </el-table-column>
-          <el-table-column prop="knowledgeStatus" label="知识状态" width="98">
-            <template #default="scope"><KnowledgeStatusBadge :status="scope.row.knowledgeStatus" /></template>
-          </el-table-column>
-          <el-table-column prop="unknownCount" label="待确认事项" width="100" align="center" />
-          <el-table-column width="38" align="right"><template #default><el-icon><ArrowRight /></el-icon></template></el-table-column>
-        </el-table>
-      </section>
-
-      <section class="system-detail-section">
-        <div class="system-section-heading"><h2>数据库对象</h2><span>{{ detail.databaseObjects.length }} 项</span></div>
-        <EmptyState v-if="detail.databaseObjects.length === 0" title="暂无数据库对象" />
-        <el-table
-          v-else
-          :data="detail.databaseObjects"
-          row-key="id"
-          class="system-object-table"
-          @row-click="handleDatabaseObjectRowClick"
-        >
-          <el-table-column prop="qualifiedName" label="对象名称" min-width="210">
-            <template #default="scope"><strong class="technical-text">{{ scope.row.qualifiedName }}</strong></template>
-          </el-table-column>
-          <el-table-column prop="objectType" label="类型" width="90">
-            <template #default="scope">{{ scope.row.objectType === 'Table' ? '表' : '视图' }}</template>
-          </el-table-column>
-          <el-table-column label="业务说明" min-width="210">
-            <template #default><span class="text-muted">进入对象详情查看</span></template>
-          </el-table-column>
-          <el-table-column prop="knowledgeStatus" label="知识状态" width="98">
-            <template #default="scope"><KnowledgeStatusBadge :status="scope.row.knowledgeStatus" /></template>
-          </el-table-column>
-          <el-table-column prop="unknownCount" label="待确认事项" width="100" align="center" />
-          <el-table-column width="38" align="right"><template #default><el-icon><ArrowRight /></el-icon></template></el-table-column>
-        </el-table>
-      </section>
-
-      <section class="system-detail-section system-detail-section--split">
-        <div>
-          <div class="system-section-heading"><h2>集成关系</h2><span>{{ detail.integrations.length }} 项</span></div>
-          <div v-if="detail.integrations.length" class="system-integration-list">
-            <button v-for="integration in detail.integrations" :key="integration.id" type="button" @click="openIntegration(integration.id)">
-              <el-icon><Link /></el-icon><span><strong class="technical-text">{{ integration.name }}</strong><small>{{ integration.integrationType }} · {{ integration.relatedSystem }}</small></span><KnowledgeStatusBadge :status="integration.knowledgeStatus"/><el-icon><ArrowRight /></el-icon>
-            </button>
-          </div>
-          <div v-else class="system-compact-empty"><el-icon><Link /></el-icon><span>暂无集成关系记录</span></div>
-        </div>
-        <div>
-          <div class="system-section-heading"><h2>代码 / 仓库</h2></div>
-          <div class="system-repository-summary">
-            <el-icon><OfficeBuilding /></el-icon>
-            <div><strong class="technical-text">{{ detail.overview.repository.name ?? '尚未记录' }}</strong><small class="technical-text">{{ detail.overview.repository.url ?? '暂无仓库地址' }}</small></div>
-          </div>
-        </div>
-      </section>
-
-      <section class="system-detail-section system-detail-section--last">
-        <div class="system-section-heading"><h2>系统级待确认事项</h2><span>{{ detail.unknownItems.length }} 项</span></div>
-        <div class="system-compact-empty"><span>暂无系统级待确认事项。</span></div>
-      </section>
+      <SystemUnifiedKnowledgeView
+        :view="knowledgeView"
+        :loading="knowledgeViewLoading"
+        :error="knowledgeViewError"
+        @open-business-function="openBusinessFunction"
+        @open-database-object="openDatabaseObject"
+        @open-business-rule="openBusinessRule"
+        @open-integration="openIntegration"
+        @open-document="openDocument"
+        @open-unknown-item="openUnknownItem"
+      />
 
       <Teleport defer to="#context-rail-content">
         <SystemContextRail :system-name="detail.overview.name" :context="detail.contextRail" />

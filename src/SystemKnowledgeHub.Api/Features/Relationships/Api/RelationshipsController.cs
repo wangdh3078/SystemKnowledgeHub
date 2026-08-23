@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using SystemKnowledgeHub.Api.Features.Relationships.Api.Contracts;
 using SystemKnowledgeHub.Api.Features.Relationships.Application;
 using SystemKnowledgeHub.Api.Features.Relationships.Application.Models;
+using SystemKnowledgeHub.Api.Features.Users.Application;
 using SystemKnowledgeHub.Api.Shared.Api;
 using SystemKnowledgeHub.Api.Shared.Api.Contracts;
 
@@ -9,8 +10,24 @@ namespace SystemKnowledgeHub.Api.Features.Relationships.Api;
 
 [ApiController]
 [Route("api/relationships")]
-public sealed class RelationshipsController(RelationshipQueries queries, RelationshipService service) : ControllerBase
+public sealed class RelationshipsController(RelationshipQueries queries, RelationshipService service, ICurrentUserContext currentUserContext) : ControllerBase
 {
+    [HttpGet]
+    public async Task<IActionResult> GetRelated(
+        [FromQuery] string? objectType,
+        [FromQuery] long objectId,
+        CancellationToken cancellationToken)
+    {
+        var result = await queries.GetRelatedKnowledge(objectType, objectId, cancellationToken);
+        return result.Failure switch
+        {
+            RelationshipFailure.None => Ok(result.Items),
+            RelationshipFailure.Validation => BadRequest(Error("validation_error", result.Message ?? "查询条件无效。")),
+            RelationshipFailure.NotFound => NotFound(Error("not_found", result.Message ?? "未找到对象。")),
+            _ => throw new InvalidOperationException("Unsupported related knowledge query result."),
+        };
+    }
+
     [HttpGet("{id}")]
     public async Task<ActionResult<RelationshipDetailResponse>> Get(long id, CancellationToken cancellationToken)
     {
@@ -29,9 +46,11 @@ public sealed class RelationshipsController(RelationshipQueries queries, Relatio
     [HttpPost]
     public async Task<IActionResult> Add([FromBody] AddRelationshipRequest request, CancellationToken cancellationToken)
     {
+        var currentUser = await ResolveCurrentUser(cancellationToken);
+        if (currentUser is null) return Unauthorized(Error("unauthenticated", "无法解析当前操作者。"));
         var result = await service.Add(new(
             Target(request.Source), request.RelationType ?? string.Empty, Target(request.Target), request.Description,
-            request.Actor is null ? null : new(request.Actor.DisplayName ?? string.Empty, request.Actor.Role)), cancellationToken);
+            new(currentUser.DisplayName, currentUser.AccessLevel)), cancellationToken);
         return Command(result, created: true);
     }
 
@@ -39,9 +58,8 @@ public sealed class RelationshipsController(RelationshipQueries queries, Relatio
     [HttpPut("{id}/description")]
     public async Task<IActionResult> UpdateDescription(long id, [FromBody] UpdateRelationshipDescriptionRequest request, CancellationToken cancellationToken)
     {
-        var result = await service.UpdateDescription(new(id, request.Description,
-            request.Actor is null ? null : new(request.Actor.DisplayName ?? string.Empty, request.Actor.Role),
-            request.ConcurrencyToken ?? string.Empty), cancellationToken);
+        if (await ResolveCurrentUser(cancellationToken) is null) return Unauthorized(Error("unauthenticated", "无法解析当前操作者。"));
+        var result = await service.UpdateDescription(new(id, request.Description, request.ConcurrencyToken ?? string.Empty), cancellationToken);
         return Command(result);
     }
 
@@ -49,13 +67,26 @@ public sealed class RelationshipsController(RelationshipQueries queries, Relatio
     [HttpPut("{id}/knowledge-status")]
     public async Task<IActionResult> ChangeStatus(long id, [FromBody] ChangeRelationshipStatusRequest request, CancellationToken cancellationToken)
     {
+        var currentUser = await ResolveCurrentUser(cancellationToken);
+        if (currentUser is null) return Unauthorized(Error("unauthenticated", "无法解析当前操作者。"));
         var result = await service.ChangeStatus(new(id, request.TargetStatus ?? string.Empty, request.Reason,
-            request.Actor is null ? null : new(
-                request.Actor.DisplayName ?? string.Empty,
-                request.Actor.RoleOrIdentity ?? string.Empty,
-                request.Actor.OccurredAt ?? default),
+            new(currentUser.DisplayName, currentUser.AccessLevel, DateTimeOffset.UtcNow),
             request.ConcurrencyToken ?? string.Empty), cancellationToken);
         return Command(result);
+    }
+
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = SystemKnowledgeHub.Api.Shared.Security.AccessPolicies.Editor)]
+    [HttpDelete("{id:long}")]
+    public async Task<IActionResult> Delete(long id, CancellationToken cancellationToken)
+    {
+        var result = await service.Delete(id, cancellationToken);
+        return result.Failure switch
+        {
+            RelationshipFailure.None => Ok(new { }),
+            RelationshipFailure.Validation => BadRequest(new ApiErrorResponse("validation_error", "请求内容无效。", result.FieldErrors, null)),
+            RelationshipFailure.NotFound => NotFound(Error("not_found", "未找到指定关系。")),
+            _ => throw new InvalidOperationException("Unsupported relationship delete result."),
+        };
     }
 
     private IActionResult Command(RelationshipCommandResult result, bool created = false)
@@ -77,6 +108,8 @@ public sealed class RelationshipsController(RelationshipQueries queries, Relatio
 
     private static RelationshipTargetCommand? Target(RelationshipTargetRequest? target)
         => target is null ? null : new(target.Type ?? string.Empty, target.Id);
+    private async Task<SystemKnowledgeHub.Api.Features.Users.Application.Models.CurrentUserResponse?> ResolveCurrentUser(CancellationToken cancellationToken)
+        => (await currentUserContext.ResolveAsync(cancellationToken)).CurrentUser;
     private static ApiErrorResponse Error(string code, string message, object? details = null)
         => new(code, message, null, details);
 }

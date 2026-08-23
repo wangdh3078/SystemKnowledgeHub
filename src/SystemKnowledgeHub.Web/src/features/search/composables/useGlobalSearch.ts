@@ -138,6 +138,10 @@ export function useGlobalSearch(inputRef: Ref<{ focus: () => void } | null>) {
       await router.push({ name: 'integration-detail', params: { id: String(item.navigation.routeObjectId) } })
       return
     }
+    if (item.navigation.routeObjectType === 'KnowledgeDocument') {
+      await router.push({ name: 'knowledge-document-detail', params: { id: String(item.navigation.routeObjectId) } })
+      return
+    }
     await router.push({ name: 'unknown-item-detail', params: { id: String(item.navigation.routeObjectId) } })
   }
 
@@ -169,6 +173,9 @@ export function useGlobalSearch(inputRef: Ref<{ focus: () => void } | null>) {
       knowledgeStatus: visit.knowledgeStatus,
       unknownItemStatus: visit.unknownItemStatus,
       navigation: visit.navigation,
+      contentType: null,
+      lifecycleStatus: null,
+      updatedAt: null,
     }, visit.objectType)
   }
 

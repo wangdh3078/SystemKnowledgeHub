@@ -68,14 +68,36 @@ public sealed class KnowledgeDocumentsController(
         if (!ApiIdParser.IsSafePositive(id)) return BadRequest(ValidationError(new Dictionary<string, string[]> { ["id"] = ["文档 ID 必须是 JavaScript 安全范围内的正整数。"] }));
         var author = await ResolveAuthor(cancellationToken);
         if (author.Result is not null) return author.Result;
-        var result = await service.UpdateContent(new UpdateKnowledgeDocumentContentCommand(id, request.Title ?? string.Empty, request.Summary, request.BodyMarkdown, request.ConcurrencyToken ?? string.Empty, author.Author!), cancellationToken);
+        var result = await service.UpdateContent(new UpdateKnowledgeDocumentContentCommand(id, request.Title ?? string.Empty, request.Summary, request.BodyMarkdown, request.ChangeSummary, request.ConcurrencyToken ?? string.Empty, author.Author!), cancellationToken);
         return result.Failure switch
         {
             KnowledgeDocumentWriteFailure.None => Ok(result.Response),
             KnowledgeDocumentWriteFailure.Validation => BadRequest(ValidationError(result.FieldErrors!)),
             KnowledgeDocumentWriteFailure.NotFound => NotFound(NotFound(id)),
             KnowledgeDocumentWriteFailure.Conflict => Conflict(new ApiErrorResponse("conflict", "内容已被其他操作修改，请刷新后重试。", null, new { resourceType = "KnowledgeDocument", resourceId = id })),
+            KnowledgeDocumentWriteFailure.InvalidState => Conflict(new ApiErrorResponse("invalid_state", "已归档文档不允许修改内容。", null, new { resourceType = "KnowledgeDocument", resourceId = id, lifecycleStatus = "Archived" })),
             _ => throw new InvalidOperationException("Unsupported KnowledgeDocument content result."),
+        };
+    }
+
+    [Authorize(Policy = AccessPolicies.Editor)]
+    [HttpPut("{id:long}/lifecycle")]
+    public async Task<ActionResult<KnowledgeDocumentDetailResponse>> UpdateLifecycle(
+        long id,
+        [FromBody] UpdateKnowledgeDocumentLifecycleRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!ApiIdParser.IsSafePositive(id)) return BadRequest(ValidationError(new Dictionary<string, string[]> { ["id"] = ["文档 ID 必须是 JavaScript 安全范围内的正整数。"] }));
+        var author = await ResolveAuthor(cancellationToken);
+        if (author.Result is not null) return author.Result;
+        var result = await service.UpdateLifecycle(new UpdateKnowledgeDocumentLifecycleCommand(id, request.TargetLifecycleStatus ?? string.Empty, request.ConcurrencyToken ?? string.Empty, author.Author!), cancellationToken);
+        return result.Failure switch
+        {
+            KnowledgeDocumentWriteFailure.None => Ok(result.Response),
+            KnowledgeDocumentWriteFailure.Validation => BadRequest(ValidationError(result.FieldErrors!)),
+            KnowledgeDocumentWriteFailure.NotFound => NotFound(NotFound(id)),
+            KnowledgeDocumentWriteFailure.Conflict => Conflict(new ApiErrorResponse("conflict", "文档已被其他操作修改，请刷新后重试。", null, new { resourceType = "KnowledgeDocument", resourceId = id })),
+            _ => throw new InvalidOperationException("Unsupported KnowledgeDocument lifecycle result."),
         };
     }
 

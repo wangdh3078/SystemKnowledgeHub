@@ -65,8 +65,9 @@ public sealed class KnowledgeStatusApiTests : IClassFixture<BootstrapWebApplicat
         var dbContext = scope.ServiceProvider.GetRequiredService<KnowledgeHubDbContext>();
         var stored = await dbContext.BusinessFunctions.AsNoTracking().SingleAsync(item => item.Id == id);
         Assert.Equal(KnowledgeStatus.Confirmed, stored.KnowledgeStatus);
-        Assert.Equal("王敏", stored.KnowledgeStatusChangedByName);
-        Assert.Equal("知识整理人员", stored.KnowledgeStatusChangedByRole);
+        Assert.Equal("SEC-01 Test Principal", stored.KnowledgeStatusChangedByName);
+        Assert.Equal("Administrator", stored.KnowledgeStatusChangedByRole);
+        Assert.NotEqual(DateTimeOffset.Parse("2099-01-01T00:00:00Z"), stored.KnowledgeStatusChangedAt);
     }
 
     [Fact]
@@ -138,7 +139,7 @@ public sealed class KnowledgeStatusApiTests : IClassFixture<BootstrapWebApplicat
             target = new { type = "BusinessFunction", id },
             targetStatus,
             reason,
-            actor = Person(),
+            actor = new { displayName = "FORGED ADMIN", roleOrIdentity = "Administrator", occurredAt = "2099-01-01T00:00:00Z" },
             concurrencyToken = token,
         });
     }

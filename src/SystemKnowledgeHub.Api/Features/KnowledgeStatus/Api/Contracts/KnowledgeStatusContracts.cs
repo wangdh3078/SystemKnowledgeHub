@@ -7,15 +7,6 @@ namespace SystemKnowledgeHub.Api.Features.StatusProgression.Api.Contracts;
 /// <param name="Id">该对象的 JavaScript 安全正整数标识符。</param>
 public sealed record KnowledgeStatusTargetRequest(string? Type, long Id);
 
-public sealed record KnowledgeStatusActorRequest(
-    string? DisplayName,
-    string? RoleOrIdentity,
-    DateTimeOffset? OccurredAt,
-    string? Team,
-    string? ExternalUserKey,
-    string? Source,
-    string? Note);
-
 /// <summary>
 /// 请求对知识对象执行显式的可信度状态变更。
 /// </summary>
@@ -28,5 +19,4 @@ public sealed record ChangeKnowledgeStatusRequest(
     KnowledgeStatusTargetRequest? Target,
     string? TargetStatus,
     string? Reason,
-    KnowledgeStatusActorRequest? Actor,
     string? ConcurrencyToken);

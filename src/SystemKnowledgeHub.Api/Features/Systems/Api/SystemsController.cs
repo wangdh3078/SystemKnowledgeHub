@@ -11,8 +11,31 @@ namespace SystemKnowledgeHub.Api.Features.Systems.Api;
 [Route("api/systems")]
 public sealed class SystemsController(
     SystemQueries queries,
+    SystemKnowledgeViewQueries knowledgeViewQueries,
     SystemService service) : ControllerBase
 {
+    [HttpGet("{id:long}/knowledge-view")]
+    [ProducesResponseType<SystemKnowledgeViewResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ApiErrorResponse>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ApiErrorResponse>(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<SystemKnowledgeViewResponse>> GetKnowledgeView(
+        long id,
+        CancellationToken cancellationToken)
+    {
+        if (!ApiIdParser.IsSafePositive(id))
+        {
+            return BadRequest(ValidationError(new Dictionary<string, string[]>
+            {
+                ["id"] = ["系统 ID 必须是 JavaScript 安全范围内的正整数。"],
+            }));
+        }
+
+        var response = await knowledgeViewQueries.Get(id, cancellationToken);
+        return response is null
+            ? NotFound(SystemNotFound(id))
+            : Ok(response);
+    }
+
     [HttpGet("{id:long}")]
     [ProducesResponseType<SystemDetailResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ApiErrorResponse>(StatusCodes.Status400BadRequest)]

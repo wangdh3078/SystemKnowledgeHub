@@ -106,9 +106,12 @@ SystemKnowledgeHub/
 ├─ AGENTS.md
 ├─ README.md
 ├─ docs/
+│  ├─ design/
 │  ├─ specifications/
+│  ├─ standards/
 │  ├─ product-design/
-│  └─ reports/
+│  ├─ reports/
+│  └─ PROJECT_FILE_MAP.md
 ├─ src/
 │  ├─ SystemKnowledgeHub.Api/
 │  └─ SystemKnowledgeHub.Web/

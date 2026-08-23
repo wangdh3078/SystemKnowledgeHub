@@ -39,6 +39,9 @@ public sealed record KnowledgeDocumentDetailResponse(
     string BodyMarkdown,
     string LifecycleStatus,
     string KnowledgeStatus,
+    long CurrentRevisionNumber,
+    long? LatestPublishedRevisionNumber,
+    KnowledgeDocumentConfirmationCoverageResponse ConfirmationCoverage,
     long CreatedByUserId,
     string CreatedByDisplayName,
     long UpdatedByUserId,
@@ -48,6 +51,10 @@ public sealed record KnowledgeDocumentDetailResponse(
     DateTimeOffset? PublishedAt,
     DateTimeOffset? ArchivedAt,
     string ConcurrencyToken);
+
+public sealed record KnowledgeDocumentConfirmationCoverageResponse(
+    string State,
+    long? LastConfirmedRevisionNumber);
 
 public sealed record KnowledgeDocumentAuthor(long UserId, string DisplayName);
 
@@ -63,6 +70,13 @@ public sealed record UpdateKnowledgeDocumentContentCommand(
     string Title,
     string? Summary,
     string? BodyMarkdown,
+    string? ChangeSummary,
+    string ConcurrencyToken,
+    KnowledgeDocumentAuthor Author);
+
+public sealed record UpdateKnowledgeDocumentLifecycleCommand(
+    long KnowledgeDocumentId,
+    string TargetLifecycleStatus,
     string ConcurrencyToken,
     KnowledgeDocumentAuthor Author);
 
@@ -72,6 +86,7 @@ public enum KnowledgeDocumentWriteFailure
     Validation,
     NotFound,
     Conflict,
+    InvalidState,
 }
 
 public sealed record KnowledgeDocumentWriteResult(

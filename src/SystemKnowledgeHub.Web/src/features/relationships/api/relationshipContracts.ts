@@ -1,12 +1,10 @@
 import { isKnowledgeStatus, type KnowledgeStatus } from '../../../api/contracts/knowledge'
-import type { ActorContext } from '../../../app/stores/actor'
-import type { PersonSnapshotInput } from '../../evidence/api/evidenceContracts'
 
-export const relationTypes = ['Calls','Reads','Writes','UsesField','AppliesRule','PublishesVia','ConsumesVia','UsesIntegration','DependsOn'] as const
+export const relationTypes = ['Calls','Reads','Writes','UsesField','AppliesRule','PublishesVia','ConsumesVia','UsesIntegration','DependsOn','Documents','References','AppliesTo','SpecifiedBy','VerifiedBy','Supersedes'] as const
 export type RelationType = (typeof relationTypes)[number]
-export type KnowledgeTargetType = 'System' | 'DatabaseSource' | 'BusinessFunction' | 'DatabaseObject' | 'DatabaseColumn' | 'BusinessRule' | 'Integration'
+export type KnowledgeTargetType = 'System' | 'DatabaseSource' | 'BusinessFunction' | 'DatabaseObject' | 'DatabaseColumn' | 'BusinessRule' | 'Integration' | 'KnowledgeDocument'
 export interface KnowledgeTargetRef { readonly type: KnowledgeTargetType; readonly id: number }
-export interface RelationshipSourcePayload { readonly source: KnowledgeTargetRef; readonly title: string; readonly systemId: number; readonly systemName: string }
+export interface RelationshipSourcePayload { readonly source: KnowledgeTargetRef; readonly title: string; readonly documentType?: string; readonly systemId?: number; readonly systemName?: string }
 export interface TargetPreview {
   readonly target: KnowledgeTargetRef
   readonly systemContext: readonly { readonly id: number; readonly name: string }[]
@@ -30,14 +28,30 @@ export interface RelationshipDetailResponse {
   readonly statusChanged: { readonly displayName: string; readonly roleOrIdentity: string | null; readonly occurredAt: string }
   readonly availableActions: readonly string[]
 }
-export interface AddRelationshipRequest { readonly source: KnowledgeTargetRef; readonly relationType: RelationType; readonly target: KnowledgeTargetRef; readonly description: string | null; readonly actor: ActorContext }
+export interface AddRelationshipRequest { readonly source: KnowledgeTargetRef; readonly relationType: RelationType; readonly target: KnowledgeTargetRef; readonly description: string | null }
 export interface AddRelationshipResponse { readonly id: number; readonly source: KnowledgeTargetRef; readonly relationType: RelationType; readonly target: KnowledgeTargetRef; readonly knowledgeStatus: 'Unknown'; readonly concurrencyToken: string }
-export interface UpdateRelationshipDescriptionRequest { readonly description: string | null; readonly actor: ActorContext; readonly concurrencyToken: string }
-export interface ChangeRelationshipStatusRequest { readonly targetStatus: KnowledgeStatus; readonly reason: string | null; readonly actor: PersonSnapshotInput; readonly concurrencyToken: string }
+export interface RelatedKnowledge { readonly id:number; readonly direction:'Incoming'|'Outgoing'; readonly relationType:RelationType; readonly related:KnowledgeTargetRef; readonly title:string; readonly objectTypeLabel:string }
+export interface UpdateRelationshipDescriptionRequest { readonly description: string | null; readonly concurrencyToken: string }
+export interface ChangeRelationshipStatusRequest { readonly targetStatus: KnowledgeStatus; readonly reason: string | null; readonly concurrencyToken: string }
 
 export const relationTypeLabels: Readonly<Record<RelationType, string>> = {
   Calls:'调用', Reads:'读取', Writes:'写入', UsesField:'使用字段', AppliesRule:'应用规则',
   PublishesVia:'通过集成发布', ConsumesVia:'通过集成消费', UsesIntegration:'使用集成', DependsOn:'依赖',
+  Documents:'说明', References:'引用', AppliesTo:'适用于', SpecifiedBy:'由规格说明定义',
+  VerifiedBy:'由测试用例验证', Supersedes:'替代旧文档',
+}
+
+const incomingRelationTypeLabels: Readonly<Partial<Record<RelationType, string>>> = {
+  Documents: '由文档说明',
+  References: '被引用',
+  AppliesTo: '适用文档',
+  SpecifiedBy: '定义需求',
+  VerifiedBy: '验证需求/规格',
+  Supersedes: '被新文档替代',
+}
+
+export function contextualRelationTypeLabel(relationType: RelationType, direction: 'Incoming' | 'Outgoing' = 'Outgoing'): string {
+  return direction === 'Incoming' ? incomingRelationTypeLabels[relationType] ?? relationTypeLabels[relationType] : relationTypeLabels[relationType]
 }
 
 type Obj = Readonly<Record<string, unknown>>
@@ -53,7 +67,7 @@ function strings(v: unknown): readonly string[] { if(!Array.isArray(v)) throw ne
 export function isRelationshipSourcePayload(v: unknown): v is RelationshipSourcePayload {
   if (typeof v !== 'object' || v === null || Array.isArray(v)) return false
   const x=v as Obj
-  return typeof x.title==='string' && typeof x.systemName==='string' && typeof x.systemId==='number' && typeof x.source==='object' && x.source!==null
+  return typeof x.title==='string' && typeof x.source==='object' && x.source!==null
 }
 export function decodeTargets(v: unknown): KnowledgeTargetsResponse {
   const x=obj(v,'targets'); if(!Array.isArray(x.items)) throw new Error('items invalid')
@@ -67,3 +81,4 @@ export function decodeRelationshipDetail(v: unknown): RelationshipDetailResponse
 export function decodeAddRelationship(v: unknown): AddRelationshipResponse { const x=obj(v,'created'); const ks=status(x.knowledgeStatus); if(ks!=='Unknown') throw new Error('new relationship must be Unknown'); return{id:id(x.id,'id'),source:target(x.source),relationType:relation(x.relationType),target:target(x.target),knowledgeStatus:ks,concurrencyToken:str(x.concurrencyToken,'token')} }
 export function decodeDescription(v: unknown): {id:number;description:string|null;knowledgeStatus:KnowledgeStatus;concurrencyToken:string} { const x=obj(v,'description');return{id:id(x.id,'id'),description:nullableStr(x.description,'description'),knowledgeStatus:status(x.knowledgeStatus),concurrencyToken:str(x.concurrencyToken,'token')} }
 export function decodeStatusChange(v: unknown): {relationshipId:number;knowledgeStatus:KnowledgeStatus;concurrencyToken:string} {const x=obj(v,'status');return{relationshipId:id(x.relationshipId,'id'),knowledgeStatus:status(x.knowledgeStatus),concurrencyToken:str(x.concurrencyToken,'token')}}
+export function decodeRelatedKnowledge(v:unknown):readonly RelatedKnowledge[]{if(!Array.isArray(v))throw new Error('relations invalid');return v.map((raw,index)=>{const x=obj(raw,`relations[${index}]`);const direction=str(x.direction,'direction');if(direction!=='Incoming'&&direction!=='Outgoing')throw new Error('direction invalid');return{id:id(x.id,'id'),direction,relationType:relation(x.relationType),related:target(x.related),title:str(x.title,'title'),objectTypeLabel:str(x.objectTypeLabel,'objectTypeLabel')}})}

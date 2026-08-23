@@ -1,25 +1,14 @@
 import { isKnowledgeStatus, type KnowledgeStatus } from '../../../api/contracts/knowledge'
 
 export interface KnowledgeStatusTarget {
-  readonly type: 'System' | 'BusinessFunction' | 'DatabaseObject' | 'DatabaseColumn' | 'BusinessRule' | 'Integration'
+  readonly type: 'System' | 'BusinessFunction' | 'DatabaseObject' | 'DatabaseColumn' | 'BusinessRule' | 'Integration' | 'KnowledgeDocument'
   readonly id: number
-}
-
-export interface KnowledgeStatusActorInput {
-  readonly displayName: string
-  readonly roleOrIdentity: string
-  readonly occurredAt: string
-  readonly team: string | null
-  readonly externalUserKey: string | null
-  readonly source: string | null
-  readonly note: string | null
 }
 
 export interface ChangeKnowledgeStatusRequest {
   readonly target: KnowledgeStatusTarget
   readonly targetStatus: KnowledgeStatus
   readonly reason: string | null
-  readonly actor: KnowledgeStatusActorInput
   readonly concurrencyToken: string
 }
 
@@ -43,7 +32,7 @@ export interface KnowledgeStatusDialogPayload {
 
 type JsonObject = Readonly<Record<string, unknown>>
 const targetTypes: readonly KnowledgeStatusTarget['type'][] = [
-  'System', 'BusinessFunction', 'DatabaseObject', 'DatabaseColumn', 'BusinessRule', 'Integration',
+  'System', 'BusinessFunction', 'DatabaseObject', 'DatabaseColumn', 'BusinessRule', 'Integration', 'KnowledgeDocument',
 ]
 
 function isObject(value: unknown): value is JsonObject {

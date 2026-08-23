@@ -5,17 +5,13 @@ public sealed record KnowledgeStatusTargetCommand(string Type, long Id);
 public sealed record KnowledgeStatusActorCommand(
     string DisplayName,
     string RoleOrIdentity,
-    DateTimeOffset OccurredAt,
-    string? Team,
-    string? ExternalUserKey,
-    string? Source,
-    string? Note);
+    DateTimeOffset OccurredAt);
 
 public sealed record ChangeKnowledgeStatusCommand(
     KnowledgeStatusTargetCommand? Target,
     string TargetStatus,
     string? Reason,
-    KnowledgeStatusActorCommand? Actor,
+    KnowledgeStatusActorCommand Actor,
     string ConcurrencyToken);
 
 public sealed record KnowledgeStatusTargetResponse(string Type, long Id);

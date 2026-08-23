@@ -14,7 +14,7 @@ public sealed class EvidenceConfiguration : IEntityTypeConfiguration<EvidenceEnt
         builder.ToTable("evidence", table =>
         {
             table.HasCheckConstraint("ck_evidence_type", "evidence_type IN ('CodeReference','Sql','DatabaseSample','DatabaseComment','Api','MqMessage','ExistingDocument','HumanConfirmation')");
-            table.HasCheckConstraint("ck_evidence_subject_type", "subject_type IN ('System','DatabaseSource','BusinessFunction','DatabaseObject','DatabaseColumn','BusinessRule','Integration','KnowledgeRelation','UnknownItem','Finding','Resolution','KnowledgeUpdate')");
+            table.HasCheckConstraint("ck_evidence_subject_type", "subject_type IN ('System','DatabaseSource','BusinessFunction','DatabaseObject','DatabaseColumn','BusinessRule','Integration','KnowledgeDocument','KnowledgeRelation','UnknownItem','Finding','Resolution','KnowledgeUpdate')");
             table.HasCheckConstraint("ck_evidence_confidence", "confidence IS NULL OR confidence IN ('High','Medium','Low')");
             table.HasCheckConstraint("ck_evidence_source_locator", "source_reference IS NOT NULL OR source_locator_json IS NOT NULL");
             table.HasCheckConstraint("ck_evidence_source_locator_json", "source_locator_json IS NULL OR (json_valid(source_locator_json) AND json_type(source_locator_json) = 'object')");
@@ -44,6 +44,7 @@ public sealed class EvidenceConfiguration : IEntityTypeConfiguration<EvidenceEnt
         builder.Property(entity => entity.ProviderSource).HasColumnName("provider_source");
         builder.Property(entity => entity.ProviderNote).HasColumnName("provider_note");
         builder.Property(entity => entity.ProvidedAt).HasColumnName("provided_at").IsRequired();
+        builder.Property(entity => entity.KnowledgeDocumentRevisionNumberSnapshot).HasColumnName("knowledge_document_revision_number_snapshot");
         builder.Property(entity => entity.CreatedAt).HasColumnName("created_at").IsRequired();
         builder.Property(entity => entity.UpdatedAt).HasColumnName("updated_at").IsRequired();
         builder.Property(entity => entity.Version).HasColumnName("version").HasDefaultValue(1L).IsConcurrencyToken().IsRequired();

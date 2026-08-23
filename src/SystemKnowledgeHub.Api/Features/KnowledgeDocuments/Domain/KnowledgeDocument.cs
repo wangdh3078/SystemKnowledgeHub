@@ -23,5 +23,7 @@ public sealed class KnowledgeDocument
     public DateTimeOffset UpdatedAt { get; set; }
     public DateTimeOffset? PublishedAt { get; set; }
     public DateTimeOffset? ArchivedAt { get; set; }
+    public long CurrentRevisionNumber { get; set; } = 1;
+    public long? LatestPublishedRevisionNumber { get; set; }
     public long Version { get; set; } = 1;
 }

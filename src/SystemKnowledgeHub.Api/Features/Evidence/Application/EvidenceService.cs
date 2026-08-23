@@ -89,13 +89,29 @@ public sealed class EvidenceService(
     {
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
         var errors = new Dictionary<string, string[]>();
+        var subjectType = default(EvidenceSubjectType);
         if (request.Subject is null)
         {
             errors["subject"] = ["必须选择一个明确的知识对象。"];
         }
-        else if (!TryParseSubject(request.Subject, errors, out _))
+        else if (!TryParseSubject(request.Subject, errors, out subjectType))
         {
             // Error recorded by TryParseSubject.
+        }
+        else if (subjectType == EvidenceSubjectType.KnowledgeDocument)
+        {
+            if (!request.SubjectRevisionNumber.HasValue)
+            {
+                errors["subjectRevisionNumber"] = ["确认知识文档时必须提交当前修订号。"];
+            }
+            else if (!ApiIdParser.IsSafePositive(request.SubjectRevisionNumber.Value))
+            {
+                errors["subjectRevisionNumber"] = ["文档修订号必须是 JavaScript 安全范围内的正整数。"];
+            }
+        }
+        else if (request.SubjectRevisionNumber.HasValue)
+        {
+            errors["subjectRevisionNumber"] = ["只有 KnowledgeDocument Subject 可以提交修订号。"];
         }
         if (string.IsNullOrWhiteSpace(request.ConfirmationStatement))
         {
@@ -142,6 +158,24 @@ public sealed class EvidenceService(
         if (!currentUser.IsActive)
         {
             return new EvidenceCommandResult(null, null, EvidenceFailure.CurrentUserInactive);
+        }
+
+        long? knowledgeDocumentRevisionNumberSnapshot = null;
+        if (subjectType == EvidenceSubjectType.KnowledgeDocument)
+        {
+            var currentRevisionNumber = await dbContext.KnowledgeDocuments.AsNoTracking()
+                .Where(document => document.Id == request.Subject!.Id)
+                .Select(document => (long?)document.CurrentRevisionNumber)
+                .SingleOrDefaultAsync(cancellationToken);
+            if (!currentRevisionNumber.HasValue)
+            {
+                return new EvidenceCommandResult(null, null, EvidenceFailure.SubjectNotFound);
+            }
+            if (currentRevisionNumber.Value != request.SubjectRevisionNumber)
+            {
+                return new EvidenceCommandResult(null, null, EvidenceFailure.Conflict);
+            }
+            knowledgeDocumentRevisionNumberSnapshot = currentRevisionNumber.Value;
         }
 
         KnowledgeRoleSnapshot? selectedRole = null;
@@ -200,7 +234,6 @@ public sealed class EvidenceService(
             }
         }
 
-        _ = TryParseSubject(request.Subject!, errors, out var subjectType);
         var subjectContext = await subjectResolver.Resolve(subjectType, request.Subject!.Id, cancellationToken);
         if (subjectContext is null)
         {
@@ -240,6 +273,7 @@ public sealed class EvidenceService(
         item.ProviderKnowledgeRoleId = selectedRole?.Id;
         item.ProviderEmployeeNo = NormalizeOptional(currentUser.EmployeeNo);
         item.ProviderJobTitle = NormalizeOptional(currentUser.JobTitle);
+        item.KnowledgeDocumentRevisionNumberSnapshot = knowledgeDocumentRevisionNumberSnapshot;
         dbContext.Evidence.Add(item);
         await dbContext.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
@@ -359,6 +393,7 @@ public sealed class EvidenceService(
             item.EvidenceType.ToString(),
             new EvidenceTargetResponse(item.SubjectType.ToString(), item.SubjectId),
             item.SubjectDetailKey,
+            item.KnowledgeDocumentRevisionNumberSnapshot,
             item.SourceTitle,
             knowledgeStatus,
             false,

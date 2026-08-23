@@ -10,9 +10,9 @@ public sealed class KnowledgeRelationConfiguration : IEntityTypeConfiguration<Kn
     {
         builder.ToTable("knowledge_relations", table =>
         {
-            table.HasCheckConstraint("ck_knowledge_relations_source_type", "source_type IN ('System','DatabaseSource','BusinessFunction','DatabaseObject','DatabaseColumn','BusinessRule','Integration')");
-            table.HasCheckConstraint("ck_knowledge_relations_target_type", "target_type IN ('System','DatabaseSource','BusinessFunction','DatabaseObject','DatabaseColumn','BusinessRule','Integration')");
-            table.HasCheckConstraint("ck_knowledge_relations_relation_type", "relation_type IN ('Calls','Reads','Writes','UsesField','AppliesRule','PublishesVia','ConsumesVia','UsesIntegration','DependsOn')");
+            table.HasCheckConstraint("ck_knowledge_relations_source_type", "source_type IN ('System','DatabaseSource','BusinessFunction','DatabaseObject','DatabaseColumn','BusinessRule','Integration','KnowledgeDocument')");
+            table.HasCheckConstraint("ck_knowledge_relations_target_type", "target_type IN ('System','DatabaseSource','BusinessFunction','DatabaseObject','DatabaseColumn','BusinessRule','Integration','KnowledgeDocument')");
+            table.HasCheckConstraint("ck_knowledge_relations_relation_type", "relation_type IN ('Calls','Reads','Writes','UsesField','AppliesRule','PublishesVia','ConsumesVia','UsesIntegration','DependsOn','Documents','References','AppliesTo','SpecifiedBy','VerifiedBy','Supersedes')");
             table.HasCheckConstraint("ck_knowledge_relations_status", "knowledge_status IN ('Unknown','Inferred','Confirmed')");
             table.HasCheckConstraint("ck_knowledge_relations_distinct_endpoints", "source_type <> target_type OR source_id <> target_id");
             table.HasCheckConstraint("ck_knowledge_relations_version", "version >= 1");

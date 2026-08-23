@@ -10,7 +10,7 @@ namespace SystemKnowledgeHub.Api.Tests.Api;
 public sealed class LocalCredentialSecurityTests(ITestOutputHelper output)
 {
     [Fact]
-    public void Password_policy_hashing_and_username_normalization_preserve_the_approved_boundaries()
+    public void Password_policy_hashing_and_username_normalization_preserve_the_current_boundaries()
     {
         Assert.True(LocalCredentialSecurity.TryNormalizeUsername("  王大虎01  ", out var username, out var normalized));
         Assert.Equal("王大虎01", username);
@@ -18,7 +18,8 @@ public sealed class LocalCredentialSecurityTests(ITestOutputHelper output)
         Assert.Equal(Normalize("Admin"), Normalize("admin"));
         Assert.False(LocalCredentialSecurity.TryNormalizeUsername("local admin", out _, out _));
         Assert.True(LocalCredentialSecurity.IsValidPassword(" leading and trailing whitespace are significant "));
-        Assert.False(LocalCredentialSecurity.IsValidPassword("too-short"));
+        Assert.False(LocalCredentialSecurity.IsValidPassword("1234567"));
+        Assert.True(LocalCredentialSecurity.IsValidPassword("12345678"));
         Assert.False(LocalCredentialSecurity.IsValidPassword(new string('a', 129)));
 
         var password = "  Unicode 密码与空格保持原样 2026!  ";

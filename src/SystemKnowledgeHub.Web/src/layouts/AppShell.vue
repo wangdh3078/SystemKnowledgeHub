@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { parseSafeApiId } from '../api/contracts/id'
 import { useOverlayStore } from '../app/stores/overlays'
@@ -16,16 +16,22 @@ import CreateDatabaseKnowledgeFlow from '../features/database-knowledge/componen
 import CreateSystemFlow from '../features/systems/components/CreateSystemFlow.vue'
 import CreateKnowledgeObjectChooser from '../features/systems/components/CreateKnowledgeObjectChooser.vue'
 import CreateBusinessFunctionFlow from '../features/business-functions/components/CreateBusinessFunctionFlow.vue'
+import CreateKnowledgeDocumentDialog from '../features/knowledge-documents/components/CreateKnowledgeDocumentDialog.vue'
 import GlobalSearchOverlay from '../features/search/components/GlobalSearchOverlay.vue'
 
 const overlayStore = useOverlayStore()
 const route = useRoute()
+const globalDocumentCreateOpen = ref(false)
 const shellClass = computed(() => ({
   'app-shell--drawer-open': overlayStore.isDrawerOpen,
 }))
 const createSystemContextId = computed(() =>
   route.name === 'system-detail' ? parseSafeApiId(route.params.id) ?? undefined : undefined,
 )
+
+function openGlobalDocumentCreate(): void {
+  globalDocumentCreateOpen.value = true
+}
 </script>
 
 <template>
@@ -45,10 +51,15 @@ const createSystemContextId = computed(() =>
     <DialogHost />
     <Teleport v-if="overlayStore.currentDialog?.kind === 'create-knowledge-object'" defer to="#dialog-feature-content">
       <CreateKnowledgeObjectChooser
-        :enabled-kinds="['system', 'business-function', 'database-knowledge', 'business-rule', 'integration']"
+        :enabled-kinds="['system', 'business-function', 'database-knowledge', 'business-rule', 'integration', 'knowledge-document']"
         :system-context="createSystemContextId ? '当前系统' : '在下一步选择'"
+        @choose-knowledge-document="openGlobalDocumentCreate"
       />
     </Teleport>
+    <CreateKnowledgeDocumentDialog
+      :open="globalDocumentCreateOpen"
+      @close="globalDocumentCreateOpen = false"
+    />
     <GlobalSearchOverlay />
     <CreateUnknownItemFlow />
     <CreateBusinessRuleFlow />

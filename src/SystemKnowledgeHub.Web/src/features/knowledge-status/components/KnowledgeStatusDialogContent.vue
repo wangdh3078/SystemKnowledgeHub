@@ -3,14 +3,12 @@ import { computed, ref, watch } from 'vue'
 import { CircleCheck, DocumentChecked, Warning } from '@element-plus/icons-vue'
 import { ApiError } from '../../../api/errors/ApiError'
 import { knowledgeStatusLabels, type KnowledgeStatus } from '../../../api/contracts/knowledge'
-import { useActorStore } from '../../../app/stores/actor'
 import { useOverlayStore } from '../../../app/stores/overlays'
 import KnowledgeStatusBadge from '../../../components/data-display/KnowledgeStatusBadge.vue'
 import { changeKnowledgeStatus } from '../api/knowledgeStatusApi'
 import { isKnowledgeStatusDialogPayload } from '../api/knowledgeStatusContracts'
 
 const overlayStore = useOverlayStore()
-const actorStore = useActorStore()
 const submitting = ref(false)
 const errorMessage = ref<string | null>(null)
 const conflict = ref(false)
@@ -48,15 +46,6 @@ async function submit(): Promise<void> {
       target: payload.value.target,
       targetStatus: targetStatus.value,
       reason: reason.value.trim() || null,
-      actor: {
-        displayName: actorStore.displayName,
-        roleOrIdentity: actorStore.role ?? '知识整理人员',
-        occurredAt: new Date().toISOString(),
-        team: null,
-        externalUserKey: null,
-        source: 'System Knowledge Hub',
-        note: null,
-      },
       concurrencyToken: payload.value.concurrencyToken,
     })
     overlayStore.closeDialog()

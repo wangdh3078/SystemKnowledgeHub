@@ -80,6 +80,7 @@ public sealed class HumanConfirmationSnapshotMigrationTests
         Assert.Contains("ck_evidence_type", tableSql);
         Assert.Contains("ck_evidence_source_locator", tableSql);
         Assert.Contains("ck_evidence_version", tableSql);
+        Assert.Contains("KnowledgeDocument", tableSql);
     }
 
     private static async Task<IReadOnlyList<string>> ReadFirstColumn(

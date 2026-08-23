@@ -24,4 +24,18 @@ describe('apiClient', () => {
     const client = createApiClient('/api', vi.fn<typeof fetch>().mockRejectedValue(new TypeError('offline')))
     await expect(client.get('/bootstrap/status', { decode: () => ({}) })).rejects.toBeInstanceOf(NetworkRequestError)
   })
+
+  it('sends body and antiforgery token for root POST endpoints that return no content', async () => {
+    const fetchImplementation = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 204 }))
+    const client = createApiClient('/api', fetchImplementation, () => 'request-token')
+
+    await client.postRoot('/auth/local/login', { username: 'local-admin', password: 'secret' })
+
+    expect(fetchImplementation).toHaveBeenCalledWith('/auth/local/login', expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({ username: 'local-admin', password: 'secret' }),
+      headers: expect.objectContaining({ 'X-CSRF-TOKEN': 'request-token' }),
+      credentials: 'include',
+    }))
+  })
 })

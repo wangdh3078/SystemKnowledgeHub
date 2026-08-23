@@ -1,0 +1,283 @@
+import { flushPromises, mount } from '@vue/test-utils'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ApiError } from '../../../api/errors/ApiError'
+import type { KnowledgeDocumentDetail } from '../api/knowledgeDocumentContracts'
+import KnowledgeDocumentDetailView from './KnowledgeDocumentDetailView.vue'
+import { getKnowledgeDocument, updateKnowledgeDocumentContent } from '../api/knowledgeDocumentsApi'
+import { getRelatedKnowledge } from '../../relationships/api/relationshipApi'
+import { getEvidenceList } from '../../evidence/api/evidenceApi'
+
+const actorState = vi.hoisted(() => ({ canEdit: true }))
+const overlayState = vi.hoisted(() => ({ openDrawer: vi.fn() }))
+const routerState = vi.hoisted(() => ({ push: vi.fn() }))
+
+vi.mock('vue', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('vue')>()
+  return {
+    ...actual,
+    defineAsyncComponent: () =>
+      actual.defineComponent({
+        name: 'KnowledgeDocumentEditor',
+        props: { modelValue: { type: String, required: true } },
+        emits: ['update:modelValue', 'ready'],
+        setup(_props, { emit }) {
+          return () =>
+            actual.h(
+              'button',
+              {
+                type: 'button',
+                onClick: () => emit('update:modelValue', '## 新步骤\n\n1. 已修改'),
+              },
+              '修改正文',
+            )
+        },
+      }),
+  }
+})
+vi.mock('vue-router', () => ({
+  onBeforeRouteLeave: vi.fn(),
+  useRoute: () => ({ params: { id: '1' } }),
+  useRouter: () => routerState,
+}))
+vi.mock('element-plus', () => ({ ElMessageBox: { confirm: vi.fn() } }))
+vi.mock('../api/knowledgeDocumentsApi', () => ({
+  getKnowledgeDocument: vi.fn(),
+  updateKnowledgeDocumentContent: vi.fn(),
+  updateKnowledgeDocumentLifecycle: vi.fn(),
+}))
+vi.mock('../../../app/stores/actor', () => ({
+  useActorStore: () => ({
+    get canEdit() {
+      return actorState.canEdit
+    },
+    refreshCurrentUser: vi.fn(),
+  }),
+}))
+vi.mock('../../../app/stores/overlays', () => ({ useOverlayStore: () => overlayState }))
+vi.mock('../../relationships/api/relationshipApi', () => ({
+  getRelatedKnowledge: vi.fn().mockResolvedValue([]),
+  deleteRelationship: vi.fn(),
+}))
+vi.mock('../../evidence/api/evidenceApi', () => ({
+  getEvidenceList: vi.fn().mockResolvedValue({ items: [] }),
+}))
+const detail: KnowledgeDocumentDetail = {
+  id: 1,
+  documentType: 'Sop',
+  title: 'Oracle 数据库连接异常处理',
+  summary: '原摘要',
+  bodyMarkdown: '## 步骤\n\n1. 检查连接',
+  lifecycleStatus: 'Draft',
+  knowledgeStatus: 'Unknown',
+  createdByUserId: 1,
+  createdByDisplayName: '编辑者',
+  updatedByUserId: 1,
+  updatedByDisplayName: '编辑者',
+  createdAt: '2026-08-22T12:00:00Z',
+  updatedAt: '2026-08-22T12:00:00Z',
+  publishedAt: null,
+  archivedAt: null,
+  currentRevisionNumber: 1,
+  latestPublishedRevisionNumber: null,
+  confirmationCoverage: { state: 'NoConfirmation', lastConfirmedRevisionNumber: null },
+  concurrencyToken: 'token-1',
+}
+
+const components = {
+  ElButton: {
+    props: { disabled: Boolean },
+    template: '<button :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
+  },
+  ElTag: { template: '<span><slot /></span>' },
+  ElForm: { template: '<form><slot /></form>' },
+  ElFormItem: { template: '<div><slot /></div>' },
+  ElInput: {
+    props: { modelValue: { type: String, required: true } },
+    emits: ['update:modelValue'],
+    template:
+      '<textarea :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />',
+  },
+  ElIcon: { template: '<span><slot /></span>' },
+  KnowledgeStatusBadge: { template: '<span>知识状态</span>' },
+}
+
+function mountView() {
+  return mount(KnowledgeDocumentDetailView, { global: { components } })
+}
+
+function button(wrapper: ReturnType<typeof mountView>, label: string) {
+  return wrapper.findAll('button').find((candidate) => candidate.text() === label)
+}
+
+describe('KnowledgeDocumentDetailView editing', () => {
+  beforeEach(() => {
+    actorState.canEdit = true
+    vi.mocked(getKnowledgeDocument).mockReset()
+    vi.mocked(updateKnowledgeDocumentContent).mockReset()
+    vi.mocked(getRelatedKnowledge).mockReset()
+    vi.mocked(getEvidenceList).mockReset()
+    vi.mocked(getKnowledgeDocument).mockResolvedValue(detail)
+    vi.mocked(getRelatedKnowledge).mockResolvedValue([])
+    vi.mocked(getEvidenceList).mockResolvedValue({ items: [] })
+    overlayState.openDrawer.mockReset()
+    routerState.push.mockReset()
+  })
+
+  it('previews unsaved Markdown and saves title, summary, body and token atomically', async () => {
+    const updated = {
+      ...detail,
+      title: '更新后的 SOP',
+      summary: null,
+      bodyMarkdown: '## 新步骤\n\n1. 已修改',
+      concurrencyToken: 'token-2',
+    }
+    vi.mocked(updateKnowledgeDocumentContent).mockResolvedValue(updated)
+    const wrapper = mountView()
+    await flushPromises()
+    await button(wrapper, '编辑')?.trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('编辑中')
+    expect(wrapper.text()).toContain('已保存')
+
+    await wrapper.findAll('textarea')[0].setValue('更新后的 SOP')
+    expect(wrapper.text()).toContain('未保存')
+    await wrapper.findAll('textarea')[1].setValue('')
+    await button(wrapper, '修改正文')?.trigger('click')
+    await button(wrapper, '预览')?.trigger('click')
+    await flushPromises()
+    expect(wrapper.html()).toContain('新步骤')
+    expect(wrapper.text()).toContain('预览未保存内容')
+
+    await button(wrapper, '保存')?.trigger('click')
+    await flushPromises()
+    expect(updateKnowledgeDocumentContent).toHaveBeenCalledWith(1, {
+      title: '更新后的 SOP',
+      summary: null,
+      bodyMarkdown: '## 新步骤\n\n1. 已修改',
+      concurrencyToken: 'token-1',
+    })
+    expect(wrapper.text()).toContain('已保存。')
+    expect(wrapper.find('textarea').exists()).toBe(false)
+    expect(wrapper.text()).toContain('更新后的 SOP')
+  })
+
+  it('shows the in-progress save state while the existing content request is pending', async () => {
+    const deferredSave: { complete: ((value: KnowledgeDocumentDetail) => void) | null } = { complete: null }
+    vi.mocked(updateKnowledgeDocumentContent).mockImplementation(
+      () => new Promise<KnowledgeDocumentDetail>((resolve) => { deferredSave.complete = resolve }),
+    )
+    const wrapper = mountView()
+    await flushPromises()
+    await button(wrapper, '编辑')?.trigger('click')
+    await wrapper.findAll('textarea')[0].setValue('保存状态验证')
+    await button(wrapper, '保存')?.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('正在保存…')
+    deferredSave.complete?.({ ...detail, title: '保存状态验证', concurrencyToken: 'token-2' })
+    await flushPromises()
+    expect(wrapper.text()).toContain('已保存。')
+  })
+
+  it('keeps the edit state and local content after a stale conflict', async () => {
+    vi.mocked(updateKnowledgeDocumentContent).mockRejectedValue(
+      new ApiError(409, {
+        code: 'conflict',
+        message: 'conflict',
+        fieldErrors: null,
+        details: null,
+      }),
+    )
+    const wrapper = mountView()
+    await flushPromises()
+    await button(wrapper, '编辑')?.trigger('click')
+    await flushPromises()
+    await button(wrapper, '修改正文')?.trigger('click')
+    await button(wrapper, '保存')?.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('文档已被其他操作修改。')
+    expect(wrapper.text()).toContain('修改正文')
+    expect(wrapper.text()).toContain('重新加载')
+  })
+
+  it('does not expose editing actions to a Viewer', async () => {
+    actorState.canEdit = false
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(button(wrapper, '编辑')).toBeUndefined()
+    expect(button(wrapper, '发布')).toBeUndefined()
+    expect(button(wrapper, '添加关联')).toBeUndefined()
+    expect(button(wrapper, '添加证据')).toBeUndefined()
+    expect(button(wrapper, '添加人工确认')).toBeUndefined()
+  })
+
+  it('loads document Evidence, opens existing drawers with a fixed document target, and keeps progression explicit', async () => {
+    vi.mocked(getEvidenceList).mockResolvedValue({
+      items: [
+        {
+          id: 41,
+          evidenceType: 'ExistingDocument',
+          knowledgeDocumentRevisionNumberSnapshot: null,
+          sourceTitle: '已批准范围说明',
+          sourceReference: 'REQ-001',
+          sourceLocator: { section: 'scope' },
+          summary: null,
+          supportReason: '明确支持该文档的业务结论。',
+          provider: { displayName: '提供者', roleOrIdentity: '业务代表', occurredAt: '2026-08-22T02:30:00Z', team: null, externalUserKey: null, source: null, note: null },
+        },
+      ],
+    })
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(getEvidenceList).toHaveBeenCalledWith('KnowledgeDocument', 1)
+    expect(wrapper.text()).toContain('证据与人工确认')
+    expect(wrapper.text()).toContain('保存后不会自动改变知识状态。')
+    await button(wrapper, '添加证据')?.trigger('click')
+    expect(overlayState.openDrawer).toHaveBeenCalledWith({
+      kind: 'add-evidence',
+      id: null,
+      mode: 'create',
+      payload: {
+        subject: { type: 'KnowledgeDocument', id: 1 },
+        title: '操作规程 · Oracle 数据库连接异常处理',
+        knowledgeStatus: 'Unknown',
+        subjectRevisionNumber: 1,
+      },
+    })
+  })
+
+  it('loads document relations once, opens the existing add-relation drawer, and routes to the related object', async () => {
+    vi.mocked(getRelatedKnowledge).mockResolvedValue([
+      {
+        id: 71,
+        direction: 'Outgoing',
+        relationType: 'AppliesTo',
+        related: { type: 'System', id: 12 },
+        title: 'MES',
+        objectTypeLabel: '系统',
+      },
+    ])
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(getRelatedKnowledge).toHaveBeenCalledWith('KnowledgeDocument', 1)
+    expect(wrapper.text()).toContain('指向')
+    expect(wrapper.text()).toContain('适用于')
+    await button(wrapper, '添加关联')?.trigger('click')
+    expect(overlayState.openDrawer).toHaveBeenCalledWith({
+      kind: 'add-relationship',
+      id: 1,
+      mode: 'create',
+      payload: {
+        source: { type: 'KnowledgeDocument', id: 1 },
+        title: 'Oracle 数据库连接异常处理',
+        documentType: 'Sop',
+      },
+    })
+    await button(wrapper, '系统 · MES')?.trigger('click')
+    expect(routerState.push).toHaveBeenCalledWith({ name: 'system-detail', params: { id: '12' } })
+  })
+})

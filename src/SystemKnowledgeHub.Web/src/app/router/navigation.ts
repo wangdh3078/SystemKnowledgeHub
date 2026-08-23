@@ -1,8 +1,8 @@
 import type { Component } from 'vue'
-import { Coin, DataBoard, Files, Grid, QuestionFilled, UserFilled } from '@element-plus/icons-vue'
+import { Coin, DataBoard, Document, Files, Grid, QuestionFilled, UserFilled } from '@element-plus/icons-vue'
 
 export type NavigationKey =
-  'dashboard' | 'systems' | 'business-functions' | 'database' | 'unknown-items' | 'users'
+  'dashboard' | 'systems' | 'business-functions' | 'database' | 'knowledge-documents' | 'unknown-items' | 'users'
 
 export interface NavigationItem {
   readonly key: NavigationKey
@@ -10,7 +10,7 @@ export interface NavigationItem {
   readonly icon: Component
   readonly enabled: boolean
   readonly groupLabel?: string
-  readonly routeName?: 'dashboard' | 'systems-list' | 'business-functions-list' | 'database-objects-list' | 'unknown-items-list' | 'users-management'
+  readonly routeName?: 'dashboard' | 'systems-list' | 'business-functions-list' | 'database-objects-list' | 'knowledge-documents-list' | 'unknown-items-list' | 'users-management'
   readonly minimumAccessLevel?: 'Administrator'
 }
 
@@ -31,6 +31,7 @@ export const navigationItems: readonly NavigationItem[] = [
     enabled: true,
     routeName: 'database-objects-list',
   },
+  { key: 'knowledge-documents', label: '知识内容', icon: Document, enabled: true, routeName: 'knowledge-documents-list' },
   {
     key: 'unknown-items',
     label: '待确认事项',

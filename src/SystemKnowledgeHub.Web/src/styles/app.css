@@ -6,7 +6,7 @@ html,
 body,
 #app {
   width: 100%;
-  min-width: 1180px;
+  min-width: 0;
   min-height: 100%;
   margin: 0;
 }
@@ -25,6 +25,7 @@ button {
 .app-shell {
   display: grid;
   grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+  min-width: 1180px;
   min-height: 100vh;
   background: var(--color-canvas);
   transition: padding-right var(--transition-fast);
@@ -371,13 +372,38 @@ button {
 .app-topbar__profile-details dt { color: var(--text-muted); }
 .app-topbar__profile-details dd { margin: 0; overflow-wrap: anywhere; }
 .app-topbar__logout { width: 100%; }
-.security-gate { display: grid; min-height: 100vh; place-items: center; padding: 24px; background: var(--surface-page); }
+.security-gate { position: relative; display: grid; min-height: 100vh; place-items: center; padding: 32px; overflow: auto; background: radial-gradient(circle at 13% 22%, rgb(106 92 210 / 13%), transparent 29%), radial-gradient(circle at 88% 84%, rgb(91 151 214 / 10%), transparent 30%), linear-gradient(135deg, #f8f9fd 0%, #f4f5fa 52%, #f8f9fc 100%); }
+.security-gate::before { position: absolute; inset: 0; z-index: 0; background-image: linear-gradient(rgb(93 101 139 / 4%) 1px, transparent 1px), linear-gradient(90deg, rgb(93 101 139 / 4%) 1px, transparent 1px); background-size: 32px 32px; content: ''; mask-image: linear-gradient(to bottom, rgb(0 0 0 / 65%), transparent 88%); pointer-events: none; }
+.security-gate::after { position: absolute; width: min(52vw, 720px); height: min(52vw, 720px); border: 1px solid rgb(99 102 241 / 7%); border-radius: 50%; transform: translate(-31%, 18%); content: ''; pointer-events: none; }
 .security-gate--embedded { min-height: calc(100vh - 64px); }
-.security-gate__card { width: min(460px, 100%); padding: 32px; border: 1px solid var(--border-subtle); border-radius: 14px; background: var(--surface-raised); box-shadow: var(--shadow-card); }
-.security-gate__card > span { color: var(--text-muted); font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
-.security-gate__card h1 { margin: 10px 0; font-size: 24px; }
-.security-gate__card p { margin: 0 0 22px; color: var(--text-secondary); line-height: 1.65; }
+.security-gate__layout { position: relative; z-index: 1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(420px, 460px); width: min(1120px, 100%); align-items: center; gap: clamp(48px, 9vw, 132px); }
+.security-gate__brand { max-width: 540px; padding: 28px 0; }
+.security-gate__brand-mark { display: grid; width: 60px; height: 60px; margin-bottom: 24px; place-items: center; border: 1px solid rgb(255 255 255 / 70%); border-radius: 17px; background: linear-gradient(145deg, #7168df, var(--color-primary)); box-shadow: 0 16px 34px rgb(79 70 229 / 22%); color: #fff; }
+.security-gate__eyebrow { color: var(--color-primary); font-size: 12px; font-weight: 760; letter-spacing: .1em; text-transform: uppercase; }
+.security-gate__brand h1 { margin: 11px 0 16px; color: var(--color-ink); font-size: clamp(32px, 4vw, 46px); letter-spacing: -.04em; line-height: 1.14; }
+.security-gate__brand p { max-width: 510px; margin: 0; color: var(--color-muted); font-size: 15px; line-height: 1.85; }
+.security-gate__capabilities { display: flex; flex-wrap: wrap; margin-top: 23px; gap: 8px; }
+.security-gate__capabilities span { padding: 5px 10px; border-radius: 999px; background: rgb(99 91 197 / 8%); color: #5851a9; font-size: 12px; font-weight: 650; letter-spacing: .01em; }
+.security-gate__card { width: 100%; padding: 42px; border: 1px solid rgb(115 122 158 / 18%); border-radius: 18px; background: rgb(255 255 255 / 92%); box-shadow: 0 22px 55px rgb(39 45 69 / 12%), 0 2px 6px rgb(39 45 69 / 4%); backdrop-filter: blur(5px); }
+.security-gate__card h1 { margin: 0 0 8px; color: var(--color-ink); font-size: 26px; letter-spacing: -.02em; }
+.security-gate__card p { margin: 0 0 22px; color: var(--color-muted); line-height: 1.65; }
+.security-gate__subtitle { font-size: 13px; }
 .security-gate__card > div { display: flex; gap: 8px; }
+.security-gate__form { display: grid; gap: 8px; }
+.security-gate__form label { margin-top: 8px; color: var(--color-text); font-size: 13px; font-weight: 650; }
+.security-gate__form .el-input__wrapper { min-height: 44px; padding-right: 12px; border: 1px solid transparent; border-radius: 9px; box-shadow: 0 0 0 1px var(--color-border) inset; transition: box-shadow .18s ease, background .18s ease; }
+.security-gate__form .el-input__wrapper:hover { box-shadow: 0 0 0 1px #9c98ca inset; }
+.security-gate__form .el-input__wrapper.is-focus { box-shadow: 0 0 0 1px var(--color-primary) inset, 0 0 0 3px rgb(99 91 197 / 12%); }
+.security-gate__form .el-button, .security-gate__enterprise-login { width: 100%; min-height: 45px; margin-top: 10px; border-radius: 9px; }
+.security-gate__form .el-button--primary { box-shadow: 0 8px 18px rgb(79 70 229 / 17%); }
+.security-gate__form .el-button--primary:hover { transform: translateY(-1px); box-shadow: 0 11px 22px rgb(79 70 229 / 23%); }
+.security-gate__form .el-button--primary:active { transform: translateY(0); }
+.security-gate__form .el-alert { margin-top: 8px; }
+.security-gate__form p { margin: 8px 0 0; }
+.security-gate__divider { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; margin: 25px 0 14px; color: var(--color-subtle); font-size: 12px; }
+.security-gate__divider::before, .security-gate__divider::after { height: 1px; background: var(--color-border); content: ''; }
+@media (max-width: 900px) { .security-gate { padding: 24px; align-items: start; } .security-gate__layout { grid-template-columns: minmax(0, 460px); justify-content: center; gap: 18px; } .security-gate__brand { padding: 12px 0 0; } .security-gate__brand-mark { width: 42px; height: 42px; margin-bottom: 12px; border-radius: 11px; } .security-gate__brand h1 { margin: 6px 0 8px; font-size: 28px; } .security-gate__brand p { font-size: 13px; line-height: 1.65; } .security-gate__capabilities { margin-top: 14px; } }
+@media (max-width: 520px) { .security-gate { padding: 16px; } .security-gate__card { padding: 28px 22px; } }
 
 .app-content-area {
   display: grid;

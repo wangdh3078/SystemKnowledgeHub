@@ -32,6 +32,7 @@ public enum KnowledgeTargetType
     DatabaseColumn,
     BusinessRule,
     Integration,
+    KnowledgeDocument,
 }
 
 public enum RelationType
@@ -45,4 +46,10 @@ public enum RelationType
     ConsumesVia,
     UsesIntegration,
     DependsOn,
+    Documents,
+    References,
+    AppliesTo,
+    SpecifiedBy,
+    VerifiedBy,
+    Supersedes,
 }

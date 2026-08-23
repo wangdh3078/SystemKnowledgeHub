@@ -1,5 +1,7 @@
 namespace SystemKnowledgeHub.Api.Features.Relationships.Application.Models;
 
+using SystemKnowledgeHub.Api.Features.KnowledgeDocuments.Domain;
+
 public sealed record RelationshipTargetCommand(string Type, long Id);
 public sealed record RelationshipActorCommand(string DisplayName, string? Role);
 public sealed record RelationshipStatusActorCommand(string DisplayName, string RoleOrIdentity, DateTimeOffset OccurredAt);
@@ -14,14 +16,13 @@ public sealed record AddRelationshipCommand(
 public sealed record UpdateRelationshipDescriptionCommand(
     long RelationshipId,
     string? Description,
-    RelationshipActorCommand? Actor,
     string ConcurrencyToken);
 
 public sealed record ChangeRelationshipStatusCommand(
     long RelationshipId,
     string TargetStatus,
     string? Reason,
-    RelationshipStatusActorCommand? Actor,
+    RelationshipStatusActorCommand Actor,
     string ConcurrencyToken);
 
 public sealed record TargetReferenceResponse(string Type, long Id);
@@ -99,7 +100,8 @@ public sealed record RelationshipEndpointContext(
     string ObjectTypeLabel,
     string? ShortDescription,
     string KnowledgeStatus,
-    IReadOnlyList<SystemContextResponse> Systems);
+    IReadOnlyList<SystemContextResponse> Systems,
+    DocumentType? DocumentType);
 
 public enum RelationshipFailure
 {
@@ -127,5 +129,18 @@ public sealed record RelationshipDetailQueryResult(
 public sealed record KnowledgeTargetsQueryResult(
     KnowledgeTargetsResponse? Response,
     IReadOnlyDictionary<string, string[]>? FieldErrors,
+    RelationshipFailure Failure,
+    string? Message = null);
+
+public sealed record RelatedKnowledgeResponse(
+    long Id,
+    string Direction,
+    string RelationType,
+    TargetReferenceResponse Related,
+    string Title,
+    string ObjectTypeLabel);
+
+public sealed record RelatedKnowledgeQueryResult(
+    IReadOnlyList<RelatedKnowledgeResponse>? Items,
     RelationshipFailure Failure,
     string? Message = null);

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
+  decodeAddEvidence,
+  decodeEvidenceDetail,
   getHumanConfirmationMethod,
   type EvidenceDetailResponse,
 } from './evidenceContracts'
@@ -14,6 +16,7 @@ function humanConfirmation(
     evidenceType: 'HumanConfirmation',
     subject: { type: 'BusinessFunction', id: 77 },
     subjectDetailKey: 'Purpose',
+    knowledgeDocumentRevisionNumberSnapshot: null,
     sourceTitle: '人工确认 · 王敏',
     sourceReference: null,
     sourceLocator,
@@ -43,5 +46,24 @@ describe('getHumanConfirmationMethod', () => {
   it('falls back to provider source for legacy HumanConfirmation rows', () => {
     const detail = humanConfirmation({ confirmationStatement: 'legacy' }, 'OnSite')
     expect(getHumanConfirmationMethod(detail)).toBe('OnSite')
+  })
+
+  it('decodes nullable revision snapshots on Evidence responses', () => {
+    expect(decodeEvidenceDetail({
+      ...humanConfirmation({ confirmationMethod: 'Meeting' }, null),
+      knowledgeDocumentRevisionNumberSnapshot: 4,
+    }).knowledgeDocumentRevisionNumberSnapshot).toBe(4)
+
+    expect(decodeAddEvidence({
+      id: 9,
+      evidenceType: 'ExistingDocument',
+      subject: { type: 'KnowledgeDocument', id: 7 },
+      subjectDetailKey: null,
+      knowledgeDocumentRevisionNumberSnapshot: null,
+      sourceTitle: 'ordinary evidence',
+      subjectKnowledgeStatus: 'Unknown',
+      knowledgeStatusChanged: false,
+      concurrencyToken: 'opaque-evidence-token',
+    }).knowledgeDocumentRevisionNumberSnapshot).toBeNull()
   })
 })

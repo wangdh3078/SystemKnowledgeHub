@@ -20,7 +20,6 @@ public sealed class RelationshipQueries(
     {
         var errors = new Dictionary<string, string[]>();
         if (request.Purpose != "RelationTarget") errors["purpose"] = ["当前 Relationship Slice 只接受 RelationTarget。"];
-        if (!request.SystemId.HasValue || !ApiIdParser.IsSafePositive(request.SystemId.Value)) errors["systemId"] = ["必须提供有效的 System Context。"];
         if (!request.SourceId.HasValue || !ApiIdParser.IsSafePositive(request.SourceId.Value)) errors["sourceId"] = ["必须提供有效的 Source。"];
         if (!TryParseExact(request.SourceType, out KnowledgeTargetType sourceType)) errors["sourceType"] = ["SourceType 无效。"];
         if (!TryParseExact(request.RelationType, out RelationType relationType)) errors["relationType"] = ["RelationType 无效。"];
@@ -30,9 +29,14 @@ public sealed class RelationshipQueries(
         if (pageSize is < 1 or > 100) errors["pageSize"] = ["每页数量必须在 1 到 100 之间。"];
         if (errors.Count > 0) return new(null, errors, RelationshipFailure.Validation);
 
+        if (sourceType != KnowledgeTargetType.KnowledgeDocument && (!request.SystemId.HasValue || !ApiIdParser.IsSafePositive(request.SystemId.Value)))
+        {
+            return new(null, new Dictionary<string, string[]> { ["systemId"] = ["必须提供有效的 System Context。"] }, RelationshipFailure.Validation);
+        }
+
         var source = await targetResolver.Resolve(sourceType, request.SourceId!.Value, cancellationToken);
         if (source is null) return new(null, null, RelationshipFailure.NotFound, "未找到关系源对象。");
-        if (!source.Systems.Any(item => item.Id == request.SystemId))
+        if (sourceType != KnowledgeTargetType.KnowledgeDocument && !source.Systems.Any(item => item.Id == request.SystemId))
         {
             return new(null, null, RelationshipFailure.ReferenceInvalid, "Source 不属于当前 System Context。");
         }
@@ -43,7 +47,8 @@ public sealed class RelationshipQueries(
             return new(null, null, RelationshipFailure.ReferenceInvalid, "RelationType 与 SourceType 组合无效。");
         }
 
-        var candidates = await targetResolver.Search(allowed, request.SystemId!.Value, request.Query, cancellationToken);
+        var allowedDocumentTypes = endpointPolicy.AllowedDocumentTargetTypes(source, relationType, KnowledgeTargetType.KnowledgeDocument);
+        var candidates = await targetResolver.Search(allowed, request.SystemId, request.Query, allowedDocumentTypes, cancellationToken);
         var valid = candidates
             .Where(item => !(item.Target.Type == sourceType.ToString() && item.Target.Id == request.SourceId))
             .ToArray();
@@ -86,6 +91,39 @@ public sealed class RelationshipQueries(
             new RelationshipPersonContextResponse(item.CreatedByName, item.CreatedByRole, item.CreatedAt),
             new RelationshipPersonContextResponse(item.KnowledgeStatusChangedByName, item.KnowledgeStatusChangedByRole, item.KnowledgeStatusChangedAt),
             ["UpdateKnowledgeRelationDescription", "AddEvidence", "ChangeRelationKnowledgeStatus"]), RelationshipFailure.None);
+    }
+
+    public async Task<RelatedKnowledgeQueryResult> GetRelatedKnowledge(
+        string? objectType,
+        long objectId,
+        CancellationToken cancellationToken)
+    {
+        if (!ApiIdParser.IsSafePositive(objectId) || !TryParseExact(objectType, out KnowledgeTargetType type))
+        {
+            return new(null, RelationshipFailure.Validation, "对象标识无效。");
+        }
+        if (await targetResolver.Resolve(type, objectId, cancellationToken) is null)
+        {
+            return new(null, RelationshipFailure.NotFound, "未找到关联源对象。");
+        }
+
+        var relations = await dbContext.KnowledgeRelations.AsNoTracking()
+            .Where(item => (item.SourceType == type && item.SourceId == objectId)
+                || (item.TargetType == type && item.TargetId == objectId))
+            .ToArrayAsync(cancellationToken);
+        var items = new List<RelatedKnowledgeResponse>(relations.Length);
+        foreach (var relation in relations)
+        {
+            var outgoing = relation.SourceType == type && relation.SourceId == objectId;
+            var relatedType = outgoing ? relation.TargetType : relation.SourceType;
+            var relatedId = outgoing ? relation.TargetId : relation.SourceId;
+            var related = await targetResolver.Resolve(relatedType, relatedId, cancellationToken);
+            items.Add(new RelatedKnowledgeResponse(
+                relation.Id, outgoing ? "Outgoing" : "Incoming", relation.RelationType.ToString(),
+                new TargetReferenceResponse(relatedType.ToString(), relatedId),
+                related?.Title ?? "对象已不存在", related?.ObjectTypeLabel ?? relatedType.ToString()));
+        }
+        return new(items.OrderByDescending(item => item.Id).ToArray(), RelationshipFailure.None);
     }
 
     private static RelationshipEndpointResponse Endpoint(KnowledgeTargetType type, long id, RelationshipEndpointContext context)

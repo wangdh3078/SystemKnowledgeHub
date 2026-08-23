@@ -106,6 +106,9 @@ async function save(): Promise<void> {
   try {
     const created = await addHumanConfirmation({
       subject: subject.value.subject,
+      ...(subject.value.subjectRevisionNumber === undefined
+        ? {}
+        : { subjectRevisionNumber: subject.value.subjectRevisionNumber }),
       subjectDetailKey: subject.value.subjectDetailKey ?? null,
       knowledgeRoleId: requiresRoleSelection.value ? form.knowledgeRoleId : null,
       confirmationMethod: form.confirmationMethod,

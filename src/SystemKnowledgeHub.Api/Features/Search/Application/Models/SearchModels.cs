@@ -18,7 +18,10 @@ public sealed record SearchResultItem(
     string ShortDescription,
     string? KnowledgeStatus,
     string? UnknownItemStatus,
-    SearchNavigation Navigation);
+    SearchNavigation Navigation,
+    string? ContentType,
+    string? LifecycleStatus,
+    DateTimeOffset? UpdatedAt);
 
 public sealed record SearchResultGroup(
     string ObjectType,

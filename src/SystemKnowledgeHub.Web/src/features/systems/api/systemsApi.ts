@@ -19,6 +19,7 @@ import {
   type UpdateSystemTechnologyResponse,
 } from './systemsContracts'
 import { isSafeApiId } from '../../../api/contracts/id'
+import { decodeSystemKnowledgeView, type SystemKnowledgeView } from './systemKnowledgeViewContracts'
 
 export function getSystemsList(
   parameters: SystemsListParameters,
@@ -56,6 +57,20 @@ export function getSystemDetail(
   return apiClient.get(`/systems/${encodeURIComponent(String(id))}`, {
     signal,
     decode: decodeSystemDetail,
+  })
+}
+
+export function getSystemKnowledgeView(
+  id: number,
+  signal?: AbortSignal,
+): Promise<SystemKnowledgeView> {
+  if (!isSafeApiId(id)) {
+    return Promise.reject(new RangeError('ID 必须是 JavaScript 安全范围内的正整数。'))
+  }
+
+  return apiClient.get(`/systems/${encodeURIComponent(String(id))}/knowledge-view`, {
+    signal,
+    decode: decodeSystemKnowledgeView,
   })
 }
 

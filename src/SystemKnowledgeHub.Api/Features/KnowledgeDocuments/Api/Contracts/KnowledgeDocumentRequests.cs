@@ -10,4 +10,9 @@ public sealed record UpdateKnowledgeDocumentContentRequest(
     string? Title,
     string? Summary,
     string? BodyMarkdown,
+    string? ChangeSummary,
+    string? ConcurrencyToken);
+
+public sealed record UpdateKnowledgeDocumentLifecycleRequest(
+    string? TargetLifecycleStatus,
     string? ConcurrencyToken);

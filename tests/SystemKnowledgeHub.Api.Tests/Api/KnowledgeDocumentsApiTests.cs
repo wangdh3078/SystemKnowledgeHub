@@ -156,6 +156,40 @@ public sealed class KnowledgeDocumentsApiTests : IClassFixture<BootstrapWebAppli
     }
 
     [Fact]
+    public async Task Editor_can_follow_document_lifecycle_graph_without_changing_knowledge_status()
+    {
+        var editorId = await CreateUser(AccessLevel.Editor);
+        using var editor = await _factory.CreateAuthenticatedClientAsync(editorId);
+        using var create = await editor.PostAsJsonAsync("/api/knowledge-documents", new { documentType = "KnowledgeArticle", title = "Lifecycle", bodyMarkdown = "body" });
+        var draft = (await create.Content.ReadFromJsonAsync<JsonElement>()).Clone();
+        var id = draft.GetProperty("id").GetInt64();
+
+        using var publish = await editor.PutAsJsonAsync($"/api/knowledge-documents/{id}/lifecycle", new { targetLifecycleStatus = "Published", concurrencyToken = draft.GetProperty("concurrencyToken").GetString() });
+        Assert.Equal(HttpStatusCode.OK, publish.StatusCode);
+        var published = (await publish.Content.ReadFromJsonAsync<JsonElement>()).Clone();
+        Assert.Equal("Published", published.GetProperty("lifecycleStatus").GetString());
+        Assert.Equal("Unknown", published.GetProperty("knowledgeStatus").GetString());
+        Assert.False(string.IsNullOrWhiteSpace(published.GetProperty("publishedAt").GetString()));
+
+        using var archive = await editor.PutAsJsonAsync($"/api/knowledge-documents/{id}/lifecycle", new { targetLifecycleStatus = "Archived", concurrencyToken = published.GetProperty("concurrencyToken").GetString() });
+        Assert.Equal(HttpStatusCode.OK, archive.StatusCode);
+        var archived = (await archive.Content.ReadFromJsonAsync<JsonElement>()).Clone();
+        Assert.Equal("Archived", archived.GetProperty("lifecycleStatus").GetString());
+        Assert.Equal("Unknown", archived.GetProperty("knowledgeStatus").GetString());
+
+        using var restore = await editor.PutAsJsonAsync($"/api/knowledge-documents/{id}/lifecycle", new { targetLifecycleStatus = "Draft", concurrencyToken = archived.GetProperty("concurrencyToken").GetString() });
+        Assert.Equal(HttpStatusCode.OK, restore.StatusCode);
+        var restored = (await restore.Content.ReadFromJsonAsync<JsonElement>()).Clone();
+        Assert.Equal("Draft", restored.GetProperty("lifecycleStatus").GetString());
+
+        using var invalid = await editor.PutAsJsonAsync($"/api/knowledge-documents/{id}/lifecycle", new { targetLifecycleStatus = "Archived", concurrencyToken = restored.GetProperty("concurrencyToken").GetString() });
+        Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
+
+        using var stale = await editor.PutAsJsonAsync($"/api/knowledge-documents/{id}/lifecycle", new { targetLifecycleStatus = "Published", concurrencyToken = draft.GetProperty("concurrencyToken").GetString() });
+        Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode);
+    }
+
+    [Fact]
     public async Task Persistence_constraints_reject_invalid_enum_and_user_foreign_key_values()
     {
         await using var scope = _factory.Services.CreateAsyncScope();

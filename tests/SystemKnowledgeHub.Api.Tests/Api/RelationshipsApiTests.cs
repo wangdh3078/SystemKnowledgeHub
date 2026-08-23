@@ -1,15 +1,24 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using SystemKnowledgeHub.Api.Features.Users.Domain;
+using SystemKnowledgeHub.Api.Persistence;
 using SystemKnowledgeHub.Api.Tests.TestSupport;
 
 namespace SystemKnowledgeHub.Api.Tests.Api;
 
 public sealed class RelationshipsApiTests : IClassFixture<BootstrapWebApplicationFactory>
 {
+    private readonly BootstrapWebApplicationFactory _factory;
     private readonly HttpClient _client;
 
-    public RelationshipsApiTests(BootstrapWebApplicationFactory factory) => _client = factory.CreateAuthenticatedClient();
+    public RelationshipsApiTests(BootstrapWebApplicationFactory factory)
+    {
+        _factory = factory;
+        _client = factory.CreateAuthenticatedClient();
+    }
 
     [Fact]
     public async Task Target_search_add_detail_and_description_update_form_one_real_read_relationship()
@@ -105,6 +114,190 @@ public sealed class RelationshipsApiTests : IClassFixture<BootstrapWebApplicatio
         using var confirmed = await ChangeStatus(id, "Confirmed", token);
         Assert.Equal(HttpStatusCode.OK, confirmed.StatusCode);
         Assert.Equal("Confirmed", (await confirmed.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("knowledgeStatus").GetString());
+    }
+
+    [Fact]
+    public async Task Knowledge_document_can_relate_to_structured_objects_and_another_document_without_changing_document_status()
+    {
+        var documentId = await CreateDocument("关系 SOP");
+        var otherDocumentId = await CreateDocument("关联说明");
+
+        using var system = await _client.PostAsJsonAsync("/api/relationships", new
+        {
+            source = new { type = "KnowledgeDocument", id = documentId }, relationType = "AppliesTo",
+            target = new { type = "System", id = 12L }, description = (string?)null, actor = new { displayName = "伪造操作者", role = "伪造" },
+        });
+        Assert.Equal(HttpStatusCode.Created, system.StatusCode);
+        var created = await system.Content.ReadFromJsonAsync<JsonElement>();
+        using var systemDetail = await _client.GetAsync($"/api/relationships/{created.GetProperty("id").GetInt64()}");
+        Assert.Equal("SEC-01 Test Principal", (await systemDetail.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("created").GetProperty("displayName").GetString());
+
+        await AssertCreated(documentId, "Documents", "BusinessFunction", 77L);
+        await AssertCreated(documentId, "References", "DatabaseObject", 45L);
+        await AssertCreated(documentId, "Documents", "BusinessRule", await CreateBusinessRule("文档关系规则"));
+        using var related = await _client.PostAsJsonAsync("/api/relationships", new
+        {
+            source = new { type = "KnowledgeDocument", id = documentId }, relationType = "References",
+            target = new { type = "KnowledgeDocument", id = otherDocumentId }, description = (string?)null,
+        });
+        Assert.Equal(HttpStatusCode.Created, related.StatusCode);
+
+        using var list = await _client.GetAsync($"/api/relationships?objectType=KnowledgeDocument&objectId={otherDocumentId}");
+        Assert.Equal(HttpStatusCode.OK, list.StatusCode);
+        var rows = await list.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Contains(rows.EnumerateArray(), item => item.GetProperty("direction").GetString() == "Incoming"
+            && item.GetProperty("related").GetProperty("id").GetInt64() == documentId);
+        using var outgoing = await _client.GetAsync($"/api/relationships?objectType=KnowledgeDocument&objectId={documentId}");
+        var outgoingRows = await outgoing.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(5, outgoingRows.GetArrayLength());
+
+        using var duplicate = await _client.PostAsJsonAsync("/api/relationships", new
+        {
+            source = new { type = "KnowledgeDocument", id = documentId }, relationType = "References",
+            target = new { type = "KnowledgeDocument", id = otherDocumentId }, description = (string?)null,
+        });
+        Assert.Equal(HttpStatusCode.Conflict, duplicate.StatusCode);
+        using var self = await _client.PostAsJsonAsync("/api/relationships", new
+        {
+            source = new { type = "KnowledgeDocument", id = documentId }, relationType = "References",
+            target = new { type = "KnowledgeDocument", id = documentId }, description = (string?)null,
+        });
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, self.StatusCode);
+
+        foreach (var legacyRelationType in new[] { "RelatedTo", "Implements", "Resolves" })
+        {
+            using var rejected = await _client.PostAsJsonAsync("/api/relationships", new
+            {
+                source = new { type = "KnowledgeDocument", id = documentId }, relationType = legacyRelationType,
+                target = new { type = "System", id = 12L }, description = (string?)null,
+            });
+            Assert.Equal(HttpStatusCode.BadRequest, rejected.StatusCode);
+        }
+
+        var relationId = (await related.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt64();
+        using var deleted = await _client.DeleteAsync($"/api/relationships/{relationId}");
+        Assert.Equal(HttpStatusCode.OK, deleted.StatusCode);
+        using var document = await _client.GetAsync($"/api/knowledge-documents/{documentId}");
+        Assert.Equal("Unknown", (await document.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("knowledgeStatus").GetString());
+    }
+
+    [Fact]
+    public async Task Viewer_can_read_document_relationships_but_cannot_create_or_delete_them()
+    {
+        var documentId = await CreateDocument("只读关系文档");
+        await AssertCreated(documentId, "AppliesTo", "System", 12L);
+        var viewerId = await CreateUser(AccessLevel.Viewer);
+        using var viewer = await _factory.CreateAuthenticatedClientAsync(viewerId);
+
+        using var read = await viewer.GetAsync($"/api/relationships?objectType=KnowledgeDocument&objectId={documentId}");
+        Assert.Equal(HttpStatusCode.OK, read.StatusCode);
+        var relationshipId = (await read.Content.ReadFromJsonAsync<JsonElement>())[0].GetProperty("id").GetInt64();
+        using var add = await viewer.PostAsJsonAsync("/api/relationships", new
+        {
+            source = new { type = "KnowledgeDocument", id = documentId }, relationType = "References",
+            target = new { type = "System", id = 12L }, description = (string?)null,
+        });
+        Assert.Equal(HttpStatusCode.Forbidden, add.StatusCode);
+        using var delete = await viewer.DeleteAsync($"/api/relationships/{relationshipId}");
+        Assert.Equal(HttpStatusCode.Forbidden, delete.StatusCode);
+    }
+
+    [Fact]
+    public async Task Document_type_traceability_rules_filter_targets_and_reject_forged_combinations()
+    {
+        var requirementId = await CreateDocument("设备状态需求", "Requirement");
+        var specificationId = await CreateDocument("设备状态规格", "Specification");
+        var testCaseId = await CreateDocument("设备状态测试", "TestCase");
+        var sopId = await CreateDocument("设备状态操作", "Sop");
+        var designNoteId = await CreateDocument("设备状态设计", "DesignNote");
+
+        await AssertCreated(requirementId, "SpecifiedBy", "KnowledgeDocument", specificationId);
+        await AssertCreated(requirementId, "VerifiedBy", "KnowledgeDocument", testCaseId);
+        await AssertCreated(specificationId, "VerifiedBy", "KnowledgeDocument", testCaseId);
+        await AssertCreated(sopId, "AppliesTo", "System", 12L);
+        await AssertCreated(designNoteId, "References", "KnowledgeDocument", specificationId);
+        await AssertCreated(sopId, "Supersedes", "KnowledgeDocument", await CreateDocument("旧设备状态操作", "Sop"));
+
+        using var specifiedByTargets = await _client.GetAsync($"/api/knowledge-targets?purpose=RelationTarget&sourceType=KnowledgeDocument&sourceId={requirementId}&relationType=SpecifiedBy&page=1&pageSize=20");
+        Assert.Equal(HttpStatusCode.OK, specifiedByTargets.StatusCode);
+        var specifiedByItems = (await specifiedByTargets.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("items");
+        Assert.Contains(specifiedByItems.EnumerateArray(), item => item.GetProperty("target").GetProperty("id").GetInt64() == specificationId);
+        Assert.DoesNotContain(specifiedByItems.EnumerateArray(), item => item.GetProperty("target").GetProperty("id").GetInt64() == testCaseId);
+
+        foreach (var forged in new[]
+        {
+            new { sourceId = requirementId, relationType = "SpecifiedBy", targetId = testCaseId },
+            new { sourceId = designNoteId, relationType = "References", targetId = testCaseId },
+            new { sourceId = sopId, relationType = "Supersedes", targetId = specificationId },
+            new { sourceId = testCaseId, relationType = "VerifiedBy", targetId = requirementId },
+        })
+        {
+            using var rejected = await _client.PostAsJsonAsync("/api/relationships", new
+            {
+                source = new { type = "KnowledgeDocument", id = forged.sourceId }, relationType = forged.relationType,
+                target = new { type = "KnowledgeDocument", id = forged.targetId }, description = (string?)null,
+            });
+            Assert.Equal(HttpStatusCode.UnprocessableEntity, rejected.StatusCode);
+        }
+    }
+
+    private async Task<long> CreateDocument(string title, string documentType = "Sop")
+    {
+        using var response = await _client.PostAsJsonAsync("/api/knowledge-documents", new { documentType, title, bodyMarkdown = "正文" });
+        return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt64();
+    }
+
+    private async Task AssertCreated(long documentId, string relationType, string targetType, long targetId)
+    {
+        using var response = await _client.PostAsJsonAsync("/api/relationships", new
+        {
+            source = new { type = "KnowledgeDocument", id = documentId }, relationType,
+            target = new { type = targetType, id = targetId }, description = (string?)null,
+        });
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+    }
+
+    private async Task<long> CreateBusinessRule(string name)
+    {
+        using var response = await _client.PostAsJsonAsync("/api/business-rules", new
+        {
+            systemId = 12L, name, description = "文档关系测试规则", condition = (string?)null,
+            result = (string?)null, inputData = Array.Empty<object>(), actor = Actor(),
+        });
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt64();
+    }
+
+    private async Task<long> CreateIntegration(string name)
+    {
+        using var response = await _client.PostAsJsonAsync("/api/integrations", new
+        {
+            name, integrationType = "RabbitMq", sourceParty = new { systemId = 12L, displayName = "MES" },
+            targetParty = new { systemId = (long?)null, displayName = "Gateway" }, flowDirection = "OneWay",
+            purpose = "文档关系测试", endpoint = new { exchange = "mes.exchange", topic = "document.relation", queue = (string?)null },
+            databaseSourceId = (long?)null, databaseObjectId = (long?)null, actor = Actor(),
+        });
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt64();
+    }
+
+    private async Task<long> CreateUser(AccessLevel accessLevel)
+    {
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<KnowledgeHubDbContext>();
+        var timestamp = DateTimeOffset.UtcNow;
+        var user = new User
+        {
+            DisplayName = $"KC-B04 {Guid.NewGuid():N}",
+            IsActive = true,
+            AccessLevel = accessLevel,
+            CreatedAt = timestamp,
+            UpdatedAt = timestamp,
+            Version = 1,
+        };
+        dbContext.Users.Add(user);
+        await dbContext.SaveChangesAsync();
+        return user.Id;
     }
 
     private Task<HttpResponseMessage> Add(string relationType, string targetType, long targetId, string? description, long sourceId = 77)

@@ -17,7 +17,7 @@ public sealed class LocalAdminBootstrapService(KnowledgeHubDbContext dbContext, 
         }
         if (!LocalCredentialSecurity.IsValidPassword(request.Password))
         {
-            return (false, "密码长度必须为 15 到 128 个字符。");
+            return (false, "密码长度必须为 8 到 128 个字符。");
         }
 
         await dbContext.Database.MigrateAsync(cancellationToken);

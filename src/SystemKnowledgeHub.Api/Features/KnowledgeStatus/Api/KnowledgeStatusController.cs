@@ -1,13 +1,15 @@
 using Microsoft.AspNetCore.Mvc;
 using SystemKnowledgeHub.Api.Features.StatusProgression.Api.Contracts;
 using SystemKnowledgeHub.Api.Features.StatusProgression.Application;
+using SystemKnowledgeHub.Api.Features.Users.Application;
+using SystemKnowledgeHub.Api.Features.Users.Application.Models;
 using SystemKnowledgeHub.Api.Shared.Api.Contracts;
 
 namespace SystemKnowledgeHub.Api.Features.StatusProgression.Api;
 
 [ApiController]
 [Route("api/knowledge-status")]
-public sealed class KnowledgeStatusController(KnowledgeStatusService service) : ControllerBase
+public sealed class KnowledgeStatusController(KnowledgeStatusService service, ICurrentUserContext currentUserContext) : ControllerBase
 {
     [Microsoft.AspNetCore.Authorization.Authorize(Policy = SystemKnowledgeHub.Api.Shared.Security.AccessPolicies.Editor)]
     [HttpPut]
@@ -20,6 +22,18 @@ public sealed class KnowledgeStatusController(KnowledgeStatusService service) : 
         [FromBody] ChangeKnowledgeStatusRequest request,
         CancellationToken cancellationToken)
     {
+        var currentUser = await currentUserContext.ResolveAsync(cancellationToken);
+        if (currentUser.Status != CurrentUserResolutionStatus.Available || currentUser.CurrentUser is null)
+        {
+            return currentUser.Status switch
+            {
+                CurrentUserResolutionStatus.Unauthenticated or CurrentUserResolutionStatus.SessionExpired => Unauthorized(new ApiErrorResponse("unauthenticated", "尚未登录。", null, null)),
+                CurrentUserResolutionStatus.IdentityUnmapped => StatusCode(StatusCodes.Status403Forbidden, new ApiErrorResponse("identity_unmapped", "当前登录身份尚未绑定系统用户。", null, null)),
+                CurrentUserResolutionStatus.IdentityInactive => StatusCode(StatusCodes.Status403Forbidden, new ApiErrorResponse("identity_inactive", "当前登录身份已停用。", null, null)),
+                CurrentUserResolutionStatus.AccountInactive => StatusCode(StatusCodes.Status403Forbidden, new ApiErrorResponse("account_inactive", "当前用户已停用。", null, null)),
+                _ => throw new InvalidOperationException("Unsupported Current User resolution."),
+            };
+        }
         var result = await service.ChangeKnowledgeStatus(
             new ChangeKnowledgeStatusCommand(
                 request.Target is null
@@ -27,16 +41,7 @@ public sealed class KnowledgeStatusController(KnowledgeStatusService service) : 
                     : new KnowledgeStatusTargetCommand(request.Target.Type ?? string.Empty, request.Target.Id),
                 request.TargetStatus ?? string.Empty,
                 request.Reason,
-                request.Actor is null
-                    ? null
-                    : new KnowledgeStatusActorCommand(
-                        request.Actor.DisplayName ?? string.Empty,
-                        request.Actor.RoleOrIdentity ?? string.Empty,
-                        request.Actor.OccurredAt ?? default,
-                        request.Actor.Team,
-                        request.Actor.ExternalUserKey,
-                        request.Actor.Source,
-                        request.Actor.Note),
+                new KnowledgeStatusActorCommand(currentUser.CurrentUser.DisplayName, currentUser.CurrentUser.AccessLevel.ToString(), DateTimeOffset.UtcNow),
                 request.ConcurrencyToken ?? string.Empty),
             cancellationToken);
 

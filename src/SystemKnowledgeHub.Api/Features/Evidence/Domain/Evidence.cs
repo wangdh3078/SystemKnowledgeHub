@@ -31,6 +31,7 @@ public sealed class Evidence
     public string? ProviderSource { get; set; }
     public string? ProviderNote { get; set; }
     public DateTimeOffset ProvidedAt { get; set; }
+    public long? KnowledgeDocumentRevisionNumberSnapshot { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
     public long Version { get; set; } = 1;
@@ -62,6 +63,7 @@ public enum EvidenceSubjectType
     DatabaseColumn,
     BusinessRule,
     Integration,
+    KnowledgeDocument,
     KnowledgeRelation,
     UnknownItem,
     Finding,

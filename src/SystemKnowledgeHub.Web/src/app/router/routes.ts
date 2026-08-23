@@ -14,6 +14,8 @@ import BusinessRuleDetailView from '../../features/business-rules/pages/Business
 import IntegrationDetailView from '../../features/integrations/pages/IntegrationDetailView.vue'
 import UsersManagementView from '../../features/users/pages/UsersManagementView.vue'
 import AccessForbiddenView from '../../features/bootstrap/pages/AccessForbiddenView.vue'
+import KnowledgeDocumentsListView from '../../features/knowledge-documents/pages/KnowledgeDocumentsListView.vue'
+import KnowledgeDocumentDetailView from '../../features/knowledge-documents/pages/KnowledgeDocumentDetailView.vue'
 
 export const routes: readonly RouteRecordRaw[] = [
   {
@@ -130,6 +132,18 @@ export const routes: readonly RouteRecordRaw[] = [
       navigationKey: 'database',
       hasContextRail: true,
     },
+  },
+  {
+    path: '/knowledge-documents',
+    name: 'knowledge-documents-list',
+    component: KnowledgeDocumentsListView,
+    meta: { title: '知识内容', layout: 'app-shell', navigationKey: 'knowledge-documents', hasContextRail: false },
+  },
+  {
+    path: '/knowledge-documents/:id',
+    name: 'knowledge-document-detail',
+    component: KnowledgeDocumentDetailView,
+    meta: { title: '知识内容详情', layout: 'app-shell', navigationKey: 'knowledge-documents', hasContextRail: false },
   },
   {
     path: '/admin/users',

@@ -83,6 +83,7 @@ public sealed record UpdateEvidenceRequest(
 /// </remarks>
 /// <param name="KnowledgeRoleId">本次确认采用的已启用且已分配 KnowledgeRole；为 null 时按当前启用角色数量解析。</param>
 /// <param name="Subject">被本次确认支持的明确知识对象。</param>
+/// <param name="SubjectRevisionNumber">KnowledgeDocument Subject 当前显示的修订号；其它 Subject 必须省略。</param>
 /// <param name="SubjectDetailKey">可选的 Subject 内部细分位置。</param>
 /// <param name="ConfirmationMethod">确认事实的受控方式，写入 locator，不是 Provider 身份来源。</param>
 /// <param name="ConfirmedAt">确认事实发生时间；服务端保存为 UTC。</param>
@@ -91,6 +92,7 @@ public sealed record UpdateEvidenceRequest(
 /// <param name="SourceNote">随确认事实保存的可选来源上下文。</param>
 public sealed record AddHumanConfirmationRequest(
     EvidenceTargetRequest? Subject,
+    long? SubjectRevisionNumber,
     string? SubjectDetailKey,
     long? KnowledgeRoleId,
     string? ConfirmationMethod,

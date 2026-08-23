@@ -41,6 +41,7 @@ public sealed class KnowledgeHubDbContext(DbContextOptions<KnowledgeHubDbContext
     public DbSet<LoginIdentity> LoginIdentities => Set<LoginIdentity>();
     public DbSet<LocalLoginCredential> LocalLoginCredentials => Set<LocalLoginCredential>();
     public DbSet<KnowledgeDocument> KnowledgeDocuments => Set<KnowledgeDocument>();
+    public DbSet<KnowledgeDocumentRevision> KnowledgeDocumentRevisions => Set<KnowledgeDocumentRevision>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
