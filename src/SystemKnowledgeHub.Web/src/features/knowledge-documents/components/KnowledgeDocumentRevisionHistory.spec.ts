@@ -1,10 +1,13 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { createPinia, setActivePinia } from 'pinia'
+import { useOverlayStore } from '../../../app/stores/overlays'
 import {
   getKnowledgeDocumentRevision,
   listKnowledgeDocumentRevisions,
 } from '../api/knowledgeDocumentsApi'
 import type {
+  KnowledgeDocumentDetail,
   KnowledgeDocumentRevisionDetail,
   KnowledgeDocumentRevisionListItem,
   KnowledgeDocumentRevisionListResponse,
@@ -83,6 +86,28 @@ const details: Readonly<Record<number, KnowledgeDocumentRevisionDetail>> = {
   },
 }
 
+const currentDocument: KnowledgeDocumentDetail = {
+  id: 7,
+  documentType: 'KnowledgeArticle',
+  title: '当前草稿标题',
+  summary: '当前草稿摘要',
+  bodyMarkdown: details[3].bodyMarkdown,
+  lifecycleStatus: 'Draft',
+  knowledgeStatus: 'Unknown',
+  createdByUserId: 9,
+  createdByDisplayName: 'Immutable Author Snapshot',
+  updatedByUserId: 9,
+  updatedByDisplayName: 'Immutable Author Snapshot',
+  createdAt: '2026-08-23T01:00:00Z',
+  updatedAt: '2026-08-23T03:00:00Z',
+  publishedAt: '2026-08-23T02:00:00Z',
+  archivedAt: null,
+  currentRevisionNumber: 3,
+  latestPublishedRevisionNumber: 2,
+  confirmationCoverage: { state: 'NoConfirmation', lastConfirmedRevisionNumber: null },
+  concurrencyToken: 'opaque-current-token',
+}
+
 const components = {
   ElButton: {
     emits: ['click'],
@@ -117,7 +142,7 @@ function response(
 }
 function mountHistory() {
   return mount(KnowledgeDocumentRevisionHistory, {
-    props: { documentId: 7, currentRevisionNumber: 3 },
+    props: { document: currentDocument, canRestore: true },
     global: { components },
   })
 }
@@ -127,6 +152,7 @@ function buttonByLabel(wrapper: ReturnType<typeof mountHistory>, label: string) 
 
 describe('KnowledgeDocumentRevisionHistory', () => {
   beforeEach(() => {
+    setActivePinia(createPinia())
     vi.mocked(listKnowledgeDocumentRevisions).mockReset()
     vi.mocked(getKnowledgeDocumentRevision).mockReset()
     vi.mocked(listKnowledgeDocumentRevisions).mockResolvedValue(response())
@@ -238,5 +264,32 @@ describe('KnowledgeDocumentRevisionHistory', () => {
     await flushPromises()
     expect(wrapper.text()).toContain('修订历史（3）')
     expect(wrapper.text()).toContain('当前草稿标题')
+  })
+
+  it('offers Restore only for an editable Draft historical preview and opens the single dialog host', async () => {
+    const wrapper = mountHistory()
+    await flushPromises()
+    expect(wrapper.findAll('button').some((item) => item.text() === '恢复此修订')).toBe(false)
+
+    await buttonByLabel(wrapper, '查看修订 2')?.trigger('click')
+    await flushPromises()
+    const restoreButton = wrapper.findAll('button').find((item) => item.text() === '恢复此修订')
+    expect(restoreButton).toBeDefined()
+    await restoreButton?.trigger('click')
+    expect(useOverlayStore().currentDialog).toMatchObject({
+      kind: 'restore-knowledge-document-revision',
+      id: 7,
+      mode: 'edit',
+    })
+
+    await wrapper.setProps({ canRestore: false })
+    expect(wrapper.findAll('button').some((item) => item.text() === '恢复此修订')).toBe(false)
+
+    await wrapper.setProps({
+      canRestore: true,
+      document: { ...currentDocument, lifecycleStatus: 'Published' },
+    })
+    expect(wrapper.findAll('button').some((item) => item.text() === '恢复此修订')).toBe(false)
+    expect(wrapper.text()).toContain('请先将文档返回草稿后再恢复历史内容')
   })
 })

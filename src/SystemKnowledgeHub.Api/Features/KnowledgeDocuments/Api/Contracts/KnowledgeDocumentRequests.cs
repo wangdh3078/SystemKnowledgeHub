@@ -16,3 +16,7 @@ public sealed record UpdateKnowledgeDocumentContentRequest(
 public sealed record UpdateKnowledgeDocumentLifecycleRequest(
     string? TargetLifecycleStatus,
     string? ConcurrencyToken);
+
+public sealed record RestoreKnowledgeDocumentRevisionRequest(
+    string? ConcurrencyToken,
+    string? Reason);

@@ -10,18 +10,21 @@ import {
 import {
   lifecycleLabels,
   type DocumentLifecycleStatus,
+  type KnowledgeDocumentDetail,
   type KnowledgeDocumentRevisionDetail,
   type KnowledgeDocumentRevisionListItem,
   type RevisionOrigin,
 } from '../api/knowledgeDocumentContracts'
 import { renderMarkdown } from '../markdown/renderMarkdown'
 import RevisionCompareView from './RevisionCompareView.vue'
+import { useOverlayStore } from '../../../app/stores/overlays'
 
 const props = defineProps<{
-  documentId: number
-  currentRevisionNumber: number
+  document: KnowledgeDocumentDetail
+  canRestore: boolean
 }>()
 const emit = defineEmits<{ return: [] }>()
+const overlayStore = useOverlayStore()
 
 const pageSize = 20
 const page = ref(1)
@@ -46,6 +49,18 @@ const originLabels: Readonly<Record<RevisionOrigin, string>> = {
   MigrationBaseline: '迁移基线',
 }
 const renderedBody = computed(() => (detail.value ? renderMarkdown(detail.value.bodyMarkdown) : ''))
+const restoreAvailable = computed(() => Boolean(
+  props.canRestore
+  && props.document.lifecycleStatus === 'Draft'
+  && detail.value
+  && detail.value.revisionNumber < props.document.currentRevisionNumber,
+))
+const restoreRequiresDraft = computed(() => Boolean(
+  props.canRestore
+  && props.document.lifecycleStatus !== 'Draft'
+  && detail.value
+  && detail.value.revisionNumber < props.document.currentRevisionNumber,
+))
 
 function isAbort(reason: unknown): boolean {
   return reason instanceof DOMException && reason.name === 'AbortError'
@@ -74,7 +89,7 @@ async function selectRevision(item: KnowledgeDocumentRevisionListItem): Promise<
   detail.value = null
   try {
     detail.value = await getKnowledgeDocumentRevision(
-      props.documentId,
+      props.document.id,
       item.revisionNumber,
       request.signal,
     )
@@ -89,7 +104,7 @@ async function selectRevision(item: KnowledgeDocumentRevisionListItem): Promise<
     }
   }
 }
-async function loadList(): Promise<void> {
+async function loadList(preserveSelection = false): Promise<void> {
   listRequest?.abort()
   detailRequest?.abort()
   const request = new AbortController()
@@ -97,11 +112,13 @@ async function loadList(): Promise<void> {
   listLoading.value = true
   listError.value = null
   detailError.value = null
-  detail.value = null
-  selectedRevisionNumber.value = null
+  if (!preserveSelection) {
+    detail.value = null
+    selectedRevisionNumber.value = null
+  }
   try {
     const response = await listKnowledgeDocumentRevisions(
-      props.documentId,
+      props.document.id,
       page.value,
       pageSize,
       request.signal,
@@ -109,11 +126,17 @@ async function loadList(): Promise<void> {
     if (listRequest !== request) return
     items.value = response.items
     total.value = response.total
-    if (response.items.length > 0) await selectRevision(response.items[0])
+    if (!preserveSelection && response.items.length > 0) await selectRevision(response.items[0])
+    if (response.items.length === 0) {
+      detail.value = null
+      selectedRevisionNumber.value = null
+    }
   } catch (reason: unknown) {
     if (!isAbort(reason)) {
-      items.value = []
-      total.value = 0
+      if (!preserveSelection) {
+        items.value = []
+        total.value = 0
+      }
       listError.value = reason instanceof Error ? reason.message : '无法加载修订历史。'
     }
   } finally {
@@ -144,19 +167,42 @@ function enterCompare(): void {
 function returnToHistory(): void {
   compareMode.value = false
 }
+function openRestore(): void {
+  if (!detail.value || !restoreAvailable.value) return
+  overlayStore.openDialog({
+    kind: 'restore-knowledge-document-revision',
+    id: props.document.id,
+    mode: 'edit',
+    payload: {
+      document: props.document,
+      revision: detail.value,
+    },
+  })
+}
+function handleHistoryRefresh(event: Event): void {
+  if (!(event instanceof CustomEvent)) return
+  const detailValue: unknown = event.detail
+  if (typeof detailValue !== 'object' || detailValue === null) return
+  if (!('documentId' in detailValue) || detailValue.documentId !== props.document.id) return
+  void loadList(true)
+}
 
-onMounted(() => void loadList())
+onMounted(() => {
+  window.addEventListener('knowledge-document:history-refresh', handleHistoryRefresh)
+  void loadList()
+})
 onBeforeUnmount(() => {
   listRequest?.abort()
   detailRequest?.abort()
+  window.removeEventListener('knowledge-document:history-refresh', handleHistoryRefresh)
 })
 </script>
 
 <template>
   <RevisionCompareView
     v-if="compareMode && compareInitialRevisionNumber !== null"
-    :document-id="documentId"
-    :revision-count="currentRevisionNumber"
+    :document-id="document.id"
+    :revision-count="document.currentRevisionNumber"
     :initial-to-revision-number="compareInitialRevisionNumber"
     :initial-snapshot="compareInitialSnapshot"
     @return="returnToHistory"
@@ -164,7 +210,7 @@ onBeforeUnmount(() => {
   <section v-else class="knowledge-document-history" aria-labelledby="revision-history-heading">
     <header class="knowledge-document-history__header">
       <div>
-        <h2 id="revision-history-heading">修订历史（{{ currentRevisionNumber }}）</h2>
+        <h2 id="revision-history-heading">修订历史（{{ document.currentRevisionNumber }}）</h2>
         <p>查看不可变的历史快照；生命周期表示该修订生成时的文档状态。</p>
       </div>
       <div class="knowledge-document-history__header-actions">
@@ -188,7 +234,7 @@ onBeforeUnmount(() => {
       @retry="loadList"
     />
     <div v-else-if="items.length === 0" class="knowledge-document-history__empty" role="status">
-      <strong>{{ currentRevisionNumber > 0 ? '无法加载修订历史' : '暂无修订历史' }}</strong>
+      <strong>{{ document.currentRevisionNumber > 0 ? '无法加载修订历史' : '暂无修订历史' }}</strong>
       <p>未返回可显示的修订；当前内容不会被伪造为历史快照。</p>
       <el-button text type="primary" @click="loadList">重试</el-button>
     </div>
@@ -264,6 +310,14 @@ onBeforeUnmount(() => {
               <p v-if="!detail.bodyMarkdown.trim()" class="text-muted">该修订暂无正文。</p>
               <div v-else class="knowledge-document-markdown" v-html="renderedBody"></div>
             </section>
+            <footer v-if="restoreAvailable || restoreRequiresDraft" class="knowledge-document-history__restore">
+              <div>
+                <strong>恢复历史内容</strong>
+                <p v-if="restoreRequiresDraft">请先将文档返回草稿后再恢复历史内容。</p>
+                <p v-else>恢复会复制此快照并创建新的当前修订，不会删除后续历史。</p>
+              </div>
+              <el-button v-if="restoreAvailable" type="primary" @click="openRestore">恢复此修订</el-button>
+            </footer>
           </article>
         </main>
       </div>

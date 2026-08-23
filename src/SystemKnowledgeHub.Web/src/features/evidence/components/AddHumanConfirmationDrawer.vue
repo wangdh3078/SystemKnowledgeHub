@@ -8,6 +8,7 @@ import { useActorStore } from '../../../app/stores/actor'
 import { useOverlayStore } from '../../../app/stores/overlays'
 import KnowledgeStatusBadge from '../../../components/data-display/KnowledgeStatusBadge.vue'
 import { addHumanConfirmation } from '../api/evidenceApi'
+import { getKnowledgeDocument } from '../../knowledge-documents/api/knowledgeDocumentsApi'
 import {
   confirmationMethods,
   isEvidenceSubjectPayload,
@@ -26,6 +27,9 @@ const activeRoles = computed(() =>
 )
 const requiresRoleSelection = computed(() => activeRoles.value.length > 1)
 const saving = ref(false)
+const conflict = ref(false)
+const reloadingDocument = ref(false)
+const subjectRevisionNumber = ref<number | null>(null)
 const errorMessage = ref<string | null>(null)
 const fieldErrors = reactive<Record<string, string>>({})
 const formRef = ref<FormInstance>()
@@ -54,8 +58,14 @@ const rules: FormRules<typeof form> = {
 const canSave = computed(() =>
   actorStore.canEdit
   && actorStore.currentUser !== null
-  && (!requiresRoleSelection.value || form.knowledgeRoleId !== null),
+  && (!requiresRoleSelection.value || form.knowledgeRoleId !== null)
+  && !conflict.value,
 )
+
+watch(subject, (value) => {
+  subjectRevisionNumber.value = value?.subjectRevisionNumber ?? null
+  conflict.value = false
+}, { immediate: true })
 
 watch(activeRoles, (roles) => {
   if (roles.length <= 1 || !roles.some((role) => role.id === form.knowledgeRoleId)) {
@@ -70,7 +80,7 @@ function normalize(value: string): string | null {
 
 function clearFieldError(field: string): void {
   delete fieldErrors[field]
-  errorMessage.value = null
+  if (!conflict.value) errorMessage.value = null
 }
 
 function toUtcIso(localDateTime: string): string {
@@ -106,9 +116,9 @@ async function save(): Promise<void> {
   try {
     const created = await addHumanConfirmation({
       subject: subject.value.subject,
-      ...(subject.value.subjectRevisionNumber === undefined
+      ...(subjectRevisionNumber.value === null
         ? {}
-        : { subjectRevisionNumber: subject.value.subjectRevisionNumber }),
+        : { subjectRevisionNumber: subjectRevisionNumber.value }),
       subjectDetailKey: subject.value.subjectDetailKey ?? null,
       knowledgeRoleId: requiresRoleSelection.value ? form.knowledgeRoleId : null,
       confirmationMethod: form.confirmationMethod,
@@ -122,7 +132,14 @@ async function save(): Promise<void> {
     overlayStore.openDrawer({ kind: 'evidence', id: created.id, mode: 'read' })
   } catch (error: unknown) {
     if (error instanceof ApiError) {
-      errorMessage.value = error.message
+      if (error.status === 409
+        && error.response.code === 'conflict'
+        && subject.value.subject.type === 'KnowledgeDocument') {
+        conflict.value = true
+        errorMessage.value = '当前修订已变化，请重新加载最新内容后再次明确确认。'
+      } else {
+        errorMessage.value = error.message
+      }
       for (const [field, messages] of Object.entries(error.response.fieldErrors ?? {})) {
         const message = messages[0]
         if (message) fieldErrors[field] = message
@@ -136,6 +153,26 @@ async function save(): Promise<void> {
     }
   } finally {
     saving.value = false
+  }
+}
+
+async function reloadLatestDocument(): Promise<void> {
+  if (!subject.value
+    || subject.value.subject.type !== 'KnowledgeDocument'
+    || reloadingDocument.value) return
+  reloadingDocument.value = true
+  try {
+    const document = await getKnowledgeDocument(subject.value.subject.id)
+    subjectRevisionNumber.value = document.currentRevisionNumber
+    conflict.value = false
+    errorMessage.value = `已重新加载当前修订 ${document.currentRevisionNumber}，请再次明确确认最新内容。`
+    window.dispatchEvent(new CustomEvent('knowledge-document:current-refreshed', {
+      detail: { document },
+    }))
+  } catch (error: unknown) {
+    errorMessage.value = error instanceof Error ? error.message : '重新加载当前文档失败。'
+  } finally {
+    reloadingDocument.value = false
   }
 }
 
@@ -157,8 +194,15 @@ onMounted(() => void actorStore.initialize())
         <div><small>确认对象</small><strong class="technical-text">{{ subject.title }}</strong></div>
         <KnowledgeStatusBadge :status="subject.knowledgeStatus" />
       </section>
+      <p v-if="subjectRevisionNumber !== null" class="human-confirmation-revision-context">
+        本次人工确认将覆盖当前显示的修订 {{ subjectRevisionNumber }}。
+      </p>
 
-      <el-alert v-if="errorMessage" class="evidence-form-alert evidence-form-alert--outer" type="error" :title="errorMessage" :closable="false" show-icon />
+      <el-alert v-if="errorMessage" class="evidence-form-alert evidence-form-alert--outer" :type="conflict ? 'warning' : 'error'" :title="errorMessage" :closable="false" show-icon>
+        <template v-if="conflict" #default>
+          <el-button :loading="reloadingDocument" @click="reloadLatestDocument">重新加载最新内容</el-button>
+        </template>
+      </el-alert>
 
       <section class="evidence-current-user">
         <div class="evidence-current-user__heading">

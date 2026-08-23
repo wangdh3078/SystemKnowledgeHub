@@ -85,6 +85,57 @@ public sealed class KnowledgeDocumentsController(
     }
 
     [Authorize(Policy = AccessPolicies.Editor)]
+    [HttpPost("{id:long}/revisions/{revisionNumber:long}/restore")]
+    public async Task<ActionResult<KnowledgeDocumentDetailResponse>> RestoreRevision(
+        long id,
+        long revisionNumber,
+        [FromBody] RestoreKnowledgeDocumentRevisionRequest request,
+        CancellationToken cancellationToken)
+    {
+        var errors = new Dictionary<string, string[]>();
+        if (!ApiIdParser.IsSafePositive(id))
+        {
+            errors["id"] = ["文档 ID 必须是 JavaScript 安全范围内的正整数。"];
+        }
+        if (!ApiIdParser.IsSafePositive(revisionNumber))
+        {
+            errors["revisionNumber"] = ["修订号必须是 JavaScript 安全范围内的正整数。"];
+        }
+        if (errors.Count > 0) return BadRequest(ValidationError(errors));
+
+        var author = await ResolveAuthor(cancellationToken);
+        if (author.Result is not null) return author.Result;
+        var result = await service.RestoreRevision(new RestoreKnowledgeDocumentRevisionCommand(
+            id,
+            revisionNumber,
+            request.ConcurrencyToken ?? string.Empty,
+            request.Reason,
+            author.Author!), cancellationToken);
+        return result.Failure switch
+        {
+            KnowledgeDocumentWriteFailure.None => Ok(result.Response),
+            KnowledgeDocumentWriteFailure.Validation => BadRequest(ValidationError(result.FieldErrors!)),
+            KnowledgeDocumentWriteFailure.NotFound => NotFound(RevisionNotFound(id, revisionNumber)),
+            KnowledgeDocumentWriteFailure.Conflict => Conflict(new ApiErrorResponse(
+                "conflict",
+                "当前文档已被其他操作修改，请重新加载最新内容后再重试恢复。",
+                null,
+                new { resourceType = "KnowledgeDocument", resourceId = id })),
+            KnowledgeDocumentWriteFailure.InvalidState => Conflict(new ApiErrorResponse(
+                "invalid_state",
+                "当前文档不处于草稿状态，无法恢复历史内容。",
+                null,
+                new { resourceType = "KnowledgeDocument", resourceId = id })),
+            KnowledgeDocumentWriteFailure.BusinessRuleViolation => UnprocessableEntity(new ApiErrorResponse(
+                "business_rule_violation",
+                "所选修订不能恢复：请选择早于当前版本且内容不同的历史修订。",
+                null,
+                new { resourceType = "KnowledgeDocumentRevision", knowledgeDocumentId = id, revisionNumber })),
+            _ => throw new InvalidOperationException("Unsupported KnowledgeDocument restore result."),
+        };
+    }
+
+    [Authorize(Policy = AccessPolicies.Editor)]
     [HttpPost]
     public async Task<ActionResult<KnowledgeDocumentDetailResponse>> Create(
         [FromBody] CreateKnowledgeDocumentRequest request,

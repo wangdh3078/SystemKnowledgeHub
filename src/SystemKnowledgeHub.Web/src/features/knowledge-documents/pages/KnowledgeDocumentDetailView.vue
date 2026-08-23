@@ -18,6 +18,7 @@ import {
 } from '../api/knowledgeDocumentsApi'
 import {
   documentTypeLabels,
+  decodeKnowledgeDocumentDetail,
   lifecycleLabels,
   type DocumentLifecycleStatus,
   type KnowledgeDocumentDetail,
@@ -58,6 +59,7 @@ const historyMode = ref(false)
 const editing = ref(false)
 const previewing = ref(false)
 const saving = ref(false)
+const saveConfirming = ref(false)
 const editTitle = ref('')
 const editSummary = ref('')
 const editBodyMarkdown = ref('')
@@ -87,6 +89,17 @@ const evidenceSubject = computed<EvidenceSubjectPayload | null>(() => data.value
   : null)
 const validEvidenceCount = computed(() => evidence.value.filter((item) => item.sourceReference || item.sourceLocator).length)
 const humanConfirmationCount = computed(() => evidence.value.filter((item) => item.evidenceType === 'HumanConfirmation').length)
+const confirmationCoverageText = computed(() => {
+  const coverage = data.value?.confirmationCoverage
+  if (!coverage || coverage.state === 'NoConfirmation') return null
+  if (coverage.state === 'LegacyConfirmationUnknown') {
+    return '迁移前人工确认无法确定覆盖的修订。'
+  }
+  if (coverage.state === 'CurrentRevisionConfirmed') {
+    return `人工确认覆盖当前修订 ${coverage.lastConfirmedRevisionNumber}`
+  }
+  return '内容在最近一次确认后已修改'
+})
 const editSnapshot = computed<DocumentEditSnapshot>(() => ({
   title: editTitle.value,
   summary: editSummary.value,
@@ -98,7 +111,11 @@ const dirty = computed(
 const titleValid = computed(
   () => editTitle.value.trim().length > 0 && editTitle.value.trim().length <= 300,
 )
-const canSave = computed(() => editing.value && dirty.value && titleValid.value && !saving.value)
+const canSave = computed(() => editing.value
+  && dirty.value
+  && titleValid.value
+  && !saving.value
+  && !saveConfirming.value)
 async function load(): Promise<void> {
   if (id.value === null) {
     error.value = '文档 ID 无效。'
@@ -218,8 +235,12 @@ function syncEditorInitialValue(markdown: string): void {
     initialEdit.value = { ...initialEdit.value, bodyMarkdown: markdown }
   }
 }
-async function save(): Promise<void> {
-  if (!data.value || !canSave.value) return
+async function performSave(): Promise<void> {
+  if (!data.value
+    || !editing.value
+    || !dirty.value
+    || !titleValid.value
+    || saving.value) return
   saving.value = true
   saveError.value = null
   validationErrors.value = {}
@@ -259,6 +280,33 @@ async function save(): Promise<void> {
     saving.value = false
   }
 }
+async function requestSave(): Promise<void> {
+  if (!data.value || !canSave.value) return
+  if (data.value.lifecycleStatus !== 'Published') {
+    await performSave()
+    return
+  }
+
+  saveConfirming.value = true
+  try {
+    await ElMessageBox.confirm(
+      '保存后新内容立即成为已发布内容并生成新修订。',
+      '确认保存已发布内容',
+      {
+        confirmButtonText: '确认保存并立即发布',
+        cancelButtonText: '取消',
+        type: 'warning',
+      },
+    )
+    await performSave()
+  } catch (reason: unknown) {
+    if (reason !== 'cancel' && reason !== 'close') {
+      saveError.value = reason instanceof Error ? reason.message : '保存确认失败。'
+    }
+  } finally {
+    saveConfirming.value = false
+  }
+}
 async function reloadAfterConflict(): Promise<void> {
   if (!(await confirmDiscard())) return
   editing.value = false
@@ -271,7 +319,7 @@ async function reloadAfterConflict(): Promise<void> {
 function handleShortcut(event: KeyboardEvent): void {
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's' && canSave.value) {
     event.preventDefault()
-    void save()
+    void requestSave()
   }
 }
 function beforeUnload(event: BeforeUnloadEvent): void {
@@ -309,6 +357,35 @@ async function transition(target: DocumentLifecycleStatus): Promise<void> {
 function formatDate(value: string | null): string {
   return value ? value.replace('T', ' ').slice(0, 16) : '—'
 }
+function readEventDocument(event: Event): KnowledgeDocumentDetail | null {
+  if (!(event instanceof CustomEvent)) return null
+  const detailValue: unknown = event.detail
+  if (typeof detailValue !== 'object' || detailValue === null || !('document' in detailValue)) {
+    return null
+  }
+  try {
+    return decodeKnowledgeDocumentDetail(detailValue.document)
+  } catch {
+    return null
+  }
+}
+function handleCurrentRefreshed(event: Event): void {
+  const document = readEventDocument(event)
+  if (document && document.id === id.value) data.value = document
+}
+function handleRestored(event: Event): void {
+  const document = readEventDocument(event)
+  if (!document || document.id !== id.value || !(event instanceof CustomEvent)) return
+  const detailValue: unknown = event.detail
+  if (typeof detailValue !== 'object' || detailValue === null
+    || !('sourceRevisionNumber' in detailValue)
+    || typeof detailValue.sourceRevisionNumber !== 'number'
+    || !Number.isSafeInteger(detailValue.sourceRevisionNumber)
+    || detailValue.sourceRevisionNumber < 1) return
+  data.value = document
+  historyMode.value = false
+  savedMessage.value = `已从修订 ${detailValue.sourceRevisionNumber} 恢复，并创建修订 ${document.currentRevisionNumber}`
+}
 watch(id, () => {
   historyMode.value = false
   void load()
@@ -328,6 +405,8 @@ onMounted(() => {
   window.addEventListener('relationship:changed', loadRelations)
   window.addEventListener('evidence:changed', loadEvidence)
   window.addEventListener('knowledge-status:changed', load)
+  window.addEventListener('knowledge-document:current-refreshed', handleCurrentRefreshed)
+  window.addEventListener('knowledge-document:restored', handleRestored)
 })
 onBeforeUnmount(() => {
   setActiveDocumentEditDirty(false)
@@ -336,6 +415,8 @@ onBeforeUnmount(() => {
   window.removeEventListener('relationship:changed', loadRelations)
   window.removeEventListener('evidence:changed', loadEvidence)
   window.removeEventListener('knowledge-status:changed', load)
+  window.removeEventListener('knowledge-document:current-refreshed', handleCurrentRefreshed)
+  window.removeEventListener('knowledge-document:restored', handleRestored)
 })
 </script>
 
@@ -362,7 +443,7 @@ onBeforeUnmount(() => {
             <el-button @click="enterHistory">修订历史（{{ data.currentRevisionNumber }}）</el-button>
             <template v-if="editing">
               <el-button :disabled="saving" @click="cancelEdit">取消</el-button>
-              <el-button type="primary" :disabled="!canSave" :loading="saving" @click="save">{{
+              <el-button type="primary" :disabled="!canSave" :loading="saving" @click="requestSave">{{
                 saving ? '保存中…' : '保存'
               }}</el-button>
             </template>
@@ -396,11 +477,16 @@ onBeforeUnmount(() => {
           ><el-tag effect="plain">{{ lifecycleLabels[data.lifecycleStatus] }}</el-tag
           ><KnowledgeStatusBadge :status="data.knowledgeStatus" />
         </div>
+        <p
+          v-if="confirmationCoverageText"
+          :class="['knowledge-document-confirmation-coverage', { 'is-warning': data.confirmationCoverage.state === 'ChangedSinceConfirmation' }]"
+          role="status"
+        >{{ confirmationCoverageText }}</p>
       </header>
       <KnowledgeDocumentRevisionHistory
         v-if="historyMode"
-        :document-id="data.id"
-        :current-revision-number="data.currentRevisionNumber"
+        :document="data"
+        :can-restore="canEdit"
         @return="returnToCurrentContent"
       />
       <p v-if="!historyMode && savedMessage" class="knowledge-document-saved">{{ savedMessage }}</p>
@@ -412,6 +498,9 @@ onBeforeUnmount(() => {
             {{ saving ? '正在保存…' : dirty ? '未保存' : '已保存' }}
           </span>
         </div>
+        <p v-if="data.lifecycleStatus === 'Published'" class="knowledge-document-published-warning" role="note">
+          保存后新内容立即成为已发布内容并生成新修订。
+        </p>
         <el-form label-position="top">
           <el-form-item label="标题" required :error="fieldError('title') ?? undefined"
             ><el-input v-model="editTitle" maxlength="300" show-word-limit

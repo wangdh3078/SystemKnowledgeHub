@@ -123,6 +123,13 @@ public sealed record UpdateKnowledgeDocumentLifecycleCommand(
     string ConcurrencyToken,
     KnowledgeDocumentAuthor Author);
 
+public sealed record RestoreKnowledgeDocumentRevisionCommand(
+    long KnowledgeDocumentId,
+    long SourceRevisionNumber,
+    string ConcurrencyToken,
+    string? Reason,
+    KnowledgeDocumentAuthor Author);
+
 public enum KnowledgeDocumentWriteFailure
 {
     None,
@@ -130,6 +137,7 @@ public enum KnowledgeDocumentWriteFailure
     NotFound,
     Conflict,
     InvalidState,
+    BusinessRuleViolation,
 }
 
 public sealed record KnowledgeDocumentWriteResult(

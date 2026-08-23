@@ -12,6 +12,7 @@ import {
   type KnowledgeDocumentRevisionListResponse,
   type KnowledgeDocumentListParameters,
   type KnowledgeDocumentsListResponse,
+  type RestoreKnowledgeDocumentRevisionRequest,
   type UpdateKnowledgeDocumentContentRequest,
 } from './knowledgeDocumentContracts'
 
@@ -77,6 +78,23 @@ export function getKnowledgeDocumentRevision(
   return apiClient.get(
     `/knowledge-documents/${encodeURIComponent(String(id))}/revisions/${encodeURIComponent(String(revisionNumber))}`,
     { signal, decode: decodeKnowledgeDocumentRevisionDetail },
+  )
+}
+
+export function restoreKnowledgeDocumentRevision(
+  id: number,
+  revisionNumber: number,
+  request: RestoreKnowledgeDocumentRevisionRequest,
+): Promise<KnowledgeDocumentDetail> {
+  if (!isSafeApiId(id) || !isSafeApiId(revisionNumber)) {
+    return Promise.reject(
+      new RangeError('ID 与修订号必须是 JavaScript 安全范围内的正整数。'),
+    )
+  }
+  return apiClient.post(
+    `/knowledge-documents/${encodeURIComponent(String(id))}/revisions/${encodeURIComponent(String(revisionNumber))}/restore`,
+    request,
+    { decode: decodeKnowledgeDocumentDetail },
   )
 }
 

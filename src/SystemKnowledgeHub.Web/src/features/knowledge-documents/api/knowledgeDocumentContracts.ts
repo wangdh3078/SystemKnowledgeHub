@@ -125,6 +125,11 @@ export interface UpdateKnowledgeDocumentContentRequest {
   readonly concurrencyToken: string
 }
 
+export interface RestoreKnowledgeDocumentRevisionRequest {
+  readonly concurrencyToken: string
+  readonly reason: string
+}
+
 type JsonObject = Readonly<Record<string, unknown>>
 
 function isJsonObject(value: unknown): value is JsonObject {

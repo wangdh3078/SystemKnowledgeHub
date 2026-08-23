@@ -80,6 +80,16 @@
   font-style: normal;
 }
 
+.human-confirmation-revision-context {
+  margin: 10px 24px 0;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-subtle);
+  color: var(--color-muted);
+  font-size: 11px;
+}
+
 .evidence-form,
 .evidence-edit-form {
   padding: 0 24px;

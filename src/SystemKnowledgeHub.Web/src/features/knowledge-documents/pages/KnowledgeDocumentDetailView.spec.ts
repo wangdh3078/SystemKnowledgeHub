@@ -1,5 +1,5 @@
-import { flushPromises, mount } from '@vue/test-utils'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ElMessageBox } from 'element-plus'
 import { ApiError } from '../../../api/errors/ApiError'
 import type { KnowledgeDocumentDetail } from '../api/knowledgeDocumentContracts'
@@ -13,8 +13,10 @@ import {
 import { getRelatedKnowledge } from '../../relationships/api/relationshipApi'
 import { getEvidenceList } from '../../evidence/api/evidenceApi'
 
+enableAutoUnmount(afterEach)
+
 const actorState = vi.hoisted(() => ({ canEdit: true }))
-const overlayState = vi.hoisted(() => ({ openDrawer: vi.fn() }))
+const overlayState = vi.hoisted(() => ({ openDrawer: vi.fn(), openDialog: vi.fn() }))
 const routerState = vi.hoisted(() => ({ push: vi.fn() }))
 
 vi.mock('vue', async (importOriginal) => {
@@ -175,6 +177,7 @@ describe('KnowledgeDocumentDetailView editing', () => {
       bodyMarkdown: '## 历史正文',
     })
     overlayState.openDrawer.mockReset()
+    overlayState.openDialog.mockReset()
     routerState.push.mockReset()
   })
 
@@ -193,6 +196,7 @@ describe('KnowledgeDocumentDetailView editing', () => {
     await flushPromises()
     expect(wrapper.text()).toContain('编辑中')
     expect(wrapper.text()).toContain('已保存')
+    expect(wrapper.text()).not.toContain('保存后新内容立即成为已发布内容并生成新修订。')
 
     await wrapper.findAll('textarea')[0].setValue('更新后的 SOP')
     expect(wrapper.text()).toContain('未保存')
@@ -380,5 +384,154 @@ describe('KnowledgeDocumentDetailView editing', () => {
     })
     await button(wrapper, '系统 · MES')?.trigger('click')
     expect(routerState.push).toHaveBeenCalledWith({ name: 'system-detail', params: { id: '12' } })
+  })
+
+  it('requires explicit confirmation for every dirty Published save and Cancel preserves local edits', async () => {
+    const published = {
+      ...detail,
+      lifecycleStatus: 'Published' as const,
+      currentRevisionNumber: 2,
+      latestPublishedRevisionNumber: 2,
+      publishedAt: '2026-08-23T01:00:00Z',
+      concurrencyToken: 'published-token',
+    }
+    vi.mocked(getKnowledgeDocument).mockResolvedValue(published)
+    const wrapper = mountView()
+    await flushPromises()
+    await button(wrapper, '编辑')?.trigger('click')
+    expect(wrapper.text()).toContain('保存后新内容立即成为已发布内容并生成新修订。')
+    await wrapper.findAll('textarea')[0].setValue('已发布内容的新标题')
+
+    vi.mocked(ElMessageBox.confirm).mockRejectedValueOnce('cancel')
+    await button(wrapper, '保存')?.trigger('click')
+    await flushPromises()
+    expect(ElMessageBox.confirm).toHaveBeenCalledWith(
+      '保存后新内容立即成为已发布内容并生成新修订。',
+      '确认保存已发布内容',
+      expect.objectContaining({ confirmButtonText: '确认保存并立即发布' }),
+    )
+    expect(updateKnowledgeDocumentContent).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('编辑中')
+    expect(wrapper.findAll('textarea')[0].element.value).toBe('已发布内容的新标题')
+
+    vi.mocked(ElMessageBox.confirm).mockResolvedValueOnce('confirm' as never)
+    vi.mocked(updateKnowledgeDocumentContent).mockResolvedValue({
+      ...published,
+      title: '已发布内容的新标题',
+      currentRevisionNumber: 3,
+      latestPublishedRevisionNumber: 3,
+      publishedAt: '2026-08-23T02:00:00Z',
+      concurrencyToken: 'published-next-token',
+    })
+    await button(wrapper, '保存')?.trigger('click')
+    await flushPromises()
+    expect(updateKnowledgeDocumentContent).toHaveBeenCalledTimes(1)
+    expect(wrapper.text()).toContain('已保存。')
+    expect(wrapper.text()).toContain('已发布内容的新标题')
+  })
+
+  it('routes Ctrl+S and Cmd+S through the same Published confirmation and ignores a clean editor', async () => {
+    const published = {
+      ...detail,
+      lifecycleStatus: 'Published' as const,
+      currentRevisionNumber: 2,
+      latestPublishedRevisionNumber: 2,
+      publishedAt: '2026-08-23T01:00:00Z',
+      concurrencyToken: 'published-token',
+    }
+
+    for (const modifier of ['ctrl', 'meta'] as const) {
+      vi.mocked(getKnowledgeDocument).mockResolvedValue(published)
+      vi.mocked(ElMessageBox.confirm).mockReset()
+      vi.mocked(ElMessageBox.confirm).mockResolvedValue('confirm' as never)
+      vi.mocked(updateKnowledgeDocumentContent).mockReset()
+      vi.mocked(updateKnowledgeDocumentContent).mockResolvedValue({
+        ...published,
+        title: `${modifier} saved`,
+        currentRevisionNumber: 3,
+        latestPublishedRevisionNumber: 3,
+        concurrencyToken: `${modifier}-next-token`,
+      })
+      const wrapper = mountView()
+      await flushPromises()
+      await button(wrapper, '编辑')?.trigger('click')
+      await wrapper.findAll('textarea')[0].setValue(`${modifier} saved`)
+      window.dispatchEvent(new KeyboardEvent('keydown', {
+        key: 's',
+        ctrlKey: modifier === 'ctrl',
+        metaKey: modifier === 'meta',
+      }))
+      await flushPromises()
+      expect(ElMessageBox.confirm).toHaveBeenCalledTimes(1)
+      expect(updateKnowledgeDocumentContent).toHaveBeenCalledTimes(1)
+      wrapper.unmount()
+    }
+
+    vi.mocked(getKnowledgeDocument).mockResolvedValue(published)
+    vi.mocked(ElMessageBox.confirm).mockReset()
+    vi.mocked(updateKnowledgeDocumentContent).mockReset()
+    const cleanWrapper = mountView()
+    await flushPromises()
+    await button(cleanWrapper, '编辑')?.trigger('click')
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 's', ctrlKey: true }))
+    await flushPromises()
+    expect(ElMessageBox.confirm).not.toHaveBeenCalled()
+    expect(updateKnowledgeDocumentContent).not.toHaveBeenCalled()
+    cleanWrapper.unmount()
+  })
+
+  it('renders all four server-projected confirmation coverage states without changing the status badge', async () => {
+    const cases: ReadonlyArray<{
+      state: KnowledgeDocumentDetail['confirmationCoverage']['state']
+      revision: number | null
+      text: string | null
+    }> = [
+      { state: 'NoConfirmation', revision: null, text: null },
+      { state: 'LegacyConfirmationUnknown', revision: null, text: '迁移前人工确认无法确定覆盖的修订。' },
+      { state: 'CurrentRevisionConfirmed', revision: 1, text: '人工确认覆盖当前修订 1' },
+      { state: 'ChangedSinceConfirmation', revision: 1, text: '内容在最近一次确认后已修改' },
+    ]
+
+    for (const testCase of cases) {
+      vi.mocked(getKnowledgeDocument).mockResolvedValue({
+        ...detail,
+        confirmationCoverage: {
+          state: testCase.state,
+          lastConfirmedRevisionNumber: testCase.revision,
+        },
+      })
+      const wrapper = mountView()
+      await flushPromises()
+      if (testCase.text) expect(wrapper.text()).toContain(testCase.text)
+      else expect(wrapper.find('.knowledge-document-confirmation-coverage').exists()).toBe(false)
+      expect(wrapper.text()).toContain('知识状态')
+      wrapper.unmount()
+    }
+  })
+
+  it('adopts a successful Restore detail, exits History, and announces the new revision', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    await button(wrapper, '修订历史（1）')?.trigger('click')
+    await flushPromises()
+    const restored = {
+      ...detail,
+      title: '恢复后的标题',
+      currentRevisionNumber: 2,
+      concurrencyToken: 'restored-token',
+      confirmationCoverage: {
+        state: 'ChangedSinceConfirmation' as const,
+        lastConfirmedRevisionNumber: 1,
+      },
+    }
+    window.dispatchEvent(new CustomEvent('knowledge-document:restored', {
+      detail: { document: restored, sourceRevisionNumber: 1 },
+    }))
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('已从修订 1 恢复，并创建修订 2')
+    expect(wrapper.text()).toContain('恢复后的标题')
+    expect(wrapper.text()).toContain('内容在最近一次确认后已修改')
+    expect(wrapper.text()).not.toContain('返回当前内容')
   })
 })

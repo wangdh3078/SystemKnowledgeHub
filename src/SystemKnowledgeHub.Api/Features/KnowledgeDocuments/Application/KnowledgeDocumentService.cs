@@ -18,6 +18,8 @@ public sealed class KnowledgeDocumentService(
     public const int SummaryMaximumLength = 2_000;
     public const int BodyMarkdownMaximumLength = 1_000_000;
     public const int ChangeSummaryMaximumLength = 500;
+    public const int RestoreReasonMinimumLength = 5;
+    public const int RestoreReasonMaximumLength = 500;
 
     public async Task<KnowledgeDocumentWriteResult> Create(
         CreateKnowledgeDocumentCommand request,
@@ -186,13 +188,111 @@ public sealed class KnowledgeDocumentService(
         return new KnowledgeDocumentWriteResult(await queries.ToDetail(document, cancellationToken), null, KnowledgeDocumentWriteFailure.None);
     }
 
+    public async Task<KnowledgeDocumentWriteResult> RestoreRevision(
+        RestoreKnowledgeDocumentRevisionCommand request,
+        CancellationToken cancellationToken)
+    {
+        var errors = new Dictionary<string, string[]>();
+        var reason = NormalizeOptional(request.Reason);
+        if (reason is null || reason.Length < RestoreReasonMinimumLength)
+        {
+            errors["reason"] = [$"恢复原因至少需要 {RestoreReasonMinimumLength} 个字符。"];
+        }
+        else if (reason.Length > RestoreReasonMaximumLength)
+        {
+            errors["reason"] = [$"恢复原因不能超过 {RestoreReasonMaximumLength} 个字符。"];
+        }
+        if (!concurrencyTokenCodec.TryDecode(request.ConcurrencyToken, out var expectedVersion))
+        {
+            errors["concurrencyToken"] = ["并发标记无效，请重新加载后重试。"];
+        }
+        if (errors.Count > 0)
+        {
+            return new KnowledgeDocumentWriteResult(null, errors, KnowledgeDocumentWriteFailure.Validation);
+        }
+
+        var document = await dbContext.KnowledgeDocuments.SingleOrDefaultAsync(
+            item => item.Id == request.KnowledgeDocumentId,
+            cancellationToken);
+        if (document is null)
+        {
+            return new KnowledgeDocumentWriteResult(null, null, KnowledgeDocumentWriteFailure.NotFound);
+        }
+
+        var source = await dbContext.KnowledgeDocumentRevisions.AsNoTracking().SingleOrDefaultAsync(
+            item => item.KnowledgeDocumentId == request.KnowledgeDocumentId
+                && item.RevisionNumber == request.SourceRevisionNumber,
+            cancellationToken);
+        if (source is null)
+        {
+            return new KnowledgeDocumentWriteResult(null, null, KnowledgeDocumentWriteFailure.NotFound);
+        }
+        if (document.Version != expectedVersion)
+        {
+            return new KnowledgeDocumentWriteResult(null, null, KnowledgeDocumentWriteFailure.Conflict);
+        }
+        if (document.LifecycleStatus != DocumentLifecycleStatus.Draft)
+        {
+            return new KnowledgeDocumentWriteResult(null, null, KnowledgeDocumentWriteFailure.InvalidState);
+        }
+        if (source.RevisionNumber >= document.CurrentRevisionNumber
+            || (string.Equals(document.Title, source.Title, StringComparison.Ordinal)
+                && string.Equals(document.Summary, source.Summary, StringComparison.Ordinal)
+                && string.Equals(document.BodyMarkdown, source.BodyMarkdown, StringComparison.Ordinal)))
+        {
+            return new KnowledgeDocumentWriteResult(
+                null,
+                null,
+                KnowledgeDocumentWriteFailure.BusinessRuleViolation);
+        }
+
+        var timestamp = DateTimeOffset.UtcNow;
+        var nextRevisionNumber = checked(document.CurrentRevisionNumber + 1);
+        document.Title = source.Title;
+        document.Summary = source.Summary;
+        document.BodyMarkdown = source.BodyMarkdown;
+        document.UpdatedByUserId = request.Author.UserId;
+        document.UpdatedByDisplayName = request.Author.DisplayName;
+        document.UpdatedAt = timestamp;
+        document.CurrentRevisionNumber = nextRevisionNumber;
+        document.Version = expectedVersion + 1;
+        dbContext.KnowledgeDocumentRevisions.Add(CreateRevision(
+            document,
+            nextRevisionNumber,
+            request.Author,
+            timestamp,
+            RevisionOrigin.Restore,
+            null,
+            reason,
+            source.RevisionNumber));
+
+        try
+        {
+            await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+            await dbContext.SaveChangesAsync(cancellationToken);
+            await searchIndex.Upsert(document, cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return new KnowledgeDocumentWriteResult(null, null, KnowledgeDocumentWriteFailure.Conflict);
+        }
+
+        return new KnowledgeDocumentWriteResult(
+            await queries.ToDetail(document, cancellationToken),
+            null,
+            KnowledgeDocumentWriteFailure.None);
+    }
+
     private static KnowledgeDocumentRevision CreateRevision(
         KnowledgeDocument document,
         long revisionNumber,
         KnowledgeDocumentAuthor author,
         DateTimeOffset timestamp,
         RevisionOrigin origin,
-        string? changeSummary) => new()
+        string? changeSummary,
+        string? restoreReason = null,
+        long? restoredFromRevisionNumber = null) => new()
     {
         KnowledgeDocumentId = document.Id,
         RevisionNumber = revisionNumber,
@@ -204,6 +304,8 @@ public sealed class KnowledgeDocumentService(
         CreatedAt = timestamp,
         LifecycleContext = document.LifecycleStatus,
         ChangeSummary = changeSummary,
+        RestoreReason = restoreReason,
+        RestoredFromRevisionNumber = restoredFromRevisionNumber,
         RevisionOrigin = origin,
     };
 
