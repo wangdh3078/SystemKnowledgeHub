@@ -62,21 +62,26 @@ const components = {
   ElButton: {
     props: { disabled: Boolean, loading: Boolean },
     emits: ['click'],
-    template: '<button type="button" :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
+    template:
+      '<button type="button" :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
   },
   ElInput: {
     props: { modelValue: String },
     emits: ['update:modelValue', 'input'],
-    template: '<textarea :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value); $emit(\'input\', $event.target.value)" />',
+    template:
+      '<textarea :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value); $emit(\'input\', $event.target.value)" />',
   },
 }
 
-function openDialog(currentDocument: KnowledgeDocumentDetail = document): void {
+function openDialog(
+  currentDocument: KnowledgeDocumentDetail = document,
+  sourceRevision: KnowledgeDocumentRevisionDetail = revision,
+): void {
   useOverlayStore().openDialog({
     kind: 'restore-knowledge-document-revision',
     id: currentDocument.id,
     mode: 'edit',
-    payload: { document: currentDocument, revision },
+    payload: { document: currentDocument, revision: sourceRevision },
   })
 }
 
@@ -90,7 +95,9 @@ function button(wrapper: ReturnType<typeof mountDialog>, label: string) {
 
 function deferred<T>() {
   let resolve!: (value: T) => void
-  const promise = new Promise<T>((resolvePromise) => { resolve = resolvePromise })
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise
+  })
   return { promise, resolve }
 }
 
@@ -137,6 +144,54 @@ describe('KnowledgeDocumentRestoreDialogContent', () => {
     window.removeEventListener('knowledge-document:restored', restoredListener)
   })
 
+  it('keeps extension source exact while restore delegates the immutable snapshot copy by revision', async () => {
+    const extensionSource = [
+      '```mermaid',
+      'flowchart LR',
+      '  A --> B',
+      '```',
+      '',
+      '{color:#e53935|严重告警}',
+      '{bg:#fff3b0|请人工确认}',
+      '',
+      '- [ ] 未完成',
+      '',
+      '| 字段 | 说明 |',
+      '| --- | --- |',
+      '| ID | 主键 |',
+    ].join('\n')
+    const extensionRevision = { ...revision, bodyMarkdown: extensionSource }
+    const current = { ...document, bodyMarkdown: '不同的当前正文' }
+    const restored = {
+      ...current,
+      bodyMarkdown: extensionSource,
+      currentRevisionNumber: 3,
+      concurrencyToken: 'extension-restored-token',
+    }
+    setActivePinia(createPinia())
+    openDialog(current, extensionRevision)
+    vi.mocked(restoreKnowledgeDocumentRevision).mockResolvedValue(restored)
+    const restoredListener = vi.fn()
+    window.addEventListener('knowledge-document:restored', restoredListener)
+    const wrapper = mountDialog()
+
+    await wrapper.get('textarea').setValue('恢复扩展 Markdown 源码')
+    await button(wrapper, '恢复并创建新修订')?.trigger('click')
+    await flushPromises()
+
+    expect(restoreKnowledgeDocumentRevision).toHaveBeenCalledWith(7, 1, {
+      concurrencyToken: 'current-token',
+      reason: '恢复扩展 Markdown 源码',
+    })
+    expect(vi.mocked(restoreKnowledgeDocumentRevision).mock.calls[0]?.[2]).not.toHaveProperty(
+      'bodyMarkdown',
+    )
+    expect(extensionRevision.bodyMarkdown).toBe(extensionSource)
+    const event = restoredListener.mock.calls[0]?.[0] as CustomEvent | undefined
+    expect(event?.detail.document.bodyMarkdown).toBe(extensionSource)
+    window.removeEventListener('knowledge-document:restored', restoredListener)
+  })
+
   it('validates 5–500 trimmed characters and Cancel performs no request', async () => {
     const wrapper = mountDialog()
     expect(button(wrapper, '恢复并创建新修订')?.attributes('disabled')).toBeDefined()
@@ -151,13 +206,19 @@ describe('KnowledgeDocumentRestoreDialogContent', () => {
 
   it('preserves the reason on conflict, reloads the current token, and requires a second confirmation', async () => {
     vi.mocked(restoreKnowledgeDocumentRevision)
-      .mockRejectedValueOnce(new ApiError(409, {
-        code: 'conflict',
-        message: 'stale',
-        fieldErrors: null,
-        details: null,
-      }))
-      .mockResolvedValueOnce({ ...document, currentRevisionNumber: 5, concurrencyToken: 'restored-token' })
+      .mockRejectedValueOnce(
+        new ApiError(409, {
+          code: 'conflict',
+          message: 'stale',
+          fieldErrors: null,
+          details: null,
+        }),
+      )
+      .mockResolvedValueOnce({
+        ...document,
+        currentRevisionNumber: 5,
+        concurrencyToken: 'restored-token',
+      })
     const latest = {
       ...document,
       title: '并发后的当前标题',
@@ -191,7 +252,11 @@ describe('KnowledgeDocumentRestoreDialogContent', () => {
       {
         status: 409,
         code: 'invalid_state' as const,
-        latest: { ...document, lifecycleStatus: 'Published' as const, concurrencyToken: 'published-token' },
+        latest: {
+          ...document,
+          lifecycleStatus: 'Published' as const,
+          concurrencyToken: 'published-token',
+        },
         expected: '当前文档已不处于草稿状态，无法恢复',
       },
       {
@@ -213,15 +278,14 @@ describe('KnowledgeDocumentRestoreDialogContent', () => {
       setActivePinia(createPinia())
       openDialog()
       vi.mocked(getKnowledgeDocument).mockResolvedValueOnce(testCase.latest)
-      vi.mocked(restoreKnowledgeDocumentRevision).mockRejectedValueOnce(new ApiError(
-        testCase.status,
-        {
+      vi.mocked(restoreKnowledgeDocumentRevision).mockRejectedValueOnce(
+        new ApiError(testCase.status, {
           code: testCase.code,
           message: testCase.expected,
           fieldErrors: null,
           details: null,
-        },
-      ))
+        }),
+      )
       const wrapper = mountDialog()
       await wrapper.get('textarea').setValue('发生错误也要保留原因')
       await button(wrapper, '恢复并创建新修订')?.trigger('click')
@@ -234,7 +298,9 @@ describe('KnowledgeDocumentRestoreDialogContent', () => {
 
     setActivePinia(createPinia())
     openDialog()
-    vi.mocked(restoreKnowledgeDocumentRevision).mockRejectedValueOnce(new Error('network unavailable'))
+    vi.mocked(restoreKnowledgeDocumentRevision).mockRejectedValueOnce(
+      new Error('network unavailable'),
+    )
     const wrapper = mountDialog()
     await wrapper.get('textarea').setValue('网络失败保留恢复原因')
     await button(wrapper, '恢复并创建新修订')?.trigger('click')

@@ -121,7 +121,8 @@ const components = {
   ElSelect: {
     props: { modelValue: Number, id: String },
     emits: ['change'],
-    template: '<select :id="id" :value="modelValue" @change="$emit(\'change\', +$event.target.value)"><slot /></select>',
+    template:
+      '<select :id="id" :value="modelValue" @change="$emit(\'change\', +$event.target.value)"><slot /></select>',
   },
   ElOption: {
     props: { label: String, value: Number },
@@ -219,10 +220,56 @@ describe('KnowledgeDocumentRevisionHistory', () => {
     expect(legacyRevision.bodyMarkdown).toBe(rawBody)
   })
 
+  it('passes the exact immutable extension source to the shared historical Markdown view', async () => {
+    const extensionSource = [
+      '```mermaid',
+      'flowchart TD',
+      '  A --> B',
+      '```',
+      '',
+      '{color:#e53935|严重告警}',
+      '{bg:#fff3b0|请人工确认}',
+      '',
+      '- [ ] 未完成',
+      '- [x] 已完成',
+      '',
+      '| 字段 | 说明 |',
+      '| --- | --- |',
+      '| ID | 主键 |',
+    ].join('\n')
+    const extensionRevision = { ...details[3], bodyMarkdown: extensionSource }
+    vi.mocked(getKnowledgeDocumentRevision).mockResolvedValue(extensionRevision)
+    const wrapper = mount(KnowledgeDocumentRevisionHistory, {
+      props: { document: currentDocument, canRestore: true },
+      global: {
+        components,
+        stubs: {
+          KnowledgeDocumentMarkdown: {
+            name: 'KnowledgeDocumentMarkdown',
+            props: { markdown: { type: String, required: true } },
+            template: '<pre data-testid="historical-markdown-source">{{ markdown }}</pre>',
+          },
+        },
+      },
+    })
+
+    await flushPromises()
+
+    const sharedMarkdown = wrapper.getComponent({ name: 'KnowledgeDocumentMarkdown' })
+    expect(sharedMarkdown.props('markdown')).toBe(extensionSource)
+    expect(wrapper.get('[data-testid="historical-markdown-source"]').element.textContent).toBe(
+      extensionSource,
+    )
+    expect(extensionRevision.bodyMarkdown).toBe(extensionSource)
+  })
+
   it('shows list loading and a defensive empty state without inventing a revision', async () => {
     let complete: ((value: KnowledgeDocumentRevisionListResponse) => void) | undefined
     vi.mocked(listKnowledgeDocumentRevisions).mockImplementation(
-      () => new Promise((resolve) => { complete = resolve }),
+      () =>
+        new Promise((resolve) => {
+          complete = resolve
+        }),
     )
     const wrapper = mountHistory()
     await flushPromises()
@@ -262,7 +309,10 @@ describe('KnowledgeDocumentRevisionHistory', () => {
     const wrapper = mountHistory()
     await flushPromises()
 
-    await wrapper.findAll('button').find((item) => item.text() === '下一页')?.trigger('click')
+    await wrapper
+      .findAll('button')
+      .find((item) => item.text() === '下一页')
+      ?.trigger('click')
     await flushPromises()
 
     expect(listKnowledgeDocumentRevisions).toHaveBeenCalledTimes(2)
@@ -281,12 +331,18 @@ describe('KnowledgeDocumentRevisionHistory', () => {
     const wrapper = mountHistory()
     await flushPromises()
 
-    await wrapper.findAll('button').find((item) => item.text() === '比较修订')?.trigger('click')
+    await wrapper
+      .findAll('button')
+      .find((item) => item.text() === '比较修订')
+      ?.trigger('click')
     await flushPromises()
     expect(wrapper.text()).toContain('比较修订')
     expect(wrapper.text()).toContain('从 修订 2 到 修订 3')
 
-    await wrapper.findAll('button').find((item) => item.text() === '返回修订历史')?.trigger('click')
+    await wrapper
+      .findAll('button')
+      .find((item) => item.text() === '返回修订历史')
+      ?.trigger('click')
     await flushPromises()
     expect(wrapper.text()).toContain('修订历史（3）')
     expect(wrapper.text()).toContain('当前草稿标题')

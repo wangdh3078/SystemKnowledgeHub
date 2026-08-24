@@ -1,7 +1,59 @@
 import MarkdownIt from 'markdown-it'
+import { controlledColorMarkdownItPlugin } from './colorSyntax'
 import { isLegacyBreakParagraph } from './legacyMarkdownBreaks'
 
 const renderer = new MarkdownIt({ html: false, linkify: true })
+renderer.use(controlledColorMarkdownItPlugin)
+
+renderer.core.ruler.after('inline', 'task-list-items', (state) => {
+  const listContainers: number[] = []
+  const listItems: number[] = []
+  const visitedListItems = new Set<number>()
+
+  for (let index = 0; index < state.tokens.length; index += 1) {
+    const token = state.tokens[index]!
+
+    if (token.type === 'bullet_list_open' || token.type === 'ordered_list_open') {
+      listContainers.push(index)
+      continue
+    }
+    if (token.type === 'bullet_list_close' || token.type === 'ordered_list_close') {
+      listContainers.pop()
+      continue
+    }
+    if (token.type === 'list_item_open') {
+      listItems.push(index)
+      continue
+    }
+    if (token.type === 'list_item_close') {
+      listItems.pop()
+      continue
+    }
+    if (token.type !== 'inline' || listContainers.length === 0 || listItems.length === 0) {
+      continue
+    }
+
+    const currentListContainer = listContainers.at(-1)!
+    const currentListItem = listItems.at(-1)!
+    if (visitedListItems.has(currentListItem)) continue
+    visitedListItems.add(currentListItem)
+
+    const marker = /^\[([ xX])\]\s+/u.exec(token.content)
+    const firstChild = token.children?.[0]
+    if (!marker || firstChild?.type !== 'text' || !/^\[[ xX]\]\s+/u.test(firstChild.content)) {
+      continue
+    }
+
+    const checked = marker[1]?.toLowerCase() === 'x'
+    const checkbox = new state.Token('task_checkbox', 'input', 0)
+    checkbox.attrSet('data-checked', checked ? 'true' : 'false')
+    firstChild.content = firstChild.content.replace(/^\[[ xX]\]\s+/u, '')
+    token.children!.unshift(checkbox)
+
+    state.tokens[currentListContainer]!.attrJoin('class', 'knowledge-document-task-list')
+    state.tokens[currentListItem]!.attrJoin('class', 'knowledge-document-task-list-item')
+  }
+})
 renderer.core.ruler.after('inline', 'legacy-break-paragraph', (state) => {
   const lines = state.src.split(/\r\n|\n|\r/)
   for (let index = 0; index < state.tokens.length; index += 1) {
@@ -10,6 +62,35 @@ renderer.core.ruler.after('inline', 'legacy-break-paragraph', (state) => {
     state.tokens[index + 1]!.children = [hardBreak]
   }
 })
+
+renderer.renderer.rules.task_checkbox = (tokens, index) => {
+  const checked = tokens[index]!.attrGet('data-checked') === 'true'
+  const checkedAttribute = checked ? ' checked' : ''
+  const label = checked ? '任务项：已完成' : '任务项：未完成'
+  return `<input class="knowledge-document-task-checkbox" type="checkbox" disabled${checkedAttribute} aria-label="${label}">`
+}
+
+const originalFence = renderer.renderer.rules.fence
+renderer.renderer.rules.fence = (tokens, index, options, environment, self) => {
+  const token = tokens[index]!
+  const language = token.info.trim().split(/\s+/u)[0]?.toLowerCase()
+  if (language !== 'mermaid') {
+    return originalFence
+      ? originalFence(tokens, index, options, environment, self)
+      : self.renderToken(tokens, index, options)
+  }
+
+  const source = renderer.utils.escapeHtml(token.content)
+  return [
+    '<figure class="knowledge-document-mermaid" data-knowledge-document-mermaid>',
+    '<figcaption class="knowledge-document-mermaid__caption">Mermaid 图表源码</figcaption>',
+    '<pre class="knowledge-document-mermaid__source"><code>',
+    source,
+    '</code></pre>',
+    '</figure>\n',
+  ].join('')
+}
+
 const originalLinkOpen = renderer.renderer.rules.link_open
 renderer.renderer.rules.link_open = (tokens, index, options, environment, self) => {
   const token = tokens[index]

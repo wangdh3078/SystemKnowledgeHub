@@ -49,11 +49,13 @@ const details: Readonly<Record<number, KnowledgeDocumentRevisionDetail>> = {
     restoredFromRevisionNumber: 2,
     restoreReason: '恢复已验证的监听步骤',
     summary: '监听故障排查摘要',
-    bodyMarkdown: '# Oracle Listener\n\n检查监听服务。\n\n```sql\nSELECT status FROM v$instance;\n```\n\n<img src=x onerror=alert(1)>',
+    bodyMarkdown:
+      '# Oracle Listener\n\n检查监听服务。\n\n```sql\nSELECT status FROM v$instance;\n```\n\n<img src=x onerror=alert(1)>',
   }),
   5: revision(5, {
     summary: '监听与数据库状态排查',
-    bodyMarkdown: '# Oracle Listener\n\n检查监听与数据库服务。\n\n```sql\nSELECT status FROM v$instance;\n```\n\n| 项目 | 状态 |\n| --- | --- |\n| Listener | OK |\n\n<script>alert(1)</script>\n[j](javascript:alert(1))',
+    bodyMarkdown:
+      '# Oracle Listener\n\n检查监听与数据库服务。\n\n```sql\nSELECT status FROM v$instance;\n```\n\n| 项目 | 状态 |\n| --- | --- |\n| Listener | OK |\n\n<script>alert(1)</script>\n[j](javascript:alert(1))',
   }),
 }
 
@@ -61,13 +63,15 @@ const components = {
   ElButton: {
     props: { disabled: Boolean },
     emits: ['click'],
-    template: '<button type="button" :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
+    template:
+      '<button type="button" :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
   },
   ElIcon: { template: '<span><slot /></span>' },
   ElSelect: {
     props: { modelValue: Number, id: String },
     emits: ['change'],
-    template: '<select :id="id" :value="modelValue" @change="$emit(\'change\', +$event.target.value)"><slot /></select>',
+    template:
+      '<select :id="id" :value="modelValue" @change="$emit(\'change\', +$event.target.value)"><slot /></select>',
   },
   ElOption: {
     props: { label: String, value: Number },
@@ -134,6 +138,50 @@ describe('RevisionCompareView', () => {
     expect(wrapper.find('a[href^="javascript:"]').exists()).toBe(false)
     expect(wrapper.findAll('button').some((button) => button.text().includes('恢复'))).toBe(false)
     expect(wrapper.findAll('button').some((button) => button.text() === '编辑')).toBe(false)
+  })
+
+  it('compares Markdown extensions as immutable raw source without rendering or canonicalizing them', async () => {
+    const rawFrom = [
+      '```mermaid',
+      'flowchart LR',
+      '  A[开始] --> B[结束]',
+      '```',
+      '',
+      '{color:#e53935|严重告警}',
+      '{bg:#fff3b0|请人工确认}',
+      '',
+      '- [ ] 未完成',
+      '- [x] 已完成',
+      '',
+      '| 字段 | 说明 |',
+      '| --- | --- |',
+      '| ID | 主键 |',
+    ].join('\n')
+    const rawTo = rawFrom.replace('#e53935', '#E53935')
+    const fromSnapshot = revision(1, { bodyMarkdown: rawFrom })
+    const toSnapshot = revision(2, { bodyMarkdown: rawTo })
+    vi.mocked(getKnowledgeDocumentRevision).mockResolvedValue(fromSnapshot)
+
+    const wrapper = mountCompare(2, toSnapshot)
+    await flushPromises()
+
+    const diffLines = wrapper
+      .findAll('.knowledge-document-compare__line code')
+      .map((line) => line.element.textContent ?? '')
+    expect(diffLines).toContain('```mermaid')
+    expect(diffLines).toContain('  A[开始] --> B[结束]')
+    expect(diffLines).toContain('{color:#e53935|严重告警}')
+    expect(diffLines).toContain('{color:#E53935|严重告警}')
+    expect(diffLines).toContain('{bg:#fff3b0|请人工确认}')
+    expect(diffLines).toContain('- [ ] 未完成')
+    expect(diffLines).toContain('| 字段 | 说明 |')
+    expect(wrapper.find('.knowledge-document-mermaid').exists()).toBe(false)
+    expect(wrapper.find('.knowledge-document-text-color').exists()).toBe(false)
+    expect(wrapper.find('.knowledge-document-background-color').exists()).toBe(false)
+    expect(wrapper.find('input[type="checkbox"]').exists()).toBe(false)
+    expect(wrapper.find('table').exists()).toBe(false)
+    expect(fromSnapshot.bodyMarkdown).toBe(rawFrom)
+    expect(toSnapshot.bodyMarkdown).toBe(rawTo)
   })
 
   it('handles Revision 1 without fetching or comparing itself', async () => {

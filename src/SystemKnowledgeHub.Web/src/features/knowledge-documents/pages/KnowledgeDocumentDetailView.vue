@@ -1,5 +1,4 @@
 <script setup lang="ts">
-/* eslint-disable vue/no-v-html -- MarkdownIt is configured with HTML disabled and validates link protocols. */
 import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
@@ -10,7 +9,11 @@ import LoadingState from '../../../components/feedback/LoadingState.vue'
 import { useActorStore } from '../../../app/stores/actor'
 import { useOverlayStore } from '../../../app/stores/overlays'
 import { deleteRelationship, getRelatedKnowledge } from '../../relationships/api/relationshipApi'
-import { contextualRelationTypeLabel, type KnowledgeTargetType, type RelatedKnowledge } from '../../relationships/api/relationshipContracts'
+import {
+  contextualRelationTypeLabel,
+  type KnowledgeTargetType,
+  type RelatedKnowledge,
+} from '../../relationships/api/relationshipContracts'
 import {
   getKnowledgeDocument,
   updateKnowledgeDocumentContent,
@@ -23,7 +26,7 @@ import {
   type DocumentLifecycleStatus,
   type KnowledgeDocumentDetail,
 } from '../api/knowledgeDocumentContracts'
-import { renderMarkdown } from '../markdown/renderMarkdown'
+import KnowledgeDocumentMarkdown from '../markdown/KnowledgeDocumentMarkdown.vue'
 import {
   confirmDocumentEditDiscard,
   isDocumentEditDirty,
@@ -58,6 +61,7 @@ const savedMessage = ref<string | null>(null)
 const historyMode = ref(false)
 const editing = ref(false)
 const previewing = ref(false)
+const editorFullscreen = ref(false)
 const saving = ref(false)
 const saveConfirming = ref(false)
 const editTitle = ref('')
@@ -77,19 +81,23 @@ const id = computed(() => {
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null
 })
 const canEdit = computed(() => actorStore.canEdit)
-const renderedBody = computed(() => (data.value ? renderMarkdown(data.value.bodyMarkdown) : ''))
-const previewBody = computed(() => renderMarkdown(editBodyMarkdown.value))
 const isArchived = computed(() => data.value?.lifecycleStatus === 'Archived')
-const evidenceSubject = computed<EvidenceSubjectPayload | null>(() => data.value
-  ? {
-      subject: { type: 'KnowledgeDocument', id: data.value.id },
-      title: `${documentTypeLabels[data.value.documentType]} · ${data.value.title}`,
-      knowledgeStatus: data.value.knowledgeStatus,
-      subjectRevisionNumber: data.value.currentRevisionNumber,
-    }
-  : null)
-const validEvidenceCount = computed(() => evidence.value.filter((item) => item.sourceReference || item.sourceLocator).length)
-const humanConfirmationCount = computed(() => evidence.value.filter((item) => item.evidenceType === 'HumanConfirmation').length)
+const evidenceSubject = computed<EvidenceSubjectPayload | null>(() =>
+  data.value
+    ? {
+        subject: { type: 'KnowledgeDocument', id: data.value.id },
+        title: `${documentTypeLabels[data.value.documentType]} · ${data.value.title}`,
+        knowledgeStatus: data.value.knowledgeStatus,
+        subjectRevisionNumber: data.value.currentRevisionNumber,
+      }
+    : null,
+)
+const validEvidenceCount = computed(
+  () => evidence.value.filter((item) => item.sourceReference || item.sourceLocator).length,
+)
+const humanConfirmationCount = computed(
+  () => evidence.value.filter((item) => item.evidenceType === 'HumanConfirmation').length,
+)
 const confirmationCoverageText = computed(() => {
   const coverage = data.value?.confirmationCoverage
   if (!coverage || coverage.state === 'NoConfirmation') return null
@@ -112,11 +120,9 @@ const dirty = computed(
 const titleValid = computed(
   () => editTitle.value.trim().length > 0 && editTitle.value.trim().length <= 300,
 )
-const canSave = computed(() => editing.value
-  && dirty.value
-  && titleValid.value
-  && !saving.value
-  && !saveConfirming.value)
+const canSave = computed(
+  () => editing.value && dirty.value && titleValid.value && !saving.value && !saveConfirming.value,
+)
 async function load(): Promise<void> {
   const requestedId = id.value
   const requestSequence = ++detailLoadSequence
@@ -166,18 +172,44 @@ async function loadEvidence(): Promise<void> {
 }
 function addEvidence(): void {
   if (!evidenceSubject.value || !canEdit.value || isArchived.value || editing.value) return
-  overlayStore.openDrawer({ kind: 'add-evidence', id: null, mode: 'create', payload: evidenceSubject.value })
+  overlayStore.openDrawer({
+    kind: 'add-evidence',
+    id: null,
+    mode: 'create',
+    payload: evidenceSubject.value,
+  })
 }
 function addHumanConfirmation(): void {
   if (!evidenceSubject.value || !canEdit.value || isArchived.value || editing.value) return
-  overlayStore.openDrawer({ kind: 'human-confirmation', id: null, mode: 'create', payload: evidenceSubject.value })
+  overlayStore.openDrawer({
+    kind: 'human-confirmation',
+    id: null,
+    mode: 'create',
+    payload: evidenceSubject.value,
+  })
 }
 function addRelation(): void {
   if (!data.value || !canEdit.value || isArchived.value) return
-  overlayStore.openDrawer({ kind: 'add-relationship', id: data.value.id, mode: 'create', payload: { source: { type: 'KnowledgeDocument', id: data.value.id }, title: data.value.title, documentType: data.value.documentType } })
+  overlayStore.openDrawer({
+    kind: 'add-relationship',
+    id: data.value.id,
+    mode: 'create',
+    payload: {
+      source: { type: 'KnowledgeDocument', id: data.value.id },
+      title: data.value.title,
+      documentType: data.value.documentType,
+    },
+  })
 }
 function relatedRoute(item: RelatedKnowledge): { name: string; params: { id: string } } | null {
-  const routes: Readonly<Partial<Record<KnowledgeTargetType, string>>> = { System: 'system-detail', BusinessFunction: 'business-function-detail', DatabaseObject: 'database-object-detail', BusinessRule: 'business-rule-detail', Integration: 'integration-detail', KnowledgeDocument: 'knowledge-document-detail' }
+  const routes: Readonly<Partial<Record<KnowledgeTargetType, string>>> = {
+    System: 'system-detail',
+    BusinessFunction: 'business-function-detail',
+    DatabaseObject: 'database-object-detail',
+    BusinessRule: 'business-rule-detail',
+    Integration: 'integration-detail',
+    KnowledgeDocument: 'knowledge-document-detail',
+  }
   const name = routes[item.related.type]
   return name ? { name, params: { id: String(item.related.id) } } : null
 }
@@ -187,12 +219,15 @@ function openRelated(item: RelatedKnowledge): void {
 }
 async function removeRelation(item: RelatedKnowledge): Promise<void> {
   try {
-    await ElMessageBox.confirm('确认移除此关联？该操作不会删除关联对象。', '移除关联', { type: 'warning' })
+    await ElMessageBox.confirm('确认移除此关联？该操作不会删除关联对象。', '移除关联', {
+      type: 'warning',
+    })
     await deleteRelationship(item.id)
     await loadRelations()
     ElMessage.success('关联已移除。')
   } catch (reason: unknown) {
-    if (reason !== 'cancel' && reason !== 'close') relationsError.value = reason instanceof Error ? reason.message : '移除关联失败。'
+    if (reason !== 'cancel' && reason !== 'close')
+      relationsError.value = reason instanceof Error ? reason.message : '移除关联失败。'
   }
 }
 function beginEdit(): void {
@@ -206,6 +241,7 @@ function beginEdit(): void {
     bodyMarkdown: editBodyMarkdown.value,
   }
   previewing.value = false
+  editorFullscreen.value = false
   saveError.value = null
   validationErrors.value = {}
   savedMessage.value = null
@@ -223,6 +259,7 @@ async function cancelEdit(): Promise<void> {
 function finishEdit(): void {
   editing.value = false
   previewing.value = false
+  editorFullscreen.value = false
   initialEdit.value = null
   saveError.value = null
   validationErrors.value = {}
@@ -245,11 +282,7 @@ function syncEditorInitialValue(markdown: string): void {
   }
 }
 async function performSave(): Promise<void> {
-  if (!data.value
-    || !editing.value
-    || !dirty.value
-    || !titleValid.value
-    || saving.value) return
+  if (!data.value || !editing.value || !dirty.value || !titleValid.value || saving.value) return
   saving.value = true
   saveError.value = null
   validationErrors.value = {}
@@ -268,6 +301,7 @@ async function performSave(): Promise<void> {
     }
     editing.value = false
     previewing.value = false
+    editorFullscreen.value = false
     savedMessage.value = '已保存。'
   } catch (reason: unknown) {
     if (reason instanceof ApiError && reason.status === 409) {
@@ -320,12 +354,19 @@ async function reloadAfterConflict(): Promise<void> {
   if (!(await confirmDiscard())) return
   editing.value = false
   previewing.value = false
+  editorFullscreen.value = false
   initialEdit.value = null
   saveError.value = null
   validationErrors.value = {}
   await load()
 }
 function handleShortcut(event: KeyboardEvent): void {
+  if (event.key === 'Escape' && editorFullscreen.value) {
+    if (document.querySelector('.el-overlay-message-box, .el-overlay-dialog')) return
+    event.preventDefault()
+    editorFullscreen.value = false
+    return
+  }
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's' && canSave.value) {
     event.preventDefault()
     void requestSave()
@@ -391,20 +432,30 @@ function handleHumanConfirmationChanged(event: Event): void {
   const eventDetail: unknown = event.detail
   if (typeof eventDetail !== 'object' || eventDetail === null || !('subject' in eventDetail)) return
   const subject: unknown = eventDetail.subject
-  if (typeof subject !== 'object' || subject === null
-    || !('type' in subject) || subject.type !== 'KnowledgeDocument'
-    || !('id' in subject) || subject.id !== id.value) return
+  if (
+    typeof subject !== 'object' ||
+    subject === null ||
+    !('type' in subject) ||
+    subject.type !== 'KnowledgeDocument' ||
+    !('id' in subject) ||
+    subject.id !== id.value
+  )
+    return
   void load()
 }
 function handleRestored(event: Event): void {
   const document = readEventDocument(event)
   if (!document || document.id !== id.value || !(event instanceof CustomEvent)) return
   const detailValue: unknown = event.detail
-  if (typeof detailValue !== 'object' || detailValue === null
-    || !('sourceRevisionNumber' in detailValue)
-    || typeof detailValue.sourceRevisionNumber !== 'number'
-    || !Number.isSafeInteger(detailValue.sourceRevisionNumber)
-    || detailValue.sourceRevisionNumber < 1) return
+  if (
+    typeof detailValue !== 'object' ||
+    detailValue === null ||
+    !('sourceRevisionNumber' in detailValue) ||
+    typeof detailValue.sourceRevisionNumber !== 'number' ||
+    !Number.isSafeInteger(detailValue.sourceRevisionNumber) ||
+    detailValue.sourceRevisionNumber < 1
+  )
+    return
   detailLoadSequence += 1
   loading.value = false
   data.value = document
@@ -417,9 +468,16 @@ watch(id, () => {
   void loadRelations()
   void loadEvidence()
 })
-watch([editing, dirty], ([isEditing, isDirty]) => {
-  setActiveDocumentEditDirty(isEditing && isDirty)
-}, { immediate: true })
+watch(
+  [editing, dirty],
+  ([isEditing, isDirty]) => {
+    setActiveDocumentEditDirty(isEditing && isDirty)
+  },
+  { immediate: true },
+)
+watch(editorFullscreen, (active) => {
+  document.body.classList.toggle('knowledge-document-editor-fullscreen-active', active)
+})
 onBeforeRouteLeave(async () => !editing.value || (await confirmDiscard()))
 onMounted(() => {
   window.addEventListener('keydown', handleShortcut)
@@ -436,6 +494,7 @@ onMounted(() => {
 })
 onBeforeUnmount(() => {
   setActiveDocumentEditDirty(false)
+  document.body.classList.remove('knowledge-document-editor-fullscreen-active')
   window.removeEventListener('keydown', handleShortcut)
   window.removeEventListener('beforeunload', beforeUnload)
   window.removeEventListener('relationship:changed', loadRelations)
@@ -467,12 +526,18 @@ onBeforeUnmount(() => {
             <p v-if="data.summary">{{ data.summary }}</p>
           </div>
           <div v-if="!historyMode" class="knowledge-document-detail__actions">
-            <el-button @click="enterHistory">修订历史（{{ data.currentRevisionNumber }}）</el-button>
+            <el-button @click="enterHistory"
+              >修订历史（{{ data.currentRevisionNumber }}）</el-button
+            >
             <template v-if="editing">
               <el-button :disabled="saving" @click="cancelEdit">取消</el-button>
-              <el-button type="primary" :disabled="!canSave" :loading="saving" @click="requestSave">{{
-                saving ? '保存中…' : '保存'
-              }}</el-button>
+              <el-button
+                type="primary"
+                :disabled="!canSave"
+                :loading="saving"
+                @click="requestSave"
+                >{{ saving ? '保存中…' : '保存' }}</el-button
+              >
             </template>
             <template v-else-if="canEdit">
               <el-button v-if="!isArchived" type="primary" @click="beginEdit">编辑</el-button>
@@ -506,9 +571,14 @@ onBeforeUnmount(() => {
         </div>
         <p
           v-if="confirmationCoverageText"
-          :class="['knowledge-document-confirmation-coverage', { 'is-warning': data.confirmationCoverage.state === 'ChangedSinceConfirmation' }]"
+          :class="[
+            'knowledge-document-confirmation-coverage',
+            { 'is-warning': data.confirmationCoverage.state === 'ChangedSinceConfirmation' },
+          ]"
           role="status"
-        >{{ confirmationCoverageText }}</p>
+        >
+          {{ confirmationCoverageText }}
+        </p>
       </header>
       <KnowledgeDocumentRevisionHistory
         v-if="historyMode"
@@ -517,15 +587,26 @@ onBeforeUnmount(() => {
         @return="returnToCurrentContent"
       />
       <p v-if="!historyMode && savedMessage" class="knowledge-document-saved">{{ savedMessage }}</p>
-      <p v-if="!historyMode && transitionError" class="knowledge-document-error">{{ transitionError }}</p>
+      <p v-if="!historyMode && transitionError" class="knowledge-document-error">
+        {{ transitionError }}
+      </p>
       <section v-if="!historyMode && editing" class="knowledge-document-edit">
         <div class="knowledge-document-edit__mode">
           <span class="knowledge-document-edit__editing-state"><i></i>编辑中</span>
-          <span :class="['knowledge-document-edit__save-state', { 'is-dirty': dirty, 'is-saving': saving }]">
+          <span
+            :class="[
+              'knowledge-document-edit__save-state',
+              { 'is-dirty': dirty, 'is-saving': saving },
+            ]"
+          >
             {{ saving ? '正在保存…' : dirty ? '未保存' : '已保存' }}
           </span>
         </div>
-        <p v-if="data.lifecycleStatus === 'Published'" class="knowledge-document-published-warning" role="note">
+        <p
+          v-if="data.lifecycleStatus === 'Published'"
+          class="knowledge-document-published-warning"
+          role="note"
+        >
           保存后新内容立即成为已发布内容并生成新修订。
         </p>
         <el-form label-position="top">
@@ -541,32 +622,17 @@ onBeforeUnmount(() => {
               show-word-limit
           /></el-form-item>
         </el-form>
-        <div class="knowledge-document-edit__tabs" role="tablist" aria-label="文档编辑模式">
-          <el-button
-            :class="{ 'is-active': !previewing }"
-            role="tab"
-            :aria-selected="!previewing"
-            size="small"
-            @click="previewing = false"
-            >编辑</el-button
-          ><el-button
-            :class="{ 'is-active': previewing }"
-            role="tab"
-            :aria-selected="previewing"
-            size="small"
-            @click="previewing = true"
-            >预览</el-button
-          ><span v-if="previewing">预览未保存内容</span>
-        </div>
-        <article
-          v-if="previewing"
-          class="knowledge-document-markdown knowledge-document-edit__preview"
-          v-html="previewBody"
-        ></article>
         <KnowledgeDocumentEditor
-          v-else
           v-model="editBodyMarkdown"
+          :previewing="previewing"
+          :fullscreen="editorFullscreen"
+          :can-save="canSave"
+          :saving="saving"
           @ready="syncEditorInitialValue"
+          @save="requestSave"
+          @edit="previewing = false"
+          @preview="previewing = true"
+          @toggle-fullscreen="editorFullscreen = !editorFullscreen"
         />
         <p v-if="fieldError('bodyMarkdown')" class="knowledge-document-error">
           {{ fieldError('bodyMarkdown') }}
@@ -585,24 +651,80 @@ onBeforeUnmount(() => {
       <section v-else-if="!historyMode" class="knowledge-document-body">
         <h2>正文</h2>
         <p v-if="!data.bodyMarkdown.trim()" class="text-muted">该文档暂无正文。</p>
-        <article v-else class="knowledge-document-markdown" v-html="renderedBody"></article>
+        <KnowledgeDocumentMarkdown v-else :markdown="data.bodyMarkdown" />
       </section>
       <section v-if="!historyMode && !editing" class="knowledge-document-relations">
-        <div class="knowledge-document-relations__heading"><h2>关联对象</h2><el-button v-if="canEdit && !isArchived" type="primary" plain size="small" @click="addRelation">添加关联</el-button></div>
+        <div class="knowledge-document-relations__heading">
+          <h2>关联对象</h2>
+          <el-button
+            v-if="canEdit && !isArchived"
+            type="primary"
+            plain
+            size="small"
+            @click="addRelation"
+            >添加关联</el-button
+          >
+        </div>
         <p v-if="relationsLoading">正在加载关联对象…</p>
-        <p v-else-if="relationsError" class="knowledge-document-error">无法加载关联对象 <el-button text type="primary" @click="loadRelations">重试</el-button></p>
+        <p v-else-if="relationsError" class="knowledge-document-error">
+          无法加载关联对象 <el-button text type="primary" @click="loadRelations">重试</el-button>
+        </p>
         <p v-else-if="!relations.length" class="text-muted">暂无关联对象</p>
-        <div v-else class="knowledge-document-relations__list"><div v-for="item in relations" :key="item.id" class="knowledge-document-relations__row"><span>{{ item.direction === 'Outgoing' ? '指向' : '来自' }}</span><span>{{ contextualRelationTypeLabel(item.relationType, item.direction) }}</span><button type="button" @click="openRelated(item)">{{ item.objectTypeLabel }} · {{ item.title }}</button><el-button v-if="canEdit && !isArchived" text type="danger" size="small" @click="removeRelation(item)">移除</el-button></div></div>
+        <div v-else class="knowledge-document-relations__list">
+          <div v-for="item in relations" :key="item.id" class="knowledge-document-relations__row">
+            <span>{{ item.direction === 'Outgoing' ? '指向' : '来自' }}</span
+            ><span>{{ contextualRelationTypeLabel(item.relationType, item.direction) }}</span
+            ><button type="button" @click="openRelated(item)">
+              {{ item.objectTypeLabel }} · {{ item.title }}</button
+            ><el-button
+              v-if="canEdit && !isArchived"
+              text
+              type="danger"
+              size="small"
+              @click="removeRelation(item)"
+              >移除</el-button
+            >
+          </div>
+        </div>
       </section>
       <section v-if="!historyMode && !editing" class="knowledge-document-evidence">
         <div class="knowledge-document-evidence__heading">
-          <div><h2>证据与人工确认</h2><p>记录支持当前知识结论的依据；保存后不会自动改变知识状态。</p></div>
-          <div v-if="canEdit && !isArchived" class="knowledge-document-evidence__actions"><el-button plain size="small" @click="addEvidence">添加证据</el-button><el-button plain size="small" @click="addHumanConfirmation">添加人工确认</el-button></div>
+          <div>
+            <h2>证据与人工确认</h2>
+            <p>记录支持当前知识结论的依据；保存后不会自动改变知识状态。</p>
+          </div>
+          <div v-if="canEdit && !isArchived" class="knowledge-document-evidence__actions">
+            <el-button plain size="small" @click="addEvidence">添加证据</el-button
+            ><el-button plain size="small" @click="addHumanConfirmation">添加人工确认</el-button>
+          </div>
         </div>
         <p v-if="evidenceLoading">正在加载证据…</p>
-        <p v-else-if="evidenceError" class="knowledge-document-error">无法加载证据 <el-button text type="primary" @click="loadEvidence">重试</el-button></p>
+        <p v-else-if="evidenceError" class="knowledge-document-error">
+          无法加载证据 <el-button text type="primary" @click="loadEvidence">重试</el-button>
+        </p>
         <p v-else-if="!evidence.length" class="text-muted">暂无证据或人工确认。</p>
-        <div v-else class="knowledge-document-evidence__list"><article v-for="item in evidence" :key="item.id" class="knowledge-document-evidence__item"><div><el-tag size="small" effect="plain">{{ evidenceTypeLabels[item.evidenceType] }}</el-tag><strong>{{ item.sourceTitle }}</strong></div><p v-if="item.summary">{{ item.summary }}</p><p>{{ item.supportReason }}</p><small>提供者：{{ item.provider.displayName }} · {{ item.provider.roleOrIdentity }}<template v-if="getHumanConfirmationListMethod(item)"> · {{ confirmationMethodLabels[getHumanConfirmationListMethod(item)!] }}</template></small></article></div>
+        <div v-else class="knowledge-document-evidence__list">
+          <article
+            v-for="item in evidence"
+            :key="item.id"
+            class="knowledge-document-evidence__item"
+          >
+            <div>
+              <el-tag size="small" effect="plain">{{
+                evidenceTypeLabels[item.evidenceType]
+              }}</el-tag
+              ><strong>{{ item.sourceTitle }}</strong>
+            </div>
+            <p v-if="item.summary">{{ item.summary }}</p>
+            <p>{{ item.supportReason }}</p>
+            <small
+              >提供者：{{ item.provider.displayName }} · {{ item.provider.roleOrIdentity
+              }}<template v-if="getHumanConfirmationListMethod(item)">
+                · {{ confirmationMethodLabels[getHumanConfirmationListMethod(item)!] }}</template
+              ></small
+            >
+          </article>
+        </div>
       </section>
       <KnowledgeStatusProgressionPanel
         v-if="!historyMode && !editing"

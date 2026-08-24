@@ -3,6 +3,7 @@ import { Editor, defaultValueCtx, editorViewCtx, rootCtx } from '@milkdown/core'
 import { gfm } from '@milkdown/preset-gfm'
 import { getMarkdown } from '@milkdown/utils'
 import { canonicalizeLegacyBreakParagraphs } from '../markdown/legacyMarkdownBreaks'
+import { knowledgeDocumentColorExtension } from './colorMarks'
 import { knowledgeDocumentCommonmark } from './milkdownConfig'
 
 const corpus = `# 标题
@@ -49,6 +50,7 @@ async function roundTrip(markdown: string): Promise<string> {
     })
     .use(knowledgeDocumentCommonmark)
     .use(gfm)
+    .use(knowledgeDocumentColorExtension)
     .create()
   const result = editor.action(getMarkdown())
   await editor.destroy()
@@ -70,6 +72,109 @@ describe('Milkdown Markdown round trip', () => {
     expect(first).toContain('[链接](https://example.com)')
     expect(first).toContain('普通中文段落。')
     expect(second).toBe(first)
+  })
+
+  it('canonicalizes color marks and preserves the saved source after reload', async () => {
+    const source = [
+      '{color:#e53935|严重告警}',
+      '',
+      '{bg:#fff3b0|请人工确认}',
+      '',
+      '{bg:#fff3b0|{color:#e53935|重点内容}}',
+    ].join('\n')
+    const canonical = [
+      '{color:#E53935|严重告警}',
+      '',
+      '{bg:#FFF3B0|请人工确认}',
+      '',
+      '{bg:#FFF3B0|{color:#E53935|重点内容}}',
+      '',
+    ].join('\n')
+
+    const saved = await roundTrip(source)
+    const reloaded = await roundTrip(saved)
+
+    expect(saved).toBe(canonical)
+    expect(reloaded).toBe(saved)
+  })
+
+  it('round-trips H1 through H6 and every standard toolbar Markdown form', async () => {
+    const source = [
+      '# H1',
+      '## H2',
+      '### H3',
+      '#### H4',
+      '##### H5',
+      '###### H6',
+      '',
+      '**加粗** *斜体* `inline`',
+      '',
+      '- 无序',
+      '',
+      '1. 有序',
+      '',
+      '> 引用',
+      '',
+      '```',
+      'plain',
+      '```',
+      '',
+      '```sql',
+      'SELECT 1;',
+      '```',
+      '',
+      '```json',
+      '{"ok":true}',
+      '```',
+      '',
+      '[文档](https://example.com/docs)',
+      '',
+      '---',
+    ].join('\n')
+    const saved = await roundTrip(source)
+
+    for (let level = 1; level <= 6; level += 1) {
+      expect(saved).toContain(`${'#'.repeat(level)} H${level}`)
+    }
+    expect(saved).toContain('**加粗**')
+    expect(saved).toContain('*斜体*')
+    expect(saved).toContain('`inline`')
+    expect(saved).toContain('```\nplain\n```')
+    expect(saved).toContain('```sql\nSELECT 1;\n```')
+    expect(saved).toContain('```json\n{"ok":true}\n```')
+    expect(saved).toContain('[文档](https://example.com/docs)')
+    expect(await roundTrip(saved)).toBe(saved)
+  })
+
+  it('preserves Task List, Table, Mermaid and controlled colors in one saved source', async () => {
+    const source = [
+      '- [ ] 未完成',
+      '- [x] 已完成',
+      '  - [ ] 嵌套待办',
+      '',
+      '| 字段 | 说明 |',
+      '| --- | --- |',
+      '| ID | 主键 |',
+      '',
+      '```mermaid',
+      'flowchart LR',
+      '  A[开始] --> B[结束]',
+      '```',
+      '',
+      '{bg:#FFF3B0|{color:#E53935|重点内容}}',
+      '',
+      '[{color:#E53935|彩色链接}](/knowledge-documents)',
+    ].join('\n')
+    const saved = await roundTrip(source)
+
+    expect(saved).toContain('* [ ] 未完成')
+    expect(saved).toContain('* [x] 已完成')
+    expect(saved).toContain('  * [ ] 嵌套待办')
+    expect(saved).toContain('| 字段 | 说明 |')
+    expect(saved).toContain('```mermaid\nflowchart LR')
+    expect(saved).toContain('{bg:#FFF3B0|{color:#E53935|重点内容}}')
+    expect(saved).toContain('[{color:#E53935|彩色链接}](/knowledge-documents)')
+    expect(await roundTrip(saved)).toBe(saved)
   })
 
   it('serializes native hard breaks without generated HTML and remains stable for Chinese text', async () => {

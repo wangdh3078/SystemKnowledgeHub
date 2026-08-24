@@ -1,5 +1,4 @@
 <script setup lang="ts">
-/* eslint-disable vue/no-v-html -- Historical Markdown uses the shared HTML-disabled renderer. */
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import ErrorState from '../../../components/feedback/ErrorState.vue'
 import LoadingState from '../../../components/feedback/LoadingState.vue'
@@ -15,7 +14,7 @@ import {
   type KnowledgeDocumentRevisionListItem,
   type RevisionOrigin,
 } from '../api/knowledgeDocumentContracts'
-import { renderMarkdown } from '../markdown/renderMarkdown'
+import KnowledgeDocumentMarkdown from '../markdown/KnowledgeDocumentMarkdown.vue'
 import RevisionCompareView from './RevisionCompareView.vue'
 import { useOverlayStore } from '../../../app/stores/overlays'
 
@@ -48,19 +47,22 @@ const originLabels: Readonly<Record<RevisionOrigin, string>> = {
   Restore: '历史恢复',
   MigrationBaseline: '迁移基线',
 }
-const renderedBody = computed(() => (detail.value ? renderMarkdown(detail.value.bodyMarkdown) : ''))
-const restoreAvailable = computed(() => Boolean(
-  props.canRestore
-  && props.document.lifecycleStatus === 'Draft'
-  && detail.value
-  && detail.value.revisionNumber < props.document.currentRevisionNumber,
-))
-const restoreRequiresDraft = computed(() => Boolean(
-  props.canRestore
-  && props.document.lifecycleStatus !== 'Draft'
-  && detail.value
-  && detail.value.revisionNumber < props.document.currentRevisionNumber,
-))
+const restoreAvailable = computed(() =>
+  Boolean(
+    props.canRestore &&
+    props.document.lifecycleStatus === 'Draft' &&
+    detail.value &&
+    detail.value.revisionNumber < props.document.currentRevisionNumber,
+  ),
+)
+const restoreRequiresDraft = computed(() =>
+  Boolean(
+    props.canRestore &&
+    props.document.lifecycleStatus !== 'Draft' &&
+    detail.value &&
+    detail.value.revisionNumber < props.document.currentRevisionNumber,
+  ),
+)
 
 function isAbort(reason: unknown): boolean {
   return reason instanceof DOMException && reason.name === 'AbortError'
@@ -152,16 +154,16 @@ function handlePageChange(nextPage: number): void {
   void loadList()
 }
 function retryDetail(): void {
-  const item = items.value.find((candidate) =>
-    candidate.revisionNumber === selectedRevisionNumber.value)
+  const item = items.value.find(
+    (candidate) => candidate.revisionNumber === selectedRevisionNumber.value,
+  )
   if (item) void selectRevision(item)
 }
 function enterCompare(): void {
   if (selectedRevisionNumber.value === null) return
   compareInitialRevisionNumber.value = selectedRevisionNumber.value
-  compareInitialSnapshot.value = detail.value?.revisionNumber === selectedRevisionNumber.value
-    ? detail.value
-    : null
+  compareInitialSnapshot.value =
+    detail.value?.revisionNumber === selectedRevisionNumber.value ? detail.value : null
   compareMode.value = true
 }
 function returnToHistory(): void {
@@ -214,19 +216,14 @@ onBeforeUnmount(() => {
         <p>查看不可变的历史快照；生命周期表示该修订生成时的文档状态。</p>
       </div>
       <div class="knowledge-document-history__header-actions">
-        <el-button
-          :disabled="selectedRevisionNumber === null"
-          type="primary"
-          @click="enterCompare"
-        >比较修订</el-button>
+        <el-button :disabled="selectedRevisionNumber === null" type="primary" @click="enterCompare"
+          >比较修订</el-button
+        >
         <el-button type="primary" plain @click="emit('return')">返回当前内容</el-button>
       </div>
     </header>
 
-    <LoadingState
-      v-if="listLoading && items.length === 0"
-      message="正在加载修订历史…"
-    />
+    <LoadingState v-if="listLoading && items.length === 0" message="正在加载修订历史…" />
     <ErrorState
       v-else-if="listError && items.length === 0"
       title="修订历史加载失败"
@@ -234,7 +231,9 @@ onBeforeUnmount(() => {
       @retry="loadList"
     />
     <div v-else-if="items.length === 0" class="knowledge-document-history__empty" role="status">
-      <strong>{{ document.currentRevisionNumber > 0 ? '无法加载修订历史' : '暂无修订历史' }}</strong>
+      <strong>{{
+        document.currentRevisionNumber > 0 ? '无法加载修订历史' : '暂无修订历史'
+      }}</strong>
       <p>未返回可显示的修订；当前内容不会被伪造为历史快照。</p>
       <el-button text type="primary" @click="loadList">重试</el-button>
     </div>
@@ -245,7 +244,10 @@ onBeforeUnmount(() => {
             v-for="item in items"
             :key="item.id"
             type="button"
-            :class="['knowledge-document-history__item', { 'is-selected': selectedRevisionNumber === item.revisionNumber }]"
+            :class="[
+              'knowledge-document-history__item',
+              { 'is-selected': selectedRevisionNumber === item.revisionNumber },
+            ]"
             :aria-current="selectedRevisionNumber === item.revisionNumber ? 'true' : undefined"
             :aria-label="`查看修订 ${item.revisionNumber}`"
             @click="selectRevision(item)"
@@ -253,8 +255,14 @@ onBeforeUnmount(() => {
             <span class="knowledge-document-history__item-heading">
               <strong>修订 {{ item.revisionNumber }}</strong>
               <span class="knowledge-document-history__markers">
-                <span v-if="item.isCurrent" class="knowledge-document-history__marker">当前版本</span>
-                <span v-if="item.isLatestPublished" class="knowledge-document-history__marker is-published">最近发布</span>
+                <span v-if="item.isCurrent" class="knowledge-document-history__marker"
+                  >当前版本</span
+                >
+                <span
+                  v-if="item.isLatestPublished"
+                  class="knowledge-document-history__marker is-published"
+                  >最近发布</span
+                >
               </span>
             </span>
             <span class="knowledge-document-history__item-line">
@@ -269,7 +277,10 @@ onBeforeUnmount(() => {
             <span v-if="item.changeSummary" class="knowledge-document-history__item-note">
               修订说明：{{ item.changeSummary }}
             </span>
-            <span v-if="item.restoredFromRevisionNumber" class="knowledge-document-history__item-note">
+            <span
+              v-if="item.restoredFromRevisionNumber"
+              class="knowledge-document-history__item-note"
+            >
               从修订 {{ item.restoredFromRevisionNumber }} 恢复
             </span>
             <span v-if="item.restoreReason" class="knowledge-document-history__item-note">
@@ -298,31 +309,57 @@ onBeforeUnmount(() => {
               <p v-if="detail.summary">{{ detail.summary }}</p>
             </header>
             <dl class="knowledge-document-history__metadata">
-              <div><dt>作者快照</dt><dd>{{ authorLabel(detail) }}</dd></div>
-              <div><dt>{{ capturedAtLabel(detail) }}</dt><dd>{{ formatDate(detail.createdAt) }}</dd></div>
-              <div><dt>修订生成时生命周期</dt><dd>{{ lifecycleLabel(detail.lifecycleContext) }}</dd></div>
-              <div v-if="detail.changeSummary"><dt>修订说明</dt><dd>{{ detail.changeSummary }}</dd></div>
-              <div v-if="detail.restoredFromRevisionNumber"><dt>恢复来源</dt><dd>从修订 {{ detail.restoredFromRevisionNumber }} 恢复</dd></div>
-              <div v-if="detail.restoreReason"><dt>恢复原因</dt><dd>{{ detail.restoreReason }}</dd></div>
+              <div>
+                <dt>作者快照</dt>
+                <dd>{{ authorLabel(detail) }}</dd>
+              </div>
+              <div>
+                <dt>{{ capturedAtLabel(detail) }}</dt>
+                <dd>{{ formatDate(detail.createdAt) }}</dd>
+              </div>
+              <div>
+                <dt>修订生成时生命周期</dt>
+                <dd>{{ lifecycleLabel(detail.lifecycleContext) }}</dd>
+              </div>
+              <div v-if="detail.changeSummary">
+                <dt>修订说明</dt>
+                <dd>{{ detail.changeSummary }}</dd>
+              </div>
+              <div v-if="detail.restoredFromRevisionNumber">
+                <dt>恢复来源</dt>
+                <dd>从修订 {{ detail.restoredFromRevisionNumber }} 恢复</dd>
+              </div>
+              <div v-if="detail.restoreReason">
+                <dt>恢复原因</dt>
+                <dd>{{ detail.restoreReason }}</dd>
+              </div>
             </dl>
             <section class="knowledge-document-history__body">
               <h3>历史正文</h3>
               <p v-if="!detail.bodyMarkdown.trim()" class="text-muted">该修订暂无正文。</p>
-              <div v-else class="knowledge-document-markdown" v-html="renderedBody"></div>
+              <KnowledgeDocumentMarkdown v-else :markdown="detail.bodyMarkdown" />
             </section>
-            <footer v-if="restoreAvailable || restoreRequiresDraft" class="knowledge-document-history__restore">
+            <footer
+              v-if="restoreAvailable || restoreRequiresDraft"
+              class="knowledge-document-history__restore"
+            >
               <div>
                 <strong>恢复历史内容</strong>
                 <p v-if="restoreRequiresDraft">请先将文档返回草稿后再恢复历史内容。</p>
                 <p v-else>恢复会复制此快照并创建新的当前修订，不会删除后续历史。</p>
               </div>
-              <el-button v-if="restoreAvailable" type="primary" @click="openRestore">恢复此修订</el-button>
+              <el-button v-if="restoreAvailable" type="primary" @click="openRestore"
+                >恢复此修订</el-button
+              >
             </footer>
           </article>
         </main>
       </div>
       <footer v-if="total > pageSize" class="knowledge-document-history__pagination">
-        <span>{{ (page - 1) * pageSize + 1 }}–{{ Math.min(page * pageSize, total) }} / {{ total }}</span>
+        <span
+          >{{ (page - 1) * pageSize + 1 }}–{{ Math.min(page * pageSize, total) }} /
+          {{ total }}</span
+        >
         <el-pagination
           background
           layout="prev, pager, next"
