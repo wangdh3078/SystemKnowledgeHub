@@ -56,19 +56,90 @@
   font-size: 0.88em;
 }
 
-.knowledge-markdown-content pre {
+.knowledge-markdown-content .knowledge-document-code-card {
   margin: 1em 0;
-  overflow-x: auto;
-  padding: 14px 16px;
-  border-radius: var(--radius-md);
-  background: #252a35;
-  color: #edf2f7;
+  overflow: hidden;
+  border: 1px solid #dbe1e8;
+  border-radius: 8px;
+  background: #f6f8fa;
+  color: #24292f;
 }
 
-.knowledge-markdown-content pre code {
+.knowledge-markdown-content .knowledge-document-code-card__header {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px 0 12px;
+  border-bottom: 1px solid #dbe1e8;
+  background: #f0f3f6;
+  gap: 10px;
+}
+
+.knowledge-markdown-content .knowledge-document-code-card__language {
+  color: #667085;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.knowledge-markdown-content .knowledge-document-code-card__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.knowledge-markdown-content .knowledge-document-code-card button {
+  height: 24px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #667085;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+}
+
+.knowledge-markdown-content .knowledge-document-code-card button:hover,
+.knowledge-markdown-content .knowledge-document-code-card button:focus-visible {
+  background: #e3e8ef;
+  color: #344054;
+  outline: none;
+}
+
+.knowledge-markdown-content .knowledge-document-code-card__copy {
+  padding: 0 6px;
+}
+
+.knowledge-markdown-content .knowledge-document-code-card__collapse {
+  width: 24px;
+  padding: 0;
+  font-size: 15px;
+  line-height: 1;
+}
+
+.knowledge-markdown-content .knowledge-document-code-card__body {
+  margin: 0;
+  padding: 12px 14px;
+  overflow-x: auto;
+  background: #f6f8fa;
+  color: #24292f;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.knowledge-markdown-content .knowledge-document-code-card__body code {
   padding: 0;
   background: transparent;
   color: inherit;
+  font: inherit;
+  white-space: pre;
+}
+
+.knowledge-markdown-content .knowledge-document-code-card.is-collapsed .knowledge-document-code-card__body {
+  display: none;
 }
 
 .knowledge-markdown-content a {
@@ -90,24 +161,33 @@
   border-top: 1px solid var(--color-border-strong);
 }
 
+.knowledge-markdown-content .knowledge-markdown-table-wrap {
+  width: 100%;
+  max-width: 100%;
+  margin: 1em 0;
+  overflow-x: auto;
+}
+
 .knowledge-markdown-content table {
-  display: block;
   width: max-content;
   min-width: 100%;
-  max-width: 100%;
-  overflow-x: auto;
   border-collapse: collapse;
 }
 
 .knowledge-markdown-content th,
 .knowledge-markdown-content td {
-  padding: 8px 10px;
+  padding: 8px 12px;
   border: 1px solid var(--color-border);
   text-align: left;
+  vertical-align: top;
 }
 
 .knowledge-markdown-content th {
   background: #f5f7fb;
+}
+
+.knowledge-markdown-content tbody tr:hover {
+  background: #fafbfc;
 }
 
 .knowledge-markdown-content .knowledge-document-mermaid {
@@ -124,7 +204,7 @@
   .knowledge-markdown-content {
     font-size: 15px;
   }
-  .knowledge-markdown-content pre {
-    padding: 12px;
+  .knowledge-markdown-content .knowledge-document-code-card__body {
+    padding: 10px 12px;
   }
 }

@@ -1,10 +1,9 @@
 <script setup lang="ts">
 import {
-  Check,
+  Document,
   FullScreen,
   Grid,
   Link,
-  List,
   Minus,
   Picture,
   RefreshLeft,
@@ -359,7 +358,9 @@ onBeforeUnmount(() => {
             size="small"
             :disabled="formattingDisabled"
             @click="applyTransform(toggleBulletList)"
-            ><el-icon><List /></el-icon></el-button
+            ><span class="knowledge-document-editor__list-icon is-bullet" aria-hidden="true"
+              ><i></i><i></i><i></i></span
+          ></el-button
         ></el-tooltip>
         <el-tooltip content="有序列表" placement="top" :trigger="tooltipTriggers"
           ><el-button
@@ -368,7 +369,9 @@ onBeforeUnmount(() => {
             size="small"
             :disabled="formattingDisabled"
             @click="applyTransform(toggleOrderedList)"
-            >1.</el-button
+            ><span class="knowledge-document-editor__list-icon is-ordered" aria-hidden="true"
+              ><i></i><i></i><i></i></span
+          ></el-button
           ></el-tooltip
         >
         <el-tooltip content="任务列表" placement="top" :trigger="tooltipTriggers"
@@ -378,7 +381,9 @@ onBeforeUnmount(() => {
             size="small"
             :disabled="formattingDisabled"
             @click="applyTransform(toggleTaskList)"
-            ><el-icon><Check /></el-icon></el-button
+            ><span class="knowledge-document-editor__list-icon is-task" aria-hidden="true"
+              ><i></i><i></i><i></i></span
+          ></el-button
         ></el-tooltip>
       </div>
       <div class="knowledge-document-editor__tool-group">
@@ -463,28 +468,28 @@ onBeforeUnmount(() => {
         ></el-tooltip>
       </div>
       <div class="knowledge-document-editor__tool-group knowledge-document-editor__workspace-group">
-        <el-tooltip content="编辑源码" placement="top" :trigger="tooltipTriggers"
+        <el-tooltip content="源码编辑" placement="top" :trigger="tooltipTriggers"
           ><el-button
-            class="knowledge-document-editor__action-button"
-            aria-label="编辑源码"
+            class="knowledge-document-editor__icon-button knowledge-document-editor__view-button"
+            aria-label="源码编辑"
             :aria-pressed="!previewing"
             size="small"
             :type="previewing ? 'default' : 'primary'"
             plain
             @click="emit('edit')"
-            >源码</el-button
+            ><el-icon><Document /></el-icon></el-button
           ></el-tooltip
         >
         <el-tooltip content="预览" placement="top" :trigger="tooltipTriggers"
           ><el-button
-            class="knowledge-document-editor__action-button"
+            class="knowledge-document-editor__icon-button knowledge-document-editor__view-button"
             aria-label="预览"
             :aria-pressed="previewing"
             size="small"
             :type="previewing ? 'primary' : 'default'"
             plain
             @click="emit('preview')"
-            ><el-icon><View /></el-icon>预览</el-button
+            ><el-icon><View /></el-icon></el-button
           ></el-tooltip
         >
         <el-tooltip :content="fullscreenLabel" placement="top" :trigger="tooltipTriggers"

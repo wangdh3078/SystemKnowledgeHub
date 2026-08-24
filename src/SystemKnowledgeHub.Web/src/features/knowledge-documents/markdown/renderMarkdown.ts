@@ -70,14 +70,28 @@ renderer.renderer.rules.task_checkbox = (tokens, index) => {
   return `<input class="knowledge-document-task-checkbox" type="checkbox" disabled${checkedAttribute} aria-label="${label}">`
 }
 
-const originalFence = renderer.renderer.rules.fence
-renderer.renderer.rules.fence = (tokens, index, options, environment, self) => {
+renderer.renderer.rules.fence = (tokens, index) => {
   const token = tokens[index]!
-  const language = token.info.trim().split(/\s+/u)[0]?.toLowerCase()
+  const declaredLanguage = token.info.trim().split(/\s+/u)[0]?.toLowerCase() ?? ''
+  const language = /^[a-z0-9_-]+$/u.test(declaredLanguage) ? declaredLanguage : ''
   if (language !== 'mermaid') {
-    return originalFence
-      ? originalFence(tokens, index, options, environment, self)
-      : self.renderToken(tokens, index, options)
+    const languageLabel = language || 'plain'
+    const source = renderer.utils.escapeHtml(token.content)
+    const languageClass = language ? ` language-${language}` : ''
+    return [
+      '<section class="knowledge-document-code-card" data-knowledge-document-code-card>',
+      '<header class="knowledge-document-code-card__header">',
+      `<span class="knowledge-document-code-card__language">${renderer.utils.escapeHtml(languageLabel)}</span>`,
+      '<span class="knowledge-document-code-card__actions">',
+      '<button type="button" class="knowledge-document-code-card__copy" data-knowledge-document-code-copy aria-label="复制代码">复制代码</button>',
+      '<button type="button" class="knowledge-document-code-card__collapse" data-knowledge-document-code-collapse aria-label="收起代码" aria-expanded="true">⌃</button>',
+      '</span></header>',
+      '<pre class="knowledge-document-code-card__body"><code class="',
+      languageClass.trim(),
+      '">',
+      source,
+      '</code></pre></section>\n',
+    ].join('')
   }
 
   const source = renderer.utils.escapeHtml(token.content)
@@ -90,6 +104,22 @@ renderer.renderer.rules.fence = (tokens, index, options, environment, self) => {
     '</figure>\n',
   ].join('')
 }
+
+const originalTableOpen = renderer.renderer.rules.table_open
+renderer.renderer.rules.table_open = (tokens, index, options, environment, self) =>
+  `<div class="knowledge-markdown-table-wrap">${
+    originalTableOpen
+      ? originalTableOpen(tokens, index, options, environment, self)
+      : self.renderToken(tokens, index, options)
+  }`
+
+const originalTableClose = renderer.renderer.rules.table_close
+renderer.renderer.rules.table_close = (tokens, index, options, environment, self) =>
+  `${
+    originalTableClose
+      ? originalTableClose(tokens, index, options, environment, self)
+      : self.renderToken(tokens, index, options)
+  }</div>`
 
 const originalLinkOpen = renderer.renderer.rules.link_open
 renderer.renderer.rules.link_open = (tokens, index, options, environment, self) => {

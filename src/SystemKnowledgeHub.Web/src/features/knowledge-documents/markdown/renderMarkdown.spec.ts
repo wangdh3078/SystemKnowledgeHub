@@ -17,6 +17,24 @@ describe('renderMarkdown', () => {
     expect(renderMarkdown('[官网](https://example.test)')).toContain('rel="noopener noreferrer"')
   })
 
+  it('renders fenced code as safe technical cards with a language fallback', () => {
+    const rendered = renderMarkdown('```sql\nSELECT 1;\n```\n\n```\nplain text\n```')
+
+    expect(rendered).toContain('knowledge-document-code-card')
+    expect(rendered).toContain('knowledge-document-code-card__language">sql</span>')
+    expect(rendered).toContain('knowledge-document-code-card__language">plain</span>')
+    expect(rendered).toContain('data-knowledge-document-code-copy')
+    expect(rendered).toContain('data-knowledge-document-code-collapse')
+    expect(rendered).toContain('SELECT 1;')
+  })
+
+  it('wraps GFM tables for responsive internal scrolling while preserving table semantics', () => {
+    const rendered = renderMarkdown('| 字段 | 类型 |\n| --- | --- |\n| Id | bigint |')
+
+    expect(rendered).toContain('<div class="knowledge-markdown-table-wrap"><table>')
+    expect(rendered).toContain('</table>\n</div>')
+  })
+
   it('renders canonical text/background colors with nested Markdown content', () => {
     const rendered = renderMarkdown(
       [

@@ -48,7 +48,9 @@ describe('KnowledgeDocumentMarkdown', () => {
     const placeholder = container.querySelector('[data-knowledge-document-mermaid]')
     expect(placeholder?.textContent).toContain('<script>alert(1)</script>')
     expect(placeholder?.querySelector('script')).toBeNull()
-    expect(container.querySelector('code.language-javascript')).not.toBeNull()
+    expect(
+      container.querySelector('.knowledge-document-code-card code.language-javascript'),
+    ).not.toBeNull()
   })
 
   it('does not load Mermaid when the rendered Markdown has no Mermaid placeholder', async () => {
@@ -61,6 +63,35 @@ describe('KnowledgeDocumentMarkdown', () => {
     expect(wrapper.get('h1').text()).toBe('普通标题')
     expect(mermaidMock.initialize).not.toHaveBeenCalled()
     expect(mermaidMock.render).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('copies raw code only and collapses each rendered code card independently', async () => {
+    const clipboard = { writeText: vi.fn().mockResolvedValue(undefined) }
+    const clipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: clipboard })
+    const wrapper = mount(KnowledgeDocumentMarkdown, {
+      props: { markdown: '```bash\necho "hello"\n```\n\n```sql\nSELECT 1;\n```' },
+    })
+
+    const cards = wrapper.findAll('[data-knowledge-document-code-card]')
+    expect(cards).toHaveLength(2)
+    await cards[0]!.get('[data-knowledge-document-code-copy]').trigger('click')
+    await flushPromises()
+    expect(clipboard.writeText).toHaveBeenCalledWith('echo "hello"\n')
+
+    await cards[0]!.get('[data-knowledge-document-code-collapse]').trigger('click')
+    expect(cards[0]!.classes()).toContain('is-collapsed')
+    expect(cards[1]!.classes()).not.toContain('is-collapsed')
+    expect(cards[0]!.get('[data-knowledge-document-code-collapse]').attributes('aria-expanded')).toBe(
+      'false',
+    )
+
+    if (clipboardDescriptor) {
+      Object.defineProperty(navigator, 'clipboard', clipboardDescriptor)
+    } else {
+      Reflect.deleteProperty(navigator, 'clipboard')
+    }
     wrapper.unmount()
   })
 

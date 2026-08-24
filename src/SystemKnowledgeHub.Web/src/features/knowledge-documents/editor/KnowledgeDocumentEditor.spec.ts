@@ -69,6 +69,28 @@ describe('KnowledgeDocumentEditor', () => {
     expect(wrapper.get('[aria-label="图片上传功能开发中"]').attributes('disabled')).toBeDefined()
   })
 
+  it('uses compact semantic list icons and icon-only source, preview, and fullscreen controls', async () => {
+    const wrapper = mountEditor()
+    await waitForSourceEditor(wrapper)
+
+    expect(wrapper.get('.knowledge-document-editor__toolbar').classes()).toContain(
+      'knowledge-document-editor__toolbar',
+    )
+    expect(wrapper.get('[aria-label="无序列表"] .knowledge-document-editor__list-icon').classes()).toContain(
+      'is-bullet',
+    )
+    expect(wrapper.get('[aria-label="有序列表"] .knowledge-document-editor__list-icon').classes()).toContain(
+      'is-ordered',
+    )
+    expect(wrapper.get('[aria-label="任务列表"] .knowledge-document-editor__list-icon').classes()).toContain(
+      'is-task',
+    )
+    expect(wrapper.get('[aria-label="源码编辑"]').text()).toBe('')
+    expect(wrapper.get('[aria-label="预览"]').text()).toBe('')
+    expect(wrapper.get('[aria-label="全屏"]').text()).toBe('')
+    expect(wrapper.find('[aria-label="源码"]').exists()).toBe(false)
+  })
+
   it('emits the page-level save request from Ctrl/Cmd+S without a toolbar save control', async () => {
     const wrapper = mountEditor()
     await waitForSourceEditor(wrapper)
