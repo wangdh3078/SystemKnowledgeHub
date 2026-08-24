@@ -27,7 +27,7 @@ import typescript from 'highlight.js/lib/languages/typescript'
 import xml from 'highlight.js/lib/languages/xml'
 import yaml from 'highlight.js/lib/languages/yaml'
 import { icon } from '@fortawesome/fontawesome-svg-core'
-import { faChevronDown, faChevronUp, faCopy } from '@fortawesome/free-solid-svg-icons'
+import { faCheck, faChevronDown, faChevronUp, faCopy } from '@fortawesome/free-solid-svg-icons'
 import { controlledColorMarkdownItPlugin } from './colorSyntax'
 import { isLegacyBreakParagraph } from './legacyMarkdownBreaks'
 
@@ -166,6 +166,9 @@ function renderHighlightedCode(source: string, language: string): string {
   return hljs.highlight(source, { language: highlighterLanguage, ignoreIllegals: true }).value
 }
 const codeCopyIcon = icon(faCopy, { classes: ['knowledge-document-code-card__control-icon'] }).html.join('')
+const codeCopiedIcon = icon(faCheck, {
+  classes: ['knowledge-document-code-card__control-icon'],
+}).html.join('')
 const codeCollapseIcon = icon(faChevronUp, {
   classes: ['knowledge-document-code-card__control-icon'],
 }).html.join('')
@@ -175,6 +178,7 @@ const codeExpandIcon = icon(faChevronDown, {
 
 export const codeCardIcons = {
   copy: codeCopyIcon,
+  copied: codeCopiedIcon,
   collapse: codeCollapseIcon,
   expand: codeExpandIcon,
 } as const
@@ -262,6 +266,7 @@ renderer.renderer.rules.fence = (tokens, index) => {
       `<span class="knowledge-document-code-card__language">${renderer.utils.escapeHtml(languageLabel)}</span>`,
       '<span class="knowledge-document-code-card__actions">',
       `<button type="button" class="knowledge-document-code-card__copy" data-knowledge-document-code-copy aria-label="复制代码" title="复制代码">${codeCardIcons.copy}</button>`,
+      '<span class="knowledge-document-code-card__copy-feedback" data-knowledge-document-code-copy-feedback aria-live="polite"></span>',
       `<button type="button" class="knowledge-document-code-card__collapse" data-knowledge-document-code-collapse aria-label="收起代码" title="收起代码" aria-expanded="true">${codeCardIcons.collapse}</button>`,
       '</span></header>',
       `<pre class="knowledge-document-code-card__body"><code class="${codeClass}">`,

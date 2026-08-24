@@ -11,7 +11,7 @@ const props = defineProps<{
 const rootElement = ref<HTMLElement | null>(null)
 const renderedHtml = computed(() => renderMarkdown(props.markdown))
 let hydrationVersion = 0
-const copyResetTimers = new Set<ReturnType<typeof setTimeout>>()
+const copyResetTimers = new Map<HTMLButtonElement, ReturnType<typeof setTimeout>>()
 
 function getCodeCard(target: EventTarget | null): HTMLElement | null {
   return target instanceof Element
@@ -26,25 +26,58 @@ async function copyRawCode(source: string): Promise<boolean> {
       return true
     }
   } catch {
-    // Fall through to the legacy browser copy command when clipboard permission is unavailable.
+    return false
   }
-
-  const textarea = document.createElement('textarea')
-  textarea.value = source
-  textarea.setAttribute('readonly', '')
-  textarea.style.position = 'fixed'
-  textarea.style.opacity = '0'
-  document.body.append(textarea)
-  textarea.select()
-  const copied = document.execCommand('copy')
-  textarea.remove()
-  return copied
+  return false
 }
 
-function resetCopyLabel(button: HTMLButtonElement): void {
+function clearCopyResetTimer(button: HTMLButtonElement): void {
+  const timer = copyResetTimers.get(button)
+  if (timer !== undefined) clearTimeout(timer)
+  copyResetTimers.delete(button)
+}
+
+function copyFeedbackElement(button: HTMLButtonElement): HTMLElement | null {
+  return getCodeCard(button)?.querySelector<HTMLElement>(
+    '[data-knowledge-document-code-copy-feedback]',
+  ) ?? null
+}
+
+function resetCopyState(button: HTMLButtonElement): void {
   button.innerHTML = codeCardIcons.copy
   button.setAttribute('aria-label', '复制代码')
   button.setAttribute('title', '复制代码')
+  button.removeAttribute('data-copy-state')
+  const feedback = copyFeedbackElement(button)
+  if (feedback) feedback.textContent = ''
+}
+
+function scheduleCopyReset(button: HTMLButtonElement): void {
+  clearCopyResetTimer(button)
+  const timer = setTimeout(() => {
+    copyResetTimers.delete(button)
+    resetCopyState(button)
+  }, 2500)
+  copyResetTimers.set(button, timer)
+}
+
+function setCopySucceeded(button: HTMLButtonElement): void {
+  button.innerHTML = codeCardIcons.copied
+  button.setAttribute('aria-label', '已复制')
+  button.setAttribute('title', '已复制')
+  button.setAttribute('data-copy-state', 'success')
+  const feedback = copyFeedbackElement(button)
+  if (feedback) feedback.textContent = ''
+  scheduleCopyReset(button)
+}
+
+function setCopyFailed(button: HTMLButtonElement): void {
+  clearCopyResetTimer(button)
+  resetCopyState(button)
+  button.setAttribute('data-copy-state', 'failure')
+  const feedback = copyFeedbackElement(button)
+  if (feedback) feedback.textContent = '复制失败'
+  scheduleCopyReset(button)
 }
 
 async function handleCodeCardClick(event: MouseEvent): Promise<void> {
@@ -56,15 +89,8 @@ async function handleCodeCardClick(event: MouseEvent): Promise<void> {
     const card = getCodeCard(copyButton)
     const source = card?.querySelector('code')?.textContent ?? ''
     if (await copyRawCode(source)) {
-      copyButton.innerHTML = codeCardIcons.copy
-      copyButton.setAttribute('aria-label', '代码已复制')
-      copyButton.setAttribute('title', '已复制')
-      const timer = setTimeout(() => {
-        copyResetTimers.delete(timer)
-        resetCopyLabel(copyButton)
-      }, 1600)
-      copyResetTimers.add(timer)
-    }
+      setCopySucceeded(copyButton)
+    } else setCopyFailed(copyButton)
     return
   }
 

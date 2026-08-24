@@ -90,6 +90,16 @@
   gap: 3px;
 }
 
+.knowledge-markdown-content .knowledge-document-code-card__copy[data-copy-state='success'] {
+  color: #067647;
+}
+
+.knowledge-markdown-content .knowledge-document-code-card__copy-feedback {
+  color: #b42318;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
 .knowledge-markdown-content .knowledge-document-code-card button {
   display: inline-grid;
   width: 24px;

@@ -40,6 +40,14 @@ The in-app browser exposes the active desktop viewport but does not expose a saf
 
 The first backend command without `--no-build` was blocked only because the user's pre-existing API process `28756` locks its Debug apphost. It was deliberately preserved. The no-build targeted regression passed against the available compiled test output; this UI-only slice makes no backend production, contract, schema, migration, or `App_Data` change.
 
+## Code Copy Feedback
+
+Each rendered code card now owns its copy feedback state. The default is the Font Awesome `faCopy` icon with `复制代码` title and accessible name. A successful `navigator.clipboard.writeText` of the exact raw `<code>` text switches only that card to `faCheck`, title `已复制`, and accessible name `已复制`. Its timer is 2500ms and a repeated successful click clears and restarts that card's timer.
+
+Clipboard rejection never creates a fake success: the copy icon and `复制代码` accessible name remain, and the card displays the local, polite `复制失败` feedback. Copy state and timers are isolated between cards. Pending timers are cleared when the Markdown component unmounts, so preview/read/revision/page changes cannot update detached DOM.
+
+Focused fake-timer tests cover exact raw copy content, success icon/label, 2500ms reset, rejection feedback, two-card isolation, repeated-click timer restart, and unmount cleanup. Browser acceptance created a document with TypeScript and SQL cards: after clicking the TypeScript card, it reported `已复制` plus `check`, while the SQL card remained `复制代码` plus `copy`; after 2.6 seconds the first card returned to `复制代码` plus `copy`. The browser observed no application warning or error on this path.
+
 ## Documentation and exclusions
 
 `KNOWLEDGE_DOCUMENT_MARKDOWN_SOURCE_EDITOR_DECISION.md` now freezes the R06 bounded editor/creation/fullscreen behavior and the confirmed diagram labels. `KNOWLEDGE_DOCUMENT_MARKDOWN_READ_THEME.md` now freezes core-plus-explicit-module highlighting and its expanded mappings.
@@ -48,4 +56,4 @@ This slice does not add a second editor, generic toolbar framework, rich-text st
 
 ## Cleanup
 
-The task-owned browser tab, API/Vite process trees, isolated SQLite/data-protection/log directory, and verification ports are removed before the commit. The pre-existing API process `28756` remains untouched.
+The task-owned browser tab, API/Vite process trees, isolated SQLite/data-protection/log directory, and verification ports are removed before the commit. The pre-existing API process `28756` was never selected as a cleanup target. It was present after the original R06 cleanup and had exited before this supplement's final read-only process check.

@@ -67,6 +67,7 @@ describe('KnowledgeDocumentMarkdown', () => {
   })
 
   it('copies raw code only and collapses each rendered code card independently', async () => {
+    vi.useFakeTimers()
     const clipboard = { writeText: vi.fn().mockResolvedValue(undefined) }
     const clipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: clipboard })
@@ -86,6 +87,15 @@ describe('KnowledgeDocumentMarkdown', () => {
     await cards[0]!.get('[data-knowledge-document-code-copy]').trigger('click')
     await flushPromises()
     expect(clipboard.writeText).toHaveBeenCalledWith('echo "hello"\n')
+    expect(cards[0]!.get('[data-knowledge-document-code-copy]').attributes('aria-label')).toBe('已复制')
+    expect(cards[0]!.get('[data-knowledge-document-code-copy]').attributes('title')).toBe('已复制')
+    expect(cards[0]!.find('svg[data-icon="check"]').exists()).toBe(true)
+
+    await vi.advanceTimersByTimeAsync(2500)
+    expect(cards[0]!.get('[data-knowledge-document-code-copy]').attributes('aria-label')).toBe(
+      '复制代码',
+    )
+    expect(cards[0]!.find('svg[data-icon="copy"]').exists()).toBe(true)
 
     await cards[0]!.get('[data-knowledge-document-code-collapse]').trigger('click')
     expect(cards[0]!.classes()).toContain('is-collapsed')
@@ -103,6 +113,97 @@ describe('KnowledgeDocumentMarkdown', () => {
       Reflect.deleteProperty(navigator, 'clipboard')
     }
     wrapper.unmount()
+    vi.useRealTimers()
+  })
+
+  it('shows local failure feedback without a fake copied state when Clipboard rejects', async () => {
+    vi.useFakeTimers()
+    const clipboard = { writeText: vi.fn().mockRejectedValue(new Error('denied')) }
+    const clipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: clipboard })
+    const wrapper = mount(KnowledgeDocumentMarkdown, {
+      props: { markdown: '```typescript\nconst denied = true\n```' },
+    })
+
+    const copyButton = wrapper.get('[data-knowledge-document-code-copy]')
+    await copyButton.trigger('click')
+    await flushPromises()
+
+    expect(copyButton.attributes('aria-label')).toBe('复制代码')
+    expect(copyButton.find('svg[data-icon="copy"]').exists()).toBe(true)
+    expect(wrapper.get('[data-knowledge-document-code-copy-feedback]').text()).toBe('复制失败')
+
+    await vi.advanceTimersByTimeAsync(2500)
+    expect(wrapper.get('[data-knowledge-document-code-copy-feedback]').text()).toBe('')
+
+    if (clipboardDescriptor) {
+      Object.defineProperty(navigator, 'clipboard', clipboardDescriptor)
+    } else {
+      Reflect.deleteProperty(navigator, 'clipboard')
+    }
+    wrapper.unmount()
+    vi.useRealTimers()
+  })
+
+  it('isolates copy feedback per code card and safely restarts its timer on repeated copy', async () => {
+    vi.useFakeTimers()
+    const clipboard = { writeText: vi.fn().mockResolvedValue(undefined) }
+    const clipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: clipboard })
+    const wrapper = mount(KnowledgeDocumentMarkdown, {
+      props: { markdown: '```bash\necho first\n```\n\n```sql\nSELECT second;\n```' },
+    })
+    const cards = wrapper.findAll('[data-knowledge-document-code-card]')
+    const firstCopy = cards[0]!.get('[data-knowledge-document-code-copy]')
+    const secondCopy = cards[1]!.get('[data-knowledge-document-code-copy]')
+
+    await firstCopy.trigger('click')
+    await flushPromises()
+    expect(firstCopy.attributes('aria-label')).toBe('已复制')
+    expect(secondCopy.attributes('aria-label')).toBe('复制代码')
+
+    await vi.advanceTimersByTimeAsync(1500)
+    await firstCopy.trigger('click')
+    await flushPromises()
+    await vi.advanceTimersByTimeAsync(1500)
+    expect(firstCopy.attributes('aria-label')).toBe('已复制')
+
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(firstCopy.attributes('aria-label')).toBe('复制代码')
+    expect(clipboard.writeText).toHaveBeenCalledTimes(2)
+
+    if (clipboardDescriptor) {
+      Object.defineProperty(navigator, 'clipboard', clipboardDescriptor)
+    } else {
+      Reflect.deleteProperty(navigator, 'clipboard')
+    }
+    wrapper.unmount()
+    vi.useRealTimers()
+  })
+
+  it('clears a pending copy reset when unmounted', async () => {
+    vi.useFakeTimers()
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const clipboard = { writeText: vi.fn().mockResolvedValue(undefined) }
+    const clipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: clipboard })
+    const wrapper = mount(KnowledgeDocumentMarkdown, {
+      props: { markdown: '```bash\necho cleanup\n```' },
+    })
+
+    await wrapper.get('[data-knowledge-document-code-copy]').trigger('click')
+    await flushPromises()
+    wrapper.unmount()
+    await vi.advanceTimersByTimeAsync(2500)
+    expect(consoleWarn).not.toHaveBeenCalled()
+
+    if (clipboardDescriptor) {
+      Object.defineProperty(navigator, 'clipboard', clipboardDescriptor)
+    } else {
+      Reflect.deleteProperty(navigator, 'clipboard')
+    }
+    consoleWarn.mockRestore()
+    vi.useRealTimers()
   })
 
   it('uses the fixed safe Mermaid configuration and replaces a valid source block with SVG', async () => {
