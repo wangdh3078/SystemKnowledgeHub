@@ -76,6 +76,13 @@ describe('KnowledgeDocumentMarkdown', () => {
 
     const cards = wrapper.findAll('[data-knowledge-document-code-card]')
     expect(cards).toHaveLength(2)
+    expect(cards[0]!.find('[data-knowledge-document-code-copy] svg[data-icon="copy"]').exists()).toBe(
+      true,
+    )
+    expect(
+      cards[0]!.find('[data-knowledge-document-code-collapse] svg[data-icon="chevron-up"]').exists(),
+    ).toBe(true)
+    expect(cards[0]!.get('[data-knowledge-document-code-copy]').text()).toBe('')
     await cards[0]!.get('[data-knowledge-document-code-copy]').trigger('click')
     await flushPromises()
     expect(clipboard.writeText).toHaveBeenCalledWith('echo "hello"\n')
@@ -86,6 +93,9 @@ describe('KnowledgeDocumentMarkdown', () => {
     expect(cards[0]!.get('[data-knowledge-document-code-collapse]').attributes('aria-expanded')).toBe(
       'false',
     )
+    expect(
+      cards[0]!.find('[data-knowledge-document-code-collapse] svg[data-icon="chevron-down"]').exists(),
+    ).toBe(true)
 
     if (clipboardDescriptor) {
       Object.defineProperty(navigator, 'clipboard', clipboardDescriptor)

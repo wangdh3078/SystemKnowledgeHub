@@ -25,6 +25,8 @@ describe('renderMarkdown', () => {
     expect(rendered).toContain('knowledge-document-code-card__language">plain</span>')
     expect(rendered).toContain('data-knowledge-document-code-copy')
     expect(rendered).toContain('data-knowledge-document-code-collapse')
+    expect(rendered).toContain('data-icon="copy"')
+    expect(rendered).toContain('data-icon="chevron-up"')
     expect(rendered).toContain('SELECT 1;')
   })
 

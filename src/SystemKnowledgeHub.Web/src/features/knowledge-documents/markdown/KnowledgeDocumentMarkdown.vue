@@ -2,7 +2,7 @@
 /* eslint-disable vue/no-v-html -- renderMarkdown keeps author-provided raw HTML disabled. */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { hydrateMermaidBlocks } from './mermaidHydrator'
-import { renderMarkdown } from './renderMarkdown'
+import { codeCardIcons, renderMarkdown } from './renderMarkdown'
 
 const props = defineProps<{
   markdown: string
@@ -42,8 +42,9 @@ async function copyRawCode(source: string): Promise<boolean> {
 }
 
 function resetCopyLabel(button: HTMLButtonElement): void {
-  button.textContent = '复制代码'
+  button.innerHTML = codeCardIcons.copy
   button.setAttribute('aria-label', '复制代码')
+  button.setAttribute('title', '复制代码')
 }
 
 async function handleCodeCardClick(event: MouseEvent): Promise<void> {
@@ -55,8 +56,9 @@ async function handleCodeCardClick(event: MouseEvent): Promise<void> {
     const card = getCodeCard(copyButton)
     const source = card?.querySelector('code')?.textContent ?? ''
     if (await copyRawCode(source)) {
-      copyButton.textContent = '已复制'
+      copyButton.innerHTML = codeCardIcons.copy
       copyButton.setAttribute('aria-label', '代码已复制')
+      copyButton.setAttribute('title', '已复制')
       const timer = setTimeout(() => {
         copyResetTimers.delete(timer)
         resetCopyLabel(copyButton)
@@ -73,7 +75,8 @@ async function handleCodeCardClick(event: MouseEvent): Promise<void> {
   const collapsed = card.classList.toggle('is-collapsed')
   collapseButton.setAttribute('aria-expanded', String(!collapsed))
   collapseButton.setAttribute('aria-label', collapsed ? '展开代码' : '收起代码')
-  collapseButton.textContent = collapsed ? '⌄' : '⌃'
+  collapseButton.setAttribute('title', collapsed ? '展开代码' : '收起代码')
+  collapseButton.innerHTML = collapsed ? codeCardIcons.expand : codeCardIcons.collapse
 }
 
 function hydrateRenderedMarkdown(): void {

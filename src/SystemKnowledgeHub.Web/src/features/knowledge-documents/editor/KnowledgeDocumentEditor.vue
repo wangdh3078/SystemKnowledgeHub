@@ -1,15 +1,25 @@
 <script setup lang="ts">
 import {
-  Document,
-  FullScreen,
-  Grid,
-  Link,
   Minus,
-  Picture,
-  RefreshLeft,
-  RefreshRight,
-  View,
 } from '@element-plus/icons-vue'
+import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome'
+import {
+  faCode,
+  faDiagramProject,
+  faExpand,
+  faFileCode,
+  faImage,
+  faLink,
+  faListCheck,
+  faListOl,
+  faListUl,
+  faQuoteLeft,
+  faRotateLeft,
+  faRotateRight,
+  faTable,
+  faEye,
+  faCompress,
+} from '@fortawesome/free-solid-svg-icons'
 import { history, historyKeymap, redo, redoDepth, undo, undoDepth } from '@codemirror/commands'
 import { defaultHighlightStyle, syntaxHighlighting } from '@codemirror/language'
 import { markdown } from '@codemirror/lang-markdown'
@@ -331,12 +341,12 @@ onBeforeUnmount(() => {
         >
         <el-tooltip content="行内代码" placement="top" :trigger="tooltipTriggers"
           ><el-button
-            class="knowledge-document-editor__icon-button knowledge-document-editor__code-label"
+            class="knowledge-document-editor__icon-button"
             aria-label="行内代码"
             size="small"
             :disabled="formattingDisabled"
             @click="applyTransform((source, selection) => toggleInlineWrap(source, selection, '`'))"
-            >&lt;/&gt;</el-button
+            ><font-awesome-icon :icon="faCode" fixed-width /></el-button
           ></el-tooltip
         >
       </div>
@@ -348,7 +358,7 @@ onBeforeUnmount(() => {
             size="small"
             :disabled="formattingDisabled"
             @click="applyTransform(toggleQuote)"
-            >❝</el-button
+            ><font-awesome-icon :icon="faQuoteLeft" fixed-width /></el-button
           ></el-tooltip
         >
         <el-tooltip content="无序列表" placement="top" :trigger="tooltipTriggers"
@@ -358,9 +368,7 @@ onBeforeUnmount(() => {
             size="small"
             :disabled="formattingDisabled"
             @click="applyTransform(toggleBulletList)"
-            ><span class="knowledge-document-editor__list-icon is-bullet" aria-hidden="true"
-              ><i></i><i></i><i></i></span
-          ></el-button
+            ><font-awesome-icon :icon="faListUl" fixed-width /></el-button
         ></el-tooltip>
         <el-tooltip content="有序列表" placement="top" :trigger="tooltipTriggers"
           ><el-button
@@ -369,9 +377,7 @@ onBeforeUnmount(() => {
             size="small"
             :disabled="formattingDisabled"
             @click="applyTransform(toggleOrderedList)"
-            ><span class="knowledge-document-editor__list-icon is-ordered" aria-hidden="true"
-              ><i></i><i></i><i></i></span
-          ></el-button
+            ><font-awesome-icon :icon="faListOl" fixed-width /></el-button
           ></el-tooltip
         >
         <el-tooltip content="任务列表" placement="top" :trigger="tooltipTriggers"
@@ -381,20 +387,18 @@ onBeforeUnmount(() => {
             size="small"
             :disabled="formattingDisabled"
             @click="applyTransform(toggleTaskList)"
-            ><span class="knowledge-document-editor__list-icon is-task" aria-hidden="true"
-              ><i></i><i></i><i></i></span
-          ></el-button
+            ><font-awesome-icon :icon="faListCheck" fixed-width /></el-button
         ></el-tooltip>
       </div>
       <div class="knowledge-document-editor__tool-group">
         <el-tooltip content="插入代码块" placement="top" :trigger="tooltipTriggers"
           ><el-button
-            class="knowledge-document-editor__icon-button knowledge-document-editor__code-label"
+            class="knowledge-document-editor__icon-button"
             aria-label="插入代码块"
             size="small"
             :disabled="formattingDisabled"
             @click="openCodeDialog"
-            >{ }</el-button
+            ><font-awesome-icon :icon="faFileCode" fixed-width /></el-button
           ></el-tooltip
         >
         <el-tooltip content="插入链接" placement="top" :trigger="tooltipTriggers"
@@ -404,7 +408,7 @@ onBeforeUnmount(() => {
             size="small"
             :disabled="formattingDisabled"
             @click="openLinkDialog"
-            ><el-icon><Link /></el-icon></el-button
+            ><font-awesome-icon :icon="faLink" fixed-width /></el-button
         ></el-tooltip>
         <el-tooltip content="插入表格（2×2 至 10×10）" placement="top" :trigger="tooltipTriggers"
           ><el-button
@@ -413,16 +417,16 @@ onBeforeUnmount(() => {
             size="small"
             :disabled="formattingDisabled"
             @click="openTableDialog"
-            ><el-icon><Grid /></el-icon></el-button
+            ><font-awesome-icon :icon="faTable" fixed-width /></el-button
         ></el-tooltip>
         <el-tooltip content="插入 Mermaid" placement="top" :trigger="tooltipTriggers"
           ><el-button
-            class="knowledge-document-editor__icon-button knowledge-document-editor__mermaid-button"
+            class="knowledge-document-editor__icon-button"
             aria-label="插入 Mermaid"
             size="small"
             :disabled="formattingDisabled"
             @click="applyTransform(insertMermaid)"
-            >M</el-button
+            ><font-awesome-icon :icon="faDiagramProject" fixed-width /></el-button
           ></el-tooltip
         >
         <el-tooltip content="插入分隔线" placement="top" :trigger="tooltipTriggers"
@@ -441,7 +445,7 @@ onBeforeUnmount(() => {
               aria-label="图片上传功能开发中"
               size="small"
               disabled
-              ><el-icon><Picture /></el-icon></el-button></span
+              ><font-awesome-icon :icon="faImage" fixed-width /></el-button></span
         ></el-tooltip>
       </div>
       <div class="knowledge-document-editor__tool-group knowledge-document-editor__workspace-group">
@@ -452,7 +456,7 @@ onBeforeUnmount(() => {
             size="small"
             :disabled="formattingDisabled || !canUndo"
             @click="undoSource"
-            ><el-icon><RefreshLeft /></el-icon></el-button
+            ><font-awesome-icon :icon="faRotateLeft" fixed-width /></el-button
         ></el-tooltip>
         <el-tooltip
           content="重做（Ctrl+Y / Ctrl+Shift+Z）"
@@ -464,7 +468,7 @@ onBeforeUnmount(() => {
             size="small"
             :disabled="formattingDisabled || !canRedo"
             @click="redoSource"
-            ><el-icon><RefreshRight /></el-icon></el-button
+            ><font-awesome-icon :icon="faRotateRight" fixed-width /></el-button
         ></el-tooltip>
       </div>
       <div class="knowledge-document-editor__tool-group knowledge-document-editor__workspace-group">
@@ -477,7 +481,7 @@ onBeforeUnmount(() => {
             :type="previewing ? 'default' : 'primary'"
             plain
             @click="emit('edit')"
-            ><el-icon><Document /></el-icon></el-button
+            ><font-awesome-icon :icon="faCode" fixed-width /></el-button
           ></el-tooltip
         >
         <el-tooltip content="预览" placement="top" :trigger="tooltipTriggers"
@@ -489,7 +493,7 @@ onBeforeUnmount(() => {
             :type="previewing ? 'primary' : 'default'"
             plain
             @click="emit('preview')"
-            ><el-icon><View /></el-icon></el-button
+            ><font-awesome-icon :icon="faEye" fixed-width /></el-button
           ></el-tooltip
         >
         <el-tooltip :content="fullscreenLabel" placement="top" :trigger="tooltipTriggers"
@@ -499,7 +503,7 @@ onBeforeUnmount(() => {
             :aria-pressed="fullscreen"
             size="small"
             @click="emit('toggle-fullscreen')"
-            ><el-icon><FullScreen /></el-icon></el-button
+            ><font-awesome-icon :icon="fullscreen ? faCompress : faExpand" fixed-width /></el-button
         ></el-tooltip>
       </div>
     </div>

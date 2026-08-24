@@ -21,21 +21,30 @@ R04 的五项人工反馈均已落实：代码围栏不再以纯黑块显示；U
 
 | 控件 | 图标语义 / 状态 |
 | --- | --- |
-| UL | 三个圆点与横线 |
-| OL | 1/2/3 与横线 |
-| Task | 勾选框与横线 |
-| Source | 文档图标，`源码编辑` tooltip/aria，selected state |
+| UL | Font Awesome `faListUl` |
+| OL | Font Awesome `faListOl` |
+| Task | Font Awesome `faListCheck` |
+| Source | Font Awesome `faCode`，`源码编辑` tooltip/aria，selected state |
 | Preview | 眼睛图标，`预览` tooltip/aria，selected state |
 | Fullscreen | expand/collapse 图标，icon-only |
 | Image | icon-only disabled，`图片上传功能开发中` |
 
-浏览器 DOM 检查确认 Source、Preview、Fullscreen 三个按钮均没有可见文字；没有 Save、颜色、背景色或清色控件；UL/OL/Task 使用三种不同的图标类。
+浏览器 DOM 检查确认 Source、Preview、Fullscreen 三个按钮均没有可见文字；没有 Save、颜色、背景色或清色控件；UL/OL/Task 使用三种不同的 Free SVG 图标。
+
+## Font Awesome Free Integration
+
+- 新增官方 SVG/Vue 依赖：`@fortawesome/fontawesome-svg-core`、`@fortawesome/vue-fontawesome`、`@fortawesome/free-solid-svg-icons` 与 `@fortawesome/free-regular-svg-icons`；未引入 Pro 包、webfont 或另一套 UI framework。
+- Toolbar 仅按需 import Free Solid 图标：`faListUl`、`faListOl`、`faListCheck`、`faQuoteLeft`、`faCode`、`faFileCode`、`faLink`、`faTable`、`faDiagramProject`、`faImage`、`faRotateLeft`、`faRotateRight`、`faEye`、`faExpand`、`faCompress`。代码卡片仅按需使用 `faCopy`、`faChevronUp`、`faChevronDown`。
+- 没有 `library.add(fas)`、`library.add(far)` 或其它全量 pack 注册；静态审计仅发现以上具体 import。Element Plus 保留用于 `Minus` 分隔线及现有 UI 组件；Bold/Italic/标题继续使用文字型 glyph/dropdown。
+- Browser DOM 验证：列表、代码、视图等 Font Awesome SVG 均为 16×16px，所在按钮均为 29×29px，六项抽样按钮的中心对齐偏差为 0px。UL/OL/Task 不依赖 tooltip 即可区分；Source/Preview/Fullscreen 仍为 icon-only，Image 为 disabled icon-only。
+- 代码卡片 header 使用 `faCopy`、`faChevronUp`、`faChevronDown` 的 SVG；保留中文 `title`/`aria-label`，复制与收起/展开在实际浏览器中正常工作。Browser console 仅有 Vite debug 连接日志，无 unresolved component、warning 或 error。
+- Production build PASS。通过按需 import/static audit 确认无整包图标注册；新增图标仅影响 KnowledgeDocument 编辑器/共享代码卡片范围，未批量替换系统其它区域。
 
 ## Code Block Card Design
 
 所有非 Mermaid fence 由共享 renderer 输出安全代码卡片：浅色 header/body、细边框、8px 圆角、语言标签、`复制代码` 与折叠箭头。无语言 fence 显示 `plain`。代码正文保留字面行断与 `overflow-x: auto`；复制读取 `code.textContent`，因此不包含 header、语言、按钮或潜在行号。折叠只切换单卡片 CSS 状态，绝不修改 Markdown；每张卡片状态独立。
 
-自动化测试覆盖语言/无语言、原始复制内容、收起/展开和多卡片独立性。浏览器在 Bash/SQL 卡片上确认 language、复制成功反馈 `已复制`、收起/展开和另一张卡片不受影响。代码卡片在 Preview、当前 Read、历史 Read 与恢复预览均使用同一组件。
+自动化测试覆盖语言/无语言、原始复制内容、收起/展开和多卡片独立性。浏览器在 Bash/SQL 卡片上确认 language、copy/chevron 图标、收起/展开和另一张卡片不受影响。代码卡片在 Preview、当前 Read、历史 Read 与恢复预览均使用同一组件。
 
 ## Table Responsive Width
 
@@ -81,4 +90,4 @@ GFM table 已由 `.knowledge-markdown-table-wrap` 包装。wrapper 为 `width/ma
 
 ## Cleanup
 
-已关闭验收浏览器页，停止本任务启动的 API/Vite 父进程及 Vite 子进程，并释放 `5211`、`5178`。任务专属临时数据库目录已删除。PID 28756 是任务开始前已有的 API 进程，未停止、未修改。
+已关闭验收浏览器页，停止本任务启动的 API/Vite 父进程及 Vite 子进程，并释放 `5211`、`5178`、`5212`、`5180`。两套任务专属临时数据库目录均已删除。PID 28756 是任务开始前已有的 API 进程，未停止、未修改。

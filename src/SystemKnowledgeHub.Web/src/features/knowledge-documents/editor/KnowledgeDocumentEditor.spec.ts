@@ -69,26 +69,41 @@ describe('KnowledgeDocumentEditor', () => {
     expect(wrapper.get('[aria-label="图片上传功能开发中"]').attributes('disabled')).toBeDefined()
   })
 
-  it('uses compact semantic list icons and icon-only source, preview, and fullscreen controls', async () => {
+  it('uses on-demand Font Awesome Free icons with icon-only source, preview, and fullscreen controls', async () => {
     const wrapper = mountEditor()
     await waitForSourceEditor(wrapper)
 
     expect(wrapper.get('.knowledge-document-editor__toolbar').classes()).toContain(
       'knowledge-document-editor__toolbar',
     )
-    expect(wrapper.get('[aria-label="无序列表"] .knowledge-document-editor__list-icon').classes()).toContain(
-      'is-bullet',
-    )
-    expect(wrapper.get('[aria-label="有序列表"] .knowledge-document-editor__list-icon').classes()).toContain(
-      'is-ordered',
-    )
-    expect(wrapper.get('[aria-label="任务列表"] .knowledge-document-editor__list-icon').classes()).toContain(
-      'is-task',
-    )
+    const expectedIcons: ReadonlyArray<readonly [string, string]> = [
+      ['无序列表', 'list-ul'],
+      ['有序列表', 'list-ol'],
+      ['任务列表', 'list-check'],
+      ['引用', 'quote-left'],
+      ['行内代码', 'code'],
+      ['插入代码块', 'file-code'],
+      ['插入链接', 'link'],
+      ['插入表格', 'table'],
+      ['插入 Mermaid', 'diagram-project'],
+      ['图片上传功能开发中', 'image'],
+      ['撤销', 'rotate-left'],
+      ['重做', 'rotate-right'],
+      ['源码编辑', 'code'],
+      ['预览', 'eye'],
+      ['全屏', 'expand'],
+    ]
+    expectedIcons.forEach(([label, icon]) => {
+      expect(wrapper.find(`[aria-label="${label}"] svg[data-icon="${icon}"]`).exists()).toBe(true)
+    })
     expect(wrapper.get('[aria-label="源码编辑"]').text()).toBe('')
     expect(wrapper.get('[aria-label="预览"]').text()).toBe('')
     expect(wrapper.get('[aria-label="全屏"]').text()).toBe('')
     expect(wrapper.find('[aria-label="源码"]').exists()).toBe(false)
+    expect(wrapper.get('[aria-label="图片上传功能开发中"]').attributes('disabled')).toBeDefined()
+
+    await wrapper.setProps({ fullscreen: true })
+    expect(wrapper.find('[aria-label="退出全屏"] svg[data-icon="compress"]').exists()).toBe(true)
   })
 
   it('emits the page-level save request from Ctrl/Cmd+S without a toolbar save control', async () => {
