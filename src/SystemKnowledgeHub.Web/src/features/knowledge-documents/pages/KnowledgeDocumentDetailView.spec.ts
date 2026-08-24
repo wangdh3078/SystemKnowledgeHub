@@ -44,10 +44,8 @@ vi.mock('vue', async (importOriginal) => {
           modelValue: { type: String, required: true },
           previewing: Boolean,
           fullscreen: Boolean,
-          canSave: Boolean,
-          saving: Boolean,
         },
-        emits: ['update:modelValue', 'ready', 'save', 'edit', 'preview', 'toggle-fullscreen'],
+        emits: ['update:modelValue', 'request-save', 'edit', 'preview', 'toggle-fullscreen'],
         setup(props, { emit }) {
           return () =>
             actual.h('div', { class: { 'is-fullscreen': props.fullscreen } }, [
@@ -81,11 +79,10 @@ vi.mock('vue', async (importOriginal) => {
                 'button',
                 {
                   type: 'button',
-                  'aria-label': '保存',
-                  disabled: !props.canSave,
-                  onClick: () => emit('save'),
+                  'aria-label': '源码快捷保存',
+                  onClick: () => emit('request-save'),
                 },
-                props.saving ? '保存中…' : '工具栏保存',
+                '源码快捷保存',
               ),
               actual.h(
                 'button',
@@ -302,7 +299,7 @@ describe('KnowledgeDocumentDetailView editing', () => {
     expect(wrapper.text()).toContain('更新后的 SOP')
   })
 
-  it('routes the toolbar Save through the same Published confirmation state machine', async () => {
+  it('routes the source Ctrl/Cmd+S request through the Published confirmation state machine', async () => {
     const published = {
       ...detail,
       lifecycleStatus: 'Published' as const,
@@ -325,13 +322,13 @@ describe('KnowledgeDocumentDetailView editing', () => {
     await wrapper.findAll('textarea')[0].setValue('工具栏保存标题')
 
     vi.mocked(ElMessageBox.confirm).mockRejectedValueOnce('cancel')
-    await wrapper.get('[aria-label="保存"]').trigger('click')
+    await wrapper.get('[aria-label="源码快捷保存"]').trigger('click')
     await flushPromises()
     expect(updateKnowledgeDocumentContent).not.toHaveBeenCalled()
     expect(wrapper.findAll('textarea')[0].element.value).toBe('工具栏保存标题')
 
     vi.mocked(ElMessageBox.confirm).mockResolvedValueOnce('confirm' as never)
-    await wrapper.get('[aria-label="保存"]').trigger('click')
+    await wrapper.get('[aria-label="源码快捷保存"]').trigger('click')
     await flushPromises()
     expect(ElMessageBox.confirm).toHaveBeenCalledTimes(2)
     expect(updateKnowledgeDocumentContent).toHaveBeenCalledWith(
@@ -360,7 +357,7 @@ describe('KnowledgeDocumentDetailView editing', () => {
     await flushPromises()
     expect(wrapper.text()).toContain('预览未保存内容')
     expect(wrapper.text()).toContain('新步骤')
-    expect(wrapper.find('[aria-label="保存"]').exists()).toBe(true)
+    expect(wrapper.find('[aria-label="保存"]').exists()).toBe(false)
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
     await flushPromises()

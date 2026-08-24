@@ -57,6 +57,7 @@ describe('KnowledgeDocumentMarkdown', () => {
     await flushPromises()
 
     expect(wrapper.classes()).toContain('knowledge-document-markdown')
+    expect(wrapper.classes()).toContain('knowledge-markdown-content')
     expect(wrapper.get('h1').text()).toBe('普通标题')
     expect(mermaidMock.initialize).not.toHaveBeenCalled()
     expect(mermaidMock.render).not.toHaveBeenCalled()

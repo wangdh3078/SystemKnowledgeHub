@@ -1,0 +1,130 @@
+.knowledge-markdown-content {
+  color: var(--color-text);
+  font-size: 15px;
+  line-height: 1.75;
+  overflow-wrap: anywhere;
+}
+
+.knowledge-markdown-content h1,
+.knowledge-markdown-content h2,
+.knowledge-markdown-content h3,
+.knowledge-markdown-content h4,
+.knowledge-markdown-content h5,
+.knowledge-markdown-content h6 {
+  margin: 1.55em 0 0.65em;
+  color: var(--color-ink);
+  line-height: 1.35;
+}
+
+.knowledge-markdown-content h1 {
+  font-size: 1.65em;
+}
+.knowledge-markdown-content h2 {
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 1.35em;
+}
+.knowledge-markdown-content h3 {
+  font-size: 1.16em;
+}
+.knowledge-markdown-content h4 {
+  font-size: 1.04em;
+}
+.knowledge-markdown-content h5 {
+  font-size: 0.95em;
+}
+.knowledge-markdown-content h6 {
+  color: var(--color-muted);
+  font-size: 0.88em;
+}
+
+.knowledge-markdown-content p,
+.knowledge-markdown-content ul,
+.knowledge-markdown-content ol {
+  margin: 0.8em 0;
+}
+
+.knowledge-markdown-content li + li {
+  margin-top: 0.28em;
+}
+
+.knowledge-markdown-content code {
+  padding: 0.14em 0.35em;
+  border-radius: 4px;
+  background: #f0f3f8;
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+}
+
+.knowledge-markdown-content pre {
+  margin: 1em 0;
+  overflow-x: auto;
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  background: #252a35;
+  color: #edf2f7;
+}
+
+.knowledge-markdown-content pre code {
+  padding: 0;
+  background: transparent;
+  color: inherit;
+}
+
+.knowledge-markdown-content a {
+  color: var(--color-primary);
+}
+
+.knowledge-markdown-content blockquote {
+  margin: 1em 0;
+  padding: 0.55em 1em;
+  border-left: 4px solid var(--color-primary);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: #f6f7fc;
+  color: var(--color-muted);
+}
+
+.knowledge-markdown-content hr {
+  margin: 1.7em 0;
+  border: 0;
+  border-top: 1px solid var(--color-border-strong);
+}
+
+.knowledge-markdown-content table {
+  display: block;
+  width: max-content;
+  min-width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+}
+
+.knowledge-markdown-content th,
+.knowledge-markdown-content td {
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  text-align: left;
+}
+
+.knowledge-markdown-content th {
+  background: #f5f7fb;
+}
+
+.knowledge-markdown-content .knowledge-document-mermaid {
+  margin: 1.4em 0;
+  overflow-x: auto;
+  text-align: center;
+}
+
+.knowledge-markdown-content .knowledge-document-task-list-item {
+  list-style: none;
+}
+
+@media (max-width: 720px) {
+  .knowledge-markdown-content {
+    font-size: 15px;
+  }
+  .knowledge-markdown-content pre {
+    padding: 12px;
+  }
+}

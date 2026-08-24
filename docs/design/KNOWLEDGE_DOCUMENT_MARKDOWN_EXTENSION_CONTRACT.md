@@ -1,20 +1,21 @@
 # KnowledgeDocument Markdown Extension Contract
 
-Status: **Frozen for UI-KC-B05**
+Status: **Frozen for UI-KC-B05-R03**
 Product: **系统知识中心 / System Knowledge Hub**
 
 ## 1. Storage boundary
 
-`KnowledgeDocument.bodyMarkdown` and every immutable revision store Markdown source. The editor, current read view, unsaved preview, historical read view, restore flow, and raw-source compare must preserve the same source semantics.
+`KnowledgeDocument.bodyMarkdown` and every immutable revision store Markdown source. The raw source editor, current read view, unsaved preview, historical read view, restore flow, and raw-source compare must preserve the same source semantics.
 
-- Milkdown remains the editor.
+- Raw Markdown Source is the only authoring surface. `bodyMarkdown: string` is its single authoritative editing state; no ProseMirror document, HTML serializer, or rich-text shadow state is maintained.
+- The implementation uses a minimal CodeMirror 6 Markdown surface for syntax highlighting, selection/caret, history, wrapping, keyboard editing, and controlled source updates.
 - Raw HTML is disabled in the shared renderer.
 - Generated Mermaid SVG/HTML is never persisted.
 - Historical revisions are read compatibly and are never rewritten in bulk.
 
 ## 2. Standard Markdown
 
-The following features use the stable CommonMark/GFM syntax emitted by the installed Milkdown parser and serializer:
+The following features use stable CommonMark/GFM source entered directly or inserted by source toolbar transformations:
 
 | Feature | Canonical example |
 |---|---|
@@ -56,7 +57,7 @@ Tables use GFM pipe-table source:
 | Name | 名称 |
 ```
 
-The editor supports bounded 2×2 through 10×10 insertion, editable cells, row/column insertion and deletion, and whole-table deletion. Raw `<table>` markup is not canonical storage.
+The source toolbar supports bounded 2×2 through 10×10 insertion. Subsequent table editing is direct GFM source editing; no WYSIWYG cell, row, or column command surface is required. Raw `<table>` markup is not canonical storage.
 
 ### 3.3 Mermaid
 
@@ -71,7 +72,9 @@ flowchart LR
 
 The shared read component lazy-loads the official Mermaid renderer only when a Mermaid fence exists. It renders with a fixed strict security configuration. Each block is isolated: a failed diagram keeps its escaped source visible and adds a safe error state without breaking the rest of the document.
 
-### 3.4 Text color
+### 3.4 Text color — Deprecated authoring extension
+
+Text color is retained only for historical read compatibility. The raw-source toolbar does not author, clear, or otherwise generate this extension.
 
 Text color uses exactly:
 
@@ -85,7 +88,9 @@ Example:
 {color:#E53935|严重告警}
 ```
 
-### 3.5 Background color
+### 3.5 Background color — Deprecated authoring extension
+
+Background color is retained only for historical read compatibility. The raw-source toolbar does not author, clear, or otherwise generate this extension.
 
 Background color uses exactly:
 
@@ -109,11 +114,11 @@ Only six-digit hexadecimal RGB values are accepted. Accepted lowercase input is 
 
 The renderer may emit only a fixed `<span>` whose `color` or `background-color` value has already passed the strict `#RRGGBB` validation. Nested content is parsed and escaped through the normal Markdown boundary.
 
-Color marks are inline-only and cannot span a Markdown line boundary. A toolbar selection that crosses a hard break is serialized as one closed color span on each side of the break. Because the frozen color opener itself contains `|`, range formatting deliberately leaves GFM table-cell text unchanged; this preserves the pipe-table grammar instead of emitting ambiguous or destructive source. Text outside table cells remains formatted normally.
+Previously authored color source remains immutable and readable. No bulk rewrite, deletion, migration, or automatic canonicalization of historical color syntax is permitted.
 
 ## 4. Image upload placeholder
 
-The toolbar reserves a disabled, labelled action named `图片上传（待接入）`. UI-KC-B05 does not call an upload API, create a fake URL, persist base64 content, insert a local path, or change the backend contract.
+The toolbar reserves a disabled image icon with the label/tooltip `图片上传功能开发中`. UI-KC-B05-R03 does not call an upload API, create a fake URL, persist base64 content, insert a local path, or change the backend contract.
 
 ## 5. Security invariants
 

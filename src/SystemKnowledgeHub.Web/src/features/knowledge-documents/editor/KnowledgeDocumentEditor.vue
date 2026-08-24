@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import {
-  ChatLineSquare,
   Check,
-  EditPen,
   FullScreen,
   Grid,
   Link,
@@ -13,87 +11,70 @@ import {
   RefreshRight,
   View,
 } from '@element-plus/icons-vue'
-import { commandsCtx, defaultValueCtx, Editor, editorViewCtx, rootCtx } from '@milkdown/core'
-import { listener, listenerCtx } from '@milkdown/plugin-listener'
-import type { MarkType } from '@milkdown/prose/model'
-import { redo, undo } from '@milkdown/prose/history'
-import type { EditorState } from '@milkdown/prose/state'
-import {
-  createCodeBlockCommand,
-  insertHrCommand,
-  linkSchema,
-  toggleEmphasisCommand,
-  toggleInlineCodeCommand,
-  toggleStrongCommand,
-  turnIntoTextCommand,
-  wrapInBlockquoteCommand,
-  wrapInBulletListCommand,
-  wrapInHeadingCommand,
-  wrapInOrderedListCommand,
-} from '@milkdown/preset-commonmark'
-import { gfm } from '@milkdown/preset-gfm'
-import { callCommand, getMarkdown, type $Command } from '@milkdown/utils'
-import { ElMessageBox } from 'element-plus'
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { history, historyKeymap, redo, redoDepth, undo, undoDepth } from '@codemirror/commands'
+import { defaultHighlightStyle, syntaxHighlighting } from '@codemirror/language'
+import { markdown } from '@codemirror/lang-markdown'
+import { EditorState } from '@codemirror/state'
+import { EditorView, keymap } from '@codemirror/view'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import KnowledgeDocumentMarkdown from '../markdown/KnowledgeDocumentMarkdown.vue'
-import { canonicalizeLegacyBreakParagraphs } from '../markdown/legacyMarkdownBreaks'
 import {
-  applyBackgroundColorCommand,
-  applyTextColorCommand,
-  backgroundColorMark,
-  clearBackgroundColorCommand,
-  clearTextColorCommand,
-  knowledgeDocumentColorExtension,
-  textColorMark,
-} from './colorMarks'
-import {
-  addColAfterCommand,
-  addRowAfterCommand,
-  deleteCurrentTableCommand,
-  deleteTableColumnCommand,
-  deleteTableRowCommand,
-  getTableCommandAvailability,
-  history,
-  insertMermaidBlockCommand,
-  insertTableCommand,
-  knowledgeDocumentEditorCommands,
-  redoCommand,
-  toggleTaskListCommand,
-  undoCommand,
-} from './editorCommands'
-import { knowledgeDocumentCommonmark } from './milkdownConfig'
-
-type BlockType = 'paragraph' | 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6'
-
-interface PaletteColor {
-  readonly value: string
-  readonly label: string
-}
+  applyHeading,
+  insertCodeBlock,
+  insertHorizontalRule,
+  insertLink,
+  insertMermaid,
+  insertTable,
+  toggleBulletList,
+  toggleInlineWrap,
+  toggleOrderedList,
+  toggleQuote,
+  toggleTaskList,
+  type MarkdownHeadingLevel,
+  type MarkdownSourceTransformResult,
+} from './sourceMarkdownTransforms'
 
 const props = withDefaults(
   defineProps<{
     previewing?: boolean
     fullscreen?: boolean
-    canSave?: boolean
-    saving?: boolean
   }>(),
-  {
-    previewing: false,
-    fullscreen: false,
-    canSave: false,
-    saving: false,
-  },
+  { previewing: false, fullscreen: false },
 )
 const model = defineModel<string>({ required: true })
 const emit = defineEmits<{
-  ready: [markdown: string]
-  save: []
   edit: []
   preview: []
+  'request-save': []
   'toggle-fullscreen': []
 }>()
 
-const blockOptions: ReadonlyArray<{ readonly value: BlockType; readonly label: string }> = [
+type CodeLanguage =
+  | 'plaintext'
+  | 'csharp'
+  | 'javascript'
+  | 'typescript'
+  | 'json'
+  | 'sql'
+  | 'bash'
+  | 'powershell'
+  | 'python'
+  | 'java'
+  | 'cpp'
+  | 'c'
+  | 'go'
+  | 'rust'
+  | 'html'
+  | 'css'
+  | 'xml'
+  | 'yaml'
+  | 'markdown'
+  | 'dockerfile'
+
+const blockOptions: ReadonlyArray<{
+  readonly value: MarkdownHeadingLevel
+  readonly label: string
+}> = [
   { value: 'paragraph', label: '正文' },
   { value: 'h1', label: 'H1' },
   { value: 'h2', label: 'H2' },
@@ -102,290 +83,218 @@ const blockOptions: ReadonlyArray<{ readonly value: BlockType; readonly label: s
   { value: 'h5', label: 'H5' },
   { value: 'h6', label: 'H6' },
 ]
-const textPalette: readonly PaletteColor[] = [
-  { value: '#E53935', label: '红' },
-  { value: '#F57C00', label: '橙' },
-  { value: '#F9A825', label: '黄' },
-  { value: '#2E7D32', label: '绿' },
-  { value: '#1565C0', label: '蓝' },
-  { value: '#6A1B9A', label: '紫' },
-  { value: '#616161', label: '灰' },
+const codeLanguages: ReadonlyArray<{ readonly value: CodeLanguage; readonly label: string }> = [
+  { value: 'plaintext', label: 'Plain text' },
+  { value: 'csharp', label: 'C#' },
+  { value: 'javascript', label: 'JavaScript' },
+  { value: 'typescript', label: 'TypeScript' },
+  { value: 'json', label: 'JSON' },
+  { value: 'sql', label: 'SQL' },
+  { value: 'bash', label: 'Bash' },
+  { value: 'powershell', label: 'PowerShell' },
+  { value: 'python', label: 'Python' },
+  { value: 'java', label: 'Java' },
+  { value: 'cpp', label: 'C++' },
+  { value: 'c', label: 'C' },
+  { value: 'go', label: 'Go' },
+  { value: 'rust', label: 'Rust' },
+  { value: 'html', label: 'HTML' },
+  { value: 'css', label: 'CSS' },
+  { value: 'xml', label: 'XML' },
+  { value: 'yaml', label: 'YAML' },
+  { value: 'markdown', label: 'Markdown' },
+  { value: 'dockerfile', label: 'Dockerfile' },
 ]
-const backgroundPalette: readonly PaletteColor[] = [
-  { value: '#FFCDD2', label: '浅红' },
-  { value: '#FFE0B2', label: '浅橙' },
-  { value: '#FFF3B0', label: '浅黄' },
-  { value: '#C8E6C9', label: '浅绿' },
-  { value: '#BBDEFB', label: '浅蓝' },
-  { value: '#E1BEE7', label: '浅紫' },
-  { value: '#E0E0E0', label: '浅灰' },
-]
-
+const tooltipTriggers: ('hover' | 'focus')[] = ['hover', 'focus']
 const editorRoot = ref<HTMLElement | null>(null)
-const initializationError = ref<string | null>(null)
-const editorReady = ref(false)
-const blockType = ref<BlockType>('paragraph')
-const taskListActive = ref(false)
-const selectedTextColor = ref('')
-const selectedBackgroundColor = ref('')
-const canUndo = ref(false)
-const canRedo = ref(false)
-const inTable = ref(false)
-const canDeleteTableRow = ref(false)
-const canDeleteTableColumn = ref(false)
+const sourceReady = ref(false)
 const tableDialogOpen = ref(false)
+const linkDialogOpen = ref(false)
+const codeDialogOpen = ref(false)
 const tableRows = ref(3)
 const tableColumns = ref(3)
-const tooltipTriggers: ('hover' | 'focus')[] = ['hover', 'focus']
-const formattingDisabled = computed(() => !editorReady.value || props.previewing)
+const codeLanguage = ref<CodeLanguage>('plaintext')
+const linkUrl = ref('')
+const linkDisplayText = ref('')
+const linkError = ref<string | null>(null)
+const canUndo = ref(false)
+const canRedo = ref(false)
 const fullscreenLabel = computed(() => (props.fullscreen ? '退出全屏' : '全屏'))
-let editor: Editor | null = null
+const formattingDisabled = computed(() => !sourceReady.value || props.previewing)
+let view: EditorView | null = null
+let applyingExternalSource = false
 
-function selectedUniformMarkHex(state: EditorState, markType: MarkType): string {
-  if (state.selection.empty) {
-    const marks = state.storedMarks ?? state.selection.$from.marks()
-    const value: unknown = marks.find((mark) => mark.type === markType)?.attrs.hex
-    return typeof value === 'string' ? value : ''
-  }
-
-  let uniformHex: string | null = null
-  let sawText = false
-  let mixed = false
-  state.doc.nodesBetween(state.selection.from, state.selection.to, (node, position) => {
-    if (!node.isText) return
-    const intersectsSelection =
-      position < state.selection.to && position + node.nodeSize > state.selection.from
-    if (!intersectsSelection) return
-    sawText = true
-    const value: unknown = node.marks.find((mark) => mark.type === markType)?.attrs.hex
-    if (typeof value !== 'string') {
-      mixed = true
-      return
-    }
-    if (uniformHex === null) uniformHex = value
-    else if (uniformHex !== value) mixed = true
-  })
-  return sawText && !mixed ? (uniformHex ?? '') : ''
+function refreshHistoryState(): void {
+  if (!view) return
+  canUndo.value = undoDepth(view.state) > 0
+  canRedo.value = redoDepth(view.state) > 0
 }
 
-function refreshToolbarState(): void {
-  if (!editor || !editorReady.value) return
-  editor.action((ctx) => {
-    const view = ctx.get(editorViewCtx)
-    const { state } = view
-    const { $from } = state.selection
-    let nextBlockType: BlockType = 'paragraph'
-    for (let depth = $from.depth; depth >= 0; depth -= 1) {
-      const node = $from.node(depth)
-      if (node.type.name !== 'heading') continue
-      const level: unknown = node.attrs.level
-      if (typeof level === 'number' && level >= 1 && level <= 6) {
-        nextBlockType = `h${level}` as BlockType
-      }
-      break
-    }
-    blockType.value = nextBlockType
-
-    taskListActive.value = false
-    for (let depth = $from.depth; depth > 0; depth -= 1) {
-      const node = $from.node(depth)
-      if (node.type.name === 'list_item' && node.attrs.checked != null) {
-        taskListActive.value = true
-        break
-      }
-    }
-
-    const textColorType = textColorMark.type(ctx)
-    const backgroundColorType = backgroundColorMark.type(ctx)
-    selectedTextColor.value = selectedUniformMarkHex(state, textColorType)
-    selectedBackgroundColor.value = selectedUniformMarkHex(state, backgroundColorType)
-
-    canUndo.value = undo(state)
-    canRedo.value = redo(state)
-    const tableAvailability = getTableCommandAvailability(state)
-    inTable.value = tableAvailability.isInTable
-    canDeleteTableRow.value = tableAvailability.canDeleteRow
-    canDeleteTableColumn.value = tableAvailability.canDeleteColumn
-  })
+function currentSelection(): { readonly anchor: number; readonly head: number } | null {
+  return view?.state.selection.main ?? null
 }
 
-function run<T>(command: $Command<T>, payload?: T): boolean {
-  if (!editor || !editorReady.value) return false
-  const result = editor.action(callCommand(command.key, payload))
-  if (result) {
-    editor.action((ctx) => ctx.get(editorViewCtx).focus())
-  }
-  queueMicrotask(refreshToolbarState)
-  return result
+function selectedSource(): string {
+  if (!view) return ''
+  const selection = view.state.selection.main
+  return view.state.doc.sliceString(selection.from, selection.to)
 }
 
-function canRun<T>(command: $Command<T>, payload?: T): boolean {
-  if (!editor || !editorReady.value) return false
-  return editor.action((ctx) => {
-    const view = ctx.get(editorViewCtx)
-    return ctx.get(commandsCtx).get(command.key)(payload)(view.state)
+function applyTransform(
+  transform: (
+    source: string,
+    selection: { readonly anchor: number; readonly head: number },
+  ) => MarkdownSourceTransformResult,
+): void {
+  if (formattingDisabled.value || !view) return
+  const selection = currentSelection()
+  if (!selection) return
+  const next = transform(view.state.doc.toString(), selection)
+  view.dispatch({
+    changes: { from: 0, to: view.state.doc.length, insert: next.source },
+    selection: next.selection,
+    scrollIntoView: true,
   })
+  view.focus()
+  refreshHistoryState()
 }
 
 function changeBlockType(value: unknown): void {
-  if (typeof value !== 'string') return
-  if (value === 'paragraph') {
-    run(turnIntoTextCommand)
+  const option = blockOptions.find((candidate) => candidate.value === value)
+  if (!option) return
+  applyTransform((source, selection) => applyHeading(source, selection, option.value))
+}
+
+function openLinkDialog(): void {
+  if (formattingDisabled.value) return
+  linkDisplayText.value = selectedSource()
+  linkUrl.value = ''
+  linkError.value = null
+  linkDialogOpen.value = true
+}
+
+function isSafeLinkUrl(value: string): boolean {
+  return /^(https?:\/\/|mailto:|\/)[^\s]+$/i.test(value)
+}
+
+function insertLinkFromDialog(): void {
+  const text = linkDisplayText.value.trim()
+  const url = linkUrl.value.trim()
+  if (!text) {
+    linkError.value = '请填写链接显示文本。'
     return
   }
-  if (!/^h[1-6]$/.test(value)) return
-  run(wrapInHeadingCommand, Number(value.slice(1)))
-}
-
-function selectedEditorText(): string {
-  if (!editor || !editorReady.value) return ''
-  return editor.action((ctx) => {
-    const { state } = ctx.get(editorViewCtx)
-    return state.doc.textBetween(state.selection.from, state.selection.to, ' ')
-  })
-}
-
-async function addLink(): Promise<void> {
-  if (formattingDisabled.value || !editor) return
-  try {
-    const currentText = selectedEditorText()
-    const textResponse = await ElMessageBox.prompt(
-      '请输入链接显示文本。已选中的文本会作为默认值。',
-      '插入链接',
-      {
-        confirmButtonText: '下一步',
-        cancelButtonText: '取消',
-        inputValue: currentText,
-        inputPattern: /\S+/,
-        inputErrorMessage: '显示文本不能为空。',
-      },
-    )
-    const urlResponse = await ElMessageBox.prompt(
-      '请输入 http(s)、mailto 或站内相对地址。',
-      '插入链接',
-      {
-        confirmButtonText: '插入',
-        cancelButtonText: '取消',
-        inputPattern: /^(https?:\/\/|mailto:|\/)[^\s]+$/,
-        inputErrorMessage: '请输入安全的链接地址。',
-      },
-    )
-    const displayText = textResponse.value.trim()
-    const href = urlResponse.value.trim()
-    if (!displayText || !/^(https?:\/\/|mailto:|\/)[^\s]+$/.test(href)) return
-
-    editor.action((ctx) => {
-      const view = ctx.get(editorViewCtx)
-      const link = linkSchema.type(ctx).create({ href, title: null })
-      const node = view.state.schema.text(displayText, [link])
-      view.dispatch(view.state.tr.replaceSelectionWith(node, false).scrollIntoView())
-      view.focus()
-    })
-    queueMicrotask(refreshToolbarState)
-  } catch {
-    // Cancelling either prompt leaves the Markdown source unchanged.
+  if (!isSafeLinkUrl(url)) {
+    linkError.value = '仅支持 http(s)、mailto 或站内相对链接。'
+    return
   }
+  applyTransform((source, selection) => insertLink(source, selection, text, url))
+  linkDialogOpen.value = false
 }
 
-async function createCodeBlock(): Promise<void> {
+function openCodeDialog(): void {
   if (formattingDisabled.value) return
-  try {
-    const { value } = await ElMessageBox.prompt(
-      '请输入代码语言，可留空；例如 sql、json、plain。',
-      '插入代码块',
-      {
-        confirmButtonText: '插入',
-        cancelButtonText: '取消',
-        inputPattern: /^[A-Za-z0-9_+-]*$/,
-        inputErrorMessage: '语言标识只能包含字母、数字、_、+ 或 -。',
-      },
-    )
-    run(createCodeBlockCommand, value.trim().toLowerCase())
-  } catch {
-    // Cancelling the language prompt leaves the Markdown source unchanged.
-  }
+  codeLanguage.value = 'plaintext'
+  codeDialogOpen.value = true
+}
+
+function insertCodeFromDialog(): void {
+  applyTransform((source, selection) => insertCodeBlock(source, selection, codeLanguage.value))
+  codeDialogOpen.value = false
 }
 
 function openTableDialog(): void {
-  if (formattingDisabled.value || !canRun(insertTableCommand, { row: 3, col: 3 })) return
+  if (formattingDisabled.value) return
   tableRows.value = 3
   tableColumns.value = 3
   tableDialogOpen.value = true
 }
 
-function insertTable(): void {
-  const row = Math.min(10, Math.max(2, tableRows.value))
-  const col = Math.min(10, Math.max(2, tableColumns.value))
-  if (run(insertTableCommand, { row, col })) tableDialogOpen.value = false
+function insertTableFromDialog(): void {
+  applyTransform((source, selection) =>
+    insertTable(source, selection, tableRows.value, tableColumns.value),
+  )
+  tableDialogOpen.value = false
 }
 
-function applyTextColor(value: unknown): void {
-  if (typeof value === 'string' && textPalette.some((color) => color.value === value)) {
-    run(applyTextColorCommand, value)
-  }
+function undoSource(): void {
+  if (formattingDisabled.value || !view) return
+  undo(view)
+  view.focus()
+  refreshHistoryState()
 }
 
-function applyBackgroundColor(value: unknown): void {
-  if (typeof value === 'string' && backgroundPalette.some((color) => color.value === value)) {
-    run(applyBackgroundColorCommand, value)
-  }
+function redoSource(): void {
+  if (formattingDisabled.value || !view) return
+  redo(view)
+  view.focus()
+  refreshHistoryState()
 }
 
-onMounted(async () => {
+function replaceExternalSource(nextSource: string): void {
+  if (!view || view.state.doc.toString() === nextSource) return
+  applyingExternalSource = true
+  view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: nextSource } })
+  applyingExternalSource = false
+  refreshHistoryState()
+}
+
+watch(() => model.value, replaceExternalSource)
+
+onMounted(() => {
   if (!editorRoot.value) return
-  try {
-    editor = await Editor.make()
-      .config((ctx) => {
-        ctx.set(rootCtx, editorRoot.value)
-        ctx.set(defaultValueCtx, canonicalizeLegacyBreakParagraphs(model.value))
-        ctx
-          .get(listenerCtx)
-          .markdownUpdated((_ctx, markdown) => {
-            model.value = canonicalizeLegacyBreakParagraphs(markdown)
-            queueMicrotask(refreshToolbarState)
-          })
-          .updated(() => queueMicrotask(refreshToolbarState))
-          .selectionUpdated(() => queueMicrotask(refreshToolbarState))
-      })
-      .use(knowledgeDocumentCommonmark)
-      .use(gfm)
-      .use(history)
-      .use(knowledgeDocumentEditorCommands)
-      .use(knowledgeDocumentColorExtension)
-      .use(listener)
-      .create()
-    editorReady.value = true
-    const markdown = canonicalizeLegacyBreakParagraphs(editor.action(getMarkdown()))
-    model.value = markdown
-    emit('ready', markdown)
-    refreshToolbarState()
-  } catch (reason: unknown) {
-    editorReady.value = false
-    initializationError.value =
-      reason instanceof Error ? reason.message : '无法初始化 Markdown 编辑器。'
-  }
+  view = new EditorView({
+    state: EditorState.create({
+      doc: model.value,
+      extensions: [
+        history(),
+        markdown(),
+        syntaxHighlighting(defaultHighlightStyle),
+        EditorView.lineWrapping,
+        keymap.of([
+          {
+            key: 'Mod-s',
+            run: () => {
+              emit('request-save')
+              return true
+            },
+          },
+          ...historyKeymap,
+        ]),
+        EditorView.updateListener.of((update) => {
+          if (!update.docChanged) return
+          if (!applyingExternalSource) model.value = update.state.doc.toString()
+          refreshHistoryState()
+        }),
+      ],
+    }),
+    parent: editorRoot.value,
+  })
+  sourceReady.value = true
+  refreshHistoryState()
+  void nextTick(() => view?.focus())
 })
 
 onBeforeUnmount(() => {
-  editorReady.value = false
-  if (editor) void editor.destroy()
-  editor = null
+  sourceReady.value = false
+  view?.destroy()
+  view = null
 })
 </script>
 
 <template>
   <section
     :class="['knowledge-document-editor', { 'is-fullscreen': fullscreen }]"
-    aria-label="Markdown 编辑器"
+    aria-label="Markdown 源码编辑器"
   >
-    <div class="knowledge-document-editor__toolbar" role="toolbar" aria-label="Markdown 编辑工具">
+    <div class="knowledge-document-editor__toolbar" role="toolbar" aria-label="Markdown 源码工具">
       <div class="knowledge-document-editor__tool-group">
         <el-tooltip content="段落与标题级别" placement="top" :trigger="tooltipTriggers">
           <el-select
-            :model-value="blockType"
             class="knowledge-document-editor__block-select"
             size="small"
             aria-label="段落与标题"
+            :model-value="'paragraph'"
             :disabled="formattingDisabled"
             @change="changeBlockType"
           >
@@ -405,7 +314,9 @@ onBeforeUnmount(() => {
             aria-label="加粗"
             size="small"
             :disabled="formattingDisabled"
-            @click="run(toggleStrongCommand)"
+            @click="
+              applyTransform((source, selection) => toggleInlineWrap(source, selection, '**'))
+            "
             ><strong>B</strong></el-button
           ></el-tooltip
         >
@@ -415,7 +326,7 @@ onBeforeUnmount(() => {
             aria-label="斜体"
             size="small"
             :disabled="formattingDisabled"
-            @click="run(toggleEmphasisCommand)"
+            @click="applyTransform((source, selection) => toggleInlineWrap(source, selection, '*'))"
             ><em>I</em></el-button
           ></el-tooltip
         >
@@ -425,19 +336,29 @@ onBeforeUnmount(() => {
             aria-label="行内代码"
             size="small"
             :disabled="formattingDisabled"
-            @click="run(toggleInlineCodeCommand)"
+            @click="applyTransform((source, selection) => toggleInlineWrap(source, selection, '`'))"
             >&lt;/&gt;</el-button
           ></el-tooltip
         >
       </div>
       <div class="knowledge-document-editor__tool-group">
+        <el-tooltip content="引用" placement="top" :trigger="tooltipTriggers"
+          ><el-button
+            class="knowledge-document-editor__icon-button"
+            aria-label="引用"
+            size="small"
+            :disabled="formattingDisabled"
+            @click="applyTransform(toggleQuote)"
+            >❝</el-button
+          ></el-tooltip
+        >
         <el-tooltip content="无序列表" placement="top" :trigger="tooltipTriggers"
           ><el-button
             class="knowledge-document-editor__icon-button"
             aria-label="无序列表"
             size="small"
             :disabled="formattingDisabled"
-            @click="run(wrapInBulletListCommand)"
+            @click="applyTransform(toggleBulletList)"
             ><el-icon><List /></el-icon></el-button
         ></el-tooltip>
         <el-tooltip content="有序列表" placement="top" :trigger="tooltipTriggers"
@@ -446,7 +367,7 @@ onBeforeUnmount(() => {
             aria-label="有序列表"
             size="small"
             :disabled="formattingDisabled"
-            @click="run(wrapInOrderedListCommand)"
+            @click="applyTransform(toggleOrderedList)"
             >1.</el-button
           ></el-tooltip
         >
@@ -454,40 +375,30 @@ onBeforeUnmount(() => {
           ><el-button
             class="knowledge-document-editor__icon-button"
             aria-label="任务列表"
-            :aria-pressed="taskListActive"
             size="small"
             :disabled="formattingDisabled"
-            @click="run(toggleTaskListCommand)"
+            @click="applyTransform(toggleTaskList)"
             ><el-icon><Check /></el-icon></el-button
         ></el-tooltip>
-        <el-tooltip content="引用" placement="top" :trigger="tooltipTriggers"
-          ><el-button
-            class="knowledge-document-editor__icon-button"
-            aria-label="引用"
-            size="small"
-            :disabled="formattingDisabled"
-            @click="run(wrapInBlockquoteCommand)"
-            ><el-icon><ChatLineSquare /></el-icon></el-button
-        ></el-tooltip>
-        <el-tooltip content="代码块" placement="top" :trigger="tooltipTriggers"
+      </div>
+      <div class="knowledge-document-editor__tool-group">
+        <el-tooltip content="插入代码块" placement="top" :trigger="tooltipTriggers"
           ><el-button
             class="knowledge-document-editor__icon-button knowledge-document-editor__code-label"
-            aria-label="代码块"
+            aria-label="插入代码块"
             size="small"
             :disabled="formattingDisabled"
-            @click="createCodeBlock"
+            @click="openCodeDialog"
             >{ }</el-button
           ></el-tooltip
         >
-      </div>
-      <div class="knowledge-document-editor__tool-group">
         <el-tooltip content="插入链接" placement="top" :trigger="tooltipTriggers"
           ><el-button
             class="knowledge-document-editor__icon-button"
             aria-label="插入链接"
             size="small"
             :disabled="formattingDisabled"
-            @click="addLink"
+            @click="openLinkDialog"
             ><el-icon><Link /></el-icon></el-button
         ></el-tooltip>
         <el-tooltip content="插入表格（2×2 至 10×10）" placement="top" :trigger="tooltipTriggers"
@@ -505,7 +416,7 @@ onBeforeUnmount(() => {
             aria-label="插入 Mermaid"
             size="small"
             :disabled="formattingDisabled"
-            @click="run(insertMermaidBlockCommand)"
+            @click="applyTransform(insertMermaid)"
             >M</el-button
           ></el-tooltip
         >
@@ -515,88 +426,18 @@ onBeforeUnmount(() => {
             aria-label="插入分隔线"
             size="small"
             :disabled="formattingDisabled"
-            @click="run(insertHrCommand)"
+            @click="applyTransform(insertHorizontalRule)"
             ><el-icon><Minus /></el-icon></el-button
         ></el-tooltip>
-        <el-tooltip
-          content="图片上传将在附件管理功能中启用"
-          placement="top"
-          :trigger="tooltipTriggers"
-        >
-          <span class="knowledge-document-editor__disabled-tooltip" tabindex="0"
+        <el-tooltip content="图片上传功能开发中" placement="top" :trigger="tooltipTriggers"
+          ><span class="knowledge-document-editor__disabled-tooltip" tabindex="0"
             ><el-button
-              class="knowledge-document-editor__placeholder-button"
-              aria-label="图片上传（待接入）"
+              class="knowledge-document-editor__icon-button"
+              aria-label="图片上传功能开发中"
               size="small"
               disabled
-              ><el-icon><Picture /></el-icon>图片（待接入）</el-button
-            ></span
-          >
-        </el-tooltip>
-      </div>
-      <div class="knowledge-document-editor__tool-group knowledge-document-editor__color-group">
-        <el-tooltip content="文字颜色" placement="top" :trigger="tooltipTriggers">
-          <el-select
-            :model-value="selectedTextColor"
-            class="knowledge-document-editor__color-select"
-            size="small"
-            placeholder="文字颜色"
-            aria-label="文字颜色"
-            :disabled="formattingDisabled"
-            @change="applyTextColor"
-          >
-            <el-option
-              v-for="color in textPalette"
-              :key="`text-${color.value}`"
-              :label="color.label"
-              :value="color.value"
-              ><span class="knowledge-document-editor__palette-option"
-                ><i :style="{ backgroundColor: color.value }"></i>{{ color.label }}</span
-              ></el-option
-            >
-          </el-select>
-        </el-tooltip>
-        <el-tooltip content="清除文字颜色" placement="top" :trigger="tooltipTriggers"
-          ><el-button
-            class="knowledge-document-editor__icon-button knowledge-document-editor__clear-color"
-            aria-label="清除文字颜色"
-            size="small"
-            :disabled="formattingDisabled"
-            @click="run(clearTextColorCommand)"
-            >A×</el-button
-          ></el-tooltip
-        >
-        <el-tooltip content="背景颜色" placement="top" :trigger="tooltipTriggers">
-          <el-select
-            :model-value="selectedBackgroundColor"
-            class="knowledge-document-editor__color-select"
-            size="small"
-            placeholder="背景颜色"
-            aria-label="背景颜色"
-            :disabled="formattingDisabled"
-            @change="applyBackgroundColor"
-          >
-            <el-option
-              v-for="color in backgroundPalette"
-              :key="`background-${color.value}`"
-              :label="color.label"
-              :value="color.value"
-              ><span class="knowledge-document-editor__palette-option"
-                ><i :style="{ backgroundColor: color.value }"></i>{{ color.label }}</span
-              ></el-option
-            >
-          </el-select>
-        </el-tooltip>
-        <el-tooltip content="清除背景颜色" placement="top" :trigger="tooltipTriggers"
-          ><el-button
-            class="knowledge-document-editor__icon-button knowledge-document-editor__clear-color"
-            aria-label="清除背景颜色"
-            size="small"
-            :disabled="formattingDisabled"
-            @click="run(clearBackgroundColorCommand)"
-            >▧×</el-button
-          ></el-tooltip
-        >
+              ><el-icon><Picture /></el-icon></el-button></span
+        ></el-tooltip>
       </div>
       <div class="knowledge-document-editor__tool-group knowledge-document-editor__workspace-group">
         <el-tooltip content="撤销（Ctrl+Z）" placement="top" :trigger="tooltipTriggers"
@@ -605,7 +446,7 @@ onBeforeUnmount(() => {
             aria-label="撤销"
             size="small"
             :disabled="formattingDisabled || !canUndo"
-            @click="run(undoCommand)"
+            @click="undoSource"
             ><el-icon><RefreshLeft /></el-icon></el-button
         ></el-tooltip>
         <el-tooltip
@@ -617,33 +458,21 @@ onBeforeUnmount(() => {
             aria-label="重做"
             size="small"
             :disabled="formattingDisabled || !canRedo"
-            @click="run(redoCommand)"
+            @click="redoSource"
             ><el-icon><RefreshRight /></el-icon></el-button
         ></el-tooltip>
-        <el-tooltip content="保存（Ctrl+S）" placement="top" :trigger="tooltipTriggers"
-          ><el-button
-            class="knowledge-document-editor__action-button"
-            aria-label="保存"
-            size="small"
-            type="primary"
-            :disabled="!canSave || saving"
-            :loading="saving"
-            @click="emit('save')"
-            >{{ saving ? '保存中…' : '保存' }}</el-button
-          ></el-tooltip
-        >
       </div>
       <div class="knowledge-document-editor__tool-group knowledge-document-editor__workspace-group">
-        <el-tooltip content="编辑" placement="top" :trigger="tooltipTriggers"
+        <el-tooltip content="编辑源码" placement="top" :trigger="tooltipTriggers"
           ><el-button
             class="knowledge-document-editor__action-button"
-            aria-label="编辑"
+            aria-label="编辑源码"
             :aria-pressed="!previewing"
             size="small"
             :type="previewing ? 'default' : 'primary'"
             plain
             @click="emit('edit')"
-            ><el-icon><EditPen /></el-icon>编辑</el-button
+            >源码</el-button
           ></el-tooltip
         >
         <el-tooltip content="预览" placement="top" :trigger="tooltipTriggers"
@@ -660,88 +489,82 @@ onBeforeUnmount(() => {
         >
         <el-tooltip :content="fullscreenLabel" placement="top" :trigger="tooltipTriggers"
           ><el-button
-            class="knowledge-document-editor__action-button"
+            class="knowledge-document-editor__icon-button"
             :aria-label="fullscreenLabel"
             :aria-pressed="fullscreen"
             size="small"
             @click="emit('toggle-fullscreen')"
-            ><el-icon><FullScreen /></el-icon>{{ fullscreenLabel }}</el-button
-          ></el-tooltip
-        >
+            ><el-icon><FullScreen /></el-icon></el-button
+        ></el-tooltip>
       </div>
     </div>
 
     <div
-      v-if="inTable && !previewing"
-      class="knowledge-document-editor__table-tools"
-      role="toolbar"
-      aria-label="表格操作"
-    >
-      <span>表格操作</span>
-      <el-tooltip content="下方添加行" placement="top" :trigger="tooltipTriggers"
-        ><el-button aria-label="下方添加行" size="small" @click="run(addRowAfterCommand)"
-          >+ 行</el-button
-        ></el-tooltip
-      >
-      <el-tooltip content="删除当前行" placement="top" :trigger="tooltipTriggers"
-        ><el-button
-          aria-label="删除当前行"
-          size="small"
-          :disabled="!canDeleteTableRow"
-          @click="run(deleteTableRowCommand)"
-          >− 行</el-button
-        ></el-tooltip
-      >
-      <el-tooltip content="右侧添加列" placement="top" :trigger="tooltipTriggers"
-        ><el-button aria-label="右侧添加列" size="small" @click="run(addColAfterCommand)"
-          >+ 列</el-button
-        ></el-tooltip
-      >
-      <el-tooltip content="删除当前列" placement="top" :trigger="tooltipTriggers"
-        ><el-button
-          aria-label="删除当前列"
-          size="small"
-          :disabled="!canDeleteTableColumn"
-          @click="run(deleteTableColumnCommand)"
-          >− 列</el-button
-        ></el-tooltip
-      >
-      <el-tooltip content="删除整个表格" placement="top" :trigger="tooltipTriggers"
-        ><el-button
-          aria-label="删除整个表格"
-          size="small"
-          type="danger"
-          plain
-          @click="run(deleteCurrentTableCommand)"
-          >删除表格</el-button
-        ></el-tooltip
-      >
-    </div>
-
-    <p v-if="initializationError" class="knowledge-document-error">
-      编辑器加载失败，请刷新后重试。
-    </p>
-    <div v-show="!previewing" ref="editorRoot" class="knowledge-document-editor__surface"></div>
+      v-show="!previewing"
+      ref="editorRoot"
+      class="knowledge-document-editor__source"
+      aria-label="Markdown 原始源码"
+    ></div>
     <div v-show="previewing" class="knowledge-document-editor__preview" aria-live="polite">
       <p class="knowledge-document-editor__preview-note">预览未保存内容</p>
       <KnowledgeDocumentMarkdown :markdown="model" />
     </div>
 
+    <el-dialog v-model="linkDialogOpen" title="插入链接" width="420px" append-to-body>
+      <el-form label-position="top">
+        <el-form-item label="URL" required
+          ><el-input v-model="linkUrl" aria-label="链接 URL" placeholder="https://example.com"
+        /></el-form-item>
+        <el-form-item label="显示文本"
+          ><el-input v-model="linkDisplayText" aria-label="链接显示文本"
+        /></el-form-item>
+        <el-form-item label="页面标题状态"
+          ><p class="knowledge-document-editor__dialog-status">
+            本阶段暂不自动读取页面标题。
+          </p></el-form-item
+        >
+      </el-form>
+      <p v-if="linkError" class="knowledge-document-error">{{ linkError }}</p>
+      <template #footer
+        ><el-button @click="linkDialogOpen = false">取消</el-button
+        ><el-button type="primary" @click="insertLinkFromDialog">插入链接</el-button></template
+      >
+    </el-dialog>
+
+    <el-dialog v-model="codeDialogOpen" title="插入代码块" width="420px" append-to-body>
+      <el-form label-position="top"
+        ><el-form-item label="代码语言"
+          ><el-select v-model="codeLanguage" filterable aria-label="代码语言"
+            ><el-option
+              v-for="language in codeLanguages"
+              :key="language.value"
+              :label="language.label"
+              :value="language.value" /></el-select></el-form-item
+      ></el-form>
+      <template #footer
+        ><el-button @click="codeDialogOpen = false">取消</el-button
+        ><el-button type="primary" @click="insertCodeFromDialog">插入代码块</el-button></template
+      >
+    </el-dialog>
+
     <el-dialog v-model="tableDialogOpen" title="插入表格" width="380px" append-to-body>
       <p class="knowledge-document-editor__dialog-help">选择 2×2 至 10×10；第一行为表头。</p>
       <div class="knowledge-document-editor__table-size">
         <label
-          >行数<el-input-number v-model="tableRows" :min="2" :max="10" aria-label="表格行数"
-        /></label>
-        <span>×</span>
-        <label
+          >行数<el-input-number
+            v-model="tableRows"
+            :min="2"
+            :max="10"
+            aria-label="表格行数" /></label
+        ><span>×</span
+        ><label
           >列数<el-input-number v-model="tableColumns" :min="2" :max="10" aria-label="表格列数"
         /></label>
       </div>
-      <template #footer>
-        <el-button @click="tableDialogOpen = false">取消</el-button>
-        <el-button type="primary" @click="insertTable">插入表格</el-button>
-      </template>
+      <template #footer
+        ><el-button @click="tableDialogOpen = false">取消</el-button
+        ><el-button type="primary" @click="insertTableFromDialog">插入表格</el-button></template
+      >
     </el-dialog>
   </section>
 </template>

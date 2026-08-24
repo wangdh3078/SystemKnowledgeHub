@@ -86,7 +86,17 @@ function openDialog(
 }
 
 function mountDialog() {
-  return mount(KnowledgeDocumentRestoreDialogContent, { global: { components } })
+  return mount(KnowledgeDocumentRestoreDialogContent, {
+    global: {
+      components,
+      stubs: {
+        KnowledgeDocumentMarkdown: {
+          props: ['markdown'],
+          template: '<div class="knowledge-markdown-content">{{ markdown }}</div>',
+        },
+      },
+    },
+  })
 }
 
 function button(wrapper: ReturnType<typeof mountDialog>, label: string) {
@@ -121,6 +131,8 @@ describe('KnowledgeDocumentRestoreDialogContent', () => {
     expect(wrapper.text()).toContain('迁移基线')
     expect(wrapper.text()).toContain('历史作者未知')
     expect(wrapper.text()).toContain('历史标题')
+    expect(wrapper.text()).toContain('历史正文预览')
+    expect(wrapper.get('.knowledge-markdown-content').text()).toBe('历史正文')
     expect(wrapper.text()).toContain('恢复不会删除后续修订')
     expect(wrapper.text()).toContain('系统会把该历史内容复制为新的当前版本，并创建新的修订')
 

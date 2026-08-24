@@ -13,6 +13,7 @@ import {
   type KnowledgeDocumentRevisionDetail,
   type RevisionOrigin,
 } from '../api/knowledgeDocumentContracts'
+import KnowledgeDocumentMarkdown from '../markdown/KnowledgeDocumentMarkdown.vue'
 
 interface RestoreDialogPayload {
   readonly document: KnowledgeDocumentDetail
@@ -35,8 +36,8 @@ const refreshing = ref(false)
 const currentDocument = ref<KnowledgeDocumentDetail | null>(null)
 const payload = computed(() => {
   const current = overlayStore.currentDialog
-  return current?.kind === 'restore-knowledge-document-revision'
-    && isRestoreDialogPayload(current.payload)
+  return current?.kind === 'restore-knowledge-document-revision' &&
+    isRestoreDialogPayload(current.payload)
     ? current.payload
     : null
 })
@@ -48,33 +49,40 @@ const reasonError = computed(() => {
   if (normalizedReason.value.length > 500) return '恢复原因不能超过 500 个字符。'
   return null
 })
-const sourceEqualsCurrent = computed(() => Boolean(
-  payload.value
-  && currentDocument.value
-  && payload.value.revision.title === currentDocument.value.title
-  && payload.value.revision.summary === currentDocument.value.summary
-  && payload.value.revision.bodyMarkdown === currentDocument.value.bodyMarkdown,
-))
-const restorable = computed(() => Boolean(
-  payload.value
-  && currentDocument.value?.lifecycleStatus === 'Draft'
-  && payload.value.revision.revisionNumber < currentDocument.value.currentRevisionNumber
-  && !sourceEqualsCurrent.value,
-))
-const canSubmit = computed(() => restorable.value
-  && reasonError.value === null
-  && !submitting.value
-  && !refreshing.value)
+const sourceEqualsCurrent = computed(() =>
+  Boolean(
+    payload.value &&
+    currentDocument.value &&
+    payload.value.revision.title === currentDocument.value.title &&
+    payload.value.revision.summary === currentDocument.value.summary &&
+    payload.value.revision.bodyMarkdown === currentDocument.value.bodyMarkdown,
+  ),
+)
+const restorable = computed(() =>
+  Boolean(
+    payload.value &&
+    currentDocument.value?.lifecycleStatus === 'Draft' &&
+    payload.value.revision.revisionNumber < currentDocument.value.currentRevisionNumber &&
+    !sourceEqualsCurrent.value,
+  ),
+)
+const canSubmit = computed(
+  () => restorable.value && reasonError.value === null && !submitting.value && !refreshing.value,
+)
 
-watch(payload, (value) => {
-  reason.value = ''
-  submitting.value = false
-  errorMessage.value = null
-  reasonServerError.value = null
-  conflict.value = false
-  refreshing.value = false
-  currentDocument.value = value?.document ?? null
-}, { immediate: true })
+watch(
+  payload,
+  (value) => {
+    reason.value = ''
+    submitting.value = false
+    errorMessage.value = null
+    reasonServerError.value = null
+    conflict.value = false
+    refreshing.value = false
+    currentDocument.value = value?.document ?? null
+  },
+  { immediate: true },
+)
 
 function isJsonObject(value: unknown): value is Readonly<Record<string, unknown>> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -84,20 +92,22 @@ function isRestoreDialogPayload(value: unknown): value is RestoreDialogPayload {
   if (!isJsonObject(value) || !isJsonObject(value.document) || !isJsonObject(value.revision)) {
     return false
   }
-  return typeof value.document.id === 'number'
-    && isSafeApiId(value.document.id)
-    && typeof value.document.currentRevisionNumber === 'number'
-    && isSafeApiId(value.document.currentRevisionNumber)
-    && typeof value.document.concurrencyToken === 'string'
-    && (value.document.lifecycleStatus === 'Draft'
-      || value.document.lifecycleStatus === 'Published'
-      || value.document.lifecycleStatus === 'Archived')
-    && typeof value.revision.revisionNumber === 'number'
-    && isSafeApiId(value.revision.revisionNumber)
-    && value.revision.knowledgeDocumentId === value.document.id
-    && typeof value.revision.title === 'string'
-    && (value.revision.summary === null || typeof value.revision.summary === 'string')
-    && typeof value.revision.bodyMarkdown === 'string'
+  return (
+    typeof value.document.id === 'number' &&
+    isSafeApiId(value.document.id) &&
+    typeof value.document.currentRevisionNumber === 'number' &&
+    isSafeApiId(value.document.currentRevisionNumber) &&
+    typeof value.document.concurrencyToken === 'string' &&
+    (value.document.lifecycleStatus === 'Draft' ||
+      value.document.lifecycleStatus === 'Published' ||
+      value.document.lifecycleStatus === 'Archived') &&
+    typeof value.revision.revisionNumber === 'number' &&
+    isSafeApiId(value.revision.revisionNumber) &&
+    value.revision.knowledgeDocumentId === value.document.id &&
+    typeof value.revision.title === 'string' &&
+    (value.revision.summary === null || typeof value.revision.summary === 'string') &&
+    typeof value.revision.bodyMarkdown === 'string'
+  )
 }
 
 function formatDate(value: string): string {
@@ -111,12 +121,16 @@ function authorLabel(revision: KnowledgeDocumentRevisionDetail): string {
 }
 
 function announceCurrentRefresh(document: KnowledgeDocumentDetail): void {
-  window.dispatchEvent(new CustomEvent('knowledge-document:current-refreshed', {
-    detail: { document },
-  }))
-  window.dispatchEvent(new CustomEvent('knowledge-document:history-refresh', {
-    detail: { documentId: document.id },
-  }))
+  window.dispatchEvent(
+    new CustomEvent('knowledge-document:current-refreshed', {
+      detail: { document },
+    }),
+  )
+  window.dispatchEvent(
+    new CustomEvent('knowledge-document:history-refresh', {
+      detail: { documentId: document.id },
+    }),
+  )
 }
 
 async function refreshCurrent(): Promise<KnowledgeDocumentDetail | null> {
@@ -129,9 +143,8 @@ async function refreshCurrent(): Promise<KnowledgeDocumentDetail | null> {
     announceCurrentRefresh(latest)
     return latest
   } catch (error: unknown) {
-    errorMessage.value = error instanceof Error
-      ? `重新加载失败：${error.message}`
-      : '重新加载当前文档失败。'
+    errorMessage.value =
+      error instanceof Error ? `重新加载失败：${error.message}` : '重新加载当前文档失败。'
     return null
   } finally {
     refreshing.value = false
@@ -167,9 +180,11 @@ async function submit(): Promise<void> {
     )
     const sourceRevisionNumber = payload.value.revision.revisionNumber
     overlayStore.closeDialog()
-    window.dispatchEvent(new CustomEvent('knowledge-document:restored', {
-      detail: { document: restored, sourceRevisionNumber },
-    }))
+    window.dispatchEvent(
+      new CustomEvent('knowledge-document:restored', {
+        detail: { document: restored, sourceRevisionNumber },
+      }),
+    )
   } catch (error: unknown) {
     if (error instanceof ApiError) {
       if (error.status === 400) {
@@ -197,28 +212,58 @@ async function submit(): Promise<void> {
 </script>
 
 <template>
-  <section v-if="payload && currentDocument" class="knowledge-document-restore-dialog" aria-labelledby="restore-dialog-title">
+  <section
+    v-if="payload && currentDocument"
+    class="knowledge-document-restore-dialog"
+    aria-labelledby="restore-dialog-title"
+  >
     <header>
       <div>
         <small>历史内容恢复</small>
         <h2 id="restore-dialog-title">恢复修订 {{ payload.revision.revisionNumber }}</h2>
-        <p>当前版本：修订 {{ currentDocument.currentRevisionNumber }} · {{ lifecycleLabels[currentDocument.lifecycleStatus] }}</p>
+        <p>
+          当前版本：修订 {{ currentDocument.currentRevisionNumber }} ·
+          {{ lifecycleLabels[currentDocument.lifecycleStatus] }}
+        </p>
       </div>
       <button type="button" aria-label="关闭恢复确认" @click="overlayStore.closeDialog">×</button>
     </header>
 
     <dl class="knowledge-document-restore-dialog__snapshot">
-      <div><dt>来源</dt><dd>{{ originLabels[payload.revision.revisionOrigin] }}</dd></div>
-      <div><dt>作者快照</dt><dd>{{ authorLabel(payload.revision) }}</dd></div>
-      <div><dt>生成时间</dt><dd>{{ formatDate(payload.revision.createdAt) }}</dd></div>
-      <div><dt>历史标题</dt><dd>{{ payload.revision.title }}</dd></div>
-      <div><dt>历史摘要</dt><dd>{{ payload.revision.summary ?? '（空）' }}</dd></div>
+      <div>
+        <dt>来源</dt>
+        <dd>{{ originLabels[payload.revision.revisionOrigin] }}</dd>
+      </div>
+      <div>
+        <dt>作者快照</dt>
+        <dd>{{ authorLabel(payload.revision) }}</dd>
+      </div>
+      <div>
+        <dt>生成时间</dt>
+        <dd>{{ formatDate(payload.revision.createdAt) }}</dd>
+      </div>
+      <div>
+        <dt>历史标题</dt>
+        <dd>{{ payload.revision.title }}</dd>
+      </div>
+      <div>
+        <dt>历史摘要</dt>
+        <dd>{{ payload.revision.summary ?? '（空）' }}</dd>
+      </div>
     </dl>
 
     <div class="knowledge-document-restore-dialog__warning" role="note">
       <strong>恢复不会删除后续修订。</strong>
       <p>系统会把该历史内容复制为新的当前版本，并创建新的修订。</p>
     </div>
+
+    <section
+      class="knowledge-document-restore-dialog__preview"
+      aria-labelledby="restore-preview-title"
+    >
+      <h3 id="restore-preview-title">历史正文预览</h3>
+      <KnowledgeDocumentMarkdown :markdown="payload.revision.bodyMarkdown" />
+    </section>
 
     <label class="knowledge-document-restore-dialog__reason">
       <span>恢复原因 <b aria-hidden="true">*</b></span>
@@ -231,16 +276,24 @@ async function submit(): Promise<void> {
         placeholder="说明为什么需要恢复该历史内容（5～500 个字符）"
         @input="reasonServerError = null"
       />
-      <small :class="{ 'is-error': reasonError }">{{ reasonError ?? `${normalizedReason.length} / 500` }}</small>
+      <small :class="{ 'is-error': reasonError }">{{
+        reasonError ?? `${normalizedReason.length} / 500`
+      }}</small>
     </label>
 
     <p v-if="sourceEqualsCurrent" class="knowledge-document-restore-dialog__error" role="alert">
       所选历史修订内容与当前版本相同，不能创建虚假恢复修订。
     </p>
-    <p v-else-if="currentDocument.lifecycleStatus !== 'Draft'" class="knowledge-document-restore-dialog__error" role="alert">
+    <p
+      v-else-if="currentDocument.lifecycleStatus !== 'Draft'"
+      class="knowledge-document-restore-dialog__error"
+      role="alert"
+    >
       当前文档不处于草稿状态，无法恢复历史内容。
     </p>
-    <p v-if="errorMessage" class="knowledge-document-restore-dialog__error" role="alert">{{ errorMessage }}</p>
+    <p v-if="errorMessage" class="knowledge-document-restore-dialog__error" role="alert">
+      {{ errorMessage }}
+    </p>
 
     <footer>
       <el-button :disabled="submitting" @click="overlayStore.closeDialog">取消</el-button>
@@ -249,13 +302,11 @@ async function submit(): Promise<void> {
         :loading="refreshing"
         :disabled="submitting"
         @click="reloadAfterConflict"
-      >重新加载最新内容</el-button>
-      <el-button
-        type="primary"
-        :loading="submitting"
-        :disabled="!canSubmit"
-        @click="submit"
-      >恢复并创建新修订</el-button>
+        >重新加载最新内容</el-button
+      >
+      <el-button type="primary" :loading="submitting" :disabled="!canSubmit" @click="submit"
+        >恢复并创建新修订</el-button
+      >
     </footer>
   </section>
 </template>

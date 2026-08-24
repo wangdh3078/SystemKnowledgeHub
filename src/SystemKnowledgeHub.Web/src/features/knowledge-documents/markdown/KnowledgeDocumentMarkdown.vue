@@ -31,7 +31,11 @@ watch(renderedHtml, hydrateRenderedMarkdown, { flush: 'post' })
 </script>
 
 <template>
-  <div ref="rootElement" class="knowledge-document-markdown" v-html="renderedHtml"></div>
+  <div
+    ref="rootElement"
+    class="knowledge-document-markdown knowledge-markdown-content"
+    v-html="renderedHtml"
+  ></div>
 </template>
 
 <style scoped>

@@ -275,12 +275,6 @@ function returnToCurrentContent(): void {
 function fieldError(field: string): string | null {
   return validationErrors.value[field]?.[0] ?? null
 }
-function syncEditorInitialValue(markdown: string): void {
-  editBodyMarkdown.value = markdown
-  if (initialEdit.value) {
-    initialEdit.value = { ...initialEdit.value, bodyMarkdown: markdown }
-  }
-}
 async function performSave(): Promise<void> {
   if (!data.value || !editing.value || !dirty.value || !titleValid.value || saving.value) return
   saving.value = true
@@ -626,12 +620,9 @@ onBeforeUnmount(() => {
           v-model="editBodyMarkdown"
           :previewing="previewing"
           :fullscreen="editorFullscreen"
-          :can-save="canSave"
-          :saving="saving"
-          @ready="syncEditorInitialValue"
-          @save="requestSave"
           @edit="previewing = false"
           @preview="previewing = true"
+          @request-save="requestSave"
           @toggle-fullscreen="editorFullscreen = !editorFullscreen"
         />
         <p v-if="fieldError('bodyMarkdown')" class="knowledge-document-error">

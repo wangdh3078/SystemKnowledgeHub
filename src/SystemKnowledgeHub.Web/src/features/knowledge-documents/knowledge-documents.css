@@ -1,3 +1,5 @@
+@import './markdown/knowledge-markdown-theme.css';
+
 .knowledge-documents-page,
 .knowledge-document-detail-page {
   width: 100%;
@@ -88,6 +90,23 @@
 }
 .knowledge-document-create__form .el-select {
   width: 100%;
+}
+.knowledge-document-create-dialog .el-dialog {
+  display: flex;
+  flex-direction: column;
+  max-height: min(92vh, 960px);
+}
+.knowledge-document-create-dialog .el-dialog__body {
+  min-height: 0;
+  overflow: auto;
+}
+.knowledge-document-create__body {
+  margin-top: 20px;
+}
+.knowledge-document-create__body h2 {
+  margin: 0 0 10px;
+  color: var(--color-ink);
+  font-size: 15px;
 }
 .knowledge-document-error {
   margin: 12px 0 0;
@@ -266,8 +285,8 @@ body.knowledge-document-editor-fullscreen-active {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 5px;
-  padding: 9px 11px;
+  gap: 3px;
+  padding: 4px 8px;
   border-bottom: 1px solid var(--color-border);
   background: #fafbfe;
 }
@@ -276,7 +295,7 @@ body.knowledge-document-editor-fullscreen-active {
   flex: 0 0 auto;
   align-items: center;
   gap: 2px;
-  padding: 0 7px;
+  padding: 0 5px;
   border-right: 1px solid var(--color-border);
   white-space: nowrap;
 }
@@ -288,8 +307,8 @@ body.knowledge-document-editor-fullscreen-active {
   border-right: 0;
 }
 .knowledge-document-editor__icon-button {
-  width: 30px;
-  height: 30px;
+  width: 29px;
+  height: 29px;
   padding: 0;
   border: 0;
   border-radius: 6px;
@@ -327,9 +346,9 @@ body.knowledge-document-editor-fullscreen-active {
   font-weight: 780;
 }
 .knowledge-document-editor__placeholder-button {
-  height: 30px;
-  padding: 0 8px;
-  font-size: 11px;
+  width: 29px;
+  height: 29px;
+  padding: 0;
 }
 .knowledge-document-editor__disabled-tooltip {
   display: inline-flex;
@@ -339,108 +358,52 @@ body.knowledge-document-editor-fullscreen-active {
 .knowledge-document-editor__disabled-tooltip:focus-visible {
   box-shadow: 0 0 0 2px rgb(99 91 197 / 18%);
 }
-.knowledge-document-editor__color-select {
-  width: 90px;
-}
-.knowledge-document-editor__clear-color {
-  width: auto;
-  min-width: 31px;
-  padding: 0 5px;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 720;
-}
-.knowledge-document-editor__palette-option {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-}
-.knowledge-document-editor__palette-option i {
-  width: 12px;
-  height: 12px;
-  border: 1px solid rgb(31 40 54 / 14%);
-  border-radius: 3px;
-}
 .knowledge-document-editor__action-button {
-  min-width: 54px;
+  min-width: 48px;
 }
 .knowledge-document-editor__action-button + .knowledge-document-editor__action-button {
   margin-left: 2px;
 }
-.knowledge-document-editor__table-tools {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 12px;
-  border-bottom: 1px solid var(--color-border);
-  background: #f5f7fb;
-}
-.knowledge-document-editor__table-tools > span {
-  margin-right: 3px;
-  color: var(--color-muted);
-  font-size: 11px;
-  font-weight: 680;
-}
-.knowledge-document-editor__surface {
+.knowledge-document-editor__source {
   min-width: 0;
   min-height: 500px;
-  padding: 20px 24px;
-  color: var(--color-text);
-  font-size: 14px;
-  line-height: 1.75;
-  text-align: left;
+  background: #fcfcfd;
 }
-.knowledge-document-editor.is-fullscreen .knowledge-document-editor__surface,
+.knowledge-document-editor.is-fullscreen .knowledge-document-editor__source,
 .knowledge-document-editor.is-fullscreen .knowledge-document-editor__preview {
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
 }
-.knowledge-document-editor__surface .milkdown {
-  width: 100%;
-  min-width: 0;
-}
-.knowledge-document-editor__surface .ProseMirror {
+.knowledge-document-editor__source .cm-editor {
   box-sizing: border-box;
   width: 100%;
-  max-width: none;
-  min-height: 455px;
-  margin: 0;
+  min-height: 500px;
   outline: none;
-  text-align: left;
-  white-space: pre-wrap;
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  line-height: 1.7;
 }
-.knowledge-document-editor__surface .ProseMirror h1,
-.knowledge-document-editor__surface .ProseMirror h2,
-.knowledge-document-editor__surface .ProseMirror h3,
-.knowledge-document-editor__surface .ProseMirror h4,
-.knowledge-document-editor__surface .ProseMirror h5,
-.knowledge-document-editor__surface .ProseMirror h6 {
-  color: var(--color-ink);
+.knowledge-document-editor__source .cm-scroller {
+  min-height: 500px;
+  padding: 18px 20px;
+  overflow: auto;
+  font-family: var(--font-mono);
 }
-.knowledge-document-editor__surface .ProseMirror pre {
-  overflow-x: auto;
-  padding: 12px;
-  border-radius: var(--radius-sm);
-  background: #252a35;
-  color: #edf2f7;
+.knowledge-document-editor__source .cm-content {
+  caret-color: var(--color-primary);
 }
-.knowledge-document-editor__surface .ProseMirror table {
-  width: 100%;
-  border-collapse: collapse;
+.knowledge-document-editor__source .cm-focused {
+  outline: none;
 }
-.knowledge-document-editor__surface .ProseMirror th,
-.knowledge-document-editor__surface .ProseMirror td {
-  min-width: 72px;
-  padding: 7px;
-  border: 1px solid var(--color-border-strong);
-}
-.knowledge-document-editor__surface .ProseMirror .selectedCell::after {
-  background: rgb(99 91 197 / 10%);
-}
-.knowledge-document-editor__surface .ProseMirror li[data-item-type='task'] {
-  list-style: none;
+.knowledge-document-editor__source .cm-selectionBackground,
+.knowledge-document-editor__source
+  .cm-focused
+  > .cm-scroller
+  > .cm-selectionLayer
+  .cm-selectionBackground {
+  background: rgb(99 91 197 / 22%);
 }
 .knowledge-document-editor__preview {
   min-height: 500px;
@@ -453,6 +416,11 @@ body.knowledge-document-editor-fullscreen-active {
   color: var(--color-muted);
   font-size: 11px;
   font-weight: 650;
+}
+.knowledge-document-editor__dialog-status {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 12px;
 }
 .knowledge-document-editor__dialog-help {
   margin: 0 0 16px;
@@ -1255,6 +1223,20 @@ body.knowledge-document-editor-fullscreen-active {
   margin: 5px 0 0;
   font-size: 12px;
 }
+.knowledge-document-restore-dialog__preview {
+  max-height: 280px;
+  margin-top: 16px;
+  padding: 0 14px;
+  overflow: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: #fff;
+}
+.knowledge-document-restore-dialog__preview h3 {
+  margin: 14px 0 0;
+  color: var(--color-ink);
+  font-size: 14px;
+}
 .knowledge-document-restore-dialog__reason {
   display: grid;
   margin-top: 16px;
@@ -1299,10 +1281,7 @@ body.knowledge-document-editor-fullscreen-active {
     padding-right: 4px;
     padding-left: 4px;
   }
-  .knowledge-document-editor__color-select {
-    width: 86px;
-  }
-  .knowledge-document-editor__surface,
+  .knowledge-document-editor__source .cm-scroller,
   .knowledge-document-editor__preview {
     padding-right: 18px;
     padding-left: 18px;
