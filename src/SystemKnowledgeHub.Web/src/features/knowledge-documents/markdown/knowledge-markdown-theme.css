@@ -147,6 +147,42 @@
   white-space: pre;
 }
 
+.knowledge-markdown-content .knowledge-document-code-card__body .hljs-comment,
+.knowledge-markdown-content .knowledge-document-code-card__body .hljs-quote {
+  color: #6a737d;
+}
+
+.knowledge-markdown-content .knowledge-document-code-card__body .hljs-keyword,
+.knowledge-markdown-content .knowledge-document-code-card__body .hljs-selector-tag,
+.knowledge-markdown-content .knowledge-document-code-card__body .hljs-literal,
+.knowledge-markdown-content .knowledge-document-code-card__body .hljs-section {
+  color: #8a3ffc;
+}
+
+.knowledge-markdown-content .knowledge-document-code-card__body .hljs-string,
+.knowledge-markdown-content .knowledge-document-code-card__body .hljs-attr,
+.knowledge-markdown-content .knowledge-document-code-card__body .hljs-template-variable {
+  color: #0f766e;
+}
+
+.knowledge-markdown-content .knowledge-document-code-card__body .hljs-number,
+.knowledge-markdown-content .knowledge-document-code-card__body .hljs-built_in,
+.knowledge-markdown-content .knowledge-document-code-card__body .hljs-symbol,
+.knowledge-markdown-content .knowledge-document-code-card__body .hljs-bullet {
+  color: #b54708;
+}
+
+.knowledge-markdown-content .knowledge-document-code-card__body .hljs-title,
+.knowledge-markdown-content .knowledge-document-code-card__body .hljs-title.function_,
+.knowledge-markdown-content .knowledge-document-code-card__body .hljs-function .hljs-title {
+  color: #1d4ed8;
+}
+
+.knowledge-markdown-content .knowledge-document-code-card__body .hljs-type,
+.knowledge-markdown-content .knowledge-document-code-card__body .hljs-class .hljs-title {
+  color: #a21caf;
+}
+
 .knowledge-markdown-content .knowledge-document-code-card.is-collapsed .knowledge-document-code-card__body {
   display: none;
 }

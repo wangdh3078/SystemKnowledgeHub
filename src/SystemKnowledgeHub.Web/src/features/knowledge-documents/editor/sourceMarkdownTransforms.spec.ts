@@ -5,6 +5,7 @@ import {
   insertHorizontalRule,
   insertLink,
   insertMermaid,
+  insertMermaidDiagram,
   insertTable,
   toggleBulletList,
   toggleInlineWrap,
@@ -62,7 +63,25 @@ describe('source Markdown toolbar transforms', () => {
     expect(insertTable('', selection(0), 3, 2).source).toBe(
       '| 列1 | 列2 |\n| --- | --- |\n| 内容 | 内容 |\n| 内容 | 内容 |',
     )
-    expect(insertMermaid('', selection(0)).source).toContain('```mermaid\nflowchart LR')
+    expect(insertMermaid('', selection(0)).source).toContain('```mermaid\nflowchart TD')
     expect(insertHorizontalRule('正文', selection(0)).source).toBe('正文\n\n---\n')
+  })
+
+  it.each([
+    ['flowchart', 'flowchart TD'],
+    ['sequence', 'sequenceDiagram'],
+    ['gantt', 'gantt'],
+    ['class', 'classDiagram'],
+    ['state', 'stateDiagram-v2'],
+    ['pie', 'pie title 分布'],
+    ['er', 'erDiagram'],
+    ['journey', 'journey'],
+  ] as const)('inserts the %s Mermaid template directly into raw source', (diagramType, marker) => {
+    const inserted = insertMermaidDiagram('前缀后缀', selection(2), diagramType)
+
+    expect(inserted.source).toContain(`\`\`\`mermaid\n${marker}`)
+    expect(inserted.source.startsWith('前缀```mermaid\n')).toBe(true)
+    expect(inserted.source.endsWith('```后缀')).toBe(true)
+    expect(inserted.selection).toEqual({ anchor: 2 + '```mermaid\n'.length, head: 2 + '```mermaid\n'.length })
   })
 })

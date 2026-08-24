@@ -221,14 +221,99 @@ export function insertTable(
   return insertMarkdown(source, selection, [row(header), row(divider), ...body.map(row)].join('\n'))
 }
 
-export const DEFAULT_MERMAID_MARKDOWN = `\`\`\`mermaid
-flowchart LR
-  A[开始] --> B[结束]
-\`\`\``
+export type MermaidDiagramType =
+  | 'flowchart'
+  | 'sequence'
+  | 'gantt'
+  | 'class'
+  | 'state'
+  | 'pie'
+  | 'er'
+  | 'journey'
+
+export const mermaidDiagramTemplates: Readonly<Record<MermaidDiagramType, string>> = {
+  flowchart: `\`\`\`mermaid
+flowchart TD
+  A[开始] --> B{判断}
+  B -->|是| C[处理]
+  B -->|否| D[结束]
+\`\`\``,
+  sequence: `\`\`\`mermaid
+sequenceDiagram
+  participant U as 用户
+  participant S as 系统
+  U->>S: 提交请求
+  S-->>U: 返回结果
+\`\`\``,
+  gantt: `\`\`\`mermaid
+gantt
+  title 项目计划
+  dateFormat  YYYY-MM-DD
+  section 阶段一
+  需求分析 :a1, 2025-01-01, 3d
+  开发实现 :after a1, 5d
+\`\`\``,
+  class: `\`\`\`mermaid
+classDiagram
+  class User {
+    +String name
+    +login()
+  }
+  class Order
+  User --> Order
+\`\`\``,
+  state: `\`\`\`mermaid
+stateDiagram-v2
+  [*] --> 草稿
+  草稿 --> 已发布: 发布
+  已发布 --> 已归档: 归档
+\`\`\``,
+  pie: `\`\`\`mermaid
+pie title 分布
+  "已完成" : 60
+  "进行中" : 30
+  "待开始" : 10
+\`\`\``,
+  er: `\`\`\`mermaid
+erDiagram
+  USER ||--o{ ORDER : places
+  USER {
+    int id
+    string name
+  }
+  ORDER {
+    int id
+    int user_id
+  }
+\`\`\``,
+  journey: `\`\`\`mermaid
+journey
+  title 用户旅程
+  section 登录
+    输入账号: 5: 用户
+    验证身份: 4: 系统
+  section 使用
+    查看内容: 5: 用户
+\`\`\``,
+}
+
+export const DEFAULT_MERMAID_MARKDOWN = mermaidDiagramTemplates.flowchart
+
+export function insertMermaidDiagram(
+  source: string,
+  selection: MarkdownSourceSelection,
+  diagramType: MermaidDiagramType,
+): MarkdownSourceTransformResult {
+  const { from, to } = normalizedSelection(source, selection)
+  const markdown = mermaidDiagramTemplates[diagramType]
+  const updated = `${source.slice(0, from)}${markdown}${source.slice(to)}`
+  const caret = from + '```mermaid\n'.length
+  return result(updated, caret)
+}
 
 export function insertMermaid(
   source: string,
   selection: MarkdownSourceSelection,
 ): MarkdownSourceTransformResult {
-  return insertMarkdown(source, selection, DEFAULT_MERMAID_MARKDOWN)
+  return insertMermaidDiagram(source, selection, 'flowchart')
 }

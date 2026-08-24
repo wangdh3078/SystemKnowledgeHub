@@ -286,7 +286,7 @@ body.knowledge-document-editor-fullscreen-active {
   flex-wrap: wrap;
   align-items: center;
   gap: 3px;
-  padding: 4px 8px;
+  padding: 3px 6px;
   border-bottom: 1px solid var(--color-border);
   background: #fafbfe;
 }
@@ -294,8 +294,8 @@ body.knowledge-document-editor-fullscreen-active {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
-  gap: 2px;
-  padding: 0 5px;
+  gap: 1px;
+  padding: 0 3px;
   border-right: 1px solid var(--color-border);
   white-space: nowrap;
 }
@@ -306,15 +306,51 @@ body.knowledge-document-editor-fullscreen-active {
   padding-right: 0;
   border-right: 0;
 }
-.knowledge-document-editor__icon-button {
-  width: 29px;
-  height: 29px;
-  padding: 0;
-  border: 0;
+.knowledge-document-editor__diagram-menu {
+  position: relative;
+  display: inline-flex;
+}
+.knowledge-document-editor__diagram-menu-popover {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 4px);
+  left: 0;
+  display: grid;
+  min-width: 112px;
+  padding: 4px;
+  border: 1px solid var(--color-border);
   border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 8px 20px rgb(31 40 54 / 14%);
+}
+.knowledge-document-editor__diagram-menu-popover button {
+  min-height: 28px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 4px;
   background: transparent;
   color: var(--color-text);
-  font-size: 15px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  white-space: nowrap;
+}
+.knowledge-document-editor__diagram-menu-popover button:hover,
+.knowledge-document-editor__diagram-menu-popover button:focus-visible {
+  background: rgb(99 91 197 / 10%);
+  color: var(--color-primary);
+  outline: none;
+}
+.knowledge-document-editor__icon-button {
+  width: 27px;
+  height: 27px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--color-text);
+  font-size: 14px;
 }
 .knowledge-document-editor__icon-button:hover,
 .knowledge-document-editor__icon-button:focus-visible {
@@ -322,8 +358,8 @@ body.knowledge-document-editor-fullscreen-active {
   color: var(--color-primary);
 }
 .knowledge-document-editor__icon-button .svg-inline--fa {
-  width: 16px;
-  height: 16px;
+  width: 15px;
+  height: 15px;
   vertical-align: -0.1em;
 }
 .knowledge-document-editor__view-button[aria-pressed='true'] {
@@ -337,11 +373,11 @@ body.knowledge-document-editor-fullscreen-active {
   color: #fff;
 }
 .knowledge-document-editor__block-select {
-  width: 94px;
+  width: 88px;
 }
 .knowledge-document-editor__placeholder-button {
-  width: 29px;
-  height: 29px;
+  width: 27px;
+  height: 27px;
   padding: 0;
 }
 .knowledge-document-editor__disabled-tooltip {
@@ -1263,11 +1299,11 @@ body.knowledge-document-editor-fullscreen-active {
 @media (max-width: 1100px) {
   .knowledge-document-editor__toolbar {
     gap: 3px;
-    padding: 8px;
+    padding: 4px 6px;
   }
   .knowledge-document-editor__tool-group {
-    padding-right: 4px;
-    padding-left: 4px;
+    padding-right: 3px;
+    padding-left: 3px;
   }
   .knowledge-document-editor__source .cm-scroller,
   .knowledge-document-editor__preview {

@@ -1,6 +1,6 @@
 # KnowledgeDocument Markdown Source Editor Decision
 
-Status: **Frozen for UI-KC-B05-R03**  
+Status: **Frozen for UI-KC-B05-R05**
 Product: **系统知识中心 / System Knowledge Hub**
 
 ## Decision
@@ -23,7 +23,9 @@ No reusable source-editor dependency existed in the repository. The selected imp
 
 Toolbar actions transform the selected raw source or current source line. They do not manipulate rendered DOM marks or rich nodes. The toolbar has no Save action. Detail-page Save is the sole content write path and submits title, summary, and exact `bodyMarkdown` in one request; Ctrl/Cmd+S emits the same page-level save request.
 
-The source toolbar uses compact 28–30px icon controls grouped by block type, inline, list/quote, insert, history, and view controls. Unordered, ordered, and task list controls use distinct list, numbered-list, and checklist semantics. Source and Preview are icon-only controls with accessible labels/tooltips (`源码编辑` and `预览`) and explicit selected state; fullscreen remains icon-only. The toolbar does not show Save, text/background-color, or clear-color controls.
+The source toolbar uses compact 27px icon controls in a 34–38px single-row layout where width permits, grouped by block type, inline, list/quote, insert, history, and view controls. At narrower widths it may wrap without creating page-level horizontal overflow. Unordered, ordered, and task list controls use distinct list, numbered-list, and checklist semantics. Source and Preview are icon-only controls with accessible labels/tooltips (`源码编辑` and `预览`) and explicit selected state; fullscreen remains icon-only. The toolbar does not show Save, text/background-color, or clear-color controls.
+
+The diagram control is an `插入图表` menu. It inserts one of eight complete Mermaid fences directly into `bodyMarkdown`: Flowchart, Sequence, Gantt, Class, State, Pie, ER, and Journey. Templates are bounded local source transforms; no rendered SVG, editor plug-in state, or diagram metadata is persisted. The caret is placed inside the inserted fence immediately after its `mermaid` header so the template remains ordinary editable source.
 
 The create dialog has its own raw source editor and its only write action is `创建草稿`, which submits document type, title, summary, and exact source in one request.
 

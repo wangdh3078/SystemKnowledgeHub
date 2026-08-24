@@ -27,7 +27,43 @@ describe('renderMarkdown', () => {
     expect(rendered).toContain('data-knowledge-document-code-collapse')
     expect(rendered).toContain('data-icon="copy"')
     expect(rendered).toContain('data-icon="chevron-up"')
-    expect(rendered).toContain('SELECT 1;')
+    expect(rendered).toContain('<span class="hljs-keyword">SELECT</span>')
+    expect(rendered).toContain('<span class="hljs-number">1</span>;')
+  })
+
+  it.each([
+    ['plaintext', 'plain text', false],
+    ['csharp', 'public class Sample {}', true],
+    ['javascript', 'const total = 1;', true],
+    ['typescript', 'interface Item { id: number }', true],
+    ['json', '{"name":"value","enabled":true}', true],
+    ['sql', 'SELECT id FROM users;', true],
+    ['bash', 'echo "$HOME"', true],
+    ['powershell', 'Write-Host "ok"', true],
+    ['python', 'def hello():\n  return True', true],
+    ['java', 'public class Sample {}', true],
+    ['cpp', '#include <vector>', true],
+    ['c', '#include <stdio.h>', true],
+    ['go', 'package main', true],
+    ['rust', 'fn main() {}', true],
+    ['html', '<section>safe</section>', true],
+    ['xml', '<root><node /></root>', true],
+    ['css', '.card { color: red; }', true],
+    ['yaml', 'name: value', true],
+    ['markdown', '# Heading', true],
+    ['dockerfile', 'FROM alpine', true],
+  ] as const)('uses the selected %s highlighter without executing source', (language, source, highlighted) => {
+    const rendered = renderMarkdown(`\`\`\`${language}\n${source}\n\`\`\``)
+    const container = document.createElement('div')
+    container.innerHTML = rendered
+    const code = container.querySelector('code')
+
+    expect(code?.classList.contains(`language-${language}`)).toBe(true)
+    expect(code?.classList.contains('hljs')).toBe(true)
+    expect(code?.textContent).toBe(`${source}\n`)
+    expect(code?.querySelectorAll('span[class^="hljs-"]').length)
+      .toBeGreaterThanOrEqual(highlighted ? 1 : 0)
+    expect(container.querySelector('script')).toBeNull()
   })
 
   it('wraps GFM tables for responsive internal scrolling while preserving table semantics', () => {

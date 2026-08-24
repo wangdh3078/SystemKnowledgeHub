@@ -32,7 +32,7 @@ import {
   insertCodeBlock,
   insertHorizontalRule,
   insertLink,
-  insertMermaid,
+  insertMermaidDiagram,
   insertTable,
   toggleBulletList,
   toggleInlineWrap,
@@ -41,6 +41,7 @@ import {
   toggleTaskList,
   type MarkdownHeadingLevel,
   type MarkdownSourceTransformResult,
+  type MermaidDiagramType,
 } from './sourceMarkdownTransforms'
 
 const props = withDefaults(
@@ -114,12 +115,23 @@ const codeLanguages: ReadonlyArray<{ readonly value: CodeLanguage; readonly labe
   { value: 'markdown', label: 'Markdown' },
   { value: 'dockerfile', label: 'Dockerfile' },
 ]
+const diagramOptions: ReadonlyArray<{ readonly value: MermaidDiagramType; readonly label: string }> = [
+  { value: 'flowchart', label: '流程图' },
+  { value: 'sequence', label: '时序图' },
+  { value: 'gantt', label: '甘特图' },
+  { value: 'class', label: '类图' },
+  { value: 'state', label: '状态图' },
+  { value: 'pie', label: '饼图' },
+  { value: 'er', label: 'ER 图' },
+  { value: 'journey', label: '用户旅程' },
+]
 const tooltipTriggers: ('hover' | 'focus')[] = ['hover', 'focus']
 const editorRoot = ref<HTMLElement | null>(null)
 const sourceReady = ref(false)
 const tableDialogOpen = ref(false)
 const linkDialogOpen = ref(false)
 const codeDialogOpen = ref(false)
+const diagramMenuOpen = ref(false)
 const tableRows = ref(3)
 const tableColumns = ref(3)
 const codeLanguage = ref<CodeLanguage>('plaintext')
@@ -224,6 +236,18 @@ function insertTableFromDialog(): void {
     insertTable(source, selection, tableRows.value, tableColumns.value),
   )
   tableDialogOpen.value = false
+}
+
+function insertDiagramTemplate(value: unknown): void {
+  const option = diagramOptions.find((candidate) => candidate.value === value)
+  if (!option) return
+  applyTransform((source, selection) => insertMermaidDiagram(source, selection, option.value))
+  diagramMenuOpen.value = false
+}
+
+function toggleDiagramMenu(): void {
+  if (formattingDisabled.value) return
+  diagramMenuOpen.value = !diagramMenuOpen.value
 }
 
 function undoSource(): void {
@@ -419,16 +443,34 @@ onBeforeUnmount(() => {
             @click="openTableDialog"
             ><font-awesome-icon :icon="faTable" fixed-width /></el-button
         ></el-tooltip>
-        <el-tooltip content="插入 Mermaid" placement="top" :trigger="tooltipTriggers"
-          ><el-button
-            class="knowledge-document-editor__icon-button"
-            aria-label="插入 Mermaid"
-            size="small"
-            :disabled="formattingDisabled"
-            @click="applyTransform(insertMermaid)"
-            ><font-awesome-icon :icon="faDiagramProject" fixed-width /></el-button
-          ></el-tooltip
-        >
+        <div class="knowledge-document-editor__diagram-menu">
+          <el-tooltip content="插入图表" placement="top" :trigger="tooltipTriggers"
+            ><el-button
+              class="knowledge-document-editor__icon-button"
+              aria-label="插入图表"
+              aria-haspopup="menu"
+              :aria-expanded="diagramMenuOpen"
+              size="small"
+              :disabled="formattingDisabled"
+              @click="toggleDiagramMenu"
+              ><font-awesome-icon :icon="faDiagramProject" fixed-width /></el-button
+          ></el-tooltip>
+          <div
+            v-if="diagramMenuOpen"
+            class="knowledge-document-editor__diagram-menu-popover"
+            role="menu"
+            aria-label="图表类型"
+          >
+            <button
+              v-for="option in diagramOptions"
+              :key="option.value"
+              type="button"
+              role="menuitem"
+              @click="insertDiagramTemplate(option.value)"
+              >{{ option.label }}</button
+            >
+          </div>
+        </div>
         <el-tooltip content="插入分隔线" placement="top" :trigger="tooltipTriggers"
           ><el-button
             class="knowledge-document-editor__icon-button"

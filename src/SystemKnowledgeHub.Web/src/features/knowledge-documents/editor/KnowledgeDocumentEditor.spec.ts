@@ -85,7 +85,7 @@ describe('KnowledgeDocumentEditor', () => {
       ['插入代码块', 'file-code'],
       ['插入链接', 'link'],
       ['插入表格', 'table'],
-      ['插入 Mermaid', 'diagram-project'],
+      ['插入图表', 'diagram-project'],
       ['图片上传功能开发中', 'image'],
       ['撤销', 'rotate-left'],
       ['重做', 'rotate-right'],
@@ -104,6 +104,26 @@ describe('KnowledgeDocumentEditor', () => {
 
     await wrapper.setProps({ fullscreen: true })
     expect(wrapper.find('[aria-label="退出全屏"] svg[data-icon="compress"]').exists()).toBe(true)
+  })
+
+  it('exposes all eight Mermaid source templates in the compact diagram menu', async () => {
+    const wrapper = mountEditor()
+    await waitForSourceEditor(wrapper)
+
+    await wrapper.get('[aria-label="插入图表"]').trigger('click')
+
+    expect(wrapper.get('[role="menu"]').attributes('aria-label')).toBe('图表类型')
+    expect(wrapper.findAll('[role="menuitem"]')).toHaveLength(8)
+    expect(wrapper.findAll('[role="menuitem"]').map((item) => item.text())).toEqual([
+      '流程图',
+      '时序图',
+      '甘特图',
+      '类图',
+      '状态图',
+      '饼图',
+      'ER 图',
+      '用户旅程',
+    ])
   })
 
   it('emits the page-level save request from Ctrl/Cmd+S without a toolbar save control', async () => {

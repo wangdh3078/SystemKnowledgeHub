@@ -1,4 +1,23 @@
 import MarkdownIt from 'markdown-it'
+import hljs from 'highlight.js/lib/core'
+import bash from 'highlight.js/lib/languages/bash'
+import c from 'highlight.js/lib/languages/c'
+import cpp from 'highlight.js/lib/languages/cpp'
+import csharp from 'highlight.js/lib/languages/csharp'
+import css from 'highlight.js/lib/languages/css'
+import dockerfile from 'highlight.js/lib/languages/dockerfile'
+import go from 'highlight.js/lib/languages/go'
+import java from 'highlight.js/lib/languages/java'
+import javascript from 'highlight.js/lib/languages/javascript'
+import json from 'highlight.js/lib/languages/json'
+import markdown from 'highlight.js/lib/languages/markdown'
+import powershell from 'highlight.js/lib/languages/powershell'
+import python from 'highlight.js/lib/languages/python'
+import rust from 'highlight.js/lib/languages/rust'
+import sql from 'highlight.js/lib/languages/sql'
+import typescript from 'highlight.js/lib/languages/typescript'
+import xml from 'highlight.js/lib/languages/xml'
+import yaml from 'highlight.js/lib/languages/yaml'
 import { icon } from '@fortawesome/fontawesome-svg-core'
 import { faChevronDown, faChevronUp, faCopy } from '@fortawesome/free-solid-svg-icons'
 import { controlledColorMarkdownItPlugin } from './colorSyntax'
@@ -6,6 +25,59 @@ import { isLegacyBreakParagraph } from './legacyMarkdownBreaks'
 
 const renderer = new MarkdownIt({ html: false, linkify: true })
 renderer.use(controlledColorMarkdownItPlugin)
+
+const codeHighlightLanguages = {
+  bash,
+  c,
+  cpp,
+  csharp,
+  css,
+  dockerfile,
+  go,
+  java,
+  javascript,
+  json,
+  markdown,
+  powershell,
+  python,
+  rust,
+  sql,
+  typescript,
+  xml,
+  yaml,
+} as const
+
+Object.entries(codeHighlightLanguages).forEach(([name, definition]) => {
+  hljs.registerLanguage(name, definition)
+})
+
+const highlighterLanguageNames: Readonly<Record<string, string>> = {
+  bash: 'bash',
+  c: 'c',
+  cpp: 'cpp',
+  csharp: 'csharp',
+  css: 'css',
+  dockerfile: 'dockerfile',
+  go: 'go',
+  html: 'xml',
+  java: 'java',
+  javascript: 'javascript',
+  json: 'json',
+  markdown: 'markdown',
+  powershell: 'powershell',
+  python: 'python',
+  rust: 'rust',
+  sql: 'sql',
+  typescript: 'typescript',
+  xml: 'xml',
+  yaml: 'yaml',
+}
+
+function renderHighlightedCode(source: string, language: string): string {
+  const highlighterLanguage = highlighterLanguageNames[language]
+  if (!highlighterLanguage) return renderer.utils.escapeHtml(source)
+  return hljs.highlight(source, { language: highlighterLanguage, ignoreIllegals: true }).value
+}
 const codeCopyIcon = icon(faCopy, { classes: ['knowledge-document-code-card__control-icon'] }).html.join('')
 const codeCollapseIcon = icon(faChevronUp, {
   classes: ['knowledge-document-code-card__control-icon'],
@@ -87,12 +159,16 @@ renderer.renderer.rules.task_checkbox = (tokens, index) => {
 
 renderer.renderer.rules.fence = (tokens, index) => {
   const token = tokens[index]!
-  const declaredLanguage = token.info.trim().split(/\s+/u)[0]?.toLowerCase() ?? ''
-  const language = /^[a-z0-9_-]+$/u.test(declaredLanguage) ? declaredLanguage : ''
+  const declaredLanguage = token.info.trim().split(/\s+/u)[0] ?? ''
+  const normalizedDeclaredLanguage = declaredLanguage.toLowerCase()
+  const language = /^[a-z0-9_-]+$/u.test(normalizedDeclaredLanguage)
+    ? normalizedDeclaredLanguage
+    : ''
   if (language !== 'mermaid') {
-    const languageLabel = language || 'plain'
-    const source = renderer.utils.escapeHtml(token.content)
-    const languageClass = language ? ` language-${language}` : ''
+    const languageLabel = declaredLanguage || 'plain'
+    const source = renderHighlightedCode(token.content, language)
+    const languageClass = language ? `language-${language}` : ''
+    const codeClass = ['hljs', languageClass].filter(Boolean).join(' ')
     return [
       '<section class="knowledge-document-code-card" data-knowledge-document-code-card>',
       '<header class="knowledge-document-code-card__header">',
@@ -101,9 +177,7 @@ renderer.renderer.rules.fence = (tokens, index) => {
       `<button type="button" class="knowledge-document-code-card__copy" data-knowledge-document-code-copy aria-label="复制代码" title="复制代码">${codeCardIcons.copy}</button>`,
       `<button type="button" class="knowledge-document-code-card__collapse" data-knowledge-document-code-collapse aria-label="收起代码" title="收起代码" aria-expanded="true">${codeCardIcons.collapse}</button>`,
       '</span></header>',
-      '<pre class="knowledge-document-code-card__body"><code class="',
-      languageClass.trim(),
-      '">',
+      `<pre class="knowledge-document-code-card__body"><code class="${codeClass}">`,
       source,
       '</code></pre></section>\n',
     ].join('')
