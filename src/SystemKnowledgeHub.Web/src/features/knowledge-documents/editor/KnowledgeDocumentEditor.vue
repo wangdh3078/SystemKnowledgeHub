@@ -48,8 +48,9 @@ const props = withDefaults(
   defineProps<{
     previewing?: boolean
     fullscreen?: boolean
+    viewport?: 'detail' | 'dialog'
   }>(),
-  { previewing: false, fullscreen: false },
+  { previewing: false, fullscreen: false, viewport: 'detail' },
 )
 const model = defineModel<string>({ required: true })
 const emit = defineEmits<{
@@ -64,6 +65,9 @@ type CodeLanguage =
   | 'csharp'
   | 'javascript'
   | 'typescript'
+  | 'tsx'
+  | 'jsx'
+  | 'vue'
   | 'json'
   | 'sql'
   | 'bash'
@@ -76,10 +80,22 @@ type CodeLanguage =
   | 'rust'
   | 'html'
   | 'css'
+  | 'scss'
+  | 'less'
+  | 'jsonc'
   | 'xml'
   | 'yaml'
   | 'markdown'
   | 'dockerfile'
+  | 'kotlin'
+  | 'php'
+  | 'ruby'
+  | 'shell'
+  | 'batch'
+  | 'plsql'
+  | 'toml'
+  | 'ini'
+  | 'nginx'
 
 const blockOptions: ReadonlyArray<{
   readonly value: MarkdownHeadingLevel
@@ -98,6 +114,9 @@ const codeLanguages: ReadonlyArray<{ readonly value: CodeLanguage; readonly labe
   { value: 'csharp', label: 'C#' },
   { value: 'javascript', label: 'JavaScript' },
   { value: 'typescript', label: 'TypeScript' },
+  { value: 'tsx', label: 'TSX' },
+  { value: 'jsx', label: 'JSX' },
+  { value: 'vue', label: 'Vue SFC' },
   { value: 'json', label: 'JSON' },
   { value: 'sql', label: 'SQL' },
   { value: 'bash', label: 'Bash' },
@@ -110,10 +129,22 @@ const codeLanguages: ReadonlyArray<{ readonly value: CodeLanguage; readonly labe
   { value: 'rust', label: 'Rust' },
   { value: 'html', label: 'HTML' },
   { value: 'css', label: 'CSS' },
+  { value: 'scss', label: 'SCSS' },
+  { value: 'less', label: 'Less' },
+  { value: 'jsonc', label: 'JSONC' },
   { value: 'xml', label: 'XML' },
   { value: 'yaml', label: 'YAML' },
   { value: 'markdown', label: 'Markdown' },
   { value: 'dockerfile', label: 'Dockerfile' },
+  { value: 'kotlin', label: 'Kotlin' },
+  { value: 'php', label: 'PHP' },
+  { value: 'ruby', label: 'Ruby' },
+  { value: 'shell', label: 'Shell' },
+  { value: 'batch', label: 'Batch' },
+  { value: 'plsql', label: 'PL/SQL' },
+  { value: 'toml', label: 'TOML' },
+  { value: 'ini', label: 'INI' },
+  { value: 'nginx', label: 'Nginx' },
 ]
 const diagramOptions: ReadonlyArray<{ readonly value: MermaidDiagramType; readonly label: string }> = [
   { value: 'flowchart', label: '流程图' },
@@ -122,8 +153,8 @@ const diagramOptions: ReadonlyArray<{ readonly value: MermaidDiagramType; readon
   { value: 'class', label: '类图' },
   { value: 'state', label: '状态图' },
   { value: 'pie', label: '饼图' },
-  { value: 'er', label: 'ER 图' },
-  { value: 'journey', label: '用户旅程' },
+  { value: 'er', label: '关系图' },
+  { value: 'journey', label: '旅程图' },
 ]
 const tooltipTriggers: ('hover' | 'focus')[] = ['hover', 'focus']
 const editorRoot = ref<HTMLElement | null>(null)
@@ -317,7 +348,11 @@ onBeforeUnmount(() => {
 
 <template>
   <section
-    :class="['knowledge-document-editor', { 'is-fullscreen': fullscreen }]"
+    :class="[
+      'knowledge-document-editor',
+      `knowledge-document-editor--${viewport}`,
+      { 'is-fullscreen': fullscreen },
+    ]"
     aria-label="Markdown 源码编辑器"
   >
     <div class="knowledge-document-editor__toolbar" role="toolbar" aria-label="Markdown 源码工具">

@@ -1,6 +1,6 @@
 # KnowledgeDocument Markdown Source Editor Decision
 
-Status: **Frozen for UI-KC-B05-R05**
+Status: **Frozen for UI-KC-B05-R06**
 Product: **系统知识中心 / System Knowledge Hub**
 
 ## Decision
@@ -25,7 +25,9 @@ Toolbar actions transform the selected raw source or current source line. They d
 
 The source toolbar uses compact 27px icon controls in a 34–38px single-row layout where width permits, grouped by block type, inline, list/quote, insert, history, and view controls. At narrower widths it may wrap without creating page-level horizontal overflow. Unordered, ordered, and task list controls use distinct list, numbered-list, and checklist semantics. Source and Preview are icon-only controls with accessible labels/tooltips (`源码编辑` and `预览`) and explicit selected state; fullscreen remains icon-only. The toolbar does not show Save, text/background-color, or clear-color controls.
 
-The diagram control is an `插入图表` menu. It inserts one of eight complete Mermaid fences directly into `bodyMarkdown`: Flowchart, Sequence, Gantt, Class, State, Pie, ER, and Journey. Templates are bounded local source transforms; no rendered SVG, editor plug-in state, or diagram metadata is persisted. The caret is placed inside the inserted fence immediately after its `mermaid` header so the template remains ordinary editable source.
+The editor is a bounded flex viewport. The toolbar remains outside the source/preview scrolling region; raw CodeMirror source and rendered preview each own their vertical overflow. Long Markdown must not determine document-page height. Detail editing uses a desktop-height clamp, creation uses the same model with a dialog-height clamp, and fullscreen occupies the viewport while retaining the same internal scrolling separation. Local diagram menus, selects, tooltips, and link dialogs use positioned overlays and are not clipped by the editor shell.
+
+The diagram control is an `插入图表` menu. It inserts one of eight complete Mermaid fences directly into `bodyMarkdown`: `流程图`, `时序图`, `甘特图`, `类图`, `状态图`, `饼图`, `关系图`, and `旅程图`. Templates are bounded local source transforms; no rendered SVG, editor plug-in state, or diagram metadata is persisted. The caret is placed inside the inserted fence immediately after its `mermaid` header so the template remains ordinary editable source.
 
 The create dialog has its own raw source editor and its only write action is `创建草稿`, which submits document type, title, summary, and exact source in one request.
 

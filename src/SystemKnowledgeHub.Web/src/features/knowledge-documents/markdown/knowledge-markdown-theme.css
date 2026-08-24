@@ -155,13 +155,16 @@
 .knowledge-markdown-content .knowledge-document-code-card__body .hljs-keyword,
 .knowledge-markdown-content .knowledge-document-code-card__body .hljs-selector-tag,
 .knowledge-markdown-content .knowledge-document-code-card__body .hljs-literal,
-.knowledge-markdown-content .knowledge-document-code-card__body .hljs-section {
+.knowledge-markdown-content .knowledge-document-code-card__body .hljs-section,
+.knowledge-markdown-content .knowledge-document-code-card__body .hljs-tag,
+.knowledge-markdown-content .knowledge-document-code-card__body .hljs-name {
   color: #8a3ffc;
 }
 
 .knowledge-markdown-content .knowledge-document-code-card__body .hljs-string,
 .knowledge-markdown-content .knowledge-document-code-card__body .hljs-attr,
-.knowledge-markdown-content .knowledge-document-code-card__body .hljs-template-variable {
+.knowledge-markdown-content .knowledge-document-code-card__body .hljs-template-variable,
+.knowledge-markdown-content .knowledge-document-code-card__body .hljs-attribute {
   color: #0f766e;
 }
 

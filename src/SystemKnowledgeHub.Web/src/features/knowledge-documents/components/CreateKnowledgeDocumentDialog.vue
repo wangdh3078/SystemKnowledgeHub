@@ -115,6 +115,7 @@ async function submit(): Promise<void> {
         v-model="form.bodyMarkdown"
         :previewing="previewing"
         :fullscreen="fullscreen"
+        viewport="dialog"
         @edit="previewing = false"
         @preview="previewing = true"
         @toggle-fullscreen="fullscreen = !fullscreen"

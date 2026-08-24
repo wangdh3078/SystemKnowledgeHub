@@ -68,12 +68,12 @@ describe('source Markdown toolbar transforms', () => {
   })
 
   it.each([
-    ['flowchart', 'flowchart TD'],
+    ['flowchart', 'flowchart TD\n  A[开始] --> B[处理]'],
     ['sequence', 'sequenceDiagram'],
     ['gantt', 'gantt'],
     ['class', 'classDiagram'],
     ['state', 'stateDiagram-v2'],
-    ['pie', 'pie title 分布'],
+    ['pie', 'pie showData'],
     ['er', 'erDiagram'],
     ['journey', 'journey'],
   ] as const)('inserts the %s Mermaid template directly into raw source', (diagramType, marker) => {

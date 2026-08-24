@@ -252,12 +252,18 @@
 }
 .knowledge-document-editor {
   position: relative;
-  min-height: 530px;
+  display: flex;
+  flex-direction: column;
+  height: clamp(460px, calc(100vh - 300px), 720px);
+  min-height: 0;
   border: 1px solid var(--color-border-strong);
   border-radius: 11px;
   background: var(--color-surface);
   box-shadow: 0 7px 18px rgb(31 40 54 / 5%);
   overflow: hidden;
+}
+.knowledge-document-editor--dialog {
+  height: clamp(360px, calc(100vh - 430px), 620px);
 }
 .knowledge-document-editor:focus-within {
   border-color: var(--color-primary);
@@ -282,6 +288,9 @@ body.knowledge-document-editor-fullscreen-active {
   overflow: hidden;
 }
 .knowledge-document-editor__toolbar {
+  position: relative;
+  z-index: 2;
+  flex: 0 0 auto;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -389,8 +398,11 @@ body.knowledge-document-editor-fullscreen-active {
   box-shadow: 0 0 0 2px rgb(99 91 197 / 18%);
 }
 .knowledge-document-editor__source {
+  display: flex;
+  flex: 1 1 auto;
   min-width: 0;
-  min-height: 500px;
+  min-height: 0;
+  overflow: hidden;
   background: #fcfcfd;
 }
 .knowledge-document-editor.is-fullscreen .knowledge-document-editor__source,
@@ -402,7 +414,8 @@ body.knowledge-document-editor-fullscreen-active {
 .knowledge-document-editor__source .cm-editor {
   box-sizing: border-box;
   width: 100%;
-  min-height: 500px;
+  height: 100%;
+  min-height: 0;
   outline: none;
   color: var(--color-text);
   font-family: var(--font-mono);
@@ -410,7 +423,8 @@ body.knowledge-document-editor-fullscreen-active {
   line-height: 1.7;
 }
 .knowledge-document-editor__source .cm-scroller {
-  min-height: 500px;
+  height: 100%;
+  min-height: 0;
   padding: 18px 20px;
   overflow: auto;
   font-family: var(--font-mono);
@@ -430,9 +444,10 @@ body.knowledge-document-editor-fullscreen-active {
   background: rgb(99 91 197 / 22%);
 }
 .knowledge-document-editor__preview {
-  min-height: 500px;
+  flex: 1 1 auto;
+  min-height: 0;
   padding: 20px 24px;
-  overflow-x: auto;
+  overflow: auto;
   background: var(--color-surface);
 }
 .knowledge-document-editor__preview-note {
@@ -587,6 +602,11 @@ body.knowledge-document-editor-fullscreen-active {
   justify-content: space-between;
   gap: 12px;
 }
+.knowledge-document-relations__heading + .knowledge-document-relations__list,
+.knowledge-document-relations__heading + .text-muted,
+.knowledge-document-relations__heading + p {
+  margin-top: 14px;
+}
 .knowledge-document-relations__heading h2 {
   margin: 0;
   font-size: 18px;
@@ -600,7 +620,7 @@ body.knowledge-document-editor-fullscreen-active {
 }
 .knowledge-document-relations__row {
   display: grid;
-  grid-template-columns: 58px 90px minmax(0, 1fr) auto;
+  grid-template-columns: 48px max-content minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
   padding: 9px 12px;
@@ -613,12 +633,38 @@ body.knowledge-document-editor-fullscreen-active {
 .knowledge-document-relations__row > span {
   color: var(--color-muted);
 }
+.knowledge-document-relations__row > span:nth-child(2) {
+  padding: 2px 7px;
+  border: 1px solid #d9d6f0;
+  border-radius: 999px;
+  background: #f6f5fe;
+  color: #5d56a7;
+  font-size: 11px;
+  font-weight: 650;
+}
 .knowledge-document-relations__row > button {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 650;
   overflow: hidden;
   color: var(--color-primary);
   text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.knowledge-document-relations__row > button:hover {
+  text-decoration: underline;
+}
+.knowledge-document-relations__row > button:focus-visible {
+  border-radius: 3px;
+  outline: 2px solid rgb(99 91 197 / 42%);
+  outline-offset: 2px;
 }
 .knowledge-document-evidence {
   margin-top: 26px;
@@ -1337,6 +1383,13 @@ body.knowledge-document-editor-fullscreen-active {
   }
 }
 @media (max-width: 720px) {
+  .knowledge-document-relations__row {
+    grid-template-columns: 42px max-content minmax(0, 1fr);
+  }
+  .knowledge-document-relations__row > .el-button {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
   .knowledge-document-history__header {
     align-items: stretch;
     flex-direction: column;

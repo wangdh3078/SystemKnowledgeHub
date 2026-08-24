@@ -1,19 +1,27 @@
 import MarkdownIt from 'markdown-it'
 import hljs from 'highlight.js/lib/core'
 import bash from 'highlight.js/lib/languages/bash'
+import dos from 'highlight.js/lib/languages/dos'
 import c from 'highlight.js/lib/languages/c'
 import cpp from 'highlight.js/lib/languages/cpp'
 import csharp from 'highlight.js/lib/languages/csharp'
 import css from 'highlight.js/lib/languages/css'
 import dockerfile from 'highlight.js/lib/languages/dockerfile'
 import go from 'highlight.js/lib/languages/go'
+import ini from 'highlight.js/lib/languages/ini'
 import java from 'highlight.js/lib/languages/java'
 import javascript from 'highlight.js/lib/languages/javascript'
 import json from 'highlight.js/lib/languages/json'
+import kotlin from 'highlight.js/lib/languages/kotlin'
+import less from 'highlight.js/lib/languages/less'
 import markdown from 'highlight.js/lib/languages/markdown'
+import nginx from 'highlight.js/lib/languages/nginx'
+import php from 'highlight.js/lib/languages/php'
 import powershell from 'highlight.js/lib/languages/powershell'
 import python from 'highlight.js/lib/languages/python'
+import ruby from 'highlight.js/lib/languages/ruby'
 import rust from 'highlight.js/lib/languages/rust'
+import scss from 'highlight.js/lib/languages/scss'
 import sql from 'highlight.js/lib/languages/sql'
 import typescript from 'highlight.js/lib/languages/typescript'
 import xml from 'highlight.js/lib/languages/xml'
@@ -28,19 +36,27 @@ renderer.use(controlledColorMarkdownItPlugin)
 
 const codeHighlightLanguages = {
   bash,
+  dos,
   c,
   cpp,
   csharp,
   css,
   dockerfile,
   go,
+  ini,
   java,
   javascript,
   json,
+  kotlin,
+  less,
   markdown,
+  nginx,
+  php,
   powershell,
   python,
+  ruby,
   rust,
+  scss,
   sql,
   typescript,
   xml,
@@ -51,8 +67,20 @@ Object.entries(codeHighlightLanguages).forEach(([name, definition]) => {
   hljs.registerLanguage(name, definition)
 })
 
+hljs.registerLanguage('toml', (definition) => ({
+  name: 'TOML',
+  contains: [
+    { className: 'section', begin: /^\s*\[[^\]]+\]/mu },
+    { className: 'attr', begin: /[A-Za-z0-9_.-]+(?=\s*=)/u },
+    definition.QUOTE_STRING_MODE,
+    definition.C_NUMBER_MODE,
+    definition.HASH_COMMENT_MODE,
+  ],
+}))
+
 const highlighterLanguageNames: Readonly<Record<string, string>> = {
   bash: 'bash',
+  batch: 'dos',
   c: 'c',
   cpp: 'cpp',
   csharp: 'csharp',
@@ -60,20 +88,79 @@ const highlighterLanguageNames: Readonly<Record<string, string>> = {
   dockerfile: 'dockerfile',
   go: 'go',
   html: 'xml',
+  ini: 'ini',
   java: 'java',
   javascript: 'javascript',
   json: 'json',
+  jsonc: 'json',
+  kotlin: 'kotlin',
+  less: 'less',
   markdown: 'markdown',
+  nginx: 'nginx',
+  php: 'php',
+  plsql: 'sql',
   powershell: 'powershell',
   python: 'python',
+  ruby: 'ruby',
   rust: 'rust',
+  scss: 'scss',
+  shell: 'bash',
   sql: 'sql',
   typescript: 'typescript',
   xml: 'xml',
   yaml: 'yaml',
+  toml: 'toml',
+}
+
+function renderJsxLikeCode(source: string, language: 'javascript' | 'typescript'): string {
+  return source
+    .split(/(<\/?[A-Za-z][^>]*>)/gu)
+    .map((part) =>
+      /^<\/?[A-Za-z][^>]*>$/u.test(part)
+        ? `<span class="hljs-tag">${renderer.utils.escapeHtml(part)}</span>`
+        : hljs.highlight(part, { language, ignoreIllegals: true }).value,
+    )
+    .join('')
+}
+
+function renderVueSfc(source: string): string {
+  const blockPattern = /(<(template|script|style)\b[^>]*>)([\s\S]*?)(<\/\2>)/giu
+  let offset = 0
+  let rendered = ''
+  for (const match of source.matchAll(blockPattern)) {
+    const index = match.index ?? 0
+    rendered += hljs.highlight(source.slice(offset, index), {
+      language: 'xml',
+      ignoreIllegals: true,
+    }).value
+    const opening = match[1]!
+    const blockType = match[2]!.toLowerCase()
+    const content = match[3]!
+    const closing = match[4]!
+    const language =
+      blockType === 'script'
+        ? /\blang\s*=\s*["'](?:ts|tsx)["']/iu.test(opening)
+          ? 'typescript'
+          : 'javascript'
+        : blockType === 'style'
+          ? /\blang\s*=\s*["']scss["']/iu.test(opening)
+            ? 'scss'
+            : /\blang\s*=\s*["']less["']/iu.test(opening)
+              ? 'less'
+              : 'css'
+          : 'xml'
+    rendered += hljs.highlight(opening, { language: 'xml', ignoreIllegals: true }).value
+    rendered += hljs.highlight(content, { language, ignoreIllegals: true }).value
+    rendered += hljs.highlight(closing, { language: 'xml', ignoreIllegals: true }).value
+    offset = index + match[0].length
+  }
+  return rendered + hljs.highlight(source.slice(offset), { language: 'xml', ignoreIllegals: true }).value
 }
 
 function renderHighlightedCode(source: string, language: string): string {
+  if (language === 'vue') return renderVueSfc(source)
+  if (language === 'jsx') return renderJsxLikeCode(source, 'javascript')
+  if (language === 'tsx') return renderJsxLikeCode(source, 'typescript')
   const highlighterLanguage = highlighterLanguageNames[language]
   if (!highlighterLanguage) return renderer.utils.escapeHtml(source)
   return hljs.highlight(source, { language: highlighterLanguage, ignoreIllegals: true }).value

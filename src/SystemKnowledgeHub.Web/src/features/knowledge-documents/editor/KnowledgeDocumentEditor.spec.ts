@@ -121,9 +121,28 @@ describe('KnowledgeDocumentEditor', () => {
       '类图',
       '状态图',
       '饼图',
-      'ER 图',
-      '用户旅程',
+      '关系图',
+      '旅程图',
     ])
+  })
+
+  it('keeps the toolbar outside bounded detail and dialog source/preview regions', async () => {
+    const detail = mountEditor(Array.from({ length: 600 }, (_, index) => `第 ${index + 1} 行`).join('\n'))
+    await waitForSourceEditor(detail)
+
+    expect(detail.classes()).toContain('knowledge-document-editor--detail')
+    expect(detail.find('.knowledge-document-editor__toolbar').exists()).toBe(true)
+    expect(detail.find('.knowledge-document-editor__source').exists()).toBe(true)
+    expect(detail.find('.knowledge-document-editor__preview').exists()).toBe(true)
+    expect(detail.find('.knowledge-document-editor__source .cm-scroller').exists()).toBe(true)
+
+    const dialog = mount(KnowledgeDocumentEditor, {
+      props: { modelValue: '正文', viewport: 'dialog' },
+      global: { components, stubs: { KnowledgeDocumentMarkdown: true } },
+    })
+    wrappers.push(dialog)
+    await waitForSourceEditor(dialog)
+    expect(dialog.classes()).toContain('knowledge-document-editor--dialog')
   })
 
   it('emits the page-level save request from Ctrl/Cmd+S without a toolbar save control', async () => {

@@ -234,24 +234,23 @@ export type MermaidDiagramType =
 export const mermaidDiagramTemplates: Readonly<Record<MermaidDiagramType, string>> = {
   flowchart: `\`\`\`mermaid
 flowchart TD
-  A[开始] --> B{判断}
-  B -->|是| C[处理]
-  B -->|否| D[结束]
+  A[开始] --> B[处理]
+  B --> C[结束]
 \`\`\``,
   sequence: `\`\`\`mermaid
 sequenceDiagram
-  participant U as 用户
-  participant S as 系统
-  U->>S: 提交请求
-  S-->>U: 返回结果
+  participant A as 用户
+  participant B as 系统
+  A->>B: 发起请求
+  B-->>A: 返回结果
 \`\`\``,
   gantt: `\`\`\`mermaid
 gantt
   title 项目计划
-  dateFormat  YYYY-MM-DD
+  dateFormat YYYY-MM-DD
   section 阶段一
-  需求分析 :a1, 2025-01-01, 3d
-  开发实现 :after a1, 5d
+  任务一 :a1, 2026-01-01, 3d
+  任务二 :after a1, 2d
 \`\`\``,
   class: `\`\`\`mermaid
 classDiagram
@@ -259,41 +258,38 @@ classDiagram
     +String name
     +login()
   }
-  class Order
-  User --> Order
+  class System {
+    +execute()
+  }
+  User --> System
 \`\`\``,
   state: `\`\`\`mermaid
 stateDiagram-v2
-  [*] --> 草稿
-  草稿 --> 已发布: 发布
-  已发布 --> 已归档: 归档
+  [*] --> Draft
+  Draft --> Published
+  Published --> Archived
+  Archived --> [*]
 \`\`\``,
   pie: `\`\`\`mermaid
-pie title 分布
-  "已完成" : 60
-  "进行中" : 30
-  "待开始" : 10
+pie showData
+  title 示例占比
+  "类型A" : 40
+  "类型B" : 35
+  "类型C" : 25
 \`\`\``,
   er: `\`\`\`mermaid
 erDiagram
-  USER ||--o{ ORDER : places
-  USER {
-    int id
-    string name
-  }
-  ORDER {
-    int id
-    int user_id
-  }
+  USER ||--o{ DOCUMENT : creates
+  DOCUMENT ||--o{ REVISION : contains
 \`\`\``,
   journey: `\`\`\`mermaid
 journey
-  title 用户旅程
-  section 登录
-    输入账号: 5: 用户
-    验证身份: 4: 系统
-  section 使用
-    查看内容: 5: 用户
+  title 用户操作旅程
+  section 使用系统
+    登录: 5: 用户
+    查询知识: 4: 用户
+    编辑内容: 3: 用户
+    保存内容: 5: 用户
 \`\`\``,
 }
 
