@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Mvc;
 using SystemKnowledgeHub.Api.Features.KnowledgeDocuments.Api.Contracts;
 using SystemKnowledgeHub.Api.Features.KnowledgeDocuments.Application;
 using SystemKnowledgeHub.Api.Features.KnowledgeDocuments.Application.Models;
+using SystemKnowledgeHub.Api.Features.Traceability.Application;
+using SystemKnowledgeHub.Api.Features.Traceability.Application.Models;
 using SystemKnowledgeHub.Api.Features.Users.Application;
 using SystemKnowledgeHub.Api.Features.Users.Application.Models;
 using SystemKnowledgeHub.Api.Shared.Api;
@@ -15,6 +17,7 @@ namespace SystemKnowledgeHub.Api.Features.KnowledgeDocuments.Api;
 [Route("api/knowledge-documents")]
 public sealed class KnowledgeDocumentsController(
     KnowledgeDocumentQueries queries,
+    TraceabilityQueries traceabilityQueries,
     KnowledgeDocumentService service,
     ICurrentUserContext currentUserContext) : ControllerBase
 {
@@ -39,6 +42,38 @@ public sealed class KnowledgeDocumentsController(
         if (!ApiIdParser.IsSafePositive(id)) return BadRequest(ValidationError(new Dictionary<string, string[]> { ["id"] = ["文档 ID 必须是 JavaScript 安全范围内的正整数。"] }));
         var response = await queries.GetDetail(id, cancellationToken);
         return response is null ? NotFound(NotFound(id)) : Ok(response);
+    }
+
+    [HttpGet("{id}/traceability")]
+    public async Task<ActionResult<ITraceabilityResponse>> GetTraceability(
+        string id,
+        CancellationToken cancellationToken)
+    {
+        if (!ApiIdParser.TryParse(id, out var knowledgeDocumentId))
+        {
+            return BadRequest(ValidationError(new Dictionary<string, string[]>
+            {
+                ["id"] = ["文档 ID 必须是 JavaScript 安全范围内的正整数。"],
+            }));
+        }
+
+        var result = await traceabilityQueries.Get(knowledgeDocumentId, cancellationToken);
+        return result.Failure switch
+        {
+            TraceabilityQueryFailure.None => Ok(result.Response),
+            TraceabilityQueryFailure.NotFound => NotFound(NotFound(knowledgeDocumentId)),
+            TraceabilityQueryFailure.UnsupportedDocumentType => UnprocessableEntity(new ApiErrorResponse(
+                "business_rule_violation",
+                "只有需求、规格说明和测试用例支持可追溯性读取。",
+                null,
+                new { resourceType = "KnowledgeDocument", resourceId = knowledgeDocumentId })),
+            TraceabilityQueryFailure.ReferenceInvalid => UnprocessableEntity(new ApiErrorResponse(
+                "reference_invalid",
+                "可追溯性关系包含缺失或不符合契约的端点。",
+                null,
+                null)),
+            _ => throw new InvalidOperationException("Unsupported traceability query result."),
+        };
     }
 
     [HttpGet("{id:long}/revisions")]
