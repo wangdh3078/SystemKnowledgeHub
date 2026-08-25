@@ -124,19 +124,19 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="business-functions-page">
-    <header class="business-functions-page__header">
+  <div class="business-functions-page skh-page">
+    <header class="business-functions-page__header skh-page-header">
       <div>
         <h1>业务功能</h1>
         <p>查找旧系统中的业务能力、处理逻辑与改写范围。</p>
       </div>
-      <div class="business-functions-page__header-actions">
+      <div class="business-functions-page__header-actions skh-page-header__actions">
         <span v-if="data">共 {{ data.total }} 个业务功能</span>
         <el-button v-if="actorStore.canEdit" type="primary" :icon="Plus" @click="openCreate">新增业务功能</el-button>
       </div>
     </header>
 
-    <section class="business-functions-filter" aria-label="业务功能筛选">
+    <section class="business-functions-filter skh-filter-bar" aria-label="业务功能筛选">
       <el-input v-model="keyword" clearable :prefix-icon="Search" placeholder="搜索功能名称或用途" aria-label="搜索业务功能" />
       <el-select v-model="systemId" placeholder="系统：全部" clearable filterable @change="resetPageAndLoad">
         <el-option v-for="system in systemOptions" :key="system.id" :label="system.name" :value="system.id" />
@@ -161,7 +161,7 @@ onMounted(() => {
 
     <LoadingState v-if="loading && !data" message="正在读取业务功能列表…" />
     <ErrorState v-else-if="error && !data" title="业务功能列表加载失败" :message="error" @retry="load" />
-    <section v-else class="business-functions-table-section" :aria-busy="loading">
+    <section v-else class="business-functions-table-section skh-table-section" :aria-busy="loading">
       <EmptyState
         v-if="data && data.items.length === 0"
         title="没有找到业务功能"
@@ -171,12 +171,12 @@ onMounted(() => {
         v-else
         :data="data?.items ?? []"
         row-key="id"
-        class="business-functions-table"
+        class="business-functions-table skh-data-table"
         @row-click="handleRowClick"
         @sort-change="handleSortChange"
       >
         <el-table-column prop="name" label="功能名称" min-width="185" sortable="custom">
-          <template #default="scope"><strong class="technical-text function-name">{{ scope.row.name }}</strong></template>
+          <template #default="scope"><button class="technical-text function-name skh-table-link" type="button" @click.stop="openDetail(scope.row.id)">{{ scope.row.name }}</button></template>
         </el-table-column>
         <el-table-column label="系统" width="88"><template #default="scope"><strong class="technical-text">{{ scope.row.system.name }}</strong></template></el-table-column>
         <el-table-column prop="functionType" label="类型" width="108"><template #default="scope">{{ functionTypeLabels[scope.row.functionType] ?? scope.row.functionType }}</template></el-table-column>
@@ -189,7 +189,7 @@ onMounted(() => {
         <el-table-column prop="updatedAt" label="更新于" width="108" sortable="custom"><template #default="scope">{{ formatDate(scope.row.updatedAt) }}</template></el-table-column>
       </el-table>
 
-      <footer v-if="data && data.total > 0" class="business-functions-pagination">
+      <footer v-if="data && data.total > 0" class="business-functions-pagination skh-pagination">
         <span>{{ (data.page - 1) * data.pageSize + 1 }}–{{ Math.min(data.page * data.pageSize, data.total) }} / {{ data.total }}</span>
         <el-pagination background layout="prev, pager, next" :current-page="data.page" :page-size="data.pageSize" :total="data.total" @current-change="handlePageChange" />
       </footer>

@@ -1,0 +1,151 @@
+/* Shared semantic patterns for existing product surfaces. Business layout stays feature-owned. */
+
+.skh-page.skh-page {
+  width: 100%;
+  min-height: 100%;
+  padding: var(--skh-page-padding-block-start) var(--skh-page-padding-inline) var(--skh-page-padding-block-end);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.skh-page-header.skh-page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-6);
+}
+
+.skh-page-header.skh-page-header h1 {
+  color: var(--color-ink);
+  font-size: var(--skh-page-title-size);
+  line-height: 1.2;
+}
+
+.skh-page-header.skh-page-header p {
+  margin-top: 7px;
+  color: var(--color-muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.skh-page-header__actions.skh-page-header__actions,
+.skh-action-group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.skh-filter-bar.skh-filter-bar {
+  align-items: center;
+  gap: var(--skh-filter-gap);
+}
+
+.skh-filter-bar > .el-input,
+.skh-filter-bar > .el-select {
+  min-width: 0;
+}
+
+.skh-filter-bar > .el-button {
+  white-space: nowrap;
+}
+
+.skh-table-section {
+  position: relative;
+  min-height: 320px;
+}
+
+.skh-data-table.skh-data-table {
+  --el-table-border-color: var(--color-border);
+  --el-table-header-bg-color: var(--color-surface);
+  --el-table-row-hover-bg-color: var(--color-hover);
+  width: 100%;
+}
+
+.skh-data-table.skh-data-table .el-table__header-wrapper th.el-table__cell {
+  height: var(--skh-table-header-height);
+  padding: 0;
+  border-bottom-color: var(--color-border-strong);
+  color: var(--color-ink);
+  font-size: 11px;
+  font-weight: 680;
+}
+
+.skh-data-table.skh-data-table .el-table__body-wrapper td.el-table__cell {
+  height: var(--skh-table-row-height);
+  padding: 0;
+  color: var(--color-text);
+  font-size: 11px;
+}
+
+.skh-data-table--dense.skh-data-table--dense .el-table__header-wrapper th.el-table__cell {
+  height: 36px;
+  color: var(--color-muted);
+  font-size: 10px;
+}
+
+.skh-data-table--dense.skh-data-table--dense .el-table__body-wrapper td.el-table__cell {
+  height: 46px;
+}
+
+.skh-data-table--comfortable.skh-data-table--comfortable .el-table__header-wrapper th.el-table__cell {
+  height: 48px;
+}
+
+.skh-data-table--comfortable.skh-data-table--comfortable .el-table__body-wrapper td.el-table__cell {
+  height: 62px;
+}
+
+.skh-table-link {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-primary);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 680;
+  text-align: left;
+}
+
+.skh-table-link:hover {
+  text-decoration: underline;
+}
+
+.skh-table-link:focus-visible,
+.skh-icon-action:focus-visible {
+  border-radius: var(--radius-sm);
+  outline: 2px solid var(--color-primary);
+  outline-offset: 3px;
+}
+
+.skh-pagination.skh-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-height: var(--skh-pagination-height);
+  margin: 0;
+  padding: 0;
+  gap: var(--space-3);
+  color: var(--color-muted);
+  font-size: 11px;
+}
+
+.skh-pagination--split.skh-pagination--split {
+  min-height: 54px;
+  justify-content: space-between;
+}
+
+.skh-icon-action {
+  display: inline-grid;
+  min-width: 32px;
+  min-height: 32px;
+  place-items: center;
+}
+
+.skh-dialog-actions,
+.skh-drawer-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}

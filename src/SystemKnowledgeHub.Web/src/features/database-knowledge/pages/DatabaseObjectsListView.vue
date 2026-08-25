@@ -166,14 +166,14 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="database-objects-list-page">
-    <header class="database-objects-list-page__header">
+  <div class="database-objects-list-page skh-page">
+    <header class="database-objects-list-page__header skh-page-header">
       <div>
         <div class="page-eyebrow"><el-icon><Coin /></el-icon>数据库知识</div>
         <h1>数据库对象</h1>
         <p>按数据库来源与 Schema 浏览 Table、View 和关联字段。</p>
       </div>
-      <div class="database-objects-list-page__header-actions">
+      <div class="database-objects-list-page__header-actions skh-page-header__actions">
         <span v-if="data">共 {{ data.total }} 个对象</span>
         <el-button type="primary" :icon="Plus" @click="startCreate">新增</el-button>
       </div>
@@ -239,7 +239,7 @@ onMounted(() => {
       </aside>
 
       <section class="database-objects-list-page__content">
-        <section class="database-objects-filter-bar" aria-label="数据库对象筛选">
+        <section class="database-objects-filter-bar skh-filter-bar" aria-label="数据库对象筛选">
           <el-input
             v-model="keyword"
             clearable
@@ -276,13 +276,13 @@ onMounted(() => {
             v-else
             :data="data?.items ?? []"
             row-key="id"
-            class="database-objects-table"
+            class="database-objects-table skh-data-table skh-data-table--dense"
             @row-click="openObject"
             @sort-change="handleSortChange"
           >
             <el-table-column prop="objectName" label="对象名称" min-width="156" sortable="custom">
               <template #default="scope">
-                <strong class="technical-text">{{ scope.row.schema }}.{{ scope.row.objectName }}</strong>
+                <button class="technical-text skh-table-link" type="button" @click.stop="openObject(scope.row)">{{ scope.row.schema }}.{{ scope.row.objectName }}</button>
                 <small v-if="scope.row.matchedColumn" class="database-objects-table__matched">字段命中：{{ scope.row.matchedColumn.columnName }}</small>
               </template>
             </el-table-column>
@@ -313,7 +313,7 @@ onMounted(() => {
               <template #default><el-icon class="database-objects-table__next" title="查看对象详情"><ArrowRight /></el-icon></template>
             </el-table-column>
           </el-table>
-          <footer v-if="data && data.total > 0" class="database-objects-pagination">
+          <footer v-if="data && data.total > 0" class="database-objects-pagination skh-pagination skh-pagination--split">
             <span>{{ (data.page - 1) * data.pageSize + 1 }}–{{ Math.min(data.page * data.pageSize, data.total) }} / {{ data.total }}</span>
             <el-pagination
               background

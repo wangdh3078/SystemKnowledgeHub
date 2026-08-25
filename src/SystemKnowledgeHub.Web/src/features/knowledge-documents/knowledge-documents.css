@@ -91,12 +91,14 @@
 .knowledge-document-create__form .el-select {
   width: 100%;
 }
-.knowledge-document-create-dialog .el-dialog {
+.knowledge-document-create-dialog.el-dialog {
   display: flex;
   flex-direction: column;
   max-height: min(92vh, 960px);
+  margin: 4vh auto 0;
 }
-.knowledge-document-create-dialog .el-dialog__body {
+.knowledge-document-create-dialog.el-dialog .el-dialog__body {
+  flex: 1;
   min-height: 0;
   overflow: auto;
 }
@@ -1220,6 +1222,17 @@ body.knowledge-document-editor-fullscreen-active {
 }
 .knowledge-document-restore-dialog {
   min-width: 0;
+}
+.knowledge-document-restore-host.el-dialog {
+  display: flex;
+  max-height: 92vh;
+  margin: 4vh auto 0;
+  flex-direction: column;
+}
+.knowledge-document-restore-host.el-dialog .el-dialog__body {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
 }
 .knowledge-document-restore-dialog > header {
   display: flex;

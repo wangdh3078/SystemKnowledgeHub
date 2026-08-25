@@ -19,6 +19,13 @@
   --color-selected: #eef2ff;
   --color-hover: #f5f7fb;
 
+  /* Compatibility aliases for feature styles that predate the current token names. */
+  --color-text-primary: var(--color-ink);
+  --color-text-secondary: var(--color-muted);
+  --color-border-subtle: #edf0f4;
+  --color-danger: var(--status-danger);
+  --text-muted: var(--color-muted);
+
   --status-unknown: #8b95a7;
   --status-unknown-surface: #f2f4f7;
   --status-inferred: #b7791f;
@@ -36,6 +43,17 @@
   --space-6: 24px;
   --space-8: 32px;
 
+  /* System UI Foundation semantic layout tokens. */
+  --skh-page-padding-block-start: 28px;
+  --skh-page-padding-inline: 30px;
+  --skh-page-padding-block-end: 42px;
+  --skh-page-title-size: 27px;
+  --skh-section-gap: var(--space-5);
+  --skh-filter-gap: 10px;
+  --skh-table-header-height: 44px;
+  --skh-table-row-height: 52px;
+  --skh-pagination-height: 64px;
+
   --radius-sm: 4px;
   --radius-md: 7px;
   --radius-lg: 10px;
@@ -48,4 +66,13 @@
 
   --shadow-drawer: -10px 0 30px rgb(35 43 69 / 10%);
   --transition-fast: 160ms ease;
+
+  --font-family-mono: var(--font-mono);
+  --font-technical: var(--font-mono);
+}
+
+@media (max-width: 1440px) {
+  :root {
+    --skh-page-padding-inline: 24px;
+  }
 }

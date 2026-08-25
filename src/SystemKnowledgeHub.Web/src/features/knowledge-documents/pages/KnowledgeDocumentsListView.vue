@@ -118,8 +118,8 @@ onMounted(() => void load())
 </script>
 
 <template>
-  <div class="knowledge-documents-page">
-    <header class="knowledge-documents-page__header">
+  <div class="knowledge-documents-page skh-page">
+    <header class="knowledge-documents-page__header skh-page-header">
       <div>
         <h1>知识内容</h1>
         <p>集中浏览需求、规格说明、测试用例、操作规程与沉淀知识。</p>
@@ -131,7 +131,7 @@ onMounted(() => void load())
         >
       </div>
     </header>
-    <section class="knowledge-documents-filter-bar" aria-label="知识内容筛选">
+    <section class="knowledge-documents-filter-bar skh-filter-bar" aria-label="知识内容筛选">
       <el-input
         v-model="query"
         clearable
@@ -178,12 +178,12 @@ onMounted(() => void load())
         v-else
         :data="data?.items ?? []"
         row-key="id"
-        class="knowledge-documents-table"
+        class="knowledge-documents-table skh-data-table"
         @row-click="openRow"
         ><el-table-column label="标题" min-width="220"
           ><template #default="scope"
             ><button
-              class="knowledge-document-link"
+              class="knowledge-document-link skh-table-link"
               type="button"
               @click.stop="openDetail(scope.row.id)"
             >
@@ -212,7 +212,7 @@ onMounted(() => void load())
           }}</template></el-table-column
         ></el-table
       >
-      <footer v-if="data && data.total > 0" class="knowledge-documents-pagination">
+      <footer v-if="data && data.total > 0" class="knowledge-documents-pagination skh-pagination">
         <span
           >{{ (data.page - 1) * data.pageSize + 1 }}–{{
             Math.min(data.page * data.pageSize, data.total)

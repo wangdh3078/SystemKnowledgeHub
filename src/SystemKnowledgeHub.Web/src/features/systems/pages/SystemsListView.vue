@@ -91,8 +91,8 @@ onMounted(() => void load())
 </script>
 
 <template>
-  <div class="systems-page">
-    <header class="systems-page__header">
+  <div class="systems-page skh-page">
+    <header class="systems-page__header skh-page-header">
       <div>
         <h1>系统</h1>
         <p>浏览系统及其知识覆盖情况。</p>
@@ -100,7 +100,7 @@ onMounted(() => void load())
       <span v-if="data">共 {{ data.total }} 个系统</span>
     </header>
 
-    <section class="systems-filter-bar" aria-label="系统筛选">
+    <section class="systems-filter-bar skh-filter-bar" aria-label="系统筛选">
       <el-input
         v-model="keyword"
         clearable
@@ -134,7 +134,7 @@ onMounted(() => void load())
       :message="error"
       @retry="load"
     />
-    <section v-else class="systems-table-section" :aria-busy="loading">
+    <section v-else class="systems-table-section skh-table-section" :aria-busy="loading">
       <EmptyState
         v-if="data && data.items.length === 0"
         title="没有找到系统"
@@ -144,12 +144,12 @@ onMounted(() => void load())
         v-else
         :data="data?.items ?? []"
         row-key="id"
-        class="systems-table"
+        class="systems-table skh-data-table"
         @row-click="handleSystemRowClick"
         @sort-change="handleSortChange"
       >
         <el-table-column prop="name" label="系统名称" min-width="130" sortable="custom">
-          <template #default="scope"><strong class="technical-text system-name">{{ scope.row.name }}</strong></template>
+          <template #default="scope"><button class="technical-text system-name skh-table-link" type="button" @click.stop="openSystem(scope.row.id)">{{ scope.row.name }}</button></template>
         </el-table-column>
         <el-table-column prop="displayName" label="显示名称" min-width="120" />
         <el-table-column prop="systemType" label="系统类型" min-width="125" />
@@ -175,7 +175,7 @@ onMounted(() => void load())
         </el-table-column>
       </el-table>
 
-      <footer v-if="data && data.total > 0" class="systems-pagination">
+      <footer v-if="data && data.total > 0" class="systems-pagination skh-pagination">
         <span>{{ (data.page - 1) * data.pageSize + 1 }}–{{ Math.min(data.page * data.pageSize, data.total) }} / {{ data.total }}</span>
         <el-pagination
           background

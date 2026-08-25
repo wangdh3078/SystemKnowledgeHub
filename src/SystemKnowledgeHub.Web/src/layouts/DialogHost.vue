@@ -40,7 +40,14 @@ const dialogWidth = computed(() =>
     append-to-body
     destroy-on-close
     :show-close="false"
-    :class="['authoring-dialog', { 'global-search-dialog': overlayStore.currentDialog?.kind === 'global-search' }]"
+    :class="[
+      'authoring-dialog',
+      {
+        'global-search-dialog': overlayStore.currentDialog?.kind === 'global-search',
+        'knowledge-document-restore-host':
+          overlayStore.currentDialog?.kind === 'restore-knowledge-document-revision',
+      },
+    ]"
     @close="overlayStore.closeDialog"
   >
     <div id="dialog-feature-content"></div>

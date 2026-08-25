@@ -80,10 +80,6 @@
   line-height: 1.45;
 }
 
-.systems-table .el-table__row:first-child td.el-table__cell {
-  background: #f3f7ff;
-}
-
 .systems-table .system-name {
   color: #2147a5;
   font-size: 12.5px;

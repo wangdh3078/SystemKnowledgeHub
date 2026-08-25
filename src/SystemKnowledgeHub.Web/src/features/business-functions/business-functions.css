@@ -98,10 +98,6 @@
   color: var(--color-primary);
 }
 
-.business-functions-table .el-table__row:first-child td.el-table__cell {
-  background: #f6f8ff;
-}
-
 .function-name {
   color: #20325b;
   font-weight: 650;

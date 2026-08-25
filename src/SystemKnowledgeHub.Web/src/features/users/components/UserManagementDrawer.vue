@@ -130,7 +130,7 @@ onMounted(() => void load())
         <h2 id="user-drawer-title">{{ title }}</h2>
         <p>维护人员资料、KnowledgeRole 与 LoginIdentity 映射；AccessLevel 由独立安全操作管理。</p>
       </div>
-      <button type="button" aria-label="关闭" @click="overlayStore.closeDrawer">×</button>
+      <el-tooltip content="关闭用户编辑" placement="bottom"><button class="skh-icon-action" type="button" aria-label="关闭用户编辑" @click="overlayStore.closeDrawer">×</button></el-tooltip>
     </header>
 
     <div v-if="loading" class="user-drawer__state">正在读取用户资料…</div>

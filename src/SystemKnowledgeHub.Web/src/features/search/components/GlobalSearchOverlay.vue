@@ -97,9 +97,11 @@ function selectResult(item: SearchResultItem, objectType: string): void {
           aria-label="搜索所有知识对象"
           @keydown.stop="onKeydown"
         />
-        <button class="global-search__close" type="button" aria-label="关闭全局搜索" @click="close">
-          <el-icon><Close /></el-icon>
-        </button>
+        <el-tooltip content="关闭全局搜索" placement="bottom">
+          <button class="global-search__close skh-icon-action" type="button" aria-label="关闭全局搜索" @click="close">
+            <el-icon><Close /></el-icon>
+          </button>
+        </el-tooltip>
         <kbd>Ctrl + K</kbd>
       </div>
 

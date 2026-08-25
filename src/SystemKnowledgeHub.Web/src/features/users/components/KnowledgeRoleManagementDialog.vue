@@ -146,7 +146,7 @@ onMounted(() => void load())
   <section class="role-dialog" aria-labelledby="role-dialog-title">
     <header class="role-dialog__header">
       <div><span>ADMIN · KNOWLEDGE ROLE</span><h2 id="role-dialog-title">知识身份管理</h2><p>知识身份表达专业背景，不授予任何系统权限。</p></div>
-      <button type="button" aria-label="关闭" @click="overlayStore.closeDialog">×</button>
+      <el-tooltip content="关闭知识身份管理" placement="bottom"><button class="skh-icon-action" type="button" aria-label="关闭知识身份管理" @click="overlayStore.closeDialog">×</button></el-tooltip>
     </header>
 
     <el-alert

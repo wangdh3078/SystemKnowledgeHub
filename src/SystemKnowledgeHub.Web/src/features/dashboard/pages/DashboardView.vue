@@ -150,8 +150,8 @@ onMounted(() => void load())
 </script>
 
 <template>
-  <div class="dashboard-page">
-    <header class="dashboard-page__header">
+  <div class="dashboard-page skh-page">
+    <header class="dashboard-page__header skh-page-header">
       <div>
         <h1>总览</h1>
         <p>了解系统知识的覆盖程度，并找到下一步最值得处理的内容。</p>

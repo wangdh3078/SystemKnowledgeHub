@@ -226,7 +226,16 @@ async function submit(): Promise<void> {
           {{ lifecycleLabels[currentDocument.lifecycleStatus] }}
         </p>
       </div>
-      <button type="button" aria-label="关闭恢复确认" @click="overlayStore.closeDialog">×</button>
+      <el-tooltip content="关闭恢复确认" placement="top">
+        <button
+          type="button"
+          class="skh-icon-action"
+          aria-label="关闭恢复确认"
+          @click="overlayStore.closeDialog"
+        >
+          ×
+        </button>
+      </el-tooltip>
     </header>
 
     <dl class="knowledge-document-restore-dialog__snapshot">
