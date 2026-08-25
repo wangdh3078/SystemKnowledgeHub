@@ -16,4 +16,5 @@ This index is repository navigation metadata. It does not replace the authority 
 | `docs/reports/PHASE_REV_GAP_REGISTER.md` | Revision gap ownership/severity/status register | Gap Register | PHASE-REV | Verified gap status/evidence change |
 | `docs/reports/PHASE_NEXT_MAJOR_PHASE_PLANNING_R01.md` | Major-phase readiness and sequencing decision | Planning Decision | Post-REV / PHASE-TRACE | Approved phase sequencing/readiness change |
 | `docs/reports/TRACE_B01_DERIVED_TRACE_READ_FOUNDATION_VERIFICATION_REPORT.md` | Trace read implementation, query-plan, runtime, regression, and TRACE-B02 readiness evidence | Verification Report | TRACE-B01 / PHASE-TRACE | TRACE-B01 reverification or corrective delta |
+| `docs/reports/TRACE_B02_DOCUMENT_TRACEABILITY_UX_VERIFICATION_REPORT.md` | Detail-page traceability UX implementation and verification evidence | Verification Report | TRACE-B02 / PHASE-TRACE | TRACE-B02 reverification or corrective delta |
 | `docs/reports/FINAL_MVP_VERIFICATION_REPORT.md` | Frozen MVP implementation and runtime verification summary | Verification Report | MVP | Explicit MVP reverification/correction |

@@ -9,6 +9,7 @@ import {
   getKnowledgeDocument,
   getKnowledgeDocumentRevision,
   listKnowledgeDocumentRevisions,
+  updateKnowledgeDocumentLifecycle,
   updateKnowledgeDocumentContent,
 } from '../api/knowledgeDocumentsApi'
 import { getRelatedKnowledge } from '../../relationships/api/relationshipApi'
@@ -32,6 +33,7 @@ const actorState = vi.hoisted(() => ({
 }))
 const overlayState = vi.hoisted(() => ({ openDrawer: vi.fn(), openDialog: vi.fn() }))
 const routerState = vi.hoisted(() => ({ push: vi.fn() }))
+const traceState = vi.hoisted(() => ({ refresh: vi.fn(), mounted: vi.fn() }))
 
 vi.mock('vue', async (importOriginal) => {
   const actual = await importOriginal<typeof import('vue')>()
@@ -141,6 +143,21 @@ vi.mock('../../evidence/api/evidenceApi', () => ({
   getEvidenceList: vi.fn().mockResolvedValue({ items: [] }),
   addHumanConfirmation: vi.fn(),
 }))
+vi.mock('../components/TraceabilitySection.vue', async () => {
+  const { defineComponent, h, onMounted } = await import('vue')
+  return {
+    // Test-only exposed refresh surface for the feature component under test.
+    // eslint-disable-next-line vue/one-component-per-file
+    default: defineComponent({
+      name: 'TraceabilitySection',
+      setup(_, { expose }) {
+        expose({ refresh: traceState.refresh })
+        onMounted(traceState.mounted)
+        return () => h('section', { class: 'traceability-section-stub' }, '可追溯性')
+      },
+    }),
+  }
+})
 const detail: KnowledgeDocumentDetail = {
   id: 1,
   documentType: 'Sop',
@@ -205,6 +222,7 @@ describe('KnowledgeDocumentDetailView editing', () => {
     actorState.canEdit = true
     vi.mocked(getKnowledgeDocument).mockReset()
     vi.mocked(updateKnowledgeDocumentContent).mockReset()
+    vi.mocked(updateKnowledgeDocumentLifecycle).mockReset()
     vi.mocked(listKnowledgeDocumentRevisions).mockReset()
     vi.mocked(getKnowledgeDocumentRevision).mockReset()
     vi.mocked(ElMessageBox.confirm).mockReset()
@@ -212,6 +230,7 @@ describe('KnowledgeDocumentDetailView editing', () => {
     vi.mocked(getEvidenceList).mockReset()
     vi.mocked(addHumanConfirmation).mockReset()
     vi.mocked(getKnowledgeDocument).mockResolvedValue(detail)
+    vi.mocked(updateKnowledgeDocumentLifecycle).mockResolvedValue(detail)
     vi.mocked(getRelatedKnowledge).mockResolvedValue([])
     vi.mocked(getEvidenceList).mockResolvedValue({ items: [] })
     vi.mocked(listKnowledgeDocumentRevisions).mockResolvedValue({
@@ -258,6 +277,8 @@ describe('KnowledgeDocumentDetailView editing', () => {
     actorState.initialize.mockReset()
     actorState.refreshCurrentUser.mockReset()
     routerState.push.mockReset()
+    traceState.refresh.mockReset()
+    traceState.mounted.mockReset()
   })
 
   it('previews unsaved Markdown and saves title, summary, body and token atomically', async () => {
@@ -904,6 +925,53 @@ describe('KnowledgeDocumentDetailView editing', () => {
     expect(wrapper.text()).toContain('修订历史（3）')
     expect(wrapper.text()).toContain('人工确认覆盖当前修订 3')
     expect(wrapper.text()).not.toContain('内容在最近一次确认后已修改')
+  })
+
+  it('refreshes the Traceability section after relationship, trust, content, status, and lifecycle changes', async () => {
+    const requirement = {
+      ...detail,
+      documentType: 'Requirement' as const,
+      title: '可追溯需求',
+    }
+    vi.mocked(getKnowledgeDocument).mockResolvedValue(requirement)
+    vi.mocked(updateKnowledgeDocumentContent).mockResolvedValue({
+      ...requirement,
+      title: '已保存的可追溯需求',
+      concurrencyToken: 'token-2',
+    })
+    vi.mocked(updateKnowledgeDocumentLifecycle).mockResolvedValue({
+      ...requirement,
+      lifecycleStatus: 'Published',
+      concurrencyToken: 'token-3',
+    })
+    vi.mocked(ElMessageBox.confirm).mockResolvedValue('confirm' as never)
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.find('.traceability-section-stub').exists()).toBe(true)
+    expect(traceState.mounted).toHaveBeenCalledTimes(1)
+    window.dispatchEvent(new CustomEvent('relationship:changed'))
+    window.dispatchEvent(new CustomEvent('evidence:changed'))
+    window.dispatchEvent(
+      new CustomEvent('human-confirmation:changed', {
+        detail: { subject: { type: 'KnowledgeDocument', id: 1 } },
+      }),
+    )
+    window.dispatchEvent(new CustomEvent('knowledge-status:changed'))
+    await flushPromises()
+    expect(traceState.refresh).toHaveBeenCalledTimes(4)
+
+    await button(wrapper, '编辑')?.trigger('click')
+    await button(wrapper, '修改正文')?.trigger('click')
+    await button(wrapper, '保存')?.trigger('click')
+    await flushPromises()
+    expect(updateKnowledgeDocumentContent).toHaveBeenCalledTimes(1)
+    expect(traceState.refresh).toHaveBeenCalledTimes(5)
+    expect(traceState.mounted).toHaveBeenCalledTimes(1)
+
+    await button(wrapper, '发布')?.trigger('click')
+    await flushPromises()
+    expect(traceState.refresh).toHaveBeenCalledTimes(6)
   })
 
   it('adopts a successful Restore detail, exits History, and announces the new revision', async () => {

@@ -43,6 +43,8 @@ import {
   type EvidenceListItemResponse,
   type EvidenceSubjectPayload,
 } from '../../evidence/api/evidenceContracts'
+import { traceDocumentTypes, type TraceDocumentType } from '../api/traceabilityContracts'
+import TraceabilitySection from '../components/TraceabilitySection.vue'
 
 const KnowledgeDocumentEditor = defineAsyncComponent(
   () => import('../editor/KnowledgeDocumentEditor.vue'),
@@ -75,6 +77,7 @@ const relationsError = ref<string | null>(null)
 const evidence = ref<readonly EvidenceListItemResponse[]>([])
 const evidenceLoading = ref(false)
 const evidenceError = ref<string | null>(null)
+const traceabilitySection = ref<InstanceType<typeof TraceabilitySection> | null>(null)
 let detailLoadSequence = 0
 const id = computed(() => {
   const parsed = Number(route.params.id)
@@ -82,6 +85,9 @@ const id = computed(() => {
 })
 const canEdit = computed(() => actorStore.canEdit)
 const isArchived = computed(() => data.value?.lifecycleStatus === 'Archived')
+const supportsTraceability = computed(
+  () => data.value !== null && traceDocumentTypes.includes(data.value.documentType as TraceDocumentType),
+)
 const evidenceSubject = computed<EvidenceSubjectPayload | null>(() =>
   data.value
     ? {
@@ -169,6 +175,9 @@ async function loadEvidence(): Promise<void> {
   } finally {
     evidenceLoading.value = false
   }
+}
+function refreshTraceability(): void {
+  traceabilitySection.value?.refresh()
 }
 function addEvidence(): void {
   if (!evidenceSubject.value || !canEdit.value || isArchived.value || editing.value) return
@@ -288,6 +297,7 @@ async function performSave(): Promise<void> {
       concurrencyToken: data.value.concurrencyToken,
     })
     data.value = response
+    refreshTraceability()
     initialEdit.value = {
       title: response.title,
       summary: response.summary ?? '',
@@ -353,6 +363,7 @@ async function reloadAfterConflict(): Promise<void> {
   saveError.value = null
   validationErrors.value = {}
   await load()
+  refreshTraceability()
 }
 function handleShortcut(event: KeyboardEvent): void {
   if (event.key === 'Escape' && editorFullscreen.value) {
@@ -392,6 +403,7 @@ async function transition(target: DocumentLifecycleStatus): Promise<void> {
       target,
       data.value.concurrencyToken,
     )
+    refreshTraceability()
   } catch (reason: unknown) {
     if (reason === 'cancel' || reason === 'close') return
     transitionError.value =
@@ -419,7 +431,20 @@ function handleCurrentRefreshed(event: Event): void {
     detailLoadSequence += 1
     loading.value = false
     data.value = document
+    refreshTraceability()
   }
+}
+function handleRelationshipChanged(): void {
+  void loadRelations()
+  refreshTraceability()
+}
+function handleEvidenceChanged(): void {
+  void loadEvidence()
+  refreshTraceability()
+}
+function handleKnowledgeStatusChanged(): void {
+  void load()
+  refreshTraceability()
 }
 function handleHumanConfirmationChanged(event: Event): void {
   if (!(event instanceof CustomEvent)) return
@@ -436,6 +461,7 @@ function handleHumanConfirmationChanged(event: Event): void {
   )
     return
   void load()
+  refreshTraceability()
 }
 function handleRestored(event: Event): void {
   const document = readEventDocument(event)
@@ -453,11 +479,13 @@ function handleRestored(event: Event): void {
   detailLoadSequence += 1
   loading.value = false
   data.value = document
+  refreshTraceability()
   historyMode.value = false
   savedMessage.value = `已从修订 ${detailValue.sourceRevisionNumber} 恢复，并创建修订 ${document.currentRevisionNumber}`
 }
 watch(id, () => {
   historyMode.value = false
+  data.value = null
   void load()
   void loadRelations()
   void loadEvidence()
@@ -479,10 +507,10 @@ onMounted(() => {
   void load()
   void loadRelations()
   void loadEvidence()
-  window.addEventListener('relationship:changed', loadRelations)
-  window.addEventListener('evidence:changed', loadEvidence)
+  window.addEventListener('relationship:changed', handleRelationshipChanged)
+  window.addEventListener('evidence:changed', handleEvidenceChanged)
   window.addEventListener('human-confirmation:changed', handleHumanConfirmationChanged)
-  window.addEventListener('knowledge-status:changed', load)
+  window.addEventListener('knowledge-status:changed', handleKnowledgeStatusChanged)
   window.addEventListener('knowledge-document:current-refreshed', handleCurrentRefreshed)
   window.addEventListener('knowledge-document:restored', handleRestored)
 })
@@ -491,10 +519,10 @@ onBeforeUnmount(() => {
   document.body.classList.remove('knowledge-document-editor-fullscreen-active')
   window.removeEventListener('keydown', handleShortcut)
   window.removeEventListener('beforeunload', beforeUnload)
-  window.removeEventListener('relationship:changed', loadRelations)
-  window.removeEventListener('evidence:changed', loadEvidence)
+  window.removeEventListener('relationship:changed', handleRelationshipChanged)
+  window.removeEventListener('evidence:changed', handleEvidenceChanged)
   window.removeEventListener('human-confirmation:changed', handleHumanConfirmationChanged)
-  window.removeEventListener('knowledge-status:changed', load)
+  window.removeEventListener('knowledge-status:changed', handleKnowledgeStatusChanged)
   window.removeEventListener('knowledge-document:current-refreshed', handleCurrentRefreshed)
   window.removeEventListener('knowledge-document:restored', handleRestored)
 })
@@ -644,6 +672,11 @@ onBeforeUnmount(() => {
         <p v-if="!data.bodyMarkdown.trim()" class="text-muted">该文档暂无正文。</p>
         <KnowledgeDocumentMarkdown v-else :markdown="data.bodyMarkdown" />
       </section>
+      <TraceabilitySection
+        v-if="!historyMode && supportsTraceability"
+        ref="traceabilitySection"
+        :document-id="data.id"
+      />
       <section v-if="!historyMode && !editing" class="knowledge-document-relations">
         <div class="knowledge-document-relations__heading">
           <h2>关联对象</h2>
