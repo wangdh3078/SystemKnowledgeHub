@@ -1,6 +1,6 @@
 # PHASE-REV-DELTA-VERIFY-R01 — Revision Phase Final Delta Verification Report
 
-Verification date: 2026-08-25  
+Verification date: 2026-08-25
 Scope: final delta verification after `REV-FIX-01` and `UI-KC-B05-R06`
 
 ## Result
@@ -281,17 +281,18 @@ No repository migration, seed, reset, delete, replacement, or verification write
 
 ## Existing Low Gaps
 
-No deferred Low gap was opportunistically broadened or silently closed:
+The original six-Low-gap baseline is fully reflected below. `REV-GAP-005` has formal closure evidence; the remaining five Low gaps stay explicitly deferred and were not opportunistically broadened or silently closed:
 
 | Gap | Current Status | Delta Finding |
 |---|---|---|
+| REV-GAP-005 | **CLOSED — UI-KC-FIX-01** | Selective production bootstrap imports/registers `ElTooltip` and its CSS; visible toolbar actions retain tooltip, matching `aria-label`, and hover/focus triggers. Production-like mount plus isolated Browser hover/focus and fresh-console evidence satisfied the closure condition, and the R06 affected gate found no regression. |
 | REV-GAP-006 | OPEN / Deferred | Restore ancestor dialog accessible name remains outside this delta; core restore behavior passed. |
 | REV-GAP-007 | OPEN / Deferred | Nested History `main` landmark remains outside this delta; visual/history behavior passed. |
 | REV-GAP-008 | OPEN / Deferred | Published-confirm overlay coordination edge remains outside this delta; required confirmation/write safety passed. |
 | REV-GAP-009 | OPEN / Deferred | Direct Version rollback assertion remains absent; transaction/no-partial-write evidence passed. |
 | REV-GAP-011 | OPEN / Deferred | Default parallel backend-suite stall remains; deterministic serial suite passed 123/123. |
 
-These Low items do not break core revision safety and remain recorded in the existing Gap Register.
+`REV-GAP-005` remains formally closed in the Gap Register with its original description, risk, acceptance condition, and `UI-KC-FIX-01` closure evidence preserved. The other five Low items do not break core revision safety and remain OPEN / Deferred in the existing Gap Register.
 
 ## New Gap Check
 
@@ -327,7 +328,7 @@ This report does not claim Production Ready or Team Production Approved. Product
 
 ## PHASE-REV Closure Decision
 
-All PASS gates are satisfied: the five Medium closures were revalidated; canonical/immutable revision behavior, raw-source R06 behavior, HC/status independence, FTS current-only, security, full serial backend, affected frontend, isolated runtime, SQLite integrity, repository DB protection, new-gap check, and cleanup all passed.
+All PASS gates are satisfied: the five Medium closures and the existing `REV-GAP-005` Low closure were revalidated; canonical/immutable revision behavior, raw-source R06 behavior, HC/status independence, FTS current-only, security, full serial backend, affected frontend, isolated runtime, SQLite integrity, repository DB protection, new-gap check, and cleanup all passed. The five remaining Low gaps stay explicitly deferred and do not reopen PHASE-REV.
 
 ```text
 PHASE-REV CLOSED
