@@ -2,7 +2,7 @@
 
 ## Result
 
-TRACE-B02 FAIL.
+TRACE-B02 PASS — superseded by TRACE-B02-REVERIFY-R01.
 
 ## Worktree Baseline
 
@@ -182,4 +182,74 @@ TRACE-B03 can build on a stable, read-only detail-page projection surface, reusa
 
 ## Final Result
 
-TRACE-B02 FAIL.
+TRACE-B02 PASS — superseded by TRACE-B02-REVERIFY-R01.
+
+## TRACE-B02-REVERIFY-R01
+
+### Result
+
+TRACE-B02-REVERIFY-R01 PASS.
+
+### Scope and original result
+
+This focused reverification made no product source, API, CSS, test, schema, migration, or runtime-configuration change. It preserves the initial TRACE-B02 FAIL evidence above: the original repository-database comparison was not isolated from a pre-existing process. This run establishes a new quiescent baseline and proves the isolated B02 verification path keeps the repository database unchanged.
+
+### Repository DB writer gate
+
+Before taking the new baseline, the only existing `dotnet` processes were the VS Code ProjectSystem BuildHost (PID 29164) and a pre-existing VSTest host (PID 22336). Neither was `SystemKnowledgeHub.Api`; no repository `system-knowledge-hub.db-wal` or `system-knowledge-hub.db-shm` file existed. Neither user-owned process was stopped or reconfigured.
+
+### Isolated runtime
+
+- Runtime database: `C:\\tmp\\skh-trace-b02-reverify-r01\\trace-b02-reverify.db`
+- API: PID 29444, `http://127.0.0.1:5098`
+- Vite: root PID 30736, `http://127.0.0.1:5188`, explicit proxy `http://127.0.0.1:5098`
+- Data Protection: `C:\\tmp\\skh-trace-b02-reverify-r01\\keys`
+- Runtime confirmation: `GET /api/auth/options` returned `localLoginEnabled=true`, `oidcLoginEnabled=false`; the temporary DB, WAL/SHM, migrations, seed data, and disposable local Administrator were created under the temporary root only.
+
+### Repository DB protection
+
+| Fingerprint | Before | After | Result |
+| --- | --- | --- | --- |
+| Length | 724,992 | 724,992 | unchanged |
+| LastWriteTimeUtc | 2026-08-25T11:46:34.6467938Z | 2026-08-25T11:46:34.6467938Z | unchanged |
+| SHA-256 | 5008CF8E966B84070336A0ACFEE1E72CAC691134CE608295AAC50D411DD73E11 | 5008CF8E966B84070336A0ACFEE1E72CAC691134CE608295AAC50D411DD73E11 | unchanged |
+| WAL / SHM | absent | absent | unchanged |
+
+Repository DB Protection: PASS.
+
+### Focused browser smoke
+
+Using the isolated browser tab and disposable administrator, the following passed:
+
+- local login;
+- creation/opening of a Requirement with the `可追溯性` section after rendered body and before `关联对象`;
+- explicit missing Specification/Test Definition state;
+- R06 minimum regression: edit mode shows raw Markdown source and toolbar, page Save succeeds, read mode returns with Traceability still available;
+- creation of an isolated Specification and `Requirement --SpecifiedBy--> Specification` through existing relationship authoring;
+- refreshed Requirement linked state (`规格说明覆盖：已建立`), branch-level `缺少测试定义`, existing relationship drawer, and navigation to the related Specification;
+- Specification upstream Requirement context and missing Test Definition state.
+
+The browser console contained no warning, error, or unhandled rejection.
+
+### Automated reverification
+
+- `npm run type-check`: PASS.
+- `npm run build`: PASS (only the pre-existing Vite large-chunk advisory).
+- Affected Vitest: PASS, 3 files / 36 tests.
+- `TraceabilityApiTests`: PASS, 12/12.
+
+### Cleanup
+
+The task-owned browser tab was closed. Task-owned API/Vite PID tree `29444, 30736, 27616, 10468, 13768, 1320, 35044` was stopped by exact PID; ports 5098/5188 had no listeners. The temporary SQLite/WAL/SHM, Data Protection keys, disposable administrator, and logs were deleted. No user-owned process or repository database companion file was deleted.
+
+### Supersession
+
+```text
+TRACE-B02 initial verification: FAIL
+Reason: repository DB fingerprint attribution was not isolated.
+
+TRACE-B02-REVERIFY-R01: PASS
+
+Final TRACE-B02 Result: PASS
+TRACE-B03 READY: YES
+```
