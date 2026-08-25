@@ -1,7 +1,7 @@
 import { defineComponent, h } from 'vue'
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { ApiError } from '../../../api/errors/ApiError'
 import type { KnowledgeDocumentDetail } from '../api/knowledgeDocumentContracts'
 import KnowledgeDocumentDetailView from './KnowledgeDocumentDetailView.vue'
@@ -225,6 +225,7 @@ describe('KnowledgeDocumentDetailView editing', () => {
     vi.mocked(updateKnowledgeDocumentLifecycle).mockReset()
     vi.mocked(listKnowledgeDocumentRevisions).mockReset()
     vi.mocked(getKnowledgeDocumentRevision).mockReset()
+    vi.mocked(ElMessage.success).mockReset()
     vi.mocked(ElMessageBox.confirm).mockReset()
     vi.mocked(getRelatedKnowledge).mockReset()
     vi.mocked(getEvidenceList).mockReset()
@@ -315,7 +316,9 @@ describe('KnowledgeDocumentDetailView editing', () => {
       bodyMarkdown: '## 新步骤\n\n1. 已修改',
       concurrencyToken: 'token-1',
     })
-    expect(wrapper.text()).toContain('已保存。')
+    expect(wrapper.text()).not.toContain('已保存。')
+    expect(ElMessage.success).toHaveBeenCalledWith('已保存。')
+    expect(wrapper.find('.knowledge-document-body > h2').exists()).toBe(false)
     expect(wrapper.find('textarea').exists()).toBe(false)
     expect(wrapper.text()).toContain('更新后的 SOP')
   })
@@ -359,7 +362,8 @@ describe('KnowledgeDocumentDetailView editing', () => {
         concurrencyToken: 'published-token',
       }),
     )
-    expect(wrapper.text()).toContain('已保存。')
+    expect(wrapper.text()).not.toContain('已保存。')
+    expect(ElMessage.success).toHaveBeenCalledWith('已保存。')
   })
 
   it('keeps one mounted workspace through Preview and Fullscreen, then exits with Escape', async () => {
@@ -432,7 +436,8 @@ describe('KnowledgeDocumentDetailView editing', () => {
     expect(wrapper.text()).toContain('正在保存…')
     deferredSave.complete?.({ ...detail, title: '保存状态验证', concurrencyToken: 'token-2' })
     await flushPromises()
-    expect(wrapper.text()).toContain('已保存。')
+    expect(wrapper.text()).not.toContain('已保存。')
+    expect(ElMessage.success).toHaveBeenCalledWith('已保存。')
   })
 
   it('keeps the edit state and local content after a stale conflict', async () => {
@@ -484,7 +489,7 @@ describe('KnowledgeDocumentDetailView editing', () => {
 
     await button(wrapper, '返回当前内容')?.trigger('click')
     await flushPromises()
-    expect(wrapper.text()).toContain('正文')
+    expect(wrapper.find('.knowledge-document-body > h2').exists()).toBe(false)
     expect(wrapper.text()).toContain('检查连接')
   })
 
@@ -736,7 +741,8 @@ describe('KnowledgeDocumentDetailView editing', () => {
     await button(wrapper, '保存')?.trigger('click')
     await flushPromises()
     expect(updateKnowledgeDocumentContent).toHaveBeenCalledTimes(1)
-    expect(wrapper.text()).toContain('已保存。')
+    expect(wrapper.text()).not.toContain('已保存。')
+    expect(ElMessage.success).toHaveBeenCalledWith('已保存。')
     expect(wrapper.text()).toContain('已发布内容的新标题')
   })
 

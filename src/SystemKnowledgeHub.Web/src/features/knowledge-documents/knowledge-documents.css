@@ -484,7 +484,6 @@ body.knowledge-document-editor-fullscreen-active {
   padding-bottom: 9px;
   color: var(--color-muted);
 }
-.knowledge-document-body h2,
 .knowledge-document-meta h2 {
   margin: 0 0 15px;
   color: var(--color-ink);

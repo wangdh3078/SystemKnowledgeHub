@@ -306,7 +306,7 @@ async function performSave(): Promise<void> {
     editing.value = false
     previewing.value = false
     editorFullscreen.value = false
-    savedMessage.value = '已保存。'
+    ElMessage.success('已保存。')
   } catch (reason: unknown) {
     if (reason instanceof ApiError && reason.status === 409) {
       saveError.value = '文档已被其他操作修改。请重新加载最新内容后再继续编辑。'
@@ -668,7 +668,6 @@ onBeforeUnmount(() => {
         </p>
       </section>
       <section v-else-if="!historyMode" class="knowledge-document-body">
-        <h2>正文</h2>
         <p v-if="!data.bodyMarkdown.trim()" class="text-muted">该文档暂无正文。</p>
         <KnowledgeDocumentMarkdown v-else :markdown="data.bodyMarkdown" />
       </section>
