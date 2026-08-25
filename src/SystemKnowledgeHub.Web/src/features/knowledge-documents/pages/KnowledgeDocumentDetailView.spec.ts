@@ -12,7 +12,7 @@ import {
   updateKnowledgeDocumentLifecycle,
   updateKnowledgeDocumentContent,
 } from '../api/knowledgeDocumentsApi'
-import { getRelatedKnowledge } from '../../relationships/api/relationshipApi'
+import { deleteRelationship, getRelatedKnowledge } from '../../relationships/api/relationshipApi'
 import { addHumanConfirmation, getEvidenceList } from '../../evidence/api/evidenceApi'
 import AddHumanConfirmationDrawer from '../../evidence/components/AddHumanConfirmationDrawer.vue'
 
@@ -228,11 +228,13 @@ describe('KnowledgeDocumentDetailView editing', () => {
     vi.mocked(ElMessage.success).mockReset()
     vi.mocked(ElMessageBox.confirm).mockReset()
     vi.mocked(getRelatedKnowledge).mockReset()
+    vi.mocked(deleteRelationship).mockReset()
     vi.mocked(getEvidenceList).mockReset()
     vi.mocked(addHumanConfirmation).mockReset()
     vi.mocked(getKnowledgeDocument).mockResolvedValue(detail)
     vi.mocked(updateKnowledgeDocumentLifecycle).mockResolvedValue(detail)
     vi.mocked(getRelatedKnowledge).mockResolvedValue([])
+    vi.mocked(deleteRelationship).mockResolvedValue()
     vi.mocked(getEvidenceList).mockResolvedValue({ items: [] })
     vi.mocked(listKnowledgeDocumentRevisions).mockResolvedValue({
       items: [
@@ -978,6 +980,45 @@ describe('KnowledgeDocumentDetailView editing', () => {
     await button(wrapper, '发布')?.trigger('click')
     await flushPromises()
     expect(traceState.refresh).toHaveBeenCalledTimes(6)
+  })
+
+  it('uses the shared authoritative relationship refresh after remove and re-add', async () => {
+    const relatedTestCase = {
+      id: 41,
+      direction: 'Outgoing' as const,
+      relationType: 'VerifiedBy' as const,
+      related: { type: 'KnowledgeDocument' as const, id: 3 },
+      title: 'TRACE TestCase T',
+      objectTypeLabel: '知识文档',
+    }
+    vi.mocked(getKnowledgeDocument).mockResolvedValue({
+      ...detail,
+      documentType: 'Specification',
+      title: 'TRACE Specification S',
+    })
+    vi.mocked(getRelatedKnowledge)
+      .mockResolvedValueOnce([relatedTestCase])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([relatedTestCase])
+    vi.mocked(ElMessageBox.confirm).mockResolvedValue('confirm' as never)
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('TRACE TestCase T')
+    await button(wrapper, '移除')?.trigger('click')
+    await flushPromises()
+
+    expect(deleteRelationship).toHaveBeenCalledWith(41)
+    expect(getRelatedKnowledge).toHaveBeenCalledTimes(2)
+    expect(traceState.refresh).toHaveBeenCalledTimes(1)
+    expect(wrapper.text()).not.toContain('TRACE TestCase T')
+
+    window.dispatchEvent(new CustomEvent('relationship:changed'))
+    await flushPromises()
+
+    expect(getRelatedKnowledge).toHaveBeenCalledTimes(3)
+    expect(traceState.refresh).toHaveBeenCalledTimes(2)
+    expect(wrapper.text()).toContain('TRACE TestCase T')
   })
 
   it('adopts a successful Restore detail, exits History, and announces the new revision', async () => {

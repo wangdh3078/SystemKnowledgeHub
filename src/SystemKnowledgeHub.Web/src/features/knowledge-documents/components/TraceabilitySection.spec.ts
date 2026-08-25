@@ -111,6 +111,14 @@ function specificationTrace(): SpecificationTraceabilityResponse {
   }
 }
 
+function coveredSpecificationTrace(): SpecificationTraceabilityResponse {
+  return {
+    ...specificationTrace(),
+    coverage: { eligibility: 'Active', hasTestDefinition: true, missingLinkCodes: [] },
+    testCases: [relation(31, node(3, 'TestCase', '测试 T'))],
+  }
+}
+
 function testCaseTrace(): TestCaseTraceabilityResponse {
   return {
     root: node(3, 'TestCase', '测试 T'),
@@ -299,5 +307,61 @@ describe('TraceabilitySection', () => {
     await flushPromises()
 
     expect(getKnowledgeDocumentTraceability).toHaveBeenCalledTimes(2)
+  })
+
+  it('replaces covered and missing Specification states through authoritative refreshes', async () => {
+    vi.mocked(getKnowledgeDocumentTraceability)
+      .mockResolvedValueOnce(coveredSpecificationTrace())
+      .mockResolvedValueOnce(specificationTrace())
+      .mockResolvedValueOnce(coveredSpecificationTrace())
+    const wrapper = mountSection(2)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('测试 T')
+    ;(wrapper.vm as unknown as { refresh: () => void }).refresh()
+    await flushPromises()
+    expect(wrapper.text()).toContain('缺少测试定义')
+    expect(wrapper.text()).not.toContain('测试 T')
+
+    ;(wrapper.vm as unknown as { refresh: () => void }).refresh()
+    await flushPromises()
+    expect(wrapper.text()).toContain('测试 T')
+    expect(wrapper.text()).not.toContain('缺少测试定义')
+  })
+
+  it('does not present stale trace data when an authoritative refresh fails', async () => {
+    vi.mocked(getKnowledgeDocumentTraceability)
+      .mockResolvedValueOnce(coveredSpecificationTrace())
+      .mockRejectedValueOnce(new Error('refresh failed'))
+    const wrapper = mountSection(2)
+    await flushPromises()
+    expect(wrapper.text()).toContain('测试 T')
+
+    ;(wrapper.vm as unknown as { refresh: () => void }).refresh()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('可追溯性加载失败')
+    expect(wrapper.text()).not.toContain('测试 T')
+  })
+
+  it('keeps the newest same-root refresh when an older refresh completes last', async () => {
+    let resolveA: ((value: TraceabilityResponse) => void) | undefined
+    let resolveB: ((value: TraceabilityResponse) => void) | undefined
+    vi.mocked(getKnowledgeDocumentTraceability)
+      .mockResolvedValueOnce(coveredSpecificationTrace())
+      .mockImplementationOnce(() => new Promise<TraceabilityResponse>((resolve) => { resolveA = resolve }))
+      .mockImplementationOnce(() => new Promise<TraceabilityResponse>((resolve) => { resolveB = resolve }))
+    const wrapper = mountSection(2)
+    await flushPromises()
+
+    ;(wrapper.vm as unknown as { refresh: () => void }).refresh()
+    ;(wrapper.vm as unknown as { refresh: () => void }).refresh()
+    resolveB?.(specificationTrace())
+    await flushPromises()
+    resolveA?.(coveredSpecificationTrace())
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('缺少测试定义')
+    expect(wrapper.text()).not.toContain('测试 T')
   })
 })

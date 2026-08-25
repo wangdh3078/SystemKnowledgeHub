@@ -232,7 +232,7 @@ async function removeRelation(item: RelatedKnowledge): Promise<void> {
       type: 'warning',
     })
     await deleteRelationship(item.id)
-    await loadRelations()
+    window.dispatchEvent(new CustomEvent('relationship:changed'))
     ElMessage.success('关联已移除。')
   } catch (reason: unknown) {
     if (reason !== 'cancel' && reason !== 'close')
