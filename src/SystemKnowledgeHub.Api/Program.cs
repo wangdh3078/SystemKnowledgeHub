@@ -120,6 +120,7 @@ builder.Services.AddScoped<SystemQueries>();
 builder.Services.AddScoped<SystemKnowledgeViewQueries>();
 builder.Services.AddScoped<SystemService>();
 builder.Services.AddScoped<TraceabilityQueries>();
+builder.Services.AddScoped<ImpactQueries>();
 builder.Services.AddScoped<UnknownItemQueries>();
 builder.Services.AddScoped<UnknownItemService>();
 builder.Services.AddScoped<KnowledgeResolutionService>();

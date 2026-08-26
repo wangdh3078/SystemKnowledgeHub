@@ -18,6 +18,7 @@ namespace SystemKnowledgeHub.Api.Features.KnowledgeDocuments.Api;
 public sealed class KnowledgeDocumentsController(
     KnowledgeDocumentQueries queries,
     TraceabilityQueries traceabilityQueries,
+    ImpactQueries impactQueries,
     KnowledgeDocumentService service,
     ICurrentUserContext currentUserContext) : ControllerBase
 {
@@ -73,6 +74,76 @@ public sealed class KnowledgeDocumentsController(
                 null,
                 null)),
             _ => throw new InvalidOperationException("Unsupported traceability query result."),
+        };
+    }
+
+    [HttpGet("{id}/traceability/impact")]
+    public async Task<ActionResult<ImpactResponse>> GetImpact(
+        string id,
+        [FromQuery] string? page,
+        [FromQuery] string? pageSize,
+        CancellationToken cancellationToken)
+    {
+        var fieldErrors = new Dictionary<string, string[]>();
+        var unsupportedQueryKeys = Request.Query.Keys
+            .Where(key => !key.Equals("page", StringComparison.OrdinalIgnoreCase)
+                && !key.Equals("pageSize", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(key => key, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (unsupportedQueryKeys.Length > 0)
+        {
+            fieldErrors["query"] =
+            [
+                $"影响上下文只接受 page 和 pageSize；不支持：{string.Join("、", unsupportedQueryKeys)}。",
+            ];
+        }
+        if (!ApiIdParser.TryParse(id, out var knowledgeDocumentId))
+        {
+            fieldErrors["id"] = ["文档 ID 必须是 JavaScript 安全范围内的正整数。"];
+        }
+        var parsedPage = 1L;
+        if (page is not null && !ApiIdParser.TryParse(page, out parsedPage))
+        {
+            fieldErrors["page"] = ["页码必须是 JavaScript 安全范围内的正整数。"];
+        }
+        var parsedPageSize = ImpactQueries.DefaultPageSize;
+        if (pageSize is not null)
+        {
+            if (!ApiIdParser.TryParse(pageSize, out var parsedPageSizeValue)
+                || parsedPageSizeValue > ImpactQueries.MaximumPageSize)
+            {
+                fieldErrors["pageSize"] = ["每页数量必须是 1 到 100 之间的整数。"];
+            }
+            else
+            {
+                parsedPageSize = (int)parsedPageSizeValue;
+            }
+        }
+        if (fieldErrors.Count > 0)
+        {
+            return BadRequest(ValidationError(fieldErrors));
+        }
+
+        var result = await impactQueries.Get(
+            knowledgeDocumentId,
+            parsedPage,
+            parsedPageSize,
+            cancellationToken);
+        return result.Failure switch
+        {
+            ImpactQueryFailure.None => Ok(result.Response),
+            ImpactQueryFailure.NotFound => NotFound(NotFound(knowledgeDocumentId)),
+            ImpactQueryFailure.UnsupportedDocumentType => UnprocessableEntity(new ApiErrorResponse(
+                "business_rule_violation",
+                "只有需求、规格说明和测试用例支持影响上下文读取。",
+                null,
+                new { resourceType = "KnowledgeDocument", resourceId = knowledgeDocumentId })),
+            ImpactQueryFailure.ReferenceInvalid => UnprocessableEntity(new ApiErrorResponse(
+                "reference_invalid",
+                "影响上下文关系包含缺失或不符合契约的端点。",
+                null,
+                null)),
+            _ => throw new InvalidOperationException("Unsupported Impact query result."),
         };
     }
 

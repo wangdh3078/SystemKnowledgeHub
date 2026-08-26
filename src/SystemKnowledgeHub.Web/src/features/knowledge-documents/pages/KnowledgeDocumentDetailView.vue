@@ -45,6 +45,7 @@ import {
 } from '../../evidence/api/evidenceContracts'
 import { traceDocumentTypes, type TraceDocumentType } from '../api/traceabilityContracts'
 import TraceabilitySection from '../components/TraceabilitySection.vue'
+import ImpactContextSection from '../components/ImpactContextSection.vue'
 
 const KnowledgeDocumentEditor = defineAsyncComponent(
   () => import('../editor/KnowledgeDocumentEditor.vue'),
@@ -78,6 +79,7 @@ const evidence = ref<readonly EvidenceListItemResponse[]>([])
 const evidenceLoading = ref(false)
 const evidenceError = ref<string | null>(null)
 const traceabilitySection = ref<InstanceType<typeof TraceabilitySection> | null>(null)
+const impactContextSection = ref<InstanceType<typeof ImpactContextSection> | null>(null)
 let detailLoadSequence = 0
 const id = computed(() => {
   const parsed = Number(route.params.id)
@@ -178,6 +180,9 @@ async function loadEvidence(): Promise<void> {
 }
 function refreshTraceability(): void {
   traceabilitySection.value?.refresh()
+}
+function refreshImpactContext(): void {
+  impactContextSection.value?.refresh()
 }
 function addEvidence(): void {
   if (!evidenceSubject.value || !canEdit.value || isArchived.value || editing.value) return
@@ -437,6 +442,7 @@ function handleCurrentRefreshed(event: Event): void {
 function handleRelationshipChanged(): void {
   void loadRelations()
   refreshTraceability()
+  refreshImpactContext()
 }
 function handleEvidenceChanged(): void {
   void loadEvidence()
@@ -674,6 +680,11 @@ onBeforeUnmount(() => {
       <TraceabilitySection
         v-if="!historyMode && supportsTraceability"
         ref="traceabilitySection"
+        :document-id="data.id"
+      />
+      <ImpactContextSection
+        v-if="!historyMode && supportsTraceability"
+        ref="impactContextSection"
         :document-id="data.id"
       />
       <section v-if="!historyMode && !editing" class="knowledge-document-relations">

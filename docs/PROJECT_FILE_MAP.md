@@ -181,14 +181,15 @@ Search 第一版采用 SQLite 受限 `LIKE` 投影；未创建 FTS5 virtual tabl
 
 以上 `...` 均指 `src/SystemKnowledgeHub.Api/Features/Users/`。
 
-### 1.15 Traceability — TRACE-B01
+### 1.15 Traceability — TRACE-B01 / TRACE-B03
 
 | 路径 | 一句话职责 | Feature / Vertical Slice | 为什么需要 |
 | --- | --- | --- | --- |
 | `src/SystemKnowledgeHub.Api/Features/Traceability/Application/TraceabilityQueries.cs` | 从当前 KnowledgeDocument、KnowledgeRelation 与 Evidence canonical truth 实时派生 Requirement / Specification / TestCase 页面读模型、coverage、trust 与 direct Supersedes lineage。 | Traceability / TRACE-B01 | 以有界、批量、只读 EF 查询落实 TRACE-A01，不建立 graph store、cache、background projector 或 generic projection framework。 |
 | `.../Application/Models/TraceabilityModels.cs` | 定义三个 root-specific discriminated response 及 coverage、trust、lineage、cycle、truncation 的封闭枚举/DTO。 | Traceability / TRACE-B01 | 后端拥有 trace semantics，前端无需从 generic `nodes[]` / `edges[]` 重建业务含义。 |
 | `.../Application/TraceTraversalGuard.cs` | 对固定 depth-2 path 检测重复 node / relationship 并暴露 cycle flag。 | Traceability / TRACE-B01 | 对数据库约束以外的损坏数据提供 request-local defensive cycle protection。 |
-| `src/SystemKnowledgeHub.Api/Features/KnowledgeDocuments/Api/KnowledgeDocumentsController.cs` | 在既有文档 Controller 增加 `GET /api/knowledge-documents/{id}/traceability`，复用安全 ID、授权与标准错误 contract。 | Traceability / TRACE-B01 | 保持 KnowledgeDocument canonical route 边界，不新增第二套对象 API。 |
+| `.../Application/ImpactQueries.cs`、`Models/ImpactModels.cs` | 以 Requirement / Specification / TestCase root-specific fixed branches 派生 depth-2 Impact、封闭 path/meaning、最小 target metadata 与后端分页。 | Traceability / TRACE-B03 | 落实 bounded review context，不建立 graph traversal、cache、N+1 resolver 或新 truth store。 |
+| `src/SystemKnowledgeHub.Api/Features/KnowledgeDocuments/Api/KnowledgeDocumentsController.cs` | 在既有文档 Controller 暴露 Traceability 与 bounded Impact GET endpoints，复用安全 ID、授权与标准错误 contract。 | Traceability / TRACE-B01 / TRACE-B03 | 保持 KnowledgeDocument canonical route 边界，不新增第二套对象 API。 |
 
 以上 `...` 均指 `src/SystemKnowledgeHub.Api/Features/Traceability/`。
 
@@ -417,12 +418,15 @@ Search 第一版采用 SQLite 受限 `LIKE` 投影；未创建 FTS5 virtual tabl
 
 以上 `...` 均指 `src/SystemKnowledgeHub.Web/src/features/users/`。
 
-### 2.17 Traceability API boundary — TRACE-B01
+### 2.17 Traceability frontend boundary and UX — TRACE-B01 / TRACE-B03
 
 | 路径 | 一句话职责 | Feature / Vertical Slice | 为什么需要 |
 | --- | --- | --- | --- |
 | `.../features/knowledge-documents/api/traceabilityContracts.ts` | 定义并 fail-closed 解码 Requirement / Specification / TestCase trace、coverage、trust、lineage 与 limits 的 closed wire union。 | Traceability / TRACE-B01 | 在不增加产品 UI 的前提下建立 TRACE-B02 可复用的严格前端 API boundary。 |
 | `.../features/knowledge-documents/api/traceabilityApi.ts` | 校验 JavaScript-safe ID，并通过 shared `apiClient` 调用 trace endpoint。 | Traceability / TRACE-B01 | 复用既有 HTTP/error/decoder 约定，不增加 schema library 或 Feature-local fetch。 |
+| `.../features/knowledge-documents/api/impactContracts.ts`、`impactApi.ts` | 定义/解码封闭 Impact path、meaning、target、pagination contract，并通过 shared `apiClient` 调用 bounded endpoint。 | Traceability / TRACE-B03 | 前端 fail-closed 消费 server-owned semantics，不从 generic edges 推理或自行排序/分页。 |
+| `.../features/knowledge-documents/components/ImpactContextSection.vue` | 在 KnowledgeDocument Detail 内独立加载、分组、分页和导航 bounded review context，并处理空态、错误、竞态与 refresh。 | Traceability / TRACE-B03 | 在 Traceability 后、Relationships 前提供可解释上下文，不新增 route/drawer 或 blast-radius 表述。 |
+| `.../features/knowledge-documents/pages/KnowledgeDocumentDetailView.vue` | 通过既有 `relationship:changed` 协调 Relationships、Traceability 与 Impact 的 authoritative refresh。 | Traceability / TRACE-B02 / TRACE-B03 | 关系 mutation 后无需硬刷新即可保持三个读取面 current，且不创建第二写入路径。 |
 
 以上 `...` 均指 `src/SystemKnowledgeHub.Web/src/`；TRACE-B01 未增加 Vue component、CSS、route 或可见产品交互。
 
@@ -456,6 +460,7 @@ Search 第一版采用 SQLite 受限 `LIKE` 投影；未创建 FTS5 virtual tabl
 | `.../Api/UsersApiTests.cs` | 验证 User/KnowledgeRole 创建读取、NOCASE 唯一性、角色映射、启停语义与 stale token。 | Users / U01 | 用 3 个真实 SQLite/HTTP 测试覆盖 User Foundation 的高风险持久化和并发规则。 |
 | `.../Api/CurrentUserApiTests.cs` | 验证 Header 解析、Active Profile、缺失/无效/不存在/停用错误与无 Header Admin API 兼容。 | Users / U03 | 用 2 个真实 SQLite/HTTP 测试覆盖 Current User Context 的关键边界。 |
 | `.../Api/TraceabilityApiTests.cs` | 以真实 SQLite/HTTP 覆盖三种 root、coverage 边界、生命周期、trust、Supersedes、cycle、limits、排序、授权、fail-closed、只读不变量、query plan 与 fan-out payload。 | Traceability / TRACE-B01 | 保护派生 trace 的语义正确性、bounded-query safety 与 canonical write isolation。 |
+| `.../Api/ImpactApiTests.cs` | 以真实 SQLite/HTTP 覆盖七种 allowed path、forbidden path、五类 target、分页排序、distinct meaning、授权、fail-closed、只读、mutation refresh 与 query plan。 | Traceability / TRACE-B03 | 保护 bounded Impact semantics、API safety、canonical truth 与现有索引策略。 |
 
 以上 `...` 均指 `tests/SystemKnowledgeHub.Api.Tests/`。
 
@@ -473,6 +478,8 @@ Search 第一版采用 SQLite 受限 `LIKE` 投影；未创建 FTS5 virtual tabl
 | `.../src/features/database-knowledge/composables/*.spec.ts` | 验证对象/字段加载与 Drawer descriptor。 | DatabaseKnowledge / VS-01 | 保护页面关键交互状态。 |
 | `.../src/components/data-display/KnowledgeStatusBadge.spec.ts` | 验证 KnowledgeStatus 的冻结中文标签映射。 | Shared knowledge UI / VS-01 | 防止英文 wire value 被直接显示或中文术语漂移。 |
 | `.../src/features/knowledge-documents/api/traceabilityContracts.spec.ts` | 覆盖三个 discriminated root、coverage/trust/lineage/truncation 及非法 enum / malformed payload fail-closed。 | Traceability / TRACE-B01 | 在 TRACE UI 之前冻结并验证严格前端读取边界。 |
+| `.../src/features/knowledge-documents/api/impactContracts.spec.ts` | 覆盖全部 Impact pathKind/meaning/target、path consistency、pagination 与 malformed payload fail-closed。 | Traceability / TRACE-B03 | 保护 strict runtime decoder 与闭集 contract。 |
+| `.../src/features/knowledge-documents/components/ImpactContextSection.spec.ts`、`pages/KnowledgeDocumentDetailView.spec.ts` | 覆盖三类 root 文案、空/错/重试、分页、导航、竞态、关系 mutation refresh 与详情层级。 | Traceability / TRACE-B03 | 证明独立状态、authoritative refresh 和 UI placement 不回归 B02/R06。 |
 | `.../src/test/setup.ts` | 提供 Vitest/Vue Test Utils 的公共测试初始化。 | Frontend test foundation | 保持测试环境最小一致。 |
 
 以上前端 `...` 均指 `src/SystemKnowledgeHub.Web/`。
@@ -542,6 +549,7 @@ Search 第一版采用 SQLite 受限 `LIKE` 投影；未创建 FTS5 virtual tabl
 | `docs/reports/REV_B01_IMMUTABLE_REVISION_FOUNDATION_VERIFICATION_REPORT.md` | 记录 immutable revision schema、baseline backfill、原子 snapshot 与 trusted attribution 的验证。 | Revision / REV-B01 | 证明 Revision Foundation 已实现并通过 focused gate。 |
 | `docs/design/TRACE_A01_TRACEABILITY_ARCHITECTURE_AND_CONTRACT_DECISION.md` | 冻结 derived trace、coverage、trust、lineage、limits 与三类 page-oriented response 的架构合同。 | Traceability / TRACE-A01 | 是 PHASE-TRACE 实施的直接权威依据。 |
 | `docs/reports/TRACE_B01_DERIVED_TRACE_READ_FOUNDATION_VERIFICATION_REPORT.md` | 记录 TRACE-B01 endpoint、查询策略、三类 projection、自动化、SQLite runtime/query-plan、数据库保护与 B02 readiness。 | Traceability / TRACE-B01 | 为 Derived Trace Read Foundation 提供可复核完成证据。 |
+| `docs/reports/TRACE_B03_BOUNDED_IMPACT_CONTEXT_VERIFICATION_REPORT.md` | 记录 fixed Impact path、API/UI、刷新、自动化、浏览器、SQLite 与 repository DB protection 的最终验证。 | Traceability / TRACE-B03 | 为 Bounded Impact Context 与 PHASE-TRACE-VERIFY readiness 提供可复核证据。 |
 | `docs/INDEX.md` | 提供当前 canonical 设计、计划、规格、标准与验证文档的简洁入口。 | Repository documentation | 避免 README 与超大 File Map 承担重复导航职责。 |
 | `docs/reports/REPO_CLEAN_A01_WORKSPACE_AUDIT_REPORT.md`、`docs/planning/REPO_CLEAN_B01_SAFE_CLEANUP_PLAN.md` 与 `docs/reports/REPO_CLEAN_B01_SAFE_WORKSPACE_CLEANUP_VERIFICATION_REPORT.md` | 记录仓库工作区审计、获批清理边界、执行与验证结果。 | Repository maintenance / REPO-CLEAN-A01～B01 | 让清理操作、保护项、跳过项与后续人工决定可审计。 |
 | `docs/reports/SEC_01_OIDC_AUTHENTICATION_FOUNDATION_VERIFICATION_REPORT.md` 至 `docs/reports/SEC_04_SECURITY_ROLLOUT_VERIFICATION_REPORT.md` | 记录 OIDC 认证、后端访问控制、前端登录访问 UX 与安全 rollout 的验证结果。 | Security / SEC-01～SEC-04 | 保留安全阶段的连续验证历史。 |

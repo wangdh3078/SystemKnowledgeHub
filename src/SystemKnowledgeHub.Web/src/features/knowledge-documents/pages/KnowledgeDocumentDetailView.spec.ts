@@ -34,6 +34,7 @@ const actorState = vi.hoisted(() => ({
 const overlayState = vi.hoisted(() => ({ openDrawer: vi.fn(), openDialog: vi.fn() }))
 const routerState = vi.hoisted(() => ({ push: vi.fn() }))
 const traceState = vi.hoisted(() => ({ refresh: vi.fn(), mounted: vi.fn() }))
+const impactState = vi.hoisted(() => ({ refresh: vi.fn(), mounted: vi.fn() }))
 
 vi.mock('vue', async (importOriginal) => {
   const actual = await importOriginal<typeof import('vue')>()
@@ -154,6 +155,21 @@ vi.mock('../components/TraceabilitySection.vue', async () => {
         expose({ refresh: traceState.refresh })
         onMounted(traceState.mounted)
         return () => h('section', { class: 'traceability-section-stub' }, '可追溯性')
+      },
+    }),
+  }
+})
+vi.mock('../components/ImpactContextSection.vue', async () => {
+  const { defineComponent, h, onMounted } = await import('vue')
+  return {
+    // Test-only exposed refresh surface for the feature component under test.
+    // eslint-disable-next-line vue/one-component-per-file
+    default: defineComponent({
+      name: 'ImpactContextSection',
+      setup(_, { expose }) {
+        expose({ refresh: impactState.refresh })
+        onMounted(impactState.mounted)
+        return () => h('section', { class: 'impact-context-section-stub' }, '影响上下文')
       },
     }),
   }
@@ -282,6 +298,8 @@ describe('KnowledgeDocumentDetailView editing', () => {
     routerState.push.mockReset()
     traceState.refresh.mockReset()
     traceState.mounted.mockReset()
+    impactState.refresh.mockReset()
+    impactState.mounted.mockReset()
   })
 
   it('previews unsaved Markdown and saves title, summary, body and token atomically', async () => {
@@ -957,7 +975,19 @@ describe('KnowledgeDocumentDetailView editing', () => {
     await flushPromises()
 
     expect(wrapper.find('.traceability-section-stub').exists()).toBe(true)
+    expect(wrapper.find('.impact-context-section-stub').exists()).toBe(true)
+    expect(
+      Array.from(wrapper.element.querySelectorAll(
+        '.knowledge-document-body, .traceability-section-stub, .impact-context-section-stub, .knowledge-document-relations',
+      ) as NodeListOf<HTMLElement>).map((element) => element.className),
+    ).toEqual([
+      'knowledge-document-body',
+      'traceability-section-stub',
+      'impact-context-section-stub',
+      'knowledge-document-relations',
+    ])
     expect(traceState.mounted).toHaveBeenCalledTimes(1)
+    expect(impactState.mounted).toHaveBeenCalledTimes(1)
     window.dispatchEvent(new CustomEvent('relationship:changed'))
     window.dispatchEvent(new CustomEvent('evidence:changed'))
     window.dispatchEvent(
@@ -968,6 +998,7 @@ describe('KnowledgeDocumentDetailView editing', () => {
     window.dispatchEvent(new CustomEvent('knowledge-status:changed'))
     await flushPromises()
     expect(traceState.refresh).toHaveBeenCalledTimes(4)
+    expect(impactState.refresh).toHaveBeenCalledTimes(1)
 
     await button(wrapper, '编辑')?.trigger('click')
     await button(wrapper, '修改正文')?.trigger('click')
@@ -975,11 +1006,13 @@ describe('KnowledgeDocumentDetailView editing', () => {
     await flushPromises()
     expect(updateKnowledgeDocumentContent).toHaveBeenCalledTimes(1)
     expect(traceState.refresh).toHaveBeenCalledTimes(5)
+    expect(impactState.refresh).toHaveBeenCalledTimes(1)
     expect(traceState.mounted).toHaveBeenCalledTimes(1)
 
     await button(wrapper, '发布')?.trigger('click')
     await flushPromises()
     expect(traceState.refresh).toHaveBeenCalledTimes(6)
+    expect(impactState.refresh).toHaveBeenCalledTimes(1)
   })
 
   it('uses the shared authoritative relationship refresh after remove and re-add', async () => {
@@ -1011,6 +1044,7 @@ describe('KnowledgeDocumentDetailView editing', () => {
     expect(deleteRelationship).toHaveBeenCalledWith(41)
     expect(getRelatedKnowledge).toHaveBeenCalledTimes(2)
     expect(traceState.refresh).toHaveBeenCalledTimes(1)
+    expect(impactState.refresh).toHaveBeenCalledTimes(1)
     expect(wrapper.text()).not.toContain('TRACE TestCase T')
 
     window.dispatchEvent(new CustomEvent('relationship:changed'))
@@ -1018,6 +1052,7 @@ describe('KnowledgeDocumentDetailView editing', () => {
 
     expect(getRelatedKnowledge).toHaveBeenCalledTimes(3)
     expect(traceState.refresh).toHaveBeenCalledTimes(2)
+    expect(impactState.refresh).toHaveBeenCalledTimes(2)
     expect(wrapper.text()).toContain('TRACE TestCase T')
   })
 
