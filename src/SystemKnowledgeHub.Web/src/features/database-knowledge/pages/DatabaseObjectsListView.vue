@@ -175,7 +175,7 @@ onMounted(() => {
       </div>
       <div class="database-objects-list-page__header-actions skh-page-header__actions">
         <span v-if="data">共 {{ data.total }} 个对象</span>
-        <el-button type="primary" :icon="Plus" @click="startCreate">新增</el-button>
+        <el-button type="primary" :icon="Plus" @click="startCreate">新增数据库对象</el-button>
       </div>
     </header>
 

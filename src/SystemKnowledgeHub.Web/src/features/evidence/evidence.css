@@ -384,6 +384,10 @@
   border-bottom: 0;
 }
 
+.human-confirmation-drawer .evidence-form-section--confirmation .el-form-item.is-error {
+  margin-bottom: 24px;
+}
+
 .evidence-current-user {
   margin: 16px 24px 0;
   padding: 14px;

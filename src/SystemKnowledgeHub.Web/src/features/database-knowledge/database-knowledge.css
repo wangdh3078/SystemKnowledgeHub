@@ -108,6 +108,15 @@
   font-size: 12px;
 }
 
+.database-inline-notice--error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-color: #f1c9c9;
+  background: #fff7f7;
+  color: #a23b3b;
+}
+
 .database-metadata-strip {
   display: grid;
   grid-template-columns: 0.8fr 0.85fr 1.2fr 0.9fr 1fr;
@@ -133,6 +142,113 @@
 .database-metadata-strip span,
 .database-metadata-strip strong {
   display: block;
+}
+
+.database-object-evidence-section {
+  padding: 21px 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.database-object-evidence-section__heading,
+.database-object-evidence-section__heading > div,
+.database-object-evidence-section__actions {
+  display: flex;
+  align-items: center;
+}
+
+.database-object-evidence-section__heading {
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.database-object-evidence-section__heading > div,
+.database-object-evidence-section__actions {
+  gap: 8px;
+}
+
+.database-object-evidence-section__heading h2 {
+  font-size: 15px;
+}
+
+.database-object-evidence-section__heading span,
+.database-object-evidence-section__scope {
+  color: var(--color-muted);
+  font-size: 11px;
+}
+
+.database-object-evidence-section__scope {
+  margin-top: 7px;
+  line-height: 1.55;
+}
+
+.database-object-evidence-section > .feedback-state {
+  min-height: 120px;
+  margin-top: 12px;
+}
+
+.database-object-evidence-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 12px;
+  gap: 8px;
+}
+
+.database-object-evidence-list > button {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  padding: 11px 12px;
+  gap: 2px 9px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.database-object-evidence-list > button:hover,
+.database-object-evidence-list > button:focus-visible {
+  border-color: #a9c2e9;
+  background: #f7faff;
+}
+
+.database-object-evidence-list .el-icon {
+  grid-row: 1 / span 2;
+  margin-top: 3px;
+  color: var(--color-primary);
+}
+
+.database-object-evidence-list span,
+.database-object-evidence-list small,
+.database-object-evidence-list strong {
+  display: block;
+  min-width: 0;
+}
+
+.database-object-evidence-list small {
+  color: var(--color-muted);
+  font-size: 9px;
+}
+
+.database-object-evidence-list strong {
+  overflow: hidden;
+  margin-top: 2px;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.database-object-evidence-list p {
+  grid-column: 2;
+  overflow: hidden;
+  color: var(--color-muted);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.database-object-page > .knowledge-status-panel {
+  margin: 18px 0 0;
 }
 
 .database-metadata-strip span {
@@ -1035,6 +1151,19 @@
 }
 
 @media (max-width: 900px) {
+  .database-object-evidence-list {
+    grid-template-columns: 1fr;
+  }
+
+  .database-object-evidence-section__heading {
+    align-items: flex-start;
+  }
+
+  .database-object-evidence-section__actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
   .database-objects-list-page__workspace {
     grid-template-columns: 1fr;
   }

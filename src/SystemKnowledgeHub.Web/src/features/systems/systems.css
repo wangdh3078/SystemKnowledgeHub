@@ -577,6 +577,13 @@
   border-bottom: 1px solid var(--color-border-strong);
 }
 
+.system-knowledge-summary__scope {
+  margin: -5px 0 13px;
+  color: var(--color-muted);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
 .system-section-heading {
   display: flex;
   align-items: center;

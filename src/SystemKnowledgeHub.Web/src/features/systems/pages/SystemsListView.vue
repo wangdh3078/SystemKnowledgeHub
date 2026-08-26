@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, watch } from 'vue'
-import { ArrowRight, Search } from '@element-plus/icons-vue'
+import { ArrowRight, Plus, Search } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
+import { useActorStore } from '../../../app/stores/actor'
+import { useOverlayStore } from '../../../app/stores/overlays'
 import KnowledgeStatusBadge from '../../../components/data-display/KnowledgeStatusBadge.vue'
 import EmptyState from '../../../components/feedback/EmptyState.vue'
 import ErrorState from '../../../components/feedback/ErrorState.vue'
@@ -30,6 +32,8 @@ const {
   clearFilters,
 } = useSystemsList()
 const router = useRouter()
+const actorStore = useActorStore()
+const overlayStore = useOverlayStore()
 
 const lifecycleOptions: readonly { readonly value: SystemLifecycle; readonly label: string }[] = [
   { value: 'Planned', label: systemLifecycleLabels.Planned },
@@ -87,6 +91,10 @@ function handleSystemRowClick(row: SystemSummary): void {
   openSystem(row.id)
 }
 
+function openCreate(): void {
+  overlayStore.openDialog({ kind: 'create-system', id: null, mode: 'create' })
+}
+
 onMounted(() => void load())
 </script>
 
@@ -97,7 +105,10 @@ onMounted(() => void load())
         <h1>系统</h1>
         <p>浏览系统及其知识覆盖情况。</p>
       </div>
-      <span v-if="data">共 {{ data.total }} 个系统</span>
+      <div class="systems-page__header-actions skh-page-header__actions">
+        <span v-if="data">共 {{ data.total }} 个系统</span>
+        <el-button v-if="actorStore.canEdit" type="primary" :icon="Plus" @click="openCreate">新增系统</el-button>
+      </div>
     </header>
 
     <section class="systems-filter-bar skh-filter-bar" aria-label="系统筛选">
@@ -138,7 +149,7 @@ onMounted(() => void load())
       <EmptyState
         v-if="data && data.items.length === 0"
         title="没有找到系统"
-        description="可以调整筛选条件，或通过右上角“新增”记录第一个系统。"
+        description="可以调整筛选条件，或通过右上角“新增系统”记录第一个系统。"
       />
       <el-table
         v-else

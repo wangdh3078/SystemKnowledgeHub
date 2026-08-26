@@ -31,6 +31,8 @@ public sealed class DatabaseKnowledgeQueriesTests
         Assert.Equal(8, result.Detail.Columns.Count);
         Assert.Equal(123, result.Detail.Columns.Single(column => column.Selected).Id);
         Assert.Equal(123, result.Detail.SelectedColumnDrawer?.ColumnId);
+        Assert.Contains("AddEvidence", result.Detail.AvailableActions);
+        Assert.Contains("ChangeKnowledgeStatus", result.Detail.AvailableActions);
     }
 
     [Fact]

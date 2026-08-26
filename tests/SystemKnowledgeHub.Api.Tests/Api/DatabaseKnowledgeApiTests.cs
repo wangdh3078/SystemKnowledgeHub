@@ -27,6 +27,12 @@ public sealed class DatabaseKnowledgeApiTests
         Assert.Equal("Inferred", payload.GetProperty("overview").GetProperty("knowledgeStatus").GetString());
         Assert.False(string.IsNullOrWhiteSpace(payload.GetProperty("concurrencyToken").GetString()));
         Assert.Equal(123, payload.GetProperty("selectedColumnDrawer").GetProperty("columnId").GetInt64());
+        var availableActions = payload.GetProperty("availableActions")
+            .EnumerateArray()
+            .Select(action => action.GetString())
+            .ToArray();
+        Assert.Contains("AddEvidence", availableActions);
+        Assert.Contains("ChangeKnowledgeStatus", availableActions);
     }
 
     [Theory]

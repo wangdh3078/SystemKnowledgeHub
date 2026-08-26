@@ -9,6 +9,7 @@ import LoadingState from '../../../components/feedback/LoadingState.vue'
 import { getDatabaseColumnDetail } from '../../database-knowledge/api/databaseKnowledgeApi'
 import type { DashboardNeedsAttention, DashboardObjectType, DashboardRecentActivity } from '../api/dashboardContracts'
 import { useDashboard } from '../composables/useDashboard'
+import { formatLocalDateTimeToMinute } from '../../../app/formatters/dateTime'
 
 const router = useRouter()
 const overlays = useOverlayStore()
@@ -38,16 +39,6 @@ const hasKnowledge = computed(() => overviewItems.value.some(item => item.value 
 
 function percentage(value: number): string {
   return progressTotal.value === 0 ? '0.00%' : `${((value / progressTotal.value) * 100).toFixed(2)}%`
-}
-
-function formatUpdatedAt(value: string): string {
-  return new Intl.DateTimeFormat('zh-CN', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).format(new Date(value))
 }
 
 function objectTypeLabel(value: DashboardObjectType): string {
@@ -245,7 +236,7 @@ onMounted(() => void load())
                 @click="navigateRecent(item)"
               >
                 <el-icon><Clock /></el-icon>
-                <span class="dashboard-list__time">{{ formatUpdatedAt(item.updatedAt) }}</span>
+                <span class="dashboard-list__time">{{ formatLocalDateTimeToMinute(item.updatedAt) }}</span>
                 <em>{{ objectTypeLabel(item.objectType) }}</em>
                 <strong class="technical-text">{{ item.title }}</strong>
                 <el-icon class="dashboard-list__arrow"><ArrowRight /></el-icon>

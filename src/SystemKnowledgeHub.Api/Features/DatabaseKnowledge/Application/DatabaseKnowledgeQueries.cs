@@ -23,6 +23,8 @@ public sealed class DatabaseKnowledgeQueries(
         "UpdateDatabaseObjectKnowledge",
         "RegisterDatabaseColumn",
         "AddKnowledgeRelation",
+        "AddEvidence",
+        "ChangeKnowledgeStatus",
     ];
 
     private static readonly string[] DatabaseColumnActions =

@@ -127,7 +127,7 @@ onMounted(() => void load())
       <div>
         <span v-if="data">共 {{ data.total }} 篇</span
         ><el-button v-if="canEdit" type="primary" :icon="DocumentAdd" @click="createOpen = true"
-          >新建知识内容</el-button
+          >新增知识内容</el-button
         >
       </div>
     </header>

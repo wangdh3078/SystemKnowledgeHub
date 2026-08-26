@@ -178,9 +178,10 @@ onMounted(() => void loadRoute())
 
       <section class="system-knowledge-summary">
         <div class="system-section-heading">
-          <h2>知识概况</h2>
-          <span>{{ knowledgeTotal }} 条已梳理知识</span>
+          <h2>结构化知识状态概况</h2>
+          <span>{{ knowledgeTotal }} 个统计对象</span>
         </div>
+        <p class="system-knowledge-summary__scope">统计系统本身、业务功能、数据库对象、字段与集成的知识状态；不包含关联知识文档或业务规则。</p>
         <div v-if="knowledgeTotal" class="knowledge-summary-bar" aria-label="知识状态分布">
           <span class="knowledge-summary-bar__confirmed" :style="{ width: `${knowledgePercent.confirmed}%` }"></span>
           <span class="knowledge-summary-bar__inferred" :style="{ width: `${knowledgePercent.inferred}%` }"></span>

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { DocumentChecked, EditPen, Search } from '@element-plus/icons-vue'
+import { DocumentChecked, EditPen, Plus, Search, UserFilled } from '@element-plus/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
 import KnowledgeStatusBadge from '../../../components/data-display/KnowledgeStatusBadge.vue'
 import EmptyState from '../../../components/feedback/EmptyState.vue'
@@ -8,6 +8,12 @@ import ErrorState from '../../../components/feedback/ErrorState.vue'
 import LoadingState from '../../../components/feedback/LoadingState.vue'
 import { useOverlayStore } from '../../../app/stores/overlays'
 import { useActorStore } from '../../../app/stores/actor'
+import { getEvidenceList } from '../../evidence/api/evidenceApi'
+import {
+  evidenceTypeLabels,
+  type EvidenceListItemResponse,
+} from '../../evidence/api/evidenceContracts'
+import KnowledgeStatusProgressionPanel from '../../knowledge-status/components/KnowledgeStatusProgressionPanel.vue'
 import { parseSafeApiId } from '../api/databaseKnowledgeApi'
 import type { DatabaseColumnSummary } from '../api/databaseKnowledgeContracts'
 import DatabaseObjectContextRail from '../components/DatabaseObjectContextRail.vue'
@@ -19,6 +25,9 @@ const router = useRouter()
 const overlayStore = useOverlayStore()
 const actorStore = useActorStore()
 const filterText = ref('')
+const objectEvidence = ref<readonly EvidenceListItemResponse[]>([])
+const evidenceLoading = ref(false)
+const evidenceError = ref<string | null>(null)
 const {
   detail,
   loading,
@@ -32,6 +41,9 @@ const {
 
 const databaseObjectId = computed(() => parseSafeApiId(route.params.id))
 const routeSelectedColumnId = computed(() => parseSafeApiId(route.query.selectedColumnId))
+const humanConfirmationCount = computed(() => objectEvidence.value.filter(
+  (item) => item.evidenceType === 'HumanConfirmation',
+).length)
 
 const filteredColumns = computed(() => {
   if (!detail.value) return []
@@ -76,6 +88,31 @@ function openObjectKnowledgeEdit(): void {
   overlayStore.openDrawer({ kind: 'edit-database-object', id: detail.value.id, mode: 'edit' })
 }
 
+function evidenceSubjectPayload() {
+  if (!detail.value) return null
+  return {
+    subject: { type: 'DatabaseObject', id: detail.value.id },
+    title: detail.value.overview.qualifiedName,
+    knowledgeStatus: detail.value.overview.knowledgeStatus,
+  }
+}
+
+function openAddEvidence(): void {
+  const payload = evidenceSubjectPayload()
+  if (!payload) return
+  overlayStore.openDrawer({ kind: 'add-evidence', id: null, mode: 'create', payload })
+}
+
+function openAddHumanConfirmation(): void {
+  const payload = evidenceSubjectPayload()
+  if (!payload) return
+  overlayStore.openDrawer({ kind: 'human-confirmation', id: null, mode: 'create', payload })
+}
+
+function openEvidence(id: number): void {
+  overlayStore.openDrawer({ kind: 'evidence', id, mode: 'read' })
+}
+
 function openRegisterColumn(): void {
   if (!detail.value) return
   const greatestOrdinal = Math.max(0, ...detail.value.columns.map((column) => column.ordinalPosition))
@@ -99,9 +136,29 @@ function knowledgeStatusChanged(): void {
   void loadRoute()
 }
 
+function evidenceChanged(): void {
+  void loadRoute()
+}
+
+async function loadObjectEvidence(id: number): Promise<void> {
+  evidenceLoading.value = true
+  evidenceError.value = null
+  try {
+    objectEvidence.value = (await getEvidenceList('DatabaseObject', id)).items
+  } catch (loadError: unknown) {
+    objectEvidence.value = []
+    evidenceError.value = loadError instanceof Error ? loadError.message : '数据库对象证据加载失败。'
+  } finally {
+    evidenceLoading.value = false
+  }
+}
+
 async function loadRoute(): Promise<void> {
   if (databaseObjectId.value === null) return
-  await load(databaseObjectId.value, routeSelectedColumnId.value)
+  await Promise.all([
+    load(databaseObjectId.value, routeSelectedColumnId.value),
+    loadObjectEvidence(databaseObjectId.value),
+  ])
   if (selectedColumnError.value) {
     const nextQuery = { ...route.query }
     delete nextQuery.selectedColumnId
@@ -130,12 +187,14 @@ onMounted(() => {
   window.addEventListener('database-object:changed', databaseObjectChanged)
   window.addEventListener('database-column:changed', databaseObjectChanged)
   window.addEventListener('knowledge-status:changed', knowledgeStatusChanged)
+  window.addEventListener('evidence:changed', evidenceChanged)
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('database-object:changed', databaseObjectChanged)
   window.removeEventListener('database-column:changed', databaseObjectChanged)
   window.removeEventListener('knowledge-status:changed', knowledgeStatusChanged)
+  window.removeEventListener('evidence:changed', evidenceChanged)
 })
 </script>
 
@@ -189,6 +248,44 @@ onBeforeUnmount(() => {
           <strong class="technical-text">{{ detail.metadata.businessKeyColumns.join(' · ') || '—' }}</strong>
         </div>
       </section>
+
+      <section class="database-object-evidence-section" aria-labelledby="database-object-evidence-title">
+        <div class="database-object-evidence-section__heading">
+          <div>
+            <h2 id="database-object-evidence-title">证据与人工确认</h2>
+            <span>{{ objectEvidence.length }} 条对象级证据</span>
+          </div>
+          <div v-if="actorStore.canEdit" class="database-object-evidence-section__actions">
+            <el-button type="primary" plain :icon="Plus" @click="openAddEvidence">添加证据</el-button>
+            <el-button :icon="UserFilled" @click="openAddHumanConfirmation">添加人工确认</el-button>
+          </div>
+        </div>
+        <p class="database-object-evidence-section__scope">这里只显示并维护当前表或视图的对象级证据；字段证据继续在对应字段详情中独立维护。</p>
+        <LoadingState v-if="evidenceLoading" message="正在读取数据库对象证据…" />
+        <div v-else-if="evidenceError" class="database-inline-notice database-inline-notice--error">
+          {{ evidenceError }}
+          <el-button text type="primary" @click="loadObjectEvidence(detail.id)">重试</el-button>
+        </div>
+        <div v-else-if="objectEvidence.length" class="database-object-evidence-list">
+          <button v-for="item in objectEvidence" :key="item.id" type="button" @click="openEvidence(item.id)">
+            <el-icon><DocumentChecked /></el-icon>
+            <span><small>{{ evidenceTypeLabels[item.evidenceType] }}</small><strong>{{ item.sourceTitle }}</strong></span>
+            <p>{{ item.supportReason }}</p>
+          </button>
+        </div>
+        <EmptyState v-else title="尚无对象级证据" description="添加可定位的证据或人工确认，为当前表或视图的知识状态提供依据。" />
+      </section>
+
+      <KnowledgeStatusProgressionPanel
+        :id="detail.id"
+        target-type="DatabaseObject"
+        :title="detail.overview.qualifiedName"
+        :status="detail.overview.knowledgeStatus"
+        :concurrency-token="detail.concurrencyToken"
+        :evidence-count="objectEvidence.length"
+        :human-confirmation-count="humanConfirmationCount"
+        :can-change="detail.availableActions.includes('ChangeKnowledgeStatus')"
+      />
 
       <section class="database-columns-section" aria-labelledby="columns-title">
         <div class="database-columns-section__toolbar">
@@ -259,3 +356,4 @@ onBeforeUnmount(() => {
 </template>
 
 <style src="../database-knowledge.css"></style>
+<style src="../../knowledge-status/knowledge-status.css"></style>
