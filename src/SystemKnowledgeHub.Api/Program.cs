@@ -52,27 +52,37 @@ var requiresProductionConfiguration = !builder.Environment.IsDevelopment()
     && !builder.Environment.IsEnvironment("Testing");
 if (!builder.Environment.IsEnvironment("Testing") && !local.Enabled && !oidc.Enabled)
 {
-    throw new InvalidOperationException("至少必须启用 Authentication:Local 或 Authentication:Oidc 之一。");
+    ReportStartupConfigurationFailure(
+        builder.Environment,
+        "至少必须启用 Authentication:Local 或 Authentication:Oidc 之一。");
+    return;
 }
 if (!builder.Environment.IsEnvironment("Testing") && oidc.Enabled
     && (string.IsNullOrWhiteSpace(oidc.Provider)
         || string.IsNullOrWhiteSpace(oidc.Authority)
         || string.IsNullOrWhiteSpace(oidc.ClientId)))
 {
-    throw new InvalidOperationException(
+    ReportStartupConfigurationFailure(
+        builder.Environment,
         "启用 OIDC 时必须配置 Authentication:Oidc Provider、Authority 和 ClientId。");
+    return;
 }
 if (local.Lockout.MaxFailedAttempts <= 0 || local.Lockout.WindowMinutes <= 0 || local.Lockout.DurationMinutes <= 0
     || local.RateLimit.PermitLimit <= 0 || local.RateLimit.WindowMinutes <= 0)
 {
-    throw new InvalidOperationException("Authentication:Local 的 lockout 和 rate limit 配置必须为正数。");
+    ReportStartupConfigurationFailure(
+        builder.Environment,
+        "Authentication:Local 的 lockout 和 rate limit 配置必须为正数。");
+    return;
 }
 
 var dataProtectionKeyPath = builder.Configuration["DataProtection:KeyPath"];
 if (requiresProductionConfiguration && string.IsNullOrWhiteSpace(dataProtectionKeyPath))
 {
-    throw new InvalidOperationException(
+    ReportStartupConfigurationFailure(
+        builder.Environment,
         "Production Data Protection requires DataProtection:KeyPath.");
+    return;
 }
 
 var dataProtection = builder.Services.AddDataProtection()
@@ -387,6 +397,17 @@ app.Use(async (context, next) =>
 app.MapControllers();
 
 app.Run();
+
+static void ReportStartupConfigurationFailure(
+    IHostEnvironment environment,
+    string message)
+{
+    Console.Error.WriteLine($"启动配置错误（环境：{environment.EnvironmentName}）：{message}");
+    Console.Error.WriteLine(
+        $"请通过 appsettings.{environment.EnvironmentName}.json、环境变量或命令行显式修正配置；" +
+        "直接启动 SystemKnowledgeHub.Api.exe 不会应用 Properties/launchSettings.json。");
+    Environment.ExitCode = 1;
+}
 
 static Task WriteApiAuthenticationErrorAsync(
     HttpRequest request,
