@@ -5,6 +5,9 @@ export type UnknownItemStatus = 'Open' | 'Investigating' | 'ConclusionConfirmed'
 export type UnknownTargetType = 'System' | 'DatabaseSource' | 'BusinessFunction' | 'DatabaseObject' | 'DatabaseColumn' | 'BusinessRule' | 'Integration'
 
 export interface UnknownTarget { type: UnknownTargetType; id: ApiId }
+export interface HistoricalTargetIdentity {
+  id: ApiId; targetType: string; displayName: string; isDeleted: boolean; isNavigable: boolean
+}
 export interface PersonSnapshotInput {
   displayName: string
   roleOrIdentity: string
@@ -14,12 +17,12 @@ export interface PersonSnapshotInput {
   source: string | null
   note: string | null
 }
-export interface PersonSnapshot extends PersonSnapshotInput {}
-export interface UnknownTargetSummary { target: UnknownTarget; display: string; primary: boolean }
-export interface UnknownSystemSummary { id: ApiId; name: string }
+export type PersonSnapshot = PersonSnapshotInput
+export interface UnknownTargetSummary { target: UnknownTarget; display: string; primary: boolean; identity?: HistoricalTargetIdentity }
+export interface UnknownSystemSummary extends Partial<HistoricalTargetIdentity> { id: ApiId; name: string }
 export interface UnknownItemListRow {
   id: ApiId; itemCode: string; question: string; system: UnknownSystemSummary
-  primaryTarget: UnknownTarget & { display: string }; priority: UnknownItemPriority; status: UnknownItemStatus
+  primaryTarget: UnknownTarget & { display: string; identity?: HistoricalTargetIdentity }; priority: UnknownItemPriority; status: UnknownItemStatus
   findingCount: number; evidenceCount: number; updatedAt: string
 }
 export interface UnknownItemsListResponse { items: UnknownItemListRow[]; page: number; pageSize: number; total: number }
@@ -27,7 +30,7 @@ export interface Finding { id: ApiId; content: string; recordedBy: PersonSnapsho
 export interface InvestigationEvidence { id: ApiId; subject: UnknownTarget; evidenceType: string; sourceTitle: string }
 export interface Resolution { id: ApiId; conclusion: string; confirmedBy: PersonSnapshot | null; confirmedAt: string | null }
 export interface KnowledgeUpdate {
-  id: ApiId; target: UnknownTarget; subjectDetailKey: string | null; changeSummary: string
+  id: ApiId; target: UnknownTarget; targetIdentity?: HistoricalTargetIdentity; subjectDetailKey: string | null; changeSummary: string
   before: unknown; after: unknown; status: 'Proposed' | 'Applied'
 }
 export type KnowledgeUpdateApplyAction = 'AddColumnKnownValue' | 'UpdateDatabaseColumnKnowledge' | 'UpdateBusinessFunction' | 'UpdateBusinessRule' | 'UpdateIntegration'

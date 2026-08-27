@@ -4,6 +4,7 @@ using SystemKnowledgeHub.Api.Features.DatabaseKnowledge.Application.Models;
 using SystemKnowledgeHub.Api.Features.DatabaseKnowledge.Domain;
 using SystemKnowledgeHub.Api.Features.Evidence.Domain;
 using SystemKnowledgeHub.Api.Features.Relationships.Domain;
+using SystemKnowledgeHub.Api.Features.Relationships.Application;
 using SystemKnowledgeHub.Api.Features.UnknownItems.Domain;
 using SystemKnowledgeHub.Api.Persistence;
 using SystemKnowledgeHub.Api.Persistence.Concurrency;
@@ -14,6 +15,7 @@ namespace SystemKnowledgeHub.Api.Features.DatabaseKnowledge.Application;
 
 public sealed class DatabaseKnowledgeQueries(
     KnowledgeHubDbContext dbContext,
+    RelationshipTargetResolver relationshipTargetResolver,
     ConcurrencyTokenCodec concurrencyTokenCodec)
 {
     private const int DefaultPageSize = 20;
@@ -331,7 +333,19 @@ public sealed class DatabaseKnowledgeQueries(
             .Where(item => (item.SourceType == KnowledgeTargetType.DatabaseObject && item.SourceId == databaseObjectId)
                 || (item.TargetType == KnowledgeTargetType.DatabaseObject && item.TargetId == databaseObjectId))
             .ToArrayAsync(cancellationToken);
-        var functionRelationEntries = objectRelations
+        var validObjectRelations = new List<KnowledgeRelation>();
+        foreach (var relation in objectRelations)
+        {
+            var otherType = relation.SourceType == KnowledgeTargetType.DatabaseObject
+                ? relation.TargetType : relation.SourceType;
+            var otherId = relation.SourceType == KnowledgeTargetType.DatabaseObject
+                ? relation.TargetId : relation.SourceId;
+            if (await relationshipTargetResolver.Resolve(otherType, otherId, cancellationToken) is not null)
+            {
+                validObjectRelations.Add(relation);
+            }
+        }
+        var functionRelationEntries = validObjectRelations
             .Where(item => item.SourceType == KnowledgeTargetType.BusinessFunction || item.TargetType == KnowledgeTargetType.BusinessFunction)
             .Select(item => new
             {
@@ -378,8 +392,8 @@ public sealed class DatabaseKnowledgeQueries(
             columns,
             new DatabaseObjectContextRail(
                 usedByFunctions,
-                objectRelations.Count(item => item.SourceType == KnowledgeTargetType.BusinessRule || item.TargetType == KnowledgeTargetType.BusinessRule),
-                objectRelations.Count(item => item.SourceType == KnowledgeTargetType.Integration || item.TargetType == KnowledgeTargetType.Integration),
+                validObjectRelations.Count(item => item.SourceType == KnowledgeTargetType.BusinessRule || item.TargetType == KnowledgeTargetType.BusinessRule),
+                validObjectRelations.Count(item => item.SourceType == KnowledgeTargetType.Integration || item.TargetType == KnowledgeTargetType.Integration),
                 objectUnknownCount),
             selectedColumnId.HasValue ? new SelectedColumnDrawer(selectedColumnId.Value) : null,
             DatabaseObjectActions);
@@ -459,14 +473,16 @@ public sealed class DatabaseKnowledgeQueries(
                 var other = item.SourceType == KnowledgeTargetType.DatabaseColumn
                     ? (item.TargetType, item.TargetId)
                     : (item.SourceType, item.SourceId);
-                return new ColumnRelationSummary(
+                return relatedTitles.ContainsKey(other) ? new ColumnRelationSummary(
                     item.Id,
                     item.RelationType.ToString(),
                     new RelatedObjectSummary(
                         other.Item1.ToString(),
                         other.Item2,
-                        relatedTitles.GetValueOrDefault(other, $"{other.Item1} #{other.Item2}")));
+                        relatedTitles[other])) : null;
             })
+            .Where(item => item is not null)
+            .Cast<ColumnRelationSummary>()
             .OrderBy(item => item.OtherObject.Title, StringComparer.OrdinalIgnoreCase)
             .ToArray();
         var unknownItems = await dbContext.UnknownItemTargets
@@ -552,6 +568,9 @@ public sealed class DatabaseKnowledgeQueries(
                 || (relation.TargetType == KnowledgeTargetType.DatabaseObject
                     && objectIds.Contains(relation.TargetId)
                     && relation.SourceType == KnowledgeTargetType.BusinessFunction))
+            .Where(relation => relation.SourceType == KnowledgeTargetType.BusinessFunction
+                ? dbContext.BusinessFunctions.Any(item => item.Id == relation.SourceId)
+                : dbContext.BusinessFunctions.Any(item => item.Id == relation.TargetId))
             .Select(relation => new
             {
                 DatabaseObjectId = relation.SourceType == KnowledgeTargetType.DatabaseObject

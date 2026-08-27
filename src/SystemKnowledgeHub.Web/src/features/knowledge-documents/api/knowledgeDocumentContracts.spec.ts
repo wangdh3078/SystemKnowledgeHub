@@ -60,6 +60,7 @@ describe('revision history read contracts', () => {
 
   it('decodes list metadata without inventing historical content fields', () => {
     const response = decodeKnowledgeDocumentRevisionList({
+      owner: { id: 7, targetType: 'KnowledgeDocument', displayName: 'Document', isDeleted: false, isNavigable: true },
       items: [revision],
       page: 1,
       pageSize: 20,
@@ -73,6 +74,7 @@ describe('revision history read contracts', () => {
 
   it('decodes baseline null actors and immutable detail content', () => {
     const detail = decodeKnowledgeDocumentRevisionDetail({
+      owner: { id: 7, targetType: 'KnowledgeDocument', displayName: 'Document', isDeleted: true, isNavigable: false },
       ...revision,
       id: 11,
       revisionNumber: 1,

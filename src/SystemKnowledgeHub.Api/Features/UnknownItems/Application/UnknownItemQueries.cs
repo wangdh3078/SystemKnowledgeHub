@@ -7,10 +7,14 @@ using SystemKnowledgeHub.Api.Features.UnknownItems.Domain;
 using SystemKnowledgeHub.Api.Persistence;
 using SystemKnowledgeHub.Api.Persistence.Concurrency;
 using SystemKnowledgeHub.Api.Shared.Api;
+using SystemKnowledgeHub.Api.Features.SoftDelete.Application;
 
 namespace SystemKnowledgeHub.Api.Features.UnknownItems.Application;
 
-public sealed class UnknownItemQueries(KnowledgeHubDbContext dbContext, ConcurrencyTokenCodec tokenCodec)
+public sealed class UnknownItemQueries(
+    KnowledgeHubDbContext dbContext,
+    HistoricalTargetResolver historicalTargetResolver,
+    ConcurrencyTokenCodec tokenCodec)
 {
     public async Task<UnknownItemsListQueryResult> GetList(
         UnknownItemsListQuery request,
@@ -20,6 +24,26 @@ public sealed class UnknownItemQueries(KnowledgeHubDbContext dbContext, Concurre
         if (errors.Count > 0) return new(null, errors);
 
         var query = dbContext.UnknownItems.AsNoTracking().AsQueryable();
+        query = query.Where(item => item.Status == UnknownItemStatus.Closed
+            || dbContext.Systems.Any(system => system.Id == item.SystemId)
+            && item.Targets.Any(target => target.IsPrimary)
+            && item.Targets.All(target =>
+                target.TargetType == KnowledgeTargetType.System
+                    && dbContext.Systems.Any(entity => entity.Id == target.TargetId)
+                || target.TargetType == KnowledgeTargetType.DatabaseSource
+                    && dbContext.DatabaseSources.Any(entity => entity.Id == target.TargetId)
+                || target.TargetType == KnowledgeTargetType.BusinessFunction
+                    && dbContext.BusinessFunctions.Any(entity => entity.Id == target.TargetId)
+                || target.TargetType == KnowledgeTargetType.DatabaseObject
+                    && dbContext.DatabaseObjects.Any(entity => entity.Id == target.TargetId)
+                || target.TargetType == KnowledgeTargetType.DatabaseColumn
+                    && dbContext.DatabaseColumns.Any(entity => entity.Id == target.TargetId)
+                || target.TargetType == KnowledgeTargetType.BusinessRule
+                    && dbContext.BusinessRules.Any(entity => entity.Id == target.TargetId)
+                || target.TargetType == KnowledgeTargetType.Integration
+                    && dbContext.Integrations.Any(entity => entity.Id == target.TargetId)
+                || target.TargetType == KnowledgeTargetType.KnowledgeDocument
+                    && dbContext.KnowledgeDocuments.Any(entity => entity.Id == target.TargetId)));
         if (request.SystemId.HasValue) query = query.Where(item => item.SystemId == request.SystemId.Value);
         if (priority.HasValue) query = query.Where(item => item.Priority == priority.Value);
         if (status.HasValue) query = query.Where(item => item.Status == status.Value);
@@ -41,8 +65,7 @@ public sealed class UnknownItemQueries(KnowledgeHubDbContext dbContext, Concurre
                 item.Id,
                 item.ItemCode,
                 item.Question,
-                SystemId = item.System.Id,
-                SystemName = item.System.Name,
+                item.SystemId,
                 Primary = item.Targets.Where(target => target.IsPrimary).Select(target => new
                 {
                     target.TargetType,
@@ -96,24 +119,32 @@ public sealed class UnknownItemQueries(KnowledgeHubDbContext dbContext, Concurre
                 || value.SubjectType == EvidenceSubjectType.Resolution && itemResolutionIds.Contains(value.SubjectId));
         }
 
-        return new(new UnknownItemsListResponse(rows.Select(row => new UnknownItemListRowResponse(
-            row.Id,
-            row.ItemCode,
-            row.Question,
-            new(row.SystemId, row.SystemName),
-            new(row.Primary.TargetType.ToString(), row.Primary.TargetId, row.Primary.DisplaySnapshot),
-            row.Priority.ToString(),
-            row.Status.ToString(),
-            row.FindingCount,
-            EvidenceCount(row.Id),
-            row.UpdatedAt)).ToArray(), page, pageSize, total), null);
+        var responses = new List<UnknownItemListRowResponse>();
+        foreach (var row in rows)
+        {
+            var system = await historicalTargetResolver.Resolve(KnowledgeTargetType.System, row.SystemId, cancellationToken);
+            var primary = await historicalTargetResolver.Resolve(row.Primary.TargetType, row.Primary.TargetId, cancellationToken);
+            if (system is null || primary is null) continue;
+            if (row.Status != UnknownItemStatus.Closed && (system.IsDeleted || primary.IsDeleted)) continue;
+            responses.Add(new UnknownItemListRowResponse(
+                row.Id,
+                row.ItemCode,
+                row.Question,
+                SystemResponse(system),
+                new(row.Primary.TargetType.ToString(), row.Primary.TargetId, row.Primary.DisplaySnapshot, primary),
+                row.Priority.ToString(),
+                row.Status.ToString(),
+                row.FindingCount,
+                EvidenceCount(row.Id),
+                row.UpdatedAt));
+        }
+        return new(new UnknownItemsListResponse(responses, page, pageSize, total), null);
     }
 
     public async Task<UnknownItemDetailQueryResult> GetDetail(long id, CancellationToken cancellationToken)
     {
         if (!ApiIdParser.IsSafePositive(id)) return new(null, UnknownItemFailure.Validation, "待确认事项 ID 无效。");
         var item = await dbContext.UnknownItems.AsNoTracking()
-            .Include(entry => entry.System)
             .Include(entry => entry.Targets)
             .Include(entry => entry.Findings)
             .Include(entry => entry.Resolution)
@@ -121,6 +152,30 @@ public sealed class UnknownItemQueries(KnowledgeHubDbContext dbContext, Concurre
             .Include(entry => entry.Activities)
             .SingleOrDefaultAsync(entry => entry.Id == id, cancellationToken);
         if (item is null) return new(null, UnknownItemFailure.NotFound, "未找到待确认事项。");
+
+        var system = await historicalTargetResolver.Resolve(KnowledgeTargetType.System, item.SystemId, cancellationToken);
+        if (system is null) return new(null, UnknownItemFailure.ReferenceInvalid, "待确认事项的系统引用无效。");
+
+        var targetIdentities = new Dictionary<(KnowledgeTargetType Type, long Id), HistoricalTargetIdentity>();
+        foreach (var target in item.Targets)
+        {
+            var identity = await historicalTargetResolver.Resolve(target.TargetType, target.TargetId, cancellationToken);
+            if (identity is null) return new(null, UnknownItemFailure.ReferenceInvalid, "待确认事项的目标引用无效。");
+            targetIdentities[(target.TargetType, target.TargetId)] = identity;
+        }
+        foreach (var update in item.KnowledgeUpdates)
+        {
+            var key = (update.TargetType, update.TargetId);
+            if (targetIdentities.ContainsKey(key)) continue;
+            var identity = await historicalTargetResolver.Resolve(update.TargetType, update.TargetId, cancellationToken);
+            if (identity is null) return new(null, UnknownItemFailure.ReferenceInvalid, "知识更新的目标引用无效。");
+            targetIdentities[key] = identity;
+        }
+        var historicalOnly = system.IsDeleted || targetIdentities.Values.Any(identity => identity.IsDeleted);
+        if (historicalOnly && item.Status != UnknownItemStatus.Closed)
+        {
+            return new(null, UnknownItemFailure.NotFound, "未找到待确认事项。");
+        }
 
         var findingIds = item.Findings.Select(finding => finding.Id).ToArray();
         var resolutionId = item.Resolution?.Id;
@@ -139,16 +194,21 @@ public sealed class UnknownItemQueries(KnowledgeHubDbContext dbContext, Concurre
 
         var targets = item.Targets.OrderByDescending(target => target.IsPrimary).ThenBy(target => target.Id)
             .Select(target => new UnknownTargetSummaryResponse(
-                new(target.TargetType.ToString(), target.TargetId), target.DisplaySnapshot, target.IsPrimary))
+                new(target.TargetType.ToString(), target.TargetId),
+                target.DisplaySnapshot,
+                target.IsPrimary,
+                targetIdentities[(target.TargetType, target.TargetId)]))
             .ToArray();
-        var updates = item.KnowledgeUpdates.OrderBy(update => update.Id).Select(Update).ToArray();
+        var updates = item.KnowledgeUpdates.OrderBy(update => update.Id)
+            .Select(update => Update(update, targetIdentities[(update.TargetType, update.TargetId)]))
+            .ToArray();
         var impact = updates.Select(update => targetDisplay(item.Targets, update.Target) +
             (string.IsNullOrWhiteSpace(update.SubjectDetailKey) ? string.Empty : " · " + update.SubjectDetailKey)).ToArray();
 
         return new(new UnknownItemDetailResponse(
             item.Id,
             item.ItemCode,
-            new(item.System.Id, item.System.Name),
+            SystemResponse(system),
             tokenCodec.Encode(item.Version),
             new(item.Question, item.Context, item.Priority.ToString(), item.Status.ToString(), item.CreatedAt, item.UpdatedAt),
             targets,
@@ -158,7 +218,7 @@ public sealed class UnknownItemQueries(KnowledgeHubDbContext dbContext, Concurre
             updates,
             item.Activities.OrderByDescending(activity => activity.OccurredAt).ThenByDescending(activity => activity.Id).Select(Activity).ToArray(),
             new(impact, evidence.Length, item.Resolution is null ? 1 : updates.Count(update => update.Status == "Proposed")),
-            Actions(item)), UnknownItemFailure.None);
+            historicalOnly ? [] : Actions(item)), UnknownItemFailure.None);
 
         static string targetDisplay(IEnumerable<UnknownItemTarget> targets, UnknownTargetResponse target) =>
             targets.FirstOrDefault(item => item.TargetType.ToString() == target.Type && item.TargetId == target.Id)?.DisplaySnapshot
@@ -204,9 +264,17 @@ public sealed class UnknownItemQueries(KnowledgeHubDbContext dbContext, Concurre
         resolution.ConfirmedAt.HasValue ? new(resolution.ConfirmedByName!, resolution.ConfirmedByRole!, resolution.ConfirmedAt.Value,
             resolution.ConfirmedByTeam, resolution.ConfirmedByExternalKey, resolution.ConfirmedBySource, resolution.ConfirmedByNote) : null,
         resolution.ConfirmedAt);
-    private static KnowledgeUpdateResponse Update(KnowledgeUpdate update) => new(update.Id,
+    private static KnowledgeUpdateResponse Update(KnowledgeUpdate update, HistoricalTargetIdentity identity) => new(update.Id,
         new(update.TargetType.ToString(), update.TargetId), update.SubjectDetailKey, update.ChangeSummary,
-        JsonSerializer.Deserialize<JsonElement>(update.BeforeJson), JsonSerializer.Deserialize<JsonElement>(update.AfterJson), update.Status.ToString());
+        JsonSerializer.Deserialize<JsonElement>(update.BeforeJson), JsonSerializer.Deserialize<JsonElement>(update.AfterJson),
+        update.Status.ToString(), identity);
+    private static UnknownSystemResponse SystemResponse(HistoricalTargetIdentity identity) => new(
+        identity.Id,
+        identity.DisplayName,
+        identity.TargetType,
+        identity.DisplayName,
+        identity.IsDeleted,
+        identity.IsNavigable);
     private static UnknownItemActivityResponse Activity(UnknownItemActivity activity) => new(activity.ActivityType.ToString(),
         activity.Note ?? activity.ActivityType.ToString(), activity.OccurredAt);
     private static string[] Actions(UnknownItem item) => item.Status switch

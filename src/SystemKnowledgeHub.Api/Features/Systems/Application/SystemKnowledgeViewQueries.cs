@@ -5,11 +5,14 @@ using SystemKnowledgeHub.Api.Features.Relationships.Domain;
 using SystemKnowledgeHub.Api.Features.Systems.Application.Models;
 using SystemKnowledgeHub.Api.Features.UnknownItems.Domain;
 using SystemKnowledgeHub.Api.Persistence;
+using SystemKnowledgeHub.Api.Features.Relationships.Application;
 
 namespace SystemKnowledgeHub.Api.Features.Systems.Application;
 
 /// <summary>为 System Detail 提供无副作用、受限条数的统一知识只读投影。</summary>
-public sealed class SystemKnowledgeViewQueries(KnowledgeHubDbContext dbContext)
+public sealed class SystemKnowledgeViewQueries(
+    KnowledgeHubDbContext dbContext,
+    RelationshipTargetResolver targetResolver)
 {
     private const int SectionLimit = 5;
 
@@ -61,15 +64,23 @@ public sealed class SystemKnowledgeViewQueries(KnowledgeHubDbContext dbContext)
         var documentItems = await documents.OrderByDescending(item => item.Id).Take(SectionLimit)
             .Select(item => new { item.Id, item.DocumentType, item.Title, item.LifecycleStatus, item.KnowledgeStatus, item.UpdatedAt })
             .ToArrayAsync(cancellationToken);
-        var relationshipItems = await systemRelations.OrderByDescending(item => item.Id).Take(SectionLimit)
-            .Select(item => new SystemKnowledgeRelationshipResponse(
+        var relationshipItems = new List<SystemKnowledgeRelationshipResponse>();
+        var relationshipRows = await systemRelations.OrderByDescending(item => item.Id).ToArrayAsync(cancellationToken);
+        foreach (var item in relationshipRows)
+        {
+            var outgoing = item.SourceType == KnowledgeTargetType.System && item.SourceId == systemId;
+            var otherType = outgoing ? item.TargetType : item.SourceType;
+            var otherId = outgoing ? item.TargetId : item.SourceId;
+            if (await targetResolver.Resolve(otherType, otherId, cancellationToken) is null) continue;
+            relationshipItems.Add(new SystemKnowledgeRelationshipResponse(
                 item.Id,
-                item.SourceType == KnowledgeTargetType.System && item.SourceId == systemId ? "Outgoing" : "Incoming",
+                outgoing ? "Outgoing" : "Incoming",
                 item.RelationType.ToString(),
-                (item.SourceType == KnowledgeTargetType.System && item.SourceId == systemId ? item.TargetType : item.SourceType).ToString(),
-                item.SourceType == KnowledgeTargetType.System && item.SourceId == systemId ? item.TargetId : item.SourceId,
-                item.KnowledgeStatus.ToString()))
-            .ToArrayAsync(cancellationToken);
+                otherType.ToString(),
+                otherId,
+                item.KnowledgeStatus.ToString()));
+            if (relationshipItems.Count == SectionLimit) break;
+        }
         var evidenceItems = await evidence.OrderByDescending(item => item.Id).Take(SectionLimit)
             .Select(item => new SystemKnowledgeEvidenceResponse(item.Id, item.EvidenceType.ToString(), item.SourceTitle, item.Summary, item.ProvidedAt))
             .ToArrayAsync(cancellationToken);

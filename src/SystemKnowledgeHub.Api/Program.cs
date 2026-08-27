@@ -24,6 +24,7 @@ using SystemKnowledgeHub.Api.Features.KnowledgeDocuments.Application;
 using SystemKnowledgeHub.Api.Features.StatusProgression.Application;
 using SystemKnowledgeHub.Api.Features.Relationships.Application;
 using SystemKnowledgeHub.Api.Features.Search.Application;
+using SystemKnowledgeHub.Api.Features.SoftDelete.Application;
 using SystemKnowledgeHub.Api.Features.Systems.Application;
 using SystemKnowledgeHub.Api.Features.Traceability.Application;
 using SystemKnowledgeHub.Api.Features.UnknownItems.Application;
@@ -131,6 +132,7 @@ builder.Services.AddScoped<RelationshipQueries>();
 builder.Services.AddScoped<RelationshipService>();
 builder.Services.AddScoped<SearchQueries>();
 builder.Services.AddScoped<KnowledgeDocumentSearchIndex>();
+builder.Services.AddScoped<HistoricalTargetResolver>();
 builder.Services.AddScoped<SystemQueries>();
 builder.Services.AddScoped<SystemKnowledgeViewQueries>();
 builder.Services.AddScoped<SystemService>();
@@ -341,6 +343,11 @@ if (BootstrapAdministratorCommand.IsRequested(args))
 if (BootstrapLocalAdministratorCommand.IsRequested(args))
 {
     Environment.ExitCode = await BootstrapLocalAdministratorCommand.RunAsync(args, app.Services, local);
+    return;
+}
+if (KnowledgeDocumentSearchMaintenanceCommand.IsRequested(args))
+{
+    Environment.ExitCode = await KnowledgeDocumentSearchMaintenanceCommand.RunAsync(args, app.Services);
     return;
 }
 

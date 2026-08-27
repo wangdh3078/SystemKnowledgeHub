@@ -153,7 +153,7 @@ async function save(): Promise<void> {
 }
 
 function openHumanConfirmation(): void {
-  if (!detail.value) return
+  if (!detail.value?.subjectContext) return
   overlayStore.openDrawer({
     kind: 'human-confirmation',
     id: detail.value.subject.id,
@@ -184,8 +184,8 @@ onMounted(() => void load())
       </header>
 
       <section class="evidence-subject-card">
-        <div><small>支持对象</small><strong class="technical-text">{{ detail.subjectContext.title }}</strong><em v-if="detail.subjectDetailKey" class="technical-text">{{ detail.subjectDetailKey }}</em></div>
-        <KnowledgeStatusBadge :status="detail.subjectContext.knowledgeStatus" />
+        <div><small>支持对象</small><strong class="technical-text">{{ detail.subjectContext?.title ?? detail.subjectIdentity?.displayName ?? `${detail.subject.type} #${detail.subject.id}` }}</strong><em v-if="detail.subjectDetailKey" class="technical-text">{{ detail.subjectDetailKey }}</em></div>
+        <KnowledgeStatusBadge v-if="detail.subjectContext" :status="detail.subjectContext.knowledgeStatus" />
       </section>
 
       <template v-if="!editing">
@@ -220,7 +220,7 @@ onMounted(() => void load())
           </dl>
         </section>
 
-        <section class="evidence-knowledge-impact">
+        <section v-if="detail.subjectContext" class="evidence-knowledge-impact">
           <div><small>知识影响</small><strong>当前状态不会因 Evidence 自动变化</strong></div>
           <KnowledgeStatusBadge :status="detail.subjectContext.knowledgeStatus" />
         </section>

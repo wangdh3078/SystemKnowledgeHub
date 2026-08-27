@@ -5,12 +5,14 @@ using SystemKnowledgeHub.Api.Features.Relationships.Domain;
 using SystemKnowledgeHub.Api.Persistence;
 using SystemKnowledgeHub.Api.Persistence.Concurrency;
 using SystemKnowledgeHub.Api.Shared.Api;
+using SystemKnowledgeHub.Api.Features.SoftDelete.Application;
 
 namespace SystemKnowledgeHub.Api.Features.Relationships.Application;
 
 public sealed class RelationshipQueries(
     KnowledgeHubDbContext dbContext,
     RelationshipTargetResolver targetResolver,
+    HistoricalTargetResolver historicalTargetResolver,
     RelationshipEndpointPolicy endpointPolicy,
     ConcurrencyTokenCodec tokenCodec)
 {
@@ -66,7 +68,15 @@ public sealed class RelationshipQueries(
 
         var source = await targetResolver.Resolve(item.SourceType, item.SourceId, cancellationToken);
         var target = await targetResolver.Resolve(item.TargetType, item.TargetId, cancellationToken);
-        if (source is null || target is null) return new(null, RelationshipFailure.ReferenceInvalid, "关系端点已不存在。");
+        if (source is null || target is null)
+        {
+            var missingType = source is null ? item.SourceType : item.TargetType;
+            var missingId = source is null ? item.SourceId : item.TargetId;
+            var historical = await historicalTargetResolver.Resolve(missingType, missingId, cancellationToken);
+            return historical is null
+                ? new(null, RelationshipFailure.ReferenceInvalid, "关系端点引用无效。")
+                : new(null, RelationshipFailure.NotFound, "未找到关系。");
+        }
         var endpointError = endpointPolicy.Validate(item.SourceType, item.SourceId, source, item.RelationType, item.TargetType, item.TargetId, target);
         if (endpointError is not null) return new(null, RelationshipFailure.ReferenceInvalid, endpointError);
 
@@ -118,10 +128,18 @@ public sealed class RelationshipQueries(
             var relatedType = outgoing ? relation.TargetType : relation.SourceType;
             var relatedId = outgoing ? relation.TargetId : relation.SourceId;
             var related = await targetResolver.Resolve(relatedType, relatedId, cancellationToken);
+            if (related is null)
+            {
+                if (await historicalTargetResolver.Resolve(relatedType, relatedId, cancellationToken) is not null)
+                {
+                    continue;
+                }
+                return new(null, RelationshipFailure.ReferenceInvalid, "关系端点引用无效。");
+            }
             items.Add(new RelatedKnowledgeResponse(
                 relation.Id, outgoing ? "Outgoing" : "Incoming", relation.RelationType.ToString(),
                 new TargetReferenceResponse(relatedType.ToString(), relatedId),
-                related?.Title ?? "对象已不存在", related?.ObjectTypeLabel ?? relatedType.ToString()));
+                related.Title, related.ObjectTypeLabel));
         }
         return new(items.OrderByDescending(item => item.Id).ToArray(), RelationshipFailure.None);
     }

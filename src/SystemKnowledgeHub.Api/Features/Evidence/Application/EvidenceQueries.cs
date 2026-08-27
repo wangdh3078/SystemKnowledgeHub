@@ -4,6 +4,7 @@ using SystemKnowledgeHub.Api.Features.Evidence.Application.Models;
 using SystemKnowledgeHub.Api.Features.Evidence.Domain;
 using SystemKnowledgeHub.Api.Persistence;
 using SystemKnowledgeHub.Api.Persistence.Concurrency;
+using SystemKnowledgeHub.Api.Features.SoftDelete.Application;
 using SystemKnowledgeHub.Api.Shared.Api;
 
 namespace SystemKnowledgeHub.Api.Features.Evidence.Application;
@@ -12,6 +13,7 @@ namespace SystemKnowledgeHub.Api.Features.Evidence.Application;
 public sealed class EvidenceQueries(
     KnowledgeHubDbContext dbContext,
     EvidenceSubjectResolver subjectResolver,
+    HistoricalTargetResolver historicalTargetResolver,
     ConcurrencyTokenCodec concurrencyTokenCodec)
 {
     /// <summary>读取一个现有知识对象的 Evidence 摘要，不会改变其 KnowledgeStatus。</summary>
@@ -41,10 +43,19 @@ public sealed class EvidenceQueries(
             return new EvidenceListQueryResult(null, fieldErrors, EvidenceFailure.Validation);
         }
 
-        if (await subjectResolver.Resolve(parsedSubjectType, subjectId, cancellationToken) is null)
+        var currentSubject = await subjectResolver.Resolve(parsedSubjectType, subjectId, cancellationToken);
+        var historicalSubject = await historicalTargetResolver.Resolve(parsedSubjectType, subjectId, cancellationToken);
+        if (currentSubject is null && historicalSubject is null)
         {
             return new EvidenceListQueryResult(null, null, EvidenceFailure.SubjectNotFound);
         }
+
+        var subject = historicalSubject ?? new HistoricalTargetIdentity(
+            subjectId,
+            parsedSubjectType.ToString(),
+            currentSubject!.Title,
+            false,
+            true);
 
         var items = await dbContext.Evidence.AsNoTracking()
             .Where(item => item.SubjectType == parsedSubjectType && item.SubjectId == subjectId)
@@ -70,7 +81,7 @@ public sealed class EvidenceQueries(
             .ToListAsync(cancellationToken);
 
         return new EvidenceListQueryResult(
-            new EvidenceListResponse(items.Select(item => new EvidenceListItemResponse(
+            new EvidenceListResponse(subject, items.Select(item => new EvidenceListItemResponse(
                 item.Id,
                 item.EvidenceType.ToString(),
                 item.KnowledgeDocumentRevisionNumberSnapshot,
@@ -108,10 +119,18 @@ public sealed class EvidenceQueries(
         }
 
         var subjectContext = await subjectResolver.Resolve(item.SubjectType, item.SubjectId, cancellationToken);
-        if (subjectContext is null)
+        var historicalSubject = await historicalTargetResolver.Resolve(item.SubjectType, item.SubjectId, cancellationToken);
+        if (subjectContext is null && historicalSubject is null)
         {
             return new EvidenceDetailQueryResult(null, EvidenceFailure.SubjectNotFound);
         }
+
+        var subject = historicalSubject ?? new HistoricalTargetIdentity(
+            item.SubjectId,
+            item.SubjectType.ToString(),
+            subjectContext!.Title,
+            false,
+            true);
 
         JsonElement? sourceLocator = item.SourceLocatorJson is null
             ? null
@@ -123,6 +142,7 @@ public sealed class EvidenceQueries(
                 concurrencyTokenCodec.Encode(item.Version),
                 item.EvidenceType.ToString(),
                 new EvidenceTargetResponse(item.SubjectType.ToString(), item.SubjectId),
+                subject,
                 item.SubjectDetailKey,
                 item.KnowledgeDocumentRevisionNumberSnapshot,
                 item.SourceTitle,
@@ -139,10 +159,10 @@ public sealed class EvidenceQueries(
                     item.ProviderExternalKey,
                     item.ProviderSource,
                     item.ProviderNote),
-                new EvidenceSubjectContextResponse(
+                subjectContext is null ? null : new EvidenceSubjectContextResponse(
                     subjectContext.Title,
                     subjectContext.KnowledgeStatus.ToString()),
-                item.SubjectType == EvidenceSubjectType.KnowledgeRelation
+                subject.IsDeleted ? [] : item.SubjectType == EvidenceSubjectType.KnowledgeRelation
                     ? new[] { "UpdateEvidence", "ChangeRelationKnowledgeStatus" }
                     : (item.SubjectType is EvidenceSubjectType.System
                     or EvidenceSubjectType.BusinessFunction

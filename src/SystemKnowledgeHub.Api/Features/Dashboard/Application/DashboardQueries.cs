@@ -168,11 +168,15 @@ public sealed class DashboardQueries(KnowledgeHubDbContext dbContext)
                 relation.SourceType == KnowledgeTargetType.BusinessFunction
                     && functionIds.Contains(relation.SourceId)
                     && (relation.TargetType == KnowledgeTargetType.DatabaseObject
-                        || relation.TargetType == KnowledgeTargetType.DatabaseColumn)
+                        && dbContext.DatabaseObjects.Any(item => item.Id == relation.TargetId)
+                        || relation.TargetType == KnowledgeTargetType.DatabaseColumn
+                        && dbContext.DatabaseColumns.Any(item => item.Id == relation.TargetId))
                 || relation.TargetType == KnowledgeTargetType.BusinessFunction
                     && functionIds.Contains(relation.TargetId)
                     && (relation.SourceType == KnowledgeTargetType.DatabaseObject
-                        || relation.SourceType == KnowledgeTargetType.DatabaseColumn))
+                        && dbContext.DatabaseObjects.Any(item => item.Id == relation.SourceId)
+                        || relation.SourceType == KnowledgeTargetType.DatabaseColumn
+                        && dbContext.DatabaseColumns.Any(item => item.Id == relation.SourceId)))
             .Select(relation => relation.SourceType == KnowledgeTargetType.BusinessFunction
                 ? relation.SourceId
                 : relation.TargetId)
@@ -329,7 +333,8 @@ public sealed class DashboardQueries(KnowledgeHubDbContext dbContext)
 
     private IQueryable<UnknownItem> UnknownItemsInScope(long? systemId)
     {
-        var query = dbContext.UnknownItems.AsNoTracking();
+        var query = dbContext.UnknownItems.AsNoTracking()
+            .Where(item => dbContext.Systems.Any(system => system.Id == item.SystemId));
         return systemId.HasValue ? query.Where(item => item.SystemId == systemId.Value) : query;
     }
 }

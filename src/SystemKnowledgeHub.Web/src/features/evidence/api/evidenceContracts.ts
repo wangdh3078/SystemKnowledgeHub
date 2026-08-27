@@ -50,6 +50,14 @@ export interface EvidenceTarget {
   readonly id: number
 }
 
+export interface HistoricalTargetIdentity {
+  readonly id: number
+  readonly targetType: string
+  readonly displayName: string
+  readonly isDeleted: boolean
+  readonly isNavigable: boolean
+}
+
 export interface EvidenceSubjectPayload {
   readonly subject: EvidenceTarget
   readonly title: string
@@ -73,6 +81,7 @@ export interface EvidenceDetailResponse {
   readonly concurrencyToken: string
   readonly evidenceType: EvidenceType
   readonly subject: EvidenceTarget
+  readonly subjectIdentity?: HistoricalTargetIdentity
   readonly subjectDetailKey: string | null
   readonly knowledgeDocumentRevisionNumberSnapshot: number | null
   readonly sourceTitle: string
@@ -85,7 +94,7 @@ export interface EvidenceDetailResponse {
   readonly subjectContext: {
     readonly title: string
     readonly knowledgeStatus: KnowledgeStatus
-  }
+  } | null
   readonly availableActions: readonly string[]
 }
 
@@ -102,6 +111,7 @@ export interface EvidenceListItemResponse {
 }
 
 export interface EvidenceListResponse {
+  readonly subject?: HistoricalTargetIdentity
   readonly items: readonly EvidenceListItemResponse[]
 }
 
@@ -181,6 +191,11 @@ function readId(value: unknown, field: string): number {
   return value
 }
 
+function readBoolean(value: unknown, field: string): boolean {
+  if (typeof value !== 'boolean') throw new Error(`${field} must be a boolean`)
+  return value
+}
+
 function readNullableRevisionNumber(value: unknown, field: string): number | null {
   return value === null ? null : readId(value, field)
 }
@@ -237,7 +252,7 @@ export function isEvidenceSubjectPayload(value: unknown): value is EvidenceSubje
 
 export function decodeEvidenceDetail(value: unknown): EvidenceDetailResponse {
   const root = readObject(value, 'evidenceDetail')
-  const context = readObject(root.subjectContext, 'subjectContext')
+  const context = root.subjectContext === null ? null : readObject(root.subjectContext, 'subjectContext')
   const sourceLocator = root.sourceLocator === null ? null : readObject(root.sourceLocator, 'sourceLocator')
   if (!Array.isArray(root.availableActions)) throw new Error('availableActions must be an array')
   return {
@@ -245,6 +260,7 @@ export function decodeEvidenceDetail(value: unknown): EvidenceDetailResponse {
     concurrencyToken: readString(root.concurrencyToken, 'concurrencyToken'),
     evidenceType: readEvidenceType(root.evidenceType, 'evidenceType'),
     subject: readTarget(root.subject, 'subject'),
+    subjectIdentity: readHistoricalTargetIdentity(root.subjectIdentity, 'subjectIdentity'),
     subjectDetailKey: readNullableString(root.subjectDetailKey, 'subjectDetailKey'),
     knowledgeDocumentRevisionNumberSnapshot: readNullableRevisionNumber(
       root.knowledgeDocumentRevisionNumberSnapshot,
@@ -257,7 +273,7 @@ export function decodeEvidenceDetail(value: unknown): EvidenceDetailResponse {
     supportReason: readString(root.supportReason, 'supportReason'),
     confidence: readConfidence(root.confidence, 'confidence'),
     provider: readPerson(root.provider, 'provider'),
-    subjectContext: {
+    subjectContext: context === null ? null : {
       title: readString(context.title, 'subjectContext.title'),
       knowledgeStatus: readStatus(context.knowledgeStatus, 'subjectContext.knowledgeStatus'),
     },
@@ -269,6 +285,7 @@ export function decodeEvidenceList(value: unknown): EvidenceListResponse {
   const root = readObject(value, 'evidenceList')
   if (!Array.isArray(root.items)) throw new Error('items must be an array')
   return {
+    subject: readHistoricalTargetIdentity(root.subject, 'subject'),
     items: root.items.map((value, index) => {
       const item = readObject(value, `items[${index}]`)
       return {
@@ -286,6 +303,17 @@ export function decodeEvidenceList(value: unknown): EvidenceListResponse {
         provider: readPerson(item.provider, `items[${index}].provider`),
       }
     }),
+  }
+}
+
+function readHistoricalTargetIdentity(value: unknown, field: string): HistoricalTargetIdentity {
+  const item = readObject(value, field)
+  return {
+    id: readId(item.id, `${field}.id`),
+    targetType: readString(item.targetType, `${field}.targetType`),
+    displayName: readString(item.displayName, `${field}.displayName`),
+    isDeleted: readBoolean(item.isDeleted, `${field}.isDeleted`),
+    isNavigable: readBoolean(item.isNavigable, `${field}.isNavigable`),
   }
 }
 

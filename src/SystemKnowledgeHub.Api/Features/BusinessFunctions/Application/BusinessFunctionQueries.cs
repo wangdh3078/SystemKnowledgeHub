@@ -89,9 +89,13 @@ public sealed class BusinessFunctionQueries(
                 function.UpdatedAt,
                 dbContext.KnowledgeRelations.Count(relation => relation.SourceType == KnowledgeTargetType.BusinessFunction
                     && relation.SourceId == function.Id
-                    && (relation.TargetType == KnowledgeTargetType.DatabaseObject || relation.TargetType == KnowledgeTargetType.DatabaseColumn)),
+                    && (relation.TargetType == KnowledgeTargetType.DatabaseObject
+                        && dbContext.DatabaseObjects.Any(item => item.Id == relation.TargetId)
+                        || relation.TargetType == KnowledgeTargetType.DatabaseColumn
+                        && dbContext.DatabaseColumns.Any(item => item.Id == relation.TargetId))),
                 dbContext.KnowledgeRelations.Count(relation => relation.SourceType == KnowledgeTargetType.BusinessFunction
-                    && relation.SourceId == function.Id && relation.TargetType == KnowledgeTargetType.BusinessRule),
+                    && relation.SourceId == function.Id && relation.TargetType == KnowledgeTargetType.BusinessRule
+                    && dbContext.BusinessRules.Any(item => item.Id == relation.TargetId)),
                 dbContext.UnknownItemTargets.Count(target => target.TargetType == KnowledgeTargetType.BusinessFunction
                     && target.TargetId == function.Id && target.UnknownItem.Status != UnknownItemStatus.Closed)))
             .ToArrayAsync(cancellationToken);

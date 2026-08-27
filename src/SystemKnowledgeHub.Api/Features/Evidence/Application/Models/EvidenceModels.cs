@@ -1,5 +1,6 @@
 using System.Text.Json;
 using SystemKnowledgeHub.Api.Shared.Domain;
+using SystemKnowledgeHub.Api.Features.SoftDelete.Application;
 
 namespace SystemKnowledgeHub.Api.Features.Evidence.Application.Models;
 
@@ -85,6 +86,7 @@ public sealed record EvidenceDetailResponse(
     string ConcurrencyToken,
     string EvidenceType,
     EvidenceTargetResponse Subject,
+    HistoricalTargetIdentity SubjectIdentity,
     string? SubjectDetailKey,
     long? KnowledgeDocumentRevisionNumberSnapshot,
     string SourceTitle,
@@ -94,7 +96,7 @@ public sealed record EvidenceDetailResponse(
     string SupportReason,
     string? Confidence,
     PersonSnapshotResponse Provider,
-    EvidenceSubjectContextResponse SubjectContext,
+    EvidenceSubjectContextResponse? SubjectContext,
     IReadOnlyList<string> AvailableActions);
 
 /// <summary>某一知识对象的 Evidence 摘要投影，用于详情页展示其支持依据与人工确认记录。</summary>
@@ -111,7 +113,9 @@ public sealed record EvidenceListItemResponse(
     PersonSnapshotResponse Provider);
 
 /// <summary>按明确 Subject 返回的 Evidence 摘要集合。</summary>
-public sealed record EvidenceListResponse(IReadOnlyList<EvidenceListItemResponse> Items);
+public sealed record EvidenceListResponse(
+    HistoricalTargetIdentity Subject,
+    IReadOnlyList<EvidenceListItemResponse> Items);
 
 /// <summary>创建普通 Evidence 或 HumanConfirmation 后返回的简要结果。</summary>
 /// <remarks>KnowledgeStatusChanged 对创建操作保持 false；Evidence 可作为后续显式状态推进的依据，但不执行推进。</remarks>

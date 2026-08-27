@@ -1,5 +1,6 @@
 using System.Text.Json;
 using SystemKnowledgeHub.Api.Features.Evidence.Application.Models;
+using SystemKnowledgeHub.Api.Features.SoftDelete.Application;
 
 namespace SystemKnowledgeHub.Api.Features.UnknownItems.Application.Models;
 
@@ -112,9 +113,23 @@ public sealed record CloseUnknownItemCommand(long UnknownItemId, string? CloseNo
 public sealed record ReopenUnknownItemCommand(long UnknownItemId, string Reason, PersonSnapshotCommand? Actor, string ConcurrencyToken);
 
 public sealed record UnknownTargetResponse(string Type, long Id);
-public sealed record UnknownTargetSummaryResponse(UnknownTargetResponse Target, string Display, bool Primary);
-public sealed record UnknownPrimaryTargetResponse(string Type, long Id, string Display);
-public sealed record UnknownSystemResponse(long Id, string Name);
+public sealed record UnknownTargetSummaryResponse(
+    UnknownTargetResponse Target,
+    string Display,
+    bool Primary,
+    HistoricalTargetIdentity Identity);
+public sealed record UnknownPrimaryTargetResponse(
+    string Type,
+    long Id,
+    string Display,
+    HistoricalTargetIdentity Identity);
+public sealed record UnknownSystemResponse(
+    long Id,
+    string Name,
+    string TargetType,
+    string DisplayName,
+    bool IsDeleted,
+    bool IsNavigable);
 public sealed record UnknownActivityResponse(string Type, string Summary, DateTimeOffset OccurredAt);
 
 public sealed record UnknownItemListRowResponse(
@@ -154,7 +169,8 @@ public sealed record KnowledgeUpdateResponse(
     string ChangeSummary,
     JsonElement Before,
     JsonElement After,
-    string Status);
+    string Status,
+    HistoricalTargetIdentity? TargetIdentity = null);
 
 public sealed record UnknownItemActivityResponse(
     string Type,

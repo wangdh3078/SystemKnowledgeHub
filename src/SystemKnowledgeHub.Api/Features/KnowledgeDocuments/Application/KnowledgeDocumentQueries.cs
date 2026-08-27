@@ -5,11 +5,14 @@ using SystemKnowledgeHub.Api.Features.KnowledgeDocuments.Domain;
 using SystemKnowledgeHub.Api.Persistence;
 using SystemKnowledgeHub.Api.Persistence.Concurrency;
 using SystemKnowledgeHub.Api.Shared.Domain;
+using SystemKnowledgeHub.Api.Features.Relationships.Domain;
+using SystemKnowledgeHub.Api.Features.SoftDelete.Application;
 
 namespace SystemKnowledgeHub.Api.Features.KnowledgeDocuments.Application;
 
 public sealed class KnowledgeDocumentQueries(
     KnowledgeHubDbContext dbContext,
+    HistoricalTargetResolver historicalTargetResolver,
     ConcurrencyTokenCodec concurrencyTokenCodec)
 {
     private const int DefaultPageSize = 20;
@@ -96,18 +99,19 @@ public sealed class KnowledgeDocumentQueries(
             return new KnowledgeDocumentRevisionListQueryResult(null, errors, false);
         }
 
-        var document = await dbContext.KnowledgeDocuments.AsNoTracking()
-            .Where(item => item.Id == knowledgeDocumentId)
-            .Select(item => new
-            {
-                item.CurrentRevisionNumber,
-                item.LatestPublishedRevisionNumber,
-            })
-            .SingleOrDefaultAsync(cancellationToken);
-        if (document is null)
+        var owner = await historicalTargetResolver.Resolve(
+            KnowledgeTargetType.KnowledgeDocument,
+            knowledgeDocumentId,
+            cancellationToken);
+        if (owner is null)
         {
             return new KnowledgeDocumentRevisionListQueryResult(null, null, false);
         }
+
+        var document = await dbContext.KnowledgeDocuments.IgnoreQueryFilters().AsNoTracking()
+            .Where(item => item.Id == knowledgeDocumentId)
+            .Select(item => new { item.CurrentRevisionNumber, item.LatestPublishedRevisionNumber })
+            .SingleAsync(cancellationToken);
 
         var page = requestedPage ?? 1;
         var pageSize = requestedPageSize ?? DefaultPageSize;
@@ -138,7 +142,7 @@ public sealed class KnowledgeDocumentQueries(
                 .ToArrayAsync(cancellationToken);
 
         return new KnowledgeDocumentRevisionListQueryResult(
-            new KnowledgeDocumentRevisionListResponse(items, page, pageSize, total),
+            new KnowledgeDocumentRevisionListResponse(owner, items, page, pageSize, total),
             null,
             true);
     }
@@ -148,7 +152,13 @@ public sealed class KnowledgeDocumentQueries(
         long revisionNumber,
         CancellationToken cancellationToken)
     {
-        var document = await dbContext.KnowledgeDocuments.AsNoTracking()
+        var owner = await historicalTargetResolver.Resolve(
+            KnowledgeTargetType.KnowledgeDocument,
+            knowledgeDocumentId,
+            cancellationToken);
+        if (owner is null) return null;
+
+        var document = await dbContext.KnowledgeDocuments.IgnoreQueryFilters().AsNoTracking()
             .Where(item => item.Id == knowledgeDocumentId)
             .Select(item => new
             {
@@ -157,11 +167,11 @@ public sealed class KnowledgeDocumentQueries(
             })
             .SingleOrDefaultAsync(cancellationToken);
         if (document is null) return null;
-
         return await dbContext.KnowledgeDocumentRevisions.AsNoTracking()
             .Where(item => item.KnowledgeDocumentId == knowledgeDocumentId
                 && item.RevisionNumber == revisionNumber)
             .Select(item => new KnowledgeDocumentRevisionDetailResponse(
+                owner,
                 item.Id,
                 item.KnowledgeDocumentId,
                 item.RevisionNumber,

@@ -87,7 +87,16 @@ export interface KnowledgeDocumentRevisionListItem {
   readonly isLatestPublished: boolean
 }
 
+export interface HistoricalTargetIdentity {
+  readonly id: number
+  readonly targetType: string
+  readonly displayName: string
+  readonly isDeleted: boolean
+  readonly isNavigable: boolean
+}
+
 export interface KnowledgeDocumentRevisionListResponse {
+  readonly owner?: HistoricalTargetIdentity
   readonly items: readonly KnowledgeDocumentRevisionListItem[]
   readonly page: number
   readonly pageSize: number
@@ -95,6 +104,7 @@ export interface KnowledgeDocumentRevisionListResponse {
 }
 
 export interface KnowledgeDocumentRevisionDetail extends KnowledgeDocumentRevisionListItem {
+  readonly owner?: HistoricalTargetIdentity
   readonly knowledgeDocumentId: number
   readonly title: string
   readonly summary: string | null
@@ -284,6 +294,17 @@ function decodeKnowledgeDocumentRevisionListItem(
   }
 }
 
+function decodeHistoricalTargetIdentity(value: unknown, field: string): HistoricalTargetIdentity {
+  const item = readObject(value, field)
+  return {
+    id: readId(item.id, `${field}.id`),
+    targetType: readString(item.targetType, `${field}.targetType`),
+    displayName: readString(item.displayName, `${field}.displayName`),
+    isDeleted: readBoolean(item.isDeleted, `${field}.isDeleted`),
+    isNavigable: readBoolean(item.isNavigable, `${field}.isNavigable`),
+  }
+}
+
 export function decodeKnowledgeDocumentRevisionList(
   value: unknown,
 ): KnowledgeDocumentRevisionListResponse {
@@ -293,6 +314,7 @@ export function decodeKnowledgeDocumentRevisionList(
     throw new Error('total must be a non-negative integer')
   }
   return {
+    owner: decodeHistoricalTargetIdentity(root.owner, 'owner'),
     items: root.items.map((item, index) =>
       decodeKnowledgeDocumentRevisionListItem(item, `items[${index}]`),
     ),
@@ -308,6 +330,7 @@ export function decodeKnowledgeDocumentRevisionDetail(
   const root = readObject(value, 'knowledgeDocumentRevisionDetail')
   return {
     ...decodeKnowledgeDocumentRevisionListItem(root, 'revision'),
+    owner: decodeHistoricalTargetIdentity(root.owner, 'owner'),
     knowledgeDocumentId: readId(root.knowledgeDocumentId, 'knowledgeDocumentId'),
     title: readString(root.title, 'title'),
     summary: readNullableString(root.summary, 'summary'),

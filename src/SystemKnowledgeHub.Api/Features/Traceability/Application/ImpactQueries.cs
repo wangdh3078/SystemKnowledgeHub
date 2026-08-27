@@ -4,13 +4,16 @@ using SystemKnowledgeHub.Api.Features.KnowledgeDocuments.Domain;
 using SystemKnowledgeHub.Api.Features.Relationships.Domain;
 using SystemKnowledgeHub.Api.Features.Traceability.Application.Models;
 using SystemKnowledgeHub.Api.Persistence;
+using SystemKnowledgeHub.Api.Features.SoftDelete.Application;
 
 namespace SystemKnowledgeHub.Api.Features.Traceability.Application;
 
 /// <summary>
 /// Builds the fixed, path-explained Impact Context projection from current canonical truth.
 /// </summary>
-public sealed class ImpactQueries(KnowledgeHubDbContext dbContext)
+public sealed class ImpactQueries(
+    KnowledgeHubDbContext dbContext,
+    HistoricalTargetResolver historicalTargetResolver)
 {
     public const int DefaultPageSize = 20;
     public const int MaximumPageSize = 100;
@@ -52,15 +55,25 @@ public sealed class ImpactQueries(KnowledgeHubDbContext dbContext)
             .DistinctBy(path => path.ExactPathKey)
             .ToArray();
         var targets = await LoadTargetMetadata(candidates, cancellationToken);
-        if (targets.Count != candidates
-                .Select(candidate => (candidate.TargetType, candidate.TargetId))
-                .Distinct()
-                .Count())
+        var currentCandidates = new List<ImpactPathCandidate>();
+        foreach (var candidate in candidates)
         {
-            return new ImpactQueryResult(null, ImpactQueryFailure.ReferenceInvalid);
+            if (targets.ContainsKey((candidate.TargetType, candidate.TargetId)))
+            {
+                currentCandidates.Add(candidate);
+                continue;
+            }
+            var historical = await historicalTargetResolver.Resolve(
+                ToKnowledgeTargetType(candidate.TargetType),
+                candidate.TargetId,
+                cancellationToken);
+            if (historical is null)
+            {
+                return new ImpactQueryResult(null, ImpactQueryFailure.ReferenceInvalid);
+            }
         }
 
-        var ordered = candidates
+        var ordered = currentCandidates
             .Select(candidate => ToResponse(candidate, targets[(candidate.TargetType, candidate.TargetId)]))
             .OrderBy(item => PathCategoryRank(item.PathKind))
             .ThenBy(item => TargetTypeRank(item.Target.Type))
@@ -119,10 +132,16 @@ public sealed class ImpactQueries(KnowledgeHubDbContext dbContext)
         }
 
         var specificationIds = specificationRelations.Select(relation => relation.TargetId).Distinct().ToArray();
-        if (!await DocumentsMatch(specificationIds, DocumentType.Specification, cancellationToken))
+        var specificationSelection = await SelectCurrentDocuments(
+            specificationIds, [DocumentType.Specification], cancellationToken);
+        if (specificationSelection.ReferenceInvalid)
         {
             return PathLoadResult.Invalid;
         }
+        specificationIds = specificationSelection.ActiveIds;
+        specificationRelations = specificationRelations
+            .Where(relation => specificationIds.Contains(relation.TargetId))
+            .ToList();
         if (specificationIds.Length == 0)
         {
             return new PathLoadResult(paths, false);
@@ -185,10 +204,16 @@ public sealed class ImpactQueries(KnowledgeHubDbContext dbContext)
             return PathLoadResult.Invalid;
         }
         var requirementIds = definingRelations.Select(relation => relation.SourceId).Distinct().ToArray();
-        if (!await DocumentsMatch(requirementIds, DocumentType.Requirement, cancellationToken))
+        var requirementSelection = await SelectCurrentDocuments(
+            requirementIds, [DocumentType.Requirement], cancellationToken);
+        if (requirementSelection.ReferenceInvalid)
         {
             return PathLoadResult.Invalid;
         }
+        requirementIds = requirementSelection.ActiveIds;
+        definingRelations = definingRelations
+            .Where(relation => requirementIds.Contains(relation.SourceId))
+            .ToArray();
         var upstreamRelations = await dbContext.KnowledgeRelations.AsNoTracking()
             .Where(relation => relation.SourceType == KnowledgeTargetType.KnowledgeDocument
                 && requirementIds.Contains(relation.SourceId)
@@ -251,16 +276,18 @@ public sealed class ImpactQueries(KnowledgeHubDbContext dbContext)
             return PathLoadResult.Invalid;
         }
         var sourceIds = verifiedRelations.Select(relation => relation.SourceId).Distinct().ToArray();
+        var sourceSelection = await SelectCurrentDocuments(
+            sourceIds, [DocumentType.Requirement, DocumentType.Specification], cancellationToken);
+        if (sourceSelection.ReferenceInvalid)
+        {
+            return PathLoadResult.Invalid;
+        }
+        sourceIds = sourceSelection.ActiveIds;
+        verifiedRelations = verifiedRelations.Where(relation => sourceIds.Contains(relation.SourceId)).ToArray();
         var sourceTypes = await dbContext.KnowledgeDocuments.AsNoTracking()
             .Where(document => sourceIds.Contains(document.Id))
             .Select(document => new { document.Id, document.DocumentType })
             .ToArrayAsync(cancellationToken);
-        if (sourceTypes.Length != sourceIds.Length
-            || sourceTypes.Any(document => document.DocumentType is not (
-                DocumentType.Requirement or DocumentType.Specification)))
-        {
-            return PathLoadResult.Invalid;
-        }
         var typeById = sourceTypes.ToDictionary(document => document.Id, document => document.DocumentType);
         var selectedRelations = await dbContext.KnowledgeRelations.AsNoTracking()
             .Where(relation => relation.SourceType == KnowledgeTargetType.KnowledgeDocument
@@ -325,21 +352,40 @@ public sealed class ImpactQueries(KnowledgeHubDbContext dbContext)
             .ToArrayAsync(cancellationToken);
     }
 
-    private async Task<bool> DocumentsMatch(
+    private async Task<DocumentSelection> SelectCurrentDocuments(
         IReadOnlyList<long> ids,
-        DocumentType expectedType,
+        IReadOnlyList<DocumentType> expectedTypes,
         CancellationToken cancellationToken)
     {
         if (ids.Count == 0)
         {
-            return true;
+            return new DocumentSelection([], false);
         }
-        var rows = await dbContext.KnowledgeDocuments.AsNoTracking()
+        var physicalRows = await dbContext.KnowledgeDocuments.IgnoreQueryFilters().AsNoTracking()
             .Where(document => ids.Contains(document.Id))
             .Select(document => new { document.Id, document.DocumentType })
             .ToArrayAsync(cancellationToken);
-        return rows.Length == ids.Count && rows.All(document => document.DocumentType == expectedType);
+        if (physicalRows.Length != ids.Count
+            || physicalRows.Any(document => !expectedTypes.Contains(document.DocumentType)))
+        {
+            return new DocumentSelection([], true);
+        }
+        var activeIds = await dbContext.KnowledgeDocuments.AsNoTracking()
+            .Where(document => ids.Contains(document.Id))
+            .Select(document => document.Id)
+            .ToArrayAsync(cancellationToken);
+        return new DocumentSelection(activeIds, false);
     }
+
+    private static KnowledgeTargetType ToKnowledgeTargetType(ImpactTargetType type) => type switch
+    {
+        ImpactTargetType.System => KnowledgeTargetType.System,
+        ImpactTargetType.BusinessFunction => KnowledgeTargetType.BusinessFunction,
+        ImpactTargetType.DatabaseObject => KnowledgeTargetType.DatabaseObject,
+        ImpactTargetType.BusinessRule => KnowledgeTargetType.BusinessRule,
+        ImpactTargetType.Integration => KnowledgeTargetType.Integration,
+        _ => throw new InvalidOperationException($"Unsupported impact target type {type}."),
+    };
 
     private async Task<Dictionary<(ImpactTargetType Type, long Id), TargetMetadata>> LoadTargetMetadata(
         IReadOnlyList<ImpactPathCandidate> candidates,
@@ -541,6 +587,8 @@ public sealed class ImpactQueries(KnowledgeHubDbContext dbContext)
     private sealed record TargetMetadata(
         string Title,
         IReadOnlyList<ImpactSystemContextResponse> SystemContext);
+
+    private sealed record DocumentSelection(long[] ActiveIds, bool ReferenceInvalid);
 
     private sealed record PathLoadResult(
         IReadOnlyList<ImpactPathCandidate> Paths,

@@ -24,6 +24,9 @@ public sealed class TraceabilityQueries(KnowledgeHubDbContext dbContext)
         MaximumEdges,
         MaximumLineageEntries);
 
+    private IQueryable<KnowledgeDocument> PhysicalDocuments =>
+        dbContext.KnowledgeDocuments.IgnoreQueryFilters().AsNoTracking();
+
     public async Task<TraceabilityQueryResult> Get(long id, CancellationToken cancellationToken)
     {
         var rootEntity = await dbContext.KnowledgeDocuments.AsNoTracking()
@@ -108,7 +111,7 @@ public sealed class TraceabilityQueries(KnowledgeHubDbContext dbContext)
 
         var invalidDirect = await directRelations.AnyAsync(relation =>
             relation.TargetType != KnowledgeTargetType.KnowledgeDocument
-            || !dbContext.KnowledgeDocuments.Any(document =>
+            || !PhysicalDocuments.Any(document =>
                 document.Id == relation.TargetId
                 && (relation.RelationType == RelationType.SpecifiedBy
                     ? document.DocumentType == DocumentType.Specification
@@ -133,7 +136,7 @@ public sealed class TraceabilityQueries(KnowledgeHubDbContext dbContext)
             && relation.RelationType == RelationType.VerifiedBy);
         var invalidNested = await nestedRelations.AnyAsync(relation =>
             relation.TargetType != KnowledgeTargetType.KnowledgeDocument
-            || !dbContext.KnowledgeDocuments.Any(document =>
+            || !PhysicalDocuments.Any(document =>
                 document.Id == relation.TargetId
                 && document.DocumentType == DocumentType.TestCase), cancellationToken);
         if (invalidNested)
@@ -305,12 +308,12 @@ public sealed class TraceabilityQueries(KnowledgeHubDbContext dbContext)
             && relation.RelationType == RelationType.VerifiedBy);
         var invalidIncoming = await incomingRelations.AnyAsync(relation =>
             relation.SourceType != KnowledgeTargetType.KnowledgeDocument
-            || !dbContext.KnowledgeDocuments.Any(document =>
+            || !PhysicalDocuments.Any(document =>
                 document.Id == relation.SourceId
                 && document.DocumentType == DocumentType.Requirement), cancellationToken);
         var invalidOutgoing = await outgoingRelations.AnyAsync(relation =>
             relation.TargetType != KnowledgeTargetType.KnowledgeDocument
-            || !dbContext.KnowledgeDocuments.Any(document =>
+            || !PhysicalDocuments.Any(document =>
                 document.Id == relation.TargetId
                 && document.DocumentType == DocumentType.TestCase), cancellationToken);
         if (invalidIncoming || invalidOutgoing)
@@ -383,7 +386,7 @@ public sealed class TraceabilityQueries(KnowledgeHubDbContext dbContext)
             && relation.RelationType == RelationType.VerifiedBy);
         var invalidIncoming = await incomingRelations.AnyAsync(relation =>
             relation.SourceType != KnowledgeTargetType.KnowledgeDocument
-            || !dbContext.KnowledgeDocuments.Any(document =>
+            || !PhysicalDocuments.Any(document =>
                 document.Id == relation.SourceId
                 && (document.DocumentType == DocumentType.Requirement
                     || document.DocumentType == DocumentType.Specification)), cancellationToken);
@@ -416,7 +419,7 @@ public sealed class TraceabilityQueries(KnowledgeHubDbContext dbContext)
             && relation.RelationType == RelationType.SpecifiedBy);
         var invalidUpstream = await upstreamRelations.AnyAsync(relation =>
             relation.SourceType != KnowledgeTargetType.KnowledgeDocument
-            || !dbContext.KnowledgeDocuments.Any(document =>
+            || !PhysicalDocuments.Any(document =>
                 document.Id == relation.SourceId
                 && document.DocumentType == DocumentType.Requirement), cancellationToken);
         if (invalidUpstream)
@@ -541,19 +544,27 @@ public sealed class TraceabilityQueries(KnowledgeHubDbContext dbContext)
             && relation.RelationType == RelationType.Supersedes);
         var invalidOutgoing = await outgoing.AnyAsync(relation =>
             relation.TargetType != KnowledgeTargetType.KnowledgeDocument
-            || !dbContext.KnowledgeDocuments.Any(document =>
+            || !PhysicalDocuments.Any(document =>
                 document.Id == relation.TargetId && document.DocumentType == root.DocumentType), cancellationToken);
         var invalidIncoming = await incoming.AnyAsync(relation =>
             relation.SourceType != KnowledgeTargetType.KnowledgeDocument
-            || !dbContext.KnowledgeDocuments.Any(document =>
+            || !PhysicalDocuments.Any(document =>
                 document.Id == relation.SourceId && document.DocumentType == root.DocumentType), cancellationToken);
         if (invalidOutgoing || invalidIncoming)
         {
             return new LineageResult([], 0, false, true);
         }
 
-        var outgoingCount = await outgoing.CountAsync(cancellationToken);
-        var incomingCount = await incoming.CountAsync(cancellationToken);
+        var outgoingCount = await (
+            from relation in outgoing
+            join document in dbContext.KnowledgeDocuments.AsNoTracking()
+                on relation.TargetId equals document.Id
+            select relation.Id).CountAsync(cancellationToken);
+        var incomingCount = await (
+            from relation in incoming
+            join document in dbContext.KnowledgeDocuments.AsNoTracking()
+                on relation.SourceId equals document.Id
+            select relation.Id).CountAsync(cancellationToken);
         var outgoingRows = await (
             from relation in outgoing
             join document in dbContext.KnowledgeDocuments.AsNoTracking()
@@ -573,13 +584,17 @@ public sealed class TraceabilityQueries(KnowledgeHubDbContext dbContext)
                 select EdgeCandidate.Create(relation, document, TraceDirection.Incoming, root.Id))
                 .Take(remaining)
                 .ToArrayAsync(cancellationToken);
-        var cycleDetected = await outgoing.AnyAsync(outgoingRelation =>
-            dbContext.KnowledgeRelations.Any(incomingRelation =>
-                incomingRelation.RelationType == RelationType.Supersedes
+        var activeOutgoingTargetIds = from relation in outgoing
+            join document in dbContext.KnowledgeDocuments.AsNoTracking()
+                on relation.TargetId equals document.Id
+            select document.Id;
+        var cycleDetected = await dbContext.KnowledgeRelations.AnyAsync(incomingRelation =>
+                activeOutgoingTargetIds.Contains(incomingRelation.SourceId)
+                && incomingRelation.RelationType == RelationType.Supersedes
                 && incomingRelation.SourceType == KnowledgeTargetType.KnowledgeDocument
-                && incomingRelation.SourceId == outgoingRelation.TargetId
                 && incomingRelation.TargetType == KnowledgeTargetType.KnowledgeDocument
-                && incomingRelation.TargetId == root.Id), cancellationToken);
+                && incomingRelation.TargetId == root.Id,
+            cancellationToken);
         return new LineageResult(
             outgoingRows.Concat(incomingRows).ToArray(),
             outgoingCount + incomingCount,

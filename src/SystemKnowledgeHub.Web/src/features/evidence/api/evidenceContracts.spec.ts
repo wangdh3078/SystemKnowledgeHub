@@ -15,6 +15,13 @@ function humanConfirmation(
     concurrencyToken: 'opaque-token',
     evidenceType: 'HumanConfirmation',
     subject: { type: 'BusinessFunction', id: 77 },
+    subjectIdentity: {
+      id: 77,
+      targetType: 'BusinessFunction',
+      displayName: '设备状态查询',
+      isDeleted: false,
+      isNavigable: true,
+    },
     subjectDetailKey: 'Purpose',
     knowledgeDocumentRevisionNumberSnapshot: null,
     sourceTitle: '人工确认 · 王敏',

@@ -29,6 +29,7 @@ public sealed class BusinessRuleQueries(KnowledgeHubDbContext dbContext,
         var relatedFunctions = new List<BusinessRuleRelationshipResponse>();
         var relatedFields = new List<BusinessRuleRelationshipResponse>();
         var integrations = new List<BusinessRuleRelationshipResponse>();
+        var currentRelationshipCount = 0;
         foreach (var relation in relations)
         {
             var ruleIsSource = relation.SourceType == KnowledgeTargetType.BusinessRule && relation.SourceId == id;
@@ -36,6 +37,7 @@ public sealed class BusinessRuleQueries(KnowledgeHubDbContext dbContext,
             var otherId = ruleIsSource ? relation.TargetId : relation.SourceId;
             var other = await targetResolver.Resolve(otherType, otherId, cancellationToken);
             if (other is null) continue;
+            currentRelationshipCount++;
             var row = new BusinessRuleRelationshipResponse(relation.Id, otherId, other.Title, relation.RelationType.ToString());
             if (!ruleIsSource && relation.RelationType == RelationType.AppliesRule && otherType == KnowledgeTargetType.BusinessFunction)
                 relatedFunctions.Add(row);
@@ -62,7 +64,7 @@ public sealed class BusinessRuleQueries(KnowledgeHubDbContext dbContext,
         return new BusinessRuleDetailResponse(rule.Id, new(rule.SystemId, rule.SystemName), tokenCodec.Encode(rule.Version),
             new(rule.Name, rule.KnowledgeStatus.ToString()), rule.Description, rule.ConditionText, rule.ResultText,
             BusinessRuleService.DeserializeInputData(rule.InputDataJson), relatedFunctions, relatedFields, integrations,
-            evidence, unknownItems, new(relations.Length, unknownItems.Length),
+            evidence, unknownItems, new(currentRelationshipCount, unknownItems.Length),
             ["UpdateBusinessRule", "AddKnowledgeRelation", "AddEvidence", "ChangeKnowledgeStatus", "CreateUnknownItem"]);
     }
 }

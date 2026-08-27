@@ -1,5 +1,7 @@
 namespace SystemKnowledgeHub.Api.Features.KnowledgeDocuments.Application.Models;
 
+using SystemKnowledgeHub.Api.Features.SoftDelete.Application;
+
 public sealed record KnowledgeDocumentListQuery(
     string? Query,
     string? DocumentType,
@@ -71,6 +73,7 @@ public sealed record KnowledgeDocumentRevisionListItemResponse(
     bool IsLatestPublished);
 
 public sealed record KnowledgeDocumentRevisionListResponse(
+    HistoricalTargetIdentity Owner,
     IReadOnlyList<KnowledgeDocumentRevisionListItemResponse> Items,
     int Page,
     int PageSize,
@@ -82,6 +85,7 @@ public sealed record KnowledgeDocumentRevisionListQueryResult(
     bool DocumentExists);
 
 public sealed record KnowledgeDocumentRevisionDetailResponse(
+    HistoricalTargetIdentity Owner,
     long Id,
     long KnowledgeDocumentId,
     long RevisionNumber,

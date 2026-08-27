@@ -24,6 +24,7 @@ public sealed class RelationshipsController(RelationshipQueries queries, Relatio
             RelationshipFailure.None => Ok(result.Items),
             RelationshipFailure.Validation => BadRequest(Error("validation_error", result.Message ?? "查询条件无效。")),
             RelationshipFailure.NotFound => NotFound(Error("not_found", result.Message ?? "未找到对象。")),
+            RelationshipFailure.ReferenceInvalid => UnprocessableEntity(Error("reference_invalid", result.Message ?? "关系端点无效。")),
             _ => throw new InvalidOperationException("Unsupported related knowledge query result."),
         };
     }
