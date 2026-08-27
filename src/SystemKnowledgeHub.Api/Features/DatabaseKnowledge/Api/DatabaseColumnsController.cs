@@ -4,6 +4,8 @@ using SystemKnowledgeHub.Api.Features.DatabaseKnowledge.Application;
 using SystemKnowledgeHub.Api.Features.DatabaseKnowledge.Application.Models;
 using SystemKnowledgeHub.Api.Shared.Api;
 using SystemKnowledgeHub.Api.Shared.Api.Contracts;
+using SystemKnowledgeHub.Api.Features.SoftDelete.Application;
+using SystemKnowledgeHub.Api.Features.Users.Application;
 
 namespace SystemKnowledgeHub.Api.Features.DatabaseKnowledge.Api;
 
@@ -11,8 +13,29 @@ namespace SystemKnowledgeHub.Api.Features.DatabaseKnowledge.Api;
 [Route("api/database-columns")]
 public sealed class DatabaseColumnsController(
     DatabaseKnowledgeQueries queries,
-    DatabaseKnowledgeService service) : ControllerBase
+    DatabaseKnowledgeService service,
+    DatabaseKnowledgeDeleteService deleteService,
+    ICurrentUserContext currentUserContext) : ControllerBase
 {
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = SystemKnowledgeHub.Api.Shared.Security.AccessPolicies.Editor)]
+    [HttpDelete("{id:long}")]
+    public async Task<IActionResult> DeleteDatabaseColumn(long id, [FromBody] DeleteDatabaseColumnRequest request, CancellationToken cancellationToken)
+    {
+        var actor = await CurrentUserApiResolution.ResolveSoftDeleteActor(currentUserContext, cancellationToken);
+        if (actor.Error is not null) return StatusCode(actor.StatusCode!.Value, actor.Error);
+        var result = await deleteService.DeleteDatabaseColumn(id, request.ConcurrencyToken, actor.Actor!, cancellationToken);
+        return result.Failure switch
+        {
+            SoftDeleteFailure.None => NoContent(),
+            SoftDeleteFailure.Validation => BadRequest(SoftDeleteApiResponses.Validation(result.FieldErrors!)),
+            SoftDeleteFailure.NotFound => NotFound(SoftDeleteApiResponses.NotFound("DatabaseColumn", id)),
+            SoftDeleteFailure.Forbidden => StatusCode(StatusCodes.Status403Forbidden, SoftDeleteApiResponses.Forbidden("DatabaseColumn", id)),
+            SoftDeleteFailure.Conflict => Conflict(SoftDeleteApiResponses.Conflict("DatabaseColumn", id)),
+            SoftDeleteFailure.Dependencies => UnprocessableEntity(SoftDeleteApiResponses.Dependencies("DatabaseColumn", id, result.Blockers!)),
+            _ => throw new InvalidOperationException("Unsupported DatabaseColumn delete result."),
+        };
+    }
+
     [HttpGet("{id}")]
     [ProducesResponseType<DatabaseColumnDetailResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ApiErrorResponse>(StatusCodes.Status400BadRequest)]

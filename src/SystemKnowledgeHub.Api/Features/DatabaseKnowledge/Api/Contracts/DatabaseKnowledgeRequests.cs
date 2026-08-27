@@ -1,5 +1,9 @@
 namespace SystemKnowledgeHub.Api.Features.DatabaseKnowledge.Api.Contracts;
 
+public sealed record DeleteDatabaseSourceRequest(string? ConcurrencyToken);
+public sealed record DeleteDatabaseObjectRequest(string? ConcurrencyToken);
+public sealed record DeleteDatabaseColumnRequest(string? ConcurrencyToken);
+
 public sealed record DatabaseKnowledgeActorRequest(string? DisplayName, string? Role);
 
 public sealed record CreateDatabaseSourceRequest(

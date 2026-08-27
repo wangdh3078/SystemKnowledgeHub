@@ -50,8 +50,8 @@ public sealed class KnowledgeStatusController(KnowledgeStatusService service, IC
             KnowledgeStatusFailure.None => Ok(result.Response),
             KnowledgeStatusFailure.Validation => BadRequest(new ApiErrorResponse(
                 "validation_error", "请求内容无效。", result.FieldErrors, null)),
-            KnowledgeStatusFailure.NotFound => NotFound(new ApiErrorResponse(
-                "not_found", "未找到指定知识对象。", null,
+            KnowledgeStatusFailure.NotFound => UnprocessableEntity(new ApiErrorResponse(
+                "reference_invalid", "知识对象不存在或已不可用。", null,
                 request.Target is null ? null : new { resourceType = request.Target.Type, resourceId = request.Target.Id })),
             KnowledgeStatusFailure.Conflict => Conflict(new ApiErrorResponse(
                 "conflict", result.Message ?? "当前状态或并发标记已变化。", null, result.Details)),

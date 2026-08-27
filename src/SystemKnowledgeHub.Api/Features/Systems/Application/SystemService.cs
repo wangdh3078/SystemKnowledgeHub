@@ -107,6 +107,8 @@ public sealed class SystemService(
                 UpdateSystemOverviewFailure.Validation);
         }
 
+        await using var transaction = await SqliteImmediateTransaction.BeginAsync(dbContext, cancellationToken);
+
         var system = await dbContext.Systems
             .SingleOrDefaultAsync(item => item.Id == request.SystemId, cancellationToken);
         if (system is null)
@@ -162,6 +164,8 @@ public sealed class SystemService(
                 UpdateSystemOverviewFailure.Conflict);
         }
 
+        await transaction.CommitAsync(cancellationToken);
+
         return new UpdateSystemOverviewResult(
             new UpdateSystemOverviewResponse(
                 system.Id,
@@ -186,6 +190,8 @@ public sealed class SystemService(
                 errors,
                 UpdateSystemTechnologyFailure.Validation);
         }
+
+        await using var transaction = await SqliteImmediateTransaction.BeginAsync(dbContext, cancellationToken);
 
         var system = await dbContext.Systems
             .Include(item => item.TechnologyTags)
@@ -242,6 +248,8 @@ public sealed class SystemService(
             }
         }
 
+        await transaction.CommitAsync(cancellationToken);
+
         return new UpdateSystemTechnologyResult(
             new UpdateSystemTechnologyResponse(
                 system.Id,
@@ -263,6 +271,8 @@ public sealed class SystemService(
                 errors,
                 UpdateSystemLifecycleFailure.Validation);
         }
+
+        await using var transaction = await SqliteImmediateTransaction.BeginAsync(dbContext, cancellationToken);
 
         var system = await dbContext.Systems
             .SingleOrDefaultAsync(item => item.Id == request.SystemId, cancellationToken);
@@ -305,6 +315,8 @@ public sealed class SystemService(
                 null,
                 UpdateSystemLifecycleFailure.Conflict);
         }
+
+        await transaction.CommitAsync(cancellationToken);
 
         return new UpdateSystemLifecycleResult(
             new UpdateSystemLifecycleResponse(

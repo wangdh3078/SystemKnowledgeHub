@@ -46,6 +46,8 @@ public sealed class EvidenceService(
             return new EvidenceCommandResult(null, errors, EvidenceFailure.Validation);
         }
 
+        await using var transaction = await SqliteImmediateTransaction.BeginAsync(dbContext, cancellationToken);
+
         var subjectContext = await subjectResolver.Resolve(subjectType, request.Subject!.Id, cancellationToken);
         if (subjectContext is null)
         {
@@ -68,6 +70,7 @@ public sealed class EvidenceService(
             timestamp);
         dbContext.Evidence.Add(item);
         await dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
 
         return new EvidenceCommandResult(
             CreateAddResponse(item, subjectContext.KnowledgeStatus.ToString()),
@@ -87,7 +90,7 @@ public sealed class EvidenceService(
         AddHumanConfirmationCommand request,
         CancellationToken cancellationToken)
     {
-        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        await using var transaction = await SqliteImmediateTransaction.BeginAsync(dbContext, cancellationToken);
         var errors = new Dictionary<string, string[]>();
         var subjectType = default(EvidenceSubjectType);
         if (request.Subject is null)

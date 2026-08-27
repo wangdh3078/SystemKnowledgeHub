@@ -5,6 +5,7 @@ using SystemKnowledgeHub.Api.Features.Systems.Application.Models;
 using SystemKnowledgeHub.Api.Features.Users.Application;
 using SystemKnowledgeHub.Api.Shared.Api.Contracts;
 using SystemKnowledgeHub.Api.Shared.Api;
+using SystemKnowledgeHub.Api.Features.SoftDelete.Application;
 
 namespace SystemKnowledgeHub.Api.Features.Systems.Api;
 
@@ -14,6 +15,7 @@ public sealed class SystemsController(
     SystemQueries queries,
     SystemKnowledgeViewQueries knowledgeViewQueries,
     SystemService service,
+    SystemDeleteService deleteService,
     ICurrentUserContext currentUserContext) : ControllerBase
 {
     [HttpGet("{id:long}/knowledge-view")]
@@ -285,6 +287,33 @@ public sealed class SystemsController(
             _ => throw new InvalidOperationException("Unsupported System lifecycle result."),
         };
     }
+
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = SystemKnowledgeHub.Api.Shared.Security.AccessPolicies.Editor)]
+    [HttpDelete("{id:long}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType<ApiErrorResponse>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ApiErrorResponse>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ApiErrorResponse>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ApiErrorResponse>(StatusCodes.Status409Conflict)]
+    [ProducesResponseType<ApiErrorResponse>(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> DeleteSystem(long id, [FromBody] DeleteSystemRequest request, CancellationToken cancellationToken)
+    {
+        var actor = await CurrentUserApiResolution.ResolveSoftDeleteActor(currentUserContext, cancellationToken);
+        if (actor.Error is not null) return StatusCode(actor.StatusCode!.Value, actor.Error);
+        var result = await deleteService.DeleteSystem(id, request.ConcurrencyToken, actor.Actor!, cancellationToken);
+        return DeleteResult(result, "System", id);
+    }
+
+    private IActionResult DeleteResult(SoftDeleteResult result, string resourceType, long resourceId) => result.Failure switch
+    {
+        SoftDeleteFailure.None => NoContent(),
+        SoftDeleteFailure.Validation => BadRequest(SoftDeleteApiResponses.Validation(result.FieldErrors!)),
+        SoftDeleteFailure.NotFound => NotFound(SoftDeleteApiResponses.NotFound(resourceType, resourceId)),
+        SoftDeleteFailure.Forbidden => StatusCode(StatusCodes.Status403Forbidden, SoftDeleteApiResponses.Forbidden(resourceType, resourceId)),
+        SoftDeleteFailure.Conflict => Conflict(SoftDeleteApiResponses.Conflict(resourceType, resourceId)),
+        SoftDeleteFailure.Dependencies => UnprocessableEntity(SoftDeleteApiResponses.Dependencies(resourceType, resourceId, result.Blockers!)),
+        _ => throw new InvalidOperationException("Unsupported System delete result."),
+    };
 
     private static ApiErrorResponse SystemNotFound(long id) => new(
         "not_found",

@@ -5,6 +5,7 @@ using SystemKnowledgeHub.Api.Features.Integrations.Application.Models;
 using SystemKnowledgeHub.Api.Features.Users.Application;
 using SystemKnowledgeHub.Api.Shared.Api;
 using SystemKnowledgeHub.Api.Shared.Api.Contracts;
+using SystemKnowledgeHub.Api.Features.SoftDelete.Application;
 
 namespace SystemKnowledgeHub.Api.Features.Integrations.Api;
 
@@ -13,8 +14,28 @@ namespace SystemKnowledgeHub.Api.Features.Integrations.Api;
 public sealed class IntegrationsController(
     IntegrationQueries queries,
     IntegrationService service,
+    IntegrationDeleteService deleteService,
     ICurrentUserContext currentUserContext) : ControllerBase
 {
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = SystemKnowledgeHub.Api.Shared.Security.AccessPolicies.Editor)]
+    [HttpDelete("{id:long}")]
+    public async Task<IActionResult> DeleteIntegration(long id, [FromBody] DeleteIntegrationRequest request, CancellationToken cancellationToken)
+    {
+        var actor = await CurrentUserApiResolution.ResolveSoftDeleteActor(currentUserContext, cancellationToken);
+        if (actor.Error is not null) return StatusCode(actor.StatusCode!.Value, actor.Error);
+        var result = await deleteService.DeleteIntegration(id, request.ConcurrencyToken, actor.Actor!, cancellationToken);
+        return result.Failure switch
+        {
+            SoftDeleteFailure.None => NoContent(),
+            SoftDeleteFailure.Validation => BadRequest(SoftDeleteApiResponses.Validation(result.FieldErrors!)),
+            SoftDeleteFailure.NotFound => NotFound(SoftDeleteApiResponses.NotFound("Integration", id)),
+            SoftDeleteFailure.Forbidden => StatusCode(StatusCodes.Status403Forbidden, SoftDeleteApiResponses.Forbidden("Integration", id)),
+            SoftDeleteFailure.Conflict => Conflict(SoftDeleteApiResponses.Conflict("Integration", id)),
+            SoftDeleteFailure.Dependencies => UnprocessableEntity(SoftDeleteApiResponses.Dependencies("Integration", id, result.Blockers!)),
+            _ => throw new InvalidOperationException("Unsupported Integration delete result."),
+        };
+    }
+
     [HttpGet("{id:long}")]
     public async Task<IActionResult> GetDetail(long id, CancellationToken cancellationToken)
     {

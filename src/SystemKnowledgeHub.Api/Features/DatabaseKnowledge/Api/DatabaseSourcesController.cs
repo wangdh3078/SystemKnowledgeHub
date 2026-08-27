@@ -5,6 +5,7 @@ using SystemKnowledgeHub.Api.Features.DatabaseKnowledge.Application.Models;
 using SystemKnowledgeHub.Api.Features.Users.Application;
 using SystemKnowledgeHub.Api.Shared.Api;
 using SystemKnowledgeHub.Api.Shared.Api.Contracts;
+using SystemKnowledgeHub.Api.Features.SoftDelete.Application;
 
 namespace SystemKnowledgeHub.Api.Features.DatabaseKnowledge.Api;
 
@@ -12,8 +13,29 @@ namespace SystemKnowledgeHub.Api.Features.DatabaseKnowledge.Api;
 [Route("api/database-sources")]
 public sealed class DatabaseSourcesController(
     DatabaseKnowledgeService service,
+    DatabaseKnowledgeDeleteService deleteService,
     ICurrentUserContext currentUserContext) : ControllerBase
 {
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = SystemKnowledgeHub.Api.Shared.Security.AccessPolicies.Editor)]
+    [HttpDelete("{id:long}")]
+    public async Task<IActionResult> DeleteDatabaseSource(long id, [FromBody] DeleteDatabaseSourceRequest request, CancellationToken cancellationToken)
+    {
+        var actor = await CurrentUserApiResolution.ResolveSoftDeleteActor(currentUserContext, cancellationToken);
+        if (actor.Error is not null) return StatusCode(actor.StatusCode!.Value, actor.Error);
+        return DeleteResult(await deleteService.DeleteDatabaseSource(id, request.ConcurrencyToken, actor.Actor!, cancellationToken), id);
+    }
+
+    private IActionResult DeleteResult(SoftDeleteResult result, long id) => result.Failure switch
+    {
+        SoftDeleteFailure.None => NoContent(),
+        SoftDeleteFailure.Validation => BadRequest(SoftDeleteApiResponses.Validation(result.FieldErrors!)),
+        SoftDeleteFailure.NotFound => NotFound(SoftDeleteApiResponses.NotFound("DatabaseSource", id)),
+        SoftDeleteFailure.Forbidden => StatusCode(StatusCodes.Status403Forbidden, SoftDeleteApiResponses.Forbidden("DatabaseSource", id)),
+        SoftDeleteFailure.Conflict => Conflict(SoftDeleteApiResponses.Conflict("DatabaseSource", id)),
+        SoftDeleteFailure.Dependencies => UnprocessableEntity(SoftDeleteApiResponses.Dependencies("DatabaseSource", id, result.Blockers!)),
+        _ => throw new InvalidOperationException("Unsupported DatabaseSource delete result."),
+    };
+
     [Microsoft.AspNetCore.Authorization.Authorize(Policy = SystemKnowledgeHub.Api.Shared.Security.AccessPolicies.Editor)]
     [HttpPost]
     [ProducesResponseType<CreateDatabaseSourceResponse>(StatusCodes.Status201Created)]
@@ -48,7 +70,7 @@ public sealed class DatabaseSourcesController(
         {
             CreateDatabaseSourceFailure.None => StatusCode(StatusCodes.Status201Created, result.Response),
             CreateDatabaseSourceFailure.Validation => BadRequest(ValidationError(result.FieldErrors!)),
-            CreateDatabaseSourceFailure.SystemNotFound => NotFound(NotFoundError("System", request.SystemId ?? 0)),
+            CreateDatabaseSourceFailure.SystemNotFound => UnprocessableEntity(ReferenceInvalidError("System", request.SystemId ?? 0)),
             CreateDatabaseSourceFailure.DuplicateName => Conflict(ConflictError("name", "同一系统下数据库来源名称已存在。")),
             CreateDatabaseSourceFailure.PrimaryConflict => Conflict(ConflictError("isPrimary", "同一系统只能登记一个主数据库来源。")),
             _ => throw new InvalidOperationException("Unsupported DatabaseSource result."),
@@ -60,6 +82,9 @@ public sealed class DatabaseSourcesController(
 
     private static ApiErrorResponse NotFoundError(string resourceType, long resourceId) =>
         new("not_found", "未找到指定系统。", null, new { resourceType, resourceId });
+
+    private static ApiErrorResponse ReferenceInvalidError(string resourceType, long resourceId) =>
+        new("reference_invalid", "引用的系统不存在或已不可用。", null, new { resourceType, resourceId });
 
     private static ApiErrorResponse ConflictError(string field, string message) =>
         new("conflict", message, new Dictionary<string, string[]> { [field] = [message] }, null);

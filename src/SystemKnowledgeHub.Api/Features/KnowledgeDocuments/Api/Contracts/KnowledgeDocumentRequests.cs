@@ -1,5 +1,7 @@
 namespace SystemKnowledgeHub.Api.Features.KnowledgeDocuments.Api.Contracts;
 
+public sealed record DeleteKnowledgeDocumentRequest(string? ConcurrencyToken);
+
 public sealed record CreateKnowledgeDocumentRequest(
     string? DocumentType,
     string? Title,

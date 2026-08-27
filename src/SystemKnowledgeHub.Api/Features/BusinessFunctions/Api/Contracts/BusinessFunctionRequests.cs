@@ -1,5 +1,7 @@
 namespace SystemKnowledgeHub.Api.Features.BusinessFunctions.Api.Contracts;
 
+public sealed record DeleteBusinessFunctionRequest(string? ConcurrencyToken);
+
 public sealed record BusinessFunctionActorRequest(string DisplayName, string? Role);
 
 public sealed record CreateBusinessFunctionRequest(

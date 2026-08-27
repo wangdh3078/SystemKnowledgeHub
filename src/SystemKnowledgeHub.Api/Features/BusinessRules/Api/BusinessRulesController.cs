@@ -5,6 +5,7 @@ using SystemKnowledgeHub.Api.Features.BusinessRules.Application.Models;
 using SystemKnowledgeHub.Api.Features.Users.Application;
 using SystemKnowledgeHub.Api.Shared.Api;
 using SystemKnowledgeHub.Api.Shared.Api.Contracts;
+using SystemKnowledgeHub.Api.Features.SoftDelete.Application;
 
 namespace SystemKnowledgeHub.Api.Features.BusinessRules.Api;
 
@@ -13,8 +14,28 @@ namespace SystemKnowledgeHub.Api.Features.BusinessRules.Api;
 public sealed class BusinessRulesController(
     BusinessRuleQueries queries,
     BusinessRuleService service,
+    BusinessRuleDeleteService deleteService,
     ICurrentUserContext currentUserContext) : ControllerBase
 {
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = SystemKnowledgeHub.Api.Shared.Security.AccessPolicies.Editor)]
+    [HttpDelete("{id:long}")]
+    public async Task<IActionResult> DeleteBusinessRule(long id, [FromBody] DeleteBusinessRuleRequest request, CancellationToken cancellationToken)
+    {
+        var actor = await CurrentUserApiResolution.ResolveSoftDeleteActor(currentUserContext, cancellationToken);
+        if (actor.Error is not null) return StatusCode(actor.StatusCode!.Value, actor.Error);
+        var result = await deleteService.DeleteBusinessRule(id, request.ConcurrencyToken, actor.Actor!, cancellationToken);
+        return result.Failure switch
+        {
+            SoftDeleteFailure.None => NoContent(),
+            SoftDeleteFailure.Validation => BadRequest(SoftDeleteApiResponses.Validation(result.FieldErrors!)),
+            SoftDeleteFailure.NotFound => NotFound(SoftDeleteApiResponses.NotFound("BusinessRule", id)),
+            SoftDeleteFailure.Forbidden => StatusCode(StatusCodes.Status403Forbidden, SoftDeleteApiResponses.Forbidden("BusinessRule", id)),
+            SoftDeleteFailure.Conflict => Conflict(SoftDeleteApiResponses.Conflict("BusinessRule", id)),
+            SoftDeleteFailure.Dependencies => UnprocessableEntity(SoftDeleteApiResponses.Dependencies("BusinessRule", id, result.Blockers!)),
+            _ => throw new InvalidOperationException("Unsupported BusinessRule delete result."),
+        };
+    }
+
     [HttpGet("{id:long}")]
     public async Task<IActionResult> GetDetail(long id, CancellationToken cancellationToken)
     {
@@ -48,7 +69,7 @@ public sealed class BusinessRulesController(
     {
         BusinessRuleFailure.None => created ? StatusCode(StatusCodes.Status201Created, result.Response) : Ok(result.Response),
         BusinessRuleFailure.Validation => BadRequest(Error("validation_error", "请求内容无效。", result.FieldErrors)),
-        BusinessRuleFailure.SystemNotFound => NotFound(Error("not_found", "未找到所属系统。")),
+        BusinessRuleFailure.SystemNotFound => UnprocessableEntity(Error("reference_invalid", "所属系统不存在或已不可用。")),
         BusinessRuleFailure.NotFound => NotFound(Error("not_found", "未找到业务规则。")),
         BusinessRuleFailure.DuplicateName => Conflict(Error("conflict", "同一系统内已存在同名业务规则。")),
         BusinessRuleFailure.Conflict => Conflict(Error("conflict", "内容已被修改，请重新加载后重试。")),

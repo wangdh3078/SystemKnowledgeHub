@@ -1,5 +1,7 @@
 namespace SystemKnowledgeHub.Api.Features.Systems.Api.Contracts;
 
+public sealed record DeleteSystemRequest(string? ConcurrencyToken);
+
 public sealed record ActorContextRequest(string DisplayName, string? Role);
 
 public sealed record CreateSystemRequest(

@@ -24,9 +24,11 @@ public sealed class RelationshipService(
         var errors = ValidateEndpoints(request.Source, request.Target, request.RelationType, request.Actor, out var sourceType, out var targetType, out var relationType);
         if (errors.Count > 0) return new(null, errors, RelationshipFailure.Validation);
 
+        await using var transaction = await SqliteImmediateTransaction.BeginAsync(dbContext, cancellationToken);
+
         var source = await targetResolver.Resolve(sourceType, request.Source!.Id, cancellationToken);
         var target = await targetResolver.Resolve(targetType, request.Target!.Id, cancellationToken);
-        if (source is null || target is null) return new(null, null, RelationshipFailure.NotFound, "关系 Source 或 Target 不存在。");
+        if (source is null || target is null) return new(null, null, RelationshipFailure.ReferenceInvalid, "关系 Source 或 Target 不存在或已不可用。");
         var endpointError = endpointPolicy.Validate(sourceType, request.Source.Id, source, relationType, targetType, request.Target.Id, target);
         if (endpointError is not null) return new(null, null, RelationshipFailure.ReferenceInvalid, endpointError);
 
@@ -56,6 +58,8 @@ public sealed class RelationshipService(
         {
             return new(null, null, RelationshipFailure.Duplicate, "该精确关系已经存在。");
         }
+
+        await transaction.CommitAsync(cancellationToken);
 
         return new(new AddRelationshipResponse(item.Id,
             new(sourceType.ToString(), item.SourceId), relationType.ToString(), new(targetType.ToString(), item.TargetId),

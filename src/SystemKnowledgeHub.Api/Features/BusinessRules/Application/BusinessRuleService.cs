@@ -15,6 +15,7 @@ public sealed class BusinessRuleService(KnowledgeHubDbContext dbContext, Concurr
     {
         var errors = Validate(request.Name, request.Description, request.InputData, request.Actor.DisplayName);
         if (errors.Count > 0) return Failure(BusinessRuleFailure.Validation, errors);
+        await using var transaction = await SqliteImmediateTransaction.BeginAsync(dbContext, cancellationToken);
         var system = await dbContext.Systems.SingleOrDefaultAsync(item => item.Id == request.SystemId, cancellationToken);
         if (system is null) return Failure(BusinessRuleFailure.SystemNotFound);
         var name = request.Name.Trim();
@@ -45,6 +46,7 @@ public sealed class BusinessRuleService(KnowledgeHubDbContext dbContext, Concurr
         dbContext.BusinessRules.Add(rule);
         try { await dbContext.SaveChangesAsync(cancellationToken); }
         catch (DbUpdateException) { return Failure(BusinessRuleFailure.DuplicateName); }
+        await transaction.CommitAsync(cancellationToken);
         return Success(rule);
     }
 
@@ -53,6 +55,7 @@ public sealed class BusinessRuleService(KnowledgeHubDbContext dbContext, Concurr
         var errors = Validate(request.Name, request.Description, request.InputData, request.Actor.DisplayName);
         if (!tokenCodec.TryDecode(request.ConcurrencyToken, out var expectedVersion)) errors["concurrencyToken"] = ["并发标记无效，请重新加载后重试。"]; 
         if (errors.Count > 0) return Failure(BusinessRuleFailure.Validation, errors);
+        await using var transaction = await SqliteImmediateTransaction.BeginAsync(dbContext, cancellationToken);
         var rule = await dbContext.BusinessRules.Include(item => item.System)
             .SingleOrDefaultAsync(item => item.Id == request.BusinessRuleId, cancellationToken);
         if (rule is null) return Failure(BusinessRuleFailure.NotFound);
@@ -71,6 +74,7 @@ public sealed class BusinessRuleService(KnowledgeHubDbContext dbContext, Concurr
         try { await dbContext.SaveChangesAsync(cancellationToken); }
         catch (DbUpdateConcurrencyException) { return Failure(BusinessRuleFailure.Conflict); }
         catch (DbUpdateException) { return Failure(BusinessRuleFailure.DuplicateName); }
+        await transaction.CommitAsync(cancellationToken);
         return Success(rule);
     }
 

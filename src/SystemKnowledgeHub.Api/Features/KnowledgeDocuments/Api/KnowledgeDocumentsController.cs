@@ -10,6 +10,7 @@ using SystemKnowledgeHub.Api.Features.Users.Application.Models;
 using SystemKnowledgeHub.Api.Shared.Api;
 using SystemKnowledgeHub.Api.Shared.Api.Contracts;
 using SystemKnowledgeHub.Api.Shared.Security;
+using SystemKnowledgeHub.Api.Features.SoftDelete.Application;
 
 namespace SystemKnowledgeHub.Api.Features.KnowledgeDocuments.Api;
 
@@ -20,8 +21,28 @@ public sealed class KnowledgeDocumentsController(
     TraceabilityQueries traceabilityQueries,
     ImpactQueries impactQueries,
     KnowledgeDocumentService service,
+    KnowledgeDocumentDeleteService deleteService,
     ICurrentUserContext currentUserContext) : ControllerBase
 {
+    [Authorize(Policy = AccessPolicies.Editor)]
+    [HttpDelete("{id:long}")]
+    public async Task<IActionResult> DeleteKnowledgeDocument(long id, [FromBody] DeleteKnowledgeDocumentRequest request, CancellationToken cancellationToken)
+    {
+        var actor = await CurrentUserApiResolution.ResolveSoftDeleteActor(currentUserContext, cancellationToken);
+        if (actor.Error is not null) return StatusCode(actor.StatusCode!.Value, actor.Error);
+        var result = await deleteService.DeleteKnowledgeDocument(id, request.ConcurrencyToken, actor.Actor!, cancellationToken);
+        return result.Failure switch
+        {
+            SoftDeleteFailure.None => NoContent(),
+            SoftDeleteFailure.Validation => BadRequest(SoftDeleteApiResponses.Validation(result.FieldErrors!)),
+            SoftDeleteFailure.NotFound => NotFound(SoftDeleteApiResponses.NotFound("KnowledgeDocument", id)),
+            SoftDeleteFailure.Forbidden => StatusCode(StatusCodes.Status403Forbidden, SoftDeleteApiResponses.Forbidden("KnowledgeDocument", id)),
+            SoftDeleteFailure.Conflict => Conflict(SoftDeleteApiResponses.Conflict("KnowledgeDocument", id)),
+            SoftDeleteFailure.Dependencies => UnprocessableEntity(SoftDeleteApiResponses.Dependencies("KnowledgeDocument", id, result.Blockers!)),
+            _ => throw new InvalidOperationException("Unsupported KnowledgeDocument delete result."),
+        };
+    }
+
     [HttpGet]
     public async Task<ActionResult<KnowledgeDocumentsListResponse>> GetList(
         [FromQuery] string? query,

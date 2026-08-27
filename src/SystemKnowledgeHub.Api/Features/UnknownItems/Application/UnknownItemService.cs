@@ -58,7 +58,7 @@ public sealed class UnknownItemService(
             resolved.Add((target.Request, target.Type, target.Primary, context.Title));
         }
 
-        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        await using var transaction = await SqliteImmediateTransaction.BeginAsync(dbContext, cancellationToken);
         var now = DateTimeOffset.UtcNow;
         var creator = request.Creator!;
         var item = new UnknownItem
@@ -122,7 +122,7 @@ public sealed class UnknownItemService(
         if (parsedTargets.GroupBy(item => (item.Type, item.Request.Id)).Any(group => group.Count() > 1)) errors["relatedTargets"] = ["相关对象不能重复。"]; 
         if (errors.Count > 0) return Validation(errors);
 
-        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        await using var transaction = await SqliteImmediateTransaction.BeginAsync(dbContext, cancellationToken);
         var item = await dbContext.UnknownItems.Include(entry => entry.Targets).SingleOrDefaultAsync(entry => entry.Id == request.UnknownItemId, cancellationToken);
         if (item is null) return Failure(UnknownItemFailure.NotFound, "未找到待确认事项。");
         if (item.Status == UnknownItemStatus.Closed) return Failure(UnknownItemFailure.InvalidState, "已关闭事项不能修改相关对象。");
@@ -170,7 +170,7 @@ public sealed class UnknownItemService(
     {
         var validation = ValidateWorkflow(request.Actor, request.ConcurrencyToken, out var expectedVersion);
         if (validation.Count > 0) return Validation(validation);
-        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        await using var transaction = await SqliteImmediateTransaction.BeginAsync(dbContext, cancellationToken);
         var item = await dbContext.UnknownItems.SingleOrDefaultAsync(entry => entry.Id == request.UnknownItemId, cancellationToken);
         if (item is null) return Failure(UnknownItemFailure.NotFound, "未找到待确认事项。");
         if (item.Version != expectedVersion) return Failure(UnknownItemFailure.Conflict, "待确认事项已被修改，请重新加载后重试。");
@@ -196,7 +196,7 @@ public sealed class UnknownItemService(
         var errors = ValidateWorkflow(request.Recorder, request.ConcurrencyToken, out var expectedVersion, "recorder");
         if (string.IsNullOrWhiteSpace(request.Content)) errors["content"] = ["调查发现不能为空。"]; 
         if (errors.Count > 0) return Validation(errors);
-        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        await using var transaction = await SqliteImmediateTransaction.BeginAsync(dbContext, cancellationToken);
         var item = await dbContext.UnknownItems.SingleOrDefaultAsync(entry => entry.Id == request.UnknownItemId, cancellationToken);
         if (item is null) return Failure(UnknownItemFailure.NotFound, "未找到待确认事项。");
         if (item.Version != expectedVersion) return Failure(UnknownItemFailure.Conflict, "待确认事项已被修改，请重新加载后重试。");
@@ -236,7 +236,7 @@ public sealed class UnknownItemService(
         {
             return Validation(new Dictionary<string, string[]> { ["concurrencyToken"] = ["并发标记无效，请重新加载后重试。"] });
         }
-        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        await using var transaction = await SqliteImmediateTransaction.BeginAsync(dbContext, cancellationToken);
         var item = await dbContext.UnknownItems.SingleOrDefaultAsync(entry => entry.Id == request.UnknownItemId, cancellationToken);
         if (item is null) return Failure(UnknownItemFailure.NotFound, "未找到待确认事项。");
         if (item.Version != expectedVersion) return Failure(UnknownItemFailure.Conflict, "待确认事项已被修改，请重新加载后重试。");
@@ -271,7 +271,7 @@ public sealed class UnknownItemService(
         ValidateUpdateDrafts(request.KnowledgeUpdates, errors);
         if (errors.Count > 0) return Validation(errors);
 
-        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        await using var transaction = await SqliteImmediateTransaction.BeginAsync(dbContext, cancellationToken);
         var item = await dbContext.UnknownItems.Include(entry => entry.Resolution).SingleOrDefaultAsync(entry => entry.Id == request.UnknownItemId, cancellationToken);
         if (item is null) return Failure(UnknownItemFailure.NotFound, "未找到待确认事项。");
         if (item.Version != expectedVersion) return Failure(UnknownItemFailure.Conflict, "待确认事项已被修改，请重新加载后重试。");

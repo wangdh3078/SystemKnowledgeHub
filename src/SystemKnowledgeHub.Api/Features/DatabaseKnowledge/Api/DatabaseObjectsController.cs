@@ -5,6 +5,7 @@ using SystemKnowledgeHub.Api.Features.DatabaseKnowledge.Application.Models;
 using SystemKnowledgeHub.Api.Features.Users.Application;
 using SystemKnowledgeHub.Api.Shared.Api;
 using SystemKnowledgeHub.Api.Shared.Api.Contracts;
+using SystemKnowledgeHub.Api.Features.SoftDelete.Application;
 
 namespace SystemKnowledgeHub.Api.Features.DatabaseKnowledge.Api;
 
@@ -13,8 +14,28 @@ namespace SystemKnowledgeHub.Api.Features.DatabaseKnowledge.Api;
 public sealed class DatabaseObjectsController(
     DatabaseKnowledgeQueries queries,
     DatabaseKnowledgeService service,
+    DatabaseKnowledgeDeleteService deleteService,
     ICurrentUserContext currentUserContext) : ControllerBase
 {
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = SystemKnowledgeHub.Api.Shared.Security.AccessPolicies.Editor)]
+    [HttpDelete("{id:long}")]
+    public async Task<IActionResult> DeleteDatabaseObject(long id, [FromBody] DeleteDatabaseObjectRequest request, CancellationToken cancellationToken)
+    {
+        var actor = await CurrentUserApiResolution.ResolveSoftDeleteActor(currentUserContext, cancellationToken);
+        if (actor.Error is not null) return StatusCode(actor.StatusCode!.Value, actor.Error);
+        var result = await deleteService.DeleteDatabaseObject(id, request.ConcurrencyToken, actor.Actor!, cancellationToken);
+        return result.Failure switch
+        {
+            SoftDeleteFailure.None => NoContent(),
+            SoftDeleteFailure.Validation => BadRequest(SoftDeleteApiResponses.Validation(result.FieldErrors!)),
+            SoftDeleteFailure.NotFound => NotFound(SoftDeleteApiResponses.NotFound("DatabaseObject", id)),
+            SoftDeleteFailure.Forbidden => StatusCode(StatusCodes.Status403Forbidden, SoftDeleteApiResponses.Forbidden("DatabaseObject", id)),
+            SoftDeleteFailure.Conflict => Conflict(SoftDeleteApiResponses.Conflict("DatabaseObject", id)),
+            SoftDeleteFailure.Dependencies => UnprocessableEntity(SoftDeleteApiResponses.Dependencies("DatabaseObject", id, result.Blockers!)),
+            _ => throw new InvalidOperationException("Unsupported DatabaseObject delete result."),
+        };
+    }
+
     [HttpGet]
     [ProducesResponseType<DatabaseObjectsListResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ApiErrorResponse>(StatusCodes.Status400BadRequest)]
@@ -100,7 +121,11 @@ public sealed class DatabaseObjectsController(
         {
             RegisterDatabaseObjectFailure.None => StatusCode(StatusCodes.Status201Created, result.Response),
             RegisterDatabaseObjectFailure.Validation => BadRequest(ValidationError(result.FieldErrors!)),
-            RegisterDatabaseObjectFailure.DatabaseSourceNotFound => NotFound(NotFoundError("DatabaseSource", request.DatabaseSourceId ?? 0)),
+            RegisterDatabaseObjectFailure.DatabaseSourceNotFound => UnprocessableEntity(new ApiErrorResponse(
+                "reference_invalid",
+                "数据库来源不存在或已不可用。",
+                null,
+                new { resourceType = "DatabaseSource", resourceId = request.DatabaseSourceId ?? 0 })),
             RegisterDatabaseObjectFailure.DuplicateObject => Conflict(ConflictError(
                 "objectName",
                 "同一数据库来源下 Schema 与对象名称组合已存在。")),

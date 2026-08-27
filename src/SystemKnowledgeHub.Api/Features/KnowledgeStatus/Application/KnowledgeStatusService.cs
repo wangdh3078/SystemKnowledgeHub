@@ -26,7 +26,8 @@ public sealed class KnowledgeStatusService(
         {
             return Unsupported(request.Target!, "DatabaseSource 第一版不持久化 KnowledgeStatus，不允许变更。");
         }
-        return targetType switch
+        await using var transaction = await SqliteImmediateTransaction.BeginAsync(dbContext, cancellationToken);
+        var result = targetType switch
         {
             KnowledgeStatusTargetType.System => await ChangeSystem(request, targetStatus, expectedVersion, cancellationToken),
             KnowledgeStatusTargetType.BusinessFunction => await ChangeBusinessFunction(request, targetStatus, expectedVersion, cancellationToken),
@@ -37,6 +38,11 @@ public sealed class KnowledgeStatusService(
             KnowledgeStatusTargetType.KnowledgeDocument => await ChangeKnowledgeDocument(request, targetStatus, expectedVersion, cancellationToken),
             _ => Unsupported(request.Target!, "当前目标类型不支持知识状态变更。"),
         };
+        if (result.Failure == KnowledgeStatusFailure.None)
+        {
+            await transaction.CommitAsync(cancellationToken);
+        }
+        return result;
     }
 
     private async Task<ChangeKnowledgeStatusResult> ChangeSystem(

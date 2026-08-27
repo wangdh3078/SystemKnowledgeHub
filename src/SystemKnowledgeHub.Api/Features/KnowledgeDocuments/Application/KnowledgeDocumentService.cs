@@ -52,7 +52,7 @@ public sealed class KnowledgeDocumentService(
             Version = 1,
         };
         dbContext.KnowledgeDocuments.Add(document);
-        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        await using var transaction = await SqliteImmediateTransaction.BeginAsync(dbContext, cancellationToken);
         await dbContext.SaveChangesAsync(cancellationToken);
         dbContext.KnowledgeDocumentRevisions.Add(CreateRevision(
             document,
@@ -79,6 +79,8 @@ public sealed class KnowledgeDocumentService(
         }
         if (!concurrencyTokenCodec.TryDecode(request.ConcurrencyToken, out var expectedVersion)) errors["concurrencyToken"] = ["并发标记无效，请重新加载后重试。"];
         if (errors.Count > 0) return new KnowledgeDocumentWriteResult(null, errors, KnowledgeDocumentWriteFailure.Validation);
+
+        await using var transaction = await SqliteImmediateTransaction.BeginAsync(dbContext, cancellationToken);
 
         var document = await dbContext.KnowledgeDocuments.SingleOrDefaultAsync(item => item.Id == request.KnowledgeDocumentId, cancellationToken);
         if (document is null) return new KnowledgeDocumentWriteResult(null, null, KnowledgeDocumentWriteFailure.NotFound);
@@ -121,7 +123,6 @@ public sealed class KnowledgeDocumentService(
             changeSummary));
         try
         {
-            await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
             await dbContext.SaveChangesAsync(cancellationToken);
             await searchIndex.Upsert(document, cancellationToken);
             await transaction.CommitAsync(cancellationToken);
@@ -148,6 +149,8 @@ public sealed class KnowledgeDocumentService(
             errors["concurrencyToken"] = ["并发标记无效，请重新加载后重试。"];
         }
         if (errors.Count > 0) return new KnowledgeDocumentWriteResult(null, errors, KnowledgeDocumentWriteFailure.Validation);
+
+        await using var transaction = await SqliteImmediateTransaction.BeginAsync(dbContext, cancellationToken);
 
         var document = await dbContext.KnowledgeDocuments.SingleOrDefaultAsync(item => item.Id == request.KnowledgeDocumentId, cancellationToken);
         if (document is null) return new KnowledgeDocumentWriteResult(null, null, KnowledgeDocumentWriteFailure.NotFound);
@@ -186,6 +189,7 @@ public sealed class KnowledgeDocumentService(
         {
             return new KnowledgeDocumentWriteResult(null, null, KnowledgeDocumentWriteFailure.Conflict);
         }
+        await transaction.CommitAsync(cancellationToken);
         return new KnowledgeDocumentWriteResult(await queries.ToDetail(document, cancellationToken), null, KnowledgeDocumentWriteFailure.None);
     }
 
@@ -216,6 +220,8 @@ public sealed class KnowledgeDocumentService(
         {
             return new KnowledgeDocumentWriteResult(null, errors, KnowledgeDocumentWriteFailure.Validation);
         }
+
+        await using var transaction = await SqliteImmediateTransaction.BeginAsync(dbContext, cancellationToken);
 
         var document = await dbContext.KnowledgeDocuments.SingleOrDefaultAsync(
             item => item.Id == request.KnowledgeDocumentId,
@@ -274,7 +280,6 @@ public sealed class KnowledgeDocumentService(
 
         try
         {
-            await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
             await dbContext.SaveChangesAsync(cancellationToken);
             await searchIndex.Upsert(document, cancellationToken);
             await transaction.CommitAsync(cancellationToken);

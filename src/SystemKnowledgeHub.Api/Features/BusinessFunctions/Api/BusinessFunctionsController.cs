@@ -5,6 +5,7 @@ using SystemKnowledgeHub.Api.Features.BusinessFunctions.Application.Models;
 using SystemKnowledgeHub.Api.Features.Users.Application;
 using SystemKnowledgeHub.Api.Shared.Api;
 using SystemKnowledgeHub.Api.Shared.Api.Contracts;
+using SystemKnowledgeHub.Api.Features.SoftDelete.Application;
 
 namespace SystemKnowledgeHub.Api.Features.BusinessFunctions.Api;
 
@@ -13,8 +14,28 @@ namespace SystemKnowledgeHub.Api.Features.BusinessFunctions.Api;
 public sealed class BusinessFunctionsController(
     BusinessFunctionQueries queries,
     BusinessFunctionService service,
+    BusinessFunctionDeleteService deleteService,
     ICurrentUserContext currentUserContext) : ControllerBase
 {
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = SystemKnowledgeHub.Api.Shared.Security.AccessPolicies.Editor)]
+    [HttpDelete("{id:long}")]
+    public async Task<IActionResult> DeleteBusinessFunction(long id, [FromBody] DeleteBusinessFunctionRequest request, CancellationToken cancellationToken)
+    {
+        var actor = await CurrentUserApiResolution.ResolveSoftDeleteActor(currentUserContext, cancellationToken);
+        if (actor.Error is not null) return StatusCode(actor.StatusCode!.Value, actor.Error);
+        var result = await deleteService.DeleteBusinessFunction(id, request.ConcurrencyToken, actor.Actor!, cancellationToken);
+        return result.Failure switch
+        {
+            SoftDeleteFailure.None => NoContent(),
+            SoftDeleteFailure.Validation => BadRequest(SoftDeleteApiResponses.Validation(result.FieldErrors!)),
+            SoftDeleteFailure.NotFound => NotFound(SoftDeleteApiResponses.NotFound("BusinessFunction", id)),
+            SoftDeleteFailure.Forbidden => StatusCode(StatusCodes.Status403Forbidden, SoftDeleteApiResponses.Forbidden("BusinessFunction", id)),
+            SoftDeleteFailure.Conflict => Conflict(SoftDeleteApiResponses.Conflict("BusinessFunction", id)),
+            SoftDeleteFailure.Dependencies => UnprocessableEntity(SoftDeleteApiResponses.Dependencies("BusinessFunction", id, result.Blockers!)),
+            _ => throw new InvalidOperationException("Unsupported BusinessFunction delete result."),
+        };
+    }
+
     [HttpGet]
     [ProducesResponseType<BusinessFunctionsListResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ApiErrorResponse>(StatusCodes.Status400BadRequest)]
@@ -82,9 +103,9 @@ public sealed class BusinessFunctionsController(
         {
             CreateBusinessFunctionFailure.None => StatusCode(StatusCodes.Status201Created, result.Response),
             CreateBusinessFunctionFailure.Validation => BadRequest(ValidationError(result.FieldErrors!)),
-            CreateBusinessFunctionFailure.SystemNotFound => NotFound(new ApiErrorResponse(
-                "not_found",
-                "未找到指定系统。",
+            CreateBusinessFunctionFailure.SystemNotFound => UnprocessableEntity(new ApiErrorResponse(
+                "reference_invalid",
+                "所属系统不存在或已不可用。",
                 null,
                 new { resourceType = "System", resourceId = request.SystemId })),
             CreateBusinessFunctionFailure.DuplicateName => Conflict(new ApiErrorResponse(

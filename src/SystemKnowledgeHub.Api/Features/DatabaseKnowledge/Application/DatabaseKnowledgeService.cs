@@ -34,6 +34,8 @@ public sealed class DatabaseKnowledgeService(
             return new CreateDatabaseSourceResult(null, errors, CreateDatabaseSourceFailure.Validation);
         }
 
+        await using var transaction = await SqliteImmediateTransaction.BeginAsync(dbContext, cancellationToken);
+
         if (!await dbContext.Systems.AnyAsync(system => system.Id == request.SystemId, cancellationToken))
         {
             return new CreateDatabaseSourceResult(null, null, CreateDatabaseSourceFailure.SystemNotFound);
@@ -83,6 +85,8 @@ public sealed class DatabaseKnowledgeService(
             return new CreateDatabaseSourceResult(null, null, CreateDatabaseSourceFailure.DuplicateName);
         }
 
+        await transaction.CommitAsync(cancellationToken);
+
         return new CreateDatabaseSourceResult(
             new CreateDatabaseSourceResponse(
                 source.Id,
@@ -114,6 +118,8 @@ public sealed class DatabaseKnowledgeService(
         {
             return new RegisterDatabaseObjectResult(null, errors, RegisterDatabaseObjectFailure.Validation);
         }
+
+        await using var transaction = await SqliteImmediateTransaction.BeginAsync(dbContext, cancellationToken);
 
         var source = await dbContext.DatabaseSources
             .SingleOrDefaultAsync(item => item.Id == request.DatabaseSourceId, cancellationToken);
@@ -169,6 +175,8 @@ public sealed class DatabaseKnowledgeService(
             return new RegisterDatabaseObjectResult(null, null, RegisterDatabaseObjectFailure.DuplicateObject);
         }
 
+        await transaction.CommitAsync(cancellationToken);
+
         return new RegisterDatabaseObjectResult(
             new RegisterDatabaseObjectResponse(
                 databaseObject.Id,
@@ -200,6 +208,8 @@ public sealed class DatabaseKnowledgeService(
             errors["concurrencyToken"] = ["并发令牌无效。"];
         }
         if (errors.Count > 0) return new(null, errors, RegisterDatabaseColumnFailure.Validation);
+
+        await using var transaction = await SqliteImmediateTransaction.BeginAsync(dbContext, cancellationToken);
 
         var databaseObject = await dbContext.DatabaseObjects
             .SingleOrDefaultAsync(item => item.Id == request.DatabaseObjectId, cancellationToken);
@@ -249,6 +259,8 @@ public sealed class DatabaseKnowledgeService(
             return new(null, null, RegisterDatabaseColumnFailure.DuplicateColumnName);
         }
 
+        await transaction.CommitAsync(cancellationToken);
+
         return new(
             new RegisterDatabaseColumnResponse(
                 new RegisteredDatabaseColumnResponse(column.Id, column.ColumnName, column.KnowledgeStatus.ToString(), concurrencyTokenCodec.Encode(column.Version)),
@@ -273,6 +285,8 @@ public sealed class DatabaseKnowledgeService(
         if (!concurrencyTokenCodec.TryDecode(request.ConcurrencyToken, out var expectedVersion)) errors["concurrencyToken"] = ["并发令牌无效。"];
         if (errors.Count > 0) return new(null, errors, UpdateDatabaseObjectKnowledgeFailure.Validation);
 
+        await using var transaction = await SqliteImmediateTransaction.BeginAsync(dbContext, cancellationToken);
+
         var databaseObject = await dbContext.DatabaseObjects
             .Include(item => item.Columns)
             .SingleOrDefaultAsync(item => item.Id == request.DatabaseObjectId, cancellationToken);
@@ -295,6 +309,7 @@ public sealed class DatabaseKnowledgeService(
         databaseObject.UpdatedAt = DateTimeOffset.UtcNow;
         databaseObject.Version++;
         await dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
 
         return new(
             new DatabaseObjectKnowledgeResponse(
@@ -319,6 +334,8 @@ public sealed class DatabaseKnowledgeService(
         if (!concurrencyTokenCodec.TryDecode(request.ConcurrencyToken, out var expectedVersion)) errors["concurrencyToken"] = ["并发令牌无效。"];
         if (errors.Count > 0) return new(null, errors, UpdateDatabaseColumnKnowledgeFailure.Validation);
 
+        await using var transaction = await SqliteImmediateTransaction.BeginAsync(dbContext, cancellationToken);
+
         var column = await dbContext.DatabaseColumns.SingleOrDefaultAsync(item => item.Id == request.DatabaseColumnId, cancellationToken);
         if (column is null) return new(null, null, UpdateDatabaseColumnKnowledgeFailure.DatabaseColumnNotFound);
         if (column.Version != expectedVersion) return new(null, null, UpdateDatabaseColumnKnowledgeFailure.ConcurrencyConflict);
@@ -327,6 +344,7 @@ public sealed class DatabaseKnowledgeService(
         column.UpdatedAt = DateTimeOffset.UtcNow;
         column.Version++;
         await dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
 
         return new(
             new DatabaseColumnKnowledgeResponse(column.Id, column.BusinessDescription, column.KnowledgeStatus.ToString(), concurrencyTokenCodec.Encode(column.Version)),
@@ -349,6 +367,8 @@ public sealed class DatabaseKnowledgeService(
         if (string.IsNullOrWhiteSpace(actorName)) errors["actor.displayName"] = ["操作人姓名不能为空。"];
         if (!concurrencyTokenCodec.TryDecode(request.ConcurrencyToken, out var expectedVersion)) errors["concurrencyToken"] = ["并发令牌无效。"];
         if (errors.Count > 0) return new(null, errors, AddColumnKnownValueFailure.Validation);
+
+        await using var transaction = await SqliteImmediateTransaction.BeginAsync(dbContext, cancellationToken);
 
         var column = await dbContext.DatabaseColumns.SingleOrDefaultAsync(item => item.Id == request.DatabaseColumnId, cancellationToken);
         if (column is null) return new(null, null, AddColumnKnownValueFailure.DatabaseColumnNotFound);
@@ -380,6 +400,8 @@ public sealed class DatabaseKnowledgeService(
             return new(null, null, AddColumnKnownValueFailure.DuplicateValue);
         }
 
+        await transaction.CommitAsync(cancellationToken);
+
         return new(
             new AddColumnKnownValueResponse(
                 new ColumnKnownValueWriteResponse(knownValue.Id, knownValue.ValueText, knownValue.Meaning, knownValue.SortOrder),
@@ -401,6 +423,8 @@ public sealed class DatabaseKnowledgeService(
         if (string.IsNullOrWhiteSpace(actorName)) errors["actor.displayName"] = ["操作人姓名不能为空。"];
         if (!concurrencyTokenCodec.TryDecode(request.ConcurrencyToken, out var expectedVersion)) errors["concurrencyToken"] = ["并发令牌无效。"];
         if (errors.Count > 0) return new(null, errors, RemoveColumnKnownValueFailure.Validation);
+
+        await using var transaction = await SqliteImmediateTransaction.BeginAsync(dbContext, cancellationToken);
 
         var column = await dbContext.DatabaseColumns.SingleOrDefaultAsync(item => item.Id == request.DatabaseColumnId, cancellationToken);
         if (column is null) return new(null, null, RemoveColumnKnownValueFailure.DatabaseColumnNotFound);
@@ -437,6 +461,7 @@ public sealed class DatabaseKnowledgeService(
             .ThenBy(item => item.ValueText)
             .Select(item => new ColumnKnownValueWriteResponse(item.Id, item.ValueText, item.Meaning, item.SortOrder))
             .ToArrayAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return new(new RemoveColumnKnownValueResponse(column.Id, remaining, concurrencyTokenCodec.Encode(column.Version)), null, RemoveColumnKnownValueFailure.None);
     }
 

@@ -25,6 +25,8 @@ public sealed class BusinessFunctionService(
             return new CreateBusinessFunctionResult(null, errors, CreateBusinessFunctionFailure.Validation);
         }
 
+        await using var transaction = await SqliteImmediateTransaction.BeginAsync(dbContext, cancellationToken);
+
         var system = await dbContext.Systems
             .SingleOrDefaultAsync(item => item.Id == request.SystemId, cancellationToken);
         if (system is null)
@@ -72,6 +74,8 @@ public sealed class BusinessFunctionService(
             return new CreateBusinessFunctionResult(null, null, CreateBusinessFunctionFailure.DuplicateName);
         }
 
+        await transaction.CommitAsync(cancellationToken);
+
         return new CreateBusinessFunctionResult(
             new CreateBusinessFunctionResponse(
                 function.Id,
@@ -102,6 +106,9 @@ public sealed class BusinessFunctionService(
         {
             return new UpdateBusinessFunctionOverviewResult(null, errors, UpdateBusinessFunctionFailure.Validation);
         }
+
+
+        await using var transaction = await SqliteImmediateTransaction.BeginAsync(dbContext, cancellationToken);
 
         var function = await dbContext.BusinessFunctions
             .SingleOrDefaultAsync(item => item.Id == request.BusinessFunctionId, cancellationToken);
@@ -151,6 +158,8 @@ public sealed class BusinessFunctionService(
             return new UpdateBusinessFunctionOverviewResult(null, null, UpdateBusinessFunctionFailure.DuplicateName);
         }
 
+        await transaction.CommitAsync(cancellationToken);
+
         return new UpdateBusinessFunctionOverviewResult(
             new UpdateBusinessFunctionOverviewResponse(
                 new UpdatedBusinessFunctionOverviewResponse(
@@ -181,6 +190,9 @@ public sealed class BusinessFunctionService(
         {
             return new ReplaceBusinessProcessStepsResult(null, errors, UpdateBusinessFunctionFailure.Validation);
         }
+
+
+        await using var transaction = await SqliteImmediateTransaction.BeginAsync(dbContext, cancellationToken);
 
         var function = await dbContext.BusinessFunctions
             .Include(item => item.ProcessSteps)
@@ -218,6 +230,8 @@ public sealed class BusinessFunctionService(
         {
             return new ReplaceBusinessProcessStepsResult(null, null, UpdateBusinessFunctionFailure.Conflict);
         }
+
+        await transaction.CommitAsync(cancellationToken);
 
         var responseSteps = function.ProcessSteps
             .OrderBy(step => step.StepOrder)

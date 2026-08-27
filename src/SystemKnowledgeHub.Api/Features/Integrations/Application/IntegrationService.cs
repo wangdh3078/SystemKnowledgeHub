@@ -11,6 +11,7 @@ public sealed class IntegrationService(KnowledgeHubDbContext dbContext, Concurre
 {
     public async Task<IntegrationCommandResult> Create(CreateIntegrationCommand request, CancellationToken cancellationToken)
     {
+        await using var transaction = await SqliteImmediateTransaction.BeginAsync(dbContext, cancellationToken);
         var validation = await ValidateOverview(request.Overview, request.Actor, null, cancellationToken);
         if (validation.Errors.Count > 0) return Failure(IntegrationFailure.Validation, validation.Errors);
         if (validation.Failure is not null) return Failure(validation.Failure.Value, message: validation.Message);
@@ -31,6 +32,7 @@ public sealed class IntegrationService(KnowledgeHubDbContext dbContext, Concurre
         dbContext.Integrations.Add(integration);
         try { await dbContext.SaveChangesAsync(cancellationToken); }
         catch (DbUpdateException) { return Failure(IntegrationFailure.Duplicate, message: "相同类型、名称和参与方的集成已存在。"); }
+        await transaction.CommitAsync(cancellationToken);
         return Success(integration);
     }
 
@@ -38,6 +40,7 @@ public sealed class IntegrationService(KnowledgeHubDbContext dbContext, Concurre
     {
         if (!tokenCodec.TryDecode(request.ConcurrencyToken, out var expectedVersion))
             return Failure(IntegrationFailure.Validation, new Dictionary<string, string[]> { ["concurrencyToken"] = ["并发标记无效，请重新加载后重试。"] });
+        await using var transaction = await SqliteImmediateTransaction.BeginAsync(dbContext, cancellationToken);
         var integration = await dbContext.Integrations.SingleOrDefaultAsync(item => item.Id == request.IntegrationId, cancellationToken);
         if (integration is null) return Failure(IntegrationFailure.NotFound);
         if (integration.Version != expectedVersion) return Failure(IntegrationFailure.Conflict);
@@ -56,6 +59,7 @@ public sealed class IntegrationService(KnowledgeHubDbContext dbContext, Concurre
         try { await dbContext.SaveChangesAsync(cancellationToken); }
         catch (DbUpdateConcurrencyException) { return Failure(IntegrationFailure.Conflict); }
         catch (DbUpdateException) { return Failure(IntegrationFailure.Duplicate, message: "相同类型、名称和参与方的集成已存在。"); }
+        await transaction.CommitAsync(cancellationToken);
         return Success(integration);
     }
 
@@ -65,6 +69,7 @@ public sealed class IntegrationService(KnowledgeHubDbContext dbContext, Concurre
         if (!tokenCodec.TryDecode(request.ConcurrencyToken, out var expectedVersion)) errors["concurrencyToken"] = ["并发标记无效，请重新加载后重试。"]; 
         ValidateFields(request.Fields, errors);
         if (errors.Count > 0) return Failure(IntegrationFailure.Validation, errors);
+        await using var transaction = await SqliteImmediateTransaction.BeginAsync(dbContext, cancellationToken);
         var integration = await dbContext.Integrations.Include(item => item.ContractFields).SingleOrDefaultAsync(item => item.Id == request.IntegrationId, cancellationToken);
         if (integration is null) return Failure(IntegrationFailure.NotFound);
         if (integration.Version != expectedVersion) return Failure(IntegrationFailure.Conflict);
@@ -77,6 +82,7 @@ public sealed class IntegrationService(KnowledgeHubDbContext dbContext, Concurre
         integration.UpdatedAt = DateTimeOffset.UtcNow; integration.Version = expectedVersion + 1;
         try { await dbContext.SaveChangesAsync(cancellationToken); }
         catch (DbUpdateConcurrencyException) { return Failure(IntegrationFailure.Conflict); }
+        await transaction.CommitAsync(cancellationToken);
         return new IntegrationCommandResult(new IntegrationContractFieldsResponse(integration.Id,
             integration.ContractFields.OrderBy(item => item.Ordinal).Select(FieldResponse).ToArray(), tokenCodec.Encode(integration.Version)), null, IntegrationFailure.None);
     }

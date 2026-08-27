@@ -38,7 +38,7 @@ public sealed class KnowledgeResolutionService(KnowledgeHubDbContext dbContext, 
         else ValidateOverview(request.Overview, errors);
         if (errors.Count > 0) return Validation(errors);
 
-        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        await using var transaction = await SqliteImmediateTransaction.BeginAsync(dbContext, cancellationToken);
         var context = await LoadApplyContext(request.UnknownItemId, request.KnowledgeUpdateId, itemVersion, cancellationToken);
         if (context.Failure is not null) return context.Failure;
         var (item, update) = context.Value;
@@ -92,7 +92,7 @@ public sealed class KnowledgeResolutionService(KnowledgeHubDbContext dbContext, 
         else ValidateRule(request.Rule, errors);
         if (errors.Count > 0) return Validation(errors);
 
-        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        await using var transaction = await SqliteImmediateTransaction.BeginAsync(dbContext, cancellationToken);
         var context = await LoadApplyContext(request.UnknownItemId, request.KnowledgeUpdateId, itemVersion, cancellationToken);
         if (context.Failure is not null) return context.Failure;
         var (item, update) = context.Value;
@@ -143,7 +143,7 @@ public sealed class KnowledgeResolutionService(KnowledgeHubDbContext dbContext, 
         else await ValidateIntegration(request.Integration, errors, cancellationToken);
         if (errors.Count > 0) return Validation(errors);
 
-        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        await using var transaction = await SqliteImmediateTransaction.BeginAsync(dbContext, cancellationToken);
         var context = await LoadApplyContext(request.UnknownItemId, request.KnowledgeUpdateId, itemVersion, cancellationToken);
         if (context.Failure is not null) return context.Failure;
         var (item, update) = context.Value;
@@ -189,7 +189,7 @@ public sealed class KnowledgeResolutionService(KnowledgeHubDbContext dbContext, 
     {
         var errors = ValidateWorkflow(request.Confirmer, request.ConcurrencyToken, out var expectedVersion, "confirmer");
         if (errors.Count > 0) return Validation(errors);
-        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        await using var transaction = await SqliteImmediateTransaction.BeginAsync(dbContext, cancellationToken);
         var item = await dbContext.UnknownItems.Include(value => value.Resolution).Include(value => value.KnowledgeUpdates)
             .SingleOrDefaultAsync(value => value.Id == request.UnknownItemId, cancellationToken);
         if (item is null) return Failure(UnknownItemFailure.NotFound, "未找到待确认事项。");
@@ -228,7 +228,7 @@ public sealed class KnowledgeResolutionService(KnowledgeHubDbContext dbContext, 
     {
         var errors = ValidateWorkflow(request.Actor, request.ConcurrencyToken, out var expectedVersion);
         if (errors.Count > 0) return Validation(errors);
-        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        await using var transaction = await SqliteImmediateTransaction.BeginAsync(dbContext, cancellationToken);
         var item = await dbContext.UnknownItems.Include(value => value.Resolution).Include(value => value.KnowledgeUpdates)
             .SingleOrDefaultAsync(value => value.Id == request.UnknownItemId, cancellationToken);
         if (item is null) return Failure(UnknownItemFailure.NotFound, "未找到待确认事项。");
@@ -261,7 +261,7 @@ public sealed class KnowledgeResolutionService(KnowledgeHubDbContext dbContext, 
         var errors = ValidateWorkflow(request.Actor, request.ConcurrencyToken, out var expectedVersion);
         if (string.IsNullOrWhiteSpace(request.Reason)) errors["reason"] = ["重新打开原因不能为空。"]; 
         if (errors.Count > 0) return Validation(errors);
-        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        await using var transaction = await SqliteImmediateTransaction.BeginAsync(dbContext, cancellationToken);
         var item = await dbContext.UnknownItems.SingleOrDefaultAsync(value => value.Id == request.UnknownItemId, cancellationToken);
         if (item is null) return Failure(UnknownItemFailure.NotFound, "未找到待确认事项。");
         if (item.Version != expectedVersion) return Conflict();
@@ -301,7 +301,7 @@ public sealed class KnowledgeResolutionService(KnowledgeHubDbContext dbContext, 
         else if (string.IsNullOrWhiteSpace(knowledge!.BusinessDescription)) errors["businessDescription"] = ["字段业务含义不能为空。"]; 
         if (errors.Count > 0) return Validation(errors);
 
-        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        await using var transaction = await SqliteImmediateTransaction.BeginAsync(dbContext, cancellationToken);
         var context = await LoadApplyContext(itemId, updateId, itemVersion, cancellationToken);
         if (context.Failure is not null) return context.Failure;
         var (item, update) = context.Value;

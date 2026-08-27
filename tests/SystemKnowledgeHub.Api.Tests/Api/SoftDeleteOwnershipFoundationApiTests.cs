@@ -121,7 +121,7 @@ public sealed class SoftDeleteOwnershipFoundationApiTests : IClassFixture<Bootst
             systemId = deletedSystem.GetProperty("id").GetInt64(), name = $"blocked_function_{suffix}", functionType = "Query",
             rewriteStatus = "Unknown", actor = ForgedActor(),
         });
-        Assert.Equal(HttpStatusCode.NotFound, function.StatusCode);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, function.StatusCode);
 
         var sourceSystem = await CreateSystem($"source_system_{suffix}");
         var deletedSource = await CreateSource(sourceSystem.GetProperty("id").GetInt64(), $"deleted_source_{suffix}");
@@ -132,7 +132,7 @@ public sealed class SoftDeleteOwnershipFoundationApiTests : IClassFixture<Bootst
             objectType = "Table", estimatedRows = (long?)null, accessMode = "Read", primaryKeyColumns = Array.Empty<string>(),
             businessKeyColumns = Array.Empty<string>(), businessDescription = (string?)null, actor = ForgedActor(),
         });
-        Assert.Equal(HttpStatusCode.NotFound, databaseObject.StatusCode);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, databaseObject.StatusCode);
 
         var objectSystem = await CreateSystem($"object_system_{suffix}");
         var activeSource = await CreateSource(objectSystem.GetProperty("id").GetInt64(), $"active_source_{suffix}");

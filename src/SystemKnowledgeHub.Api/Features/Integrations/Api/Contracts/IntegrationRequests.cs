@@ -2,6 +2,8 @@ using System.Text.Json;
 
 namespace SystemKnowledgeHub.Api.Features.Integrations.Api.Contracts;
 
+public sealed record DeleteIntegrationRequest(string? ConcurrencyToken);
+
 public sealed record IntegrationPartyRequest(long? SystemId, string? DisplayName);
 public sealed record IntegrationActorRequest(string? DisplayName, string? Role);
 public sealed record IntegrationOverviewRequest(string? Name, string? IntegrationType, IntegrationPartyRequest? SourceParty,
