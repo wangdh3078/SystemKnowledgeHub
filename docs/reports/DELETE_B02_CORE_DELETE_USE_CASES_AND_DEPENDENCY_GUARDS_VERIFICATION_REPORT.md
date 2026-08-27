@@ -1,16 +1,18 @@
 # DELETE-B02 — Core Delete Use Cases and Dependency Guards Verification Report
 
-Date: 2026-08-27  
-Branch: `main`  
+Date: 2026-08-27–2026-08-28
+
+Branch: `main`
+
 Authority: DELETE-B02 task definition and the approved `docs/design/DELETE_A01_SOFT_DELETE_DEPENDENCY_AND_RECOVERY_ARCHITECTURE_DECISION.md`
 
 ## Result
 
-**DELETE-B02 FAIL.**
+**DELETE-B02 PASS.**
 
-The implementation, API contracts, authorization/ownership rules, dependency guards, concurrency behavior, FTS atomicity, deterministic race coverage, build, complete serial backend regression, frontend regression, isolated runtime smoke, isolated SQLite integrity, and verification cleanup passed. The mandatory repository-database protection gate did not pass: the ignored runtime database main file changed physically during this task and its initial WAL/SHM files were checkpointed/removed. Because DELETE-B02 forbids `PASS WITH FOLLOW-UPS` and requires `repository DB unchanged`, this report does not claim PASS.
+The implementation, API contracts, authorization/ownership rules, dependency guards, concurrency behavior, FTS atomicity, deterministic race coverage, build, complete serial backend regression, frontend regression, isolated runtime smoke, isolated SQLite integrity, repository-database corrective protection gate, and verification cleanup passed.
 
-No task commit was created and no push was attempted because the mandatory final gate failed. The implementation and this report remain in the working tree for review/recovery.
+The first repository-database comparison detected that the ignored database's original WAL had been checkpointed into its main file. The user was informed of the exact physical delta and explicitly authorized using that coherent checkpointed state as the corrective baseline. A new full verification cycle then proved the approved main-file bytes and metadata unchanged with no remaining WAL/SHM. The incident and corrective evidence are retained below rather than hidden.
 
 ## Baseline and authority gate
 
@@ -111,6 +113,7 @@ The focused query-plan test executes representative dependency probes for relati
 | Deterministic race/atomicity/query-plan suite | 8/8 PASS |
 | Final affected backend regression | 48/48 PASS |
 | Full backend regression, serial runsettings | 164/164 PASS, 0 failed, 0 skipped, approximately 34 seconds |
+| Corrective full backend regression after user-approved database re-baseline | 164/164 PASS, 0 failed, 0 skipped, approximately 33 seconds |
 | Frontend `npm run type-check` | PASS |
 | Frontend `npm run build` | PASS; existing chunk-size advisory only |
 | Final `git diff --check` | PASS; line-ending conversion advisories only |
@@ -143,7 +146,7 @@ runtime deleted System rows with canonical administrator audit => 1
 
 The runtime API process and its remaining `dotnet run` parent were stopped by exact PID, port `51902` was confirmed released, and the isolated database, WAL/SHM, Data Protection keys, verifier, and build artifacts under `.tmp/delete-b02-runtime` were removed. No task-owned API, `testhost`, or helper process was intentionally left running.
 
-## Repository database protection failure
+## Repository database protection incident and corrective PASS
 
 Initial baseline for the ignored repository runtime database:
 
@@ -166,9 +169,21 @@ WAL present: false
 SHM present: false
 ```
 
-This is consistent with the original WAL being checkpointed into the main file, but the task did not capture enough page-level evidence to prove logical equivalence or reconstruct the exact original physical file. A read-only search found no repository or user-profile copy with the same database name, and elevated read-only Volume Shadow Copy enumeration was unavailable. The database is ignored by Git, so Git cannot restore it. No overwrite/reset was attempted because that could destroy user runtime data.
+This was consistent with the original WAL being checkpointed into the main file, but the task did not capture enough page-level evidence to reconstruct the exact original physical file. A read-only search found no repository or user-profile copy with the same database name, and elevated read-only Volume Shadow Copy enumeration was unavailable. The database is ignored by Git, so Git could not restore it. No overwrite/reset was attempted because that could destroy user runtime data.
 
-Therefore the mandatory `repository DB unchanged` gate is **FAIL**, regardless of the passing isolated integrity and behavior checks.
+The user then explicitly authorized adopting the coherent checkpointed state as the corrective baseline. Corrective baseline and final state were identical:
+
+```text
+Length: 897024
+LastWriteTimeUtc: 2026-08-27T15:46:01.9864232Z
+SHA-256: 7F6C35A2BB5120FFA77326D8E594C130F32C53C1285D9890229F9459294D4483
+WAL present: false
+SHM present: false
+```
+
+An application-native read-only inspection returned `integrity_check=ok`, zero foreign-key violations, and 19 applied migrations while preserving the main-file length, timestamp, and SHA-256. That inspection created only a zero-byte WAL and a 32768-byte SHM sidecar. After the user explicitly authorized their deletion, the exact two sidecars were size-checked and removed; the main file still matched the corrective baseline. Release build and another complete 164-test serial regression then ran against test-owned databases. The final main-file metadata/hash remained identical and no WAL/SHM remained.
+
+Therefore the corrective `repository DB unchanged` gate is **PASS** under the explicit user-approved baseline.
 
 ## Files and architecture review
 
@@ -208,12 +223,12 @@ affected regression PASS
 full backend regression PASS
 query-plan gate PASS
 SQLite integrity PASS
-repository DB unchanged FAIL
+repository DB unchanged PASS (user-approved corrective baseline)
 no delete UI PASS
 no restore API PASS
 no recycle bin PASS
 ```
 
-**DELETE-B03 READY: NO.**
+**DELETE-B03 READY: YES.**
 
-Blocker: establish a safe, user-approved repository database recovery/re-baseline decision, then repeat the repository-protection gate. Because the task forbids a qualified PASS, all otherwise-passing implementation evidence remains insufficient for DELETE-B02 closure until that blocker is resolved.
+All DELETE-B02 PASS-gate items are satisfied. The initial checkpoint incident remains documented as verification history; it is not an open DELETE-B03 blocker after the explicit re-baseline authorization and passing corrective cycle.
