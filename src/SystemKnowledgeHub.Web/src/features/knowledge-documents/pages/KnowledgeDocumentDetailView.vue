@@ -8,6 +8,7 @@ import ErrorState from '../../../components/feedback/ErrorState.vue'
 import LoadingState from '../../../components/feedback/LoadingState.vue'
 import { useActorStore } from '../../../app/stores/actor'
 import { useOverlayStore } from '../../../app/stores/overlays'
+import { formatDateTime } from '../../../app/formatters/dateTime'
 import { deleteRelationship, getRelatedKnowledge } from '../../relationships/api/relationshipApi'
 import {
   contextualRelationTypeLabel,
@@ -415,9 +416,6 @@ async function transition(target: DocumentLifecycleStatus): Promise<void> {
       reason instanceof Error ? reason.message : '生命周期变更失败，请刷新后重试。'
   }
 }
-function formatDate(value: string | null): string {
-  return value ? value.replace('T', ' ').slice(0, 16) : '—'
-}
 function readEventDocument(event: Event): KnowledgeDocumentDetail | null {
   if (!(event instanceof CustomEvent)) return null
   const detailValue: unknown = event.detail
@@ -781,7 +779,7 @@ onBeforeUnmount(() => {
           </div>
           <div>
             <dt>创建时间</dt>
-            <dd>{{ formatDate(data.createdAt) }}</dd>
+            <dd>{{ formatDateTime(data.createdAt) }}</dd>
           </div>
           <div>
             <dt>更新人</dt>
@@ -789,15 +787,15 @@ onBeforeUnmount(() => {
           </div>
           <div>
             <dt>更新时间</dt>
-            <dd>{{ formatDate(data.updatedAt) }}</dd>
+            <dd>{{ formatDateTime(data.updatedAt) }}</dd>
           </div>
           <div>
             <dt>发布时间</dt>
-            <dd>{{ formatDate(data.publishedAt) }}</dd>
+            <dd>{{ formatDateTime(data.publishedAt) }}</dd>
           </div>
           <div>
             <dt>归档时间</dt>
-            <dd>{{ formatDate(data.archivedAt) }}</dd>
+            <dd>{{ formatDateTime(data.archivedAt) }}</dd>
           </div>
         </dl>
       </section></template

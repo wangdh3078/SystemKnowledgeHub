@@ -5,6 +5,7 @@ import { ElMessage } from 'element-plus'
 import { ApiError } from '../../../api/errors/ApiError'
 import { useActorStore } from '../../../app/stores/actor'
 import { useOverlayStore } from '../../../app/stores/overlays'
+import { formatDateTime } from '../../../app/formatters/dateTime'
 import KnowledgeStatusBadge from '../../../components/data-display/KnowledgeStatusBadge.vue'
 import ErrorState from '../../../components/feedback/ErrorState.vue'
 import LoadingState from '../../../components/feedback/LoadingState.vue'
@@ -54,15 +55,6 @@ const codeLocatorRows = computed(() => {
 function normalize(value: string): string | null {
   const result = value.trim()
   return result.length ? result : null
-}
-
-function formatLocalDateTime(value: string): string {
-  const date = new Date(value)
-  return Number.isNaN(date.getTime())
-    ? value
-    : new Intl.DateTimeFormat('zh-CN', {
-      year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
-    }).format(date)
 }
 
 function beginEdit(): void {
@@ -222,7 +214,7 @@ onMounted(() => void load())
             <div><dt>姓名</dt><dd>{{ detail.provider.displayName }}</dd></div>
             <div><dt>角色 / 身份</dt><dd>{{ detail.provider.roleOrIdentity }}</dd></div>
             <div><dt>团队</dt><dd>{{ detail.provider.team ?? '—' }}</dd></div>
-            <div><dt>提供时间</dt><dd class="technical-text">{{ formatLocalDateTime(detail.provider.occurredAt) }}</dd></div>
+            <div><dt>提供时间</dt><dd class="technical-text">{{ formatDateTime(detail.provider.occurredAt) }}</dd></div>
             <div v-if="detail.evidenceType === 'HumanConfirmation'"><dt>确认方式</dt><dd>{{ confirmationMethod ?? '—' }}</dd></div>
             <div v-else><dt>快照来源</dt><dd>{{ detail.provider.source ?? '—' }}</dd></div>
           </dl>

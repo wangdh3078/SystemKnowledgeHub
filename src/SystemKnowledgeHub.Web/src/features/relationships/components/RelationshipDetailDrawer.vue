@@ -6,6 +6,7 @@ import { ApiError } from '../../../api/errors/ApiError'
 import type { KnowledgeStatus } from '../../../api/contracts/knowledge'
 import { useActorStore } from '../../../app/stores/actor'
 import { useOverlayStore } from '../../../app/stores/overlays'
+import { formatDateTime } from '../../../app/formatters/dateTime'
 import KnowledgeProgression from '../../../components/data-display/KnowledgeProgression.vue'
 import KnowledgeStatusBadge from '../../../components/data-display/KnowledgeStatusBadge.vue'
 import ErrorState from '../../../components/feedback/ErrorState.vue'
@@ -21,7 +22,6 @@ const humanCount=computed(()=>detail.value?.evidence.filter(x=>x.evidenceType===
 const nextStatus=computed<KnowledgeStatus|null>(()=>detail.value?.knowledgeStatus==='Unknown'?'Inferred':detail.value?.knowledgeStatus==='Inferred'?'Confirmed':null)
 const requirementMet=computed(()=>detail.value?.knowledgeStatus==='Unknown'?(detail.value?.evidence.length??0)>0:humanCount.value>0)
 function evidenceTypeLabel(value: unknown): string { const type=evidenceTypes.find(item=>item===value); return type?evidenceTypeLabels[type]:'未知证据类型' }
-function formatDateTime(value: string): string { const parsed=new Date(value); return Number.isNaN(parsed.getTime())?value:parsed.toLocaleString('zh-CN',{hour12:false}) }
 async function load(){if(props.relationshipId===null)return;loading.value=true;errorMessage.value=null;try{detail.value=await getRelationshipDetail(props.relationshipId);description.value=detail.value.description??'';editing.value=false;statusConfirming.value=false;conflict.value=false}catch(e:unknown){errorMessage.value=e instanceof Error?e.message:'关系详情加载失败。'}finally{loading.value=false}}
 async function saveDescription(){if(!actorStore.canEdit||!detail.value||saving.value)return;saving.value=true;errorMessage.value=null;try{const result=await updateRelationshipDescription(detail.value.id,{description:description.value.trim()||null,concurrencyToken:detail.value.concurrencyToken});detail.value={...detail.value,description:result.description,concurrencyToken:result.concurrencyToken};editing.value=false;window.dispatchEvent(new CustomEvent('relationship:changed'));ElMessage.success('关系说明已更新。')}catch(e:unknown){conflict.value=e instanceof ApiError&&e.status===409;errorMessage.value=e instanceof Error?e.message:'关系说明保存失败。'}finally{saving.value=false}}
 async function changeStatus(){if(!actorStore.canEdit||!detail.value||!nextStatus.value||!requirementMet.value||saving.value)return;saving.value=true;errorMessage.value=null;try{await changeRelationshipStatus(detail.value.id,{targetStatus:nextStatus.value,reason:null,concurrencyToken:detail.value.concurrencyToken});await load();window.dispatchEvent(new CustomEvent('relationship:changed'));ElMessage.success('关系知识状态已明确推进。')}catch(e:unknown){conflict.value=e instanceof ApiError&&e.status===409;errorMessage.value=e instanceof Error?e.message:'知识状态修改失败。'}finally{saving.value=false}}

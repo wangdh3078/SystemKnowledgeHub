@@ -13,6 +13,7 @@ import type {
   KnowledgeDocumentRevisionListResponse,
 } from '../api/knowledgeDocumentContracts'
 import KnowledgeDocumentRevisionHistory from './KnowledgeDocumentRevisionHistory.vue'
+import { formatDateTime } from '../../../app/formatters/dateTime'
 
 vi.mock('../api/knowledgeDocumentsApi', () => ({
   getKnowledgeDocumentRevision: vi.fn(),
@@ -190,7 +191,7 @@ describe('KnowledgeDocumentRevisionHistory', () => {
     await flushPromises()
     expect(wrapper.text()).toContain('迁移基线')
     expect(wrapper.text()).toContain('历史作者未知')
-    expect(wrapper.text()).toContain('捕获于 2026-08-23 01:00')
+    expect(wrapper.text()).toContain(`捕获于 ${formatDateTime('2026-08-23T01:00:00Z')}`)
     expect(wrapper.text()).toContain('迁移正文')
   })
 

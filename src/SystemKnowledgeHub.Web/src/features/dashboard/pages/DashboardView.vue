@@ -9,7 +9,7 @@ import LoadingState from '../../../components/feedback/LoadingState.vue'
 import { getDatabaseColumnDetail } from '../../database-knowledge/api/databaseKnowledgeApi'
 import type { DashboardNeedsAttention, DashboardObjectType, DashboardRecentActivity } from '../api/dashboardContracts'
 import { useDashboard } from '../composables/useDashboard'
-import { formatLocalDateTimeToMinute } from '../../../app/formatters/dateTime'
+import { formatDateTime } from '../../../app/formatters/dateTime'
 
 const router = useRouter()
 const overlays = useOverlayStore()
@@ -236,7 +236,7 @@ onMounted(() => void load())
                 @click="navigateRecent(item)"
               >
                 <el-icon><Clock /></el-icon>
-                <span class="dashboard-list__time">{{ formatLocalDateTimeToMinute(item.updatedAt) }}</span>
+                <span class="dashboard-list__time">{{ formatDateTime(item.updatedAt) }}</span>
                 <em>{{ objectTypeLabel(item.objectType) }}</em>
                 <strong class="technical-text">{{ item.title }}</strong>
                 <el-icon class="dashboard-list__arrow"><ArrowRight /></el-icon>

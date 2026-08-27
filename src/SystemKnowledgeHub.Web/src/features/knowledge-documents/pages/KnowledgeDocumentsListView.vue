@@ -7,6 +7,7 @@ import EmptyState from '../../../components/feedback/EmptyState.vue'
 import ErrorState from '../../../components/feedback/ErrorState.vue'
 import LoadingState from '../../../components/feedback/LoadingState.vue'
 import { useActorStore } from '../../../app/stores/actor'
+import { formatDateTime } from '../../../app/formatters/dateTime'
 import { getKnowledgeDocuments } from '../api/knowledgeDocumentsApi'
 import {
   documentLifecycleStatuses,
@@ -90,9 +91,6 @@ function clearFilters(): void {
   lifecycleStatus.value = undefined
   knowledgeStatus.value = undefined
   resetAndLoad()
-}
-function formatDate(value: string): string {
-  return value.slice(0, 10)
 }
 function openDetail(id: number): void {
   void router.push({ name: 'knowledge-document-detail', params: { id: String(id) } })
@@ -206,9 +204,9 @@ onMounted(() => void load())
               :status="scope.row.knowledgeStatus" /></template></el-table-column
         ><el-table-column prop="updatedByDisplayName" label="更新人" width="112" /><el-table-column
           label="更新于"
-          width="104"
+          width="156"
           ><template #default="scope">{{
-            formatDate(scope.row.updatedAt)
+            formatDateTime(scope.row.updatedAt)
           }}</template></el-table-column
         ></el-table
       >

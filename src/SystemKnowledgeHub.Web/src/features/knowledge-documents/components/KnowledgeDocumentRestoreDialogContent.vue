@@ -14,6 +14,7 @@ import {
   type RevisionOrigin,
 } from '../api/knowledgeDocumentContracts'
 import KnowledgeDocumentMarkdown from '../markdown/KnowledgeDocumentMarkdown.vue'
+import { formatDateTime } from '../../../app/formatters/dateTime'
 
 interface RestoreDialogPayload {
   readonly document: KnowledgeDocumentDetail
@@ -108,10 +109,6 @@ function isRestoreDialogPayload(value: unknown): value is RestoreDialogPayload {
     (value.revision.summary === null || typeof value.revision.summary === 'string') &&
     typeof value.revision.bodyMarkdown === 'string'
   )
-}
-
-function formatDate(value: string): string {
-  return value.replace('T', ' ').slice(0, 16)
 }
 
 function authorLabel(revision: KnowledgeDocumentRevisionDetail): string {
@@ -249,7 +246,7 @@ async function submit(): Promise<void> {
       </div>
       <div>
         <dt>生成时间</dt>
-        <dd>{{ formatDate(payload.revision.createdAt) }}</dd>
+        <dd>{{ formatDateTime(payload.revision.createdAt) }}</dd>
       </div>
       <div>
         <dt>历史标题</dt>

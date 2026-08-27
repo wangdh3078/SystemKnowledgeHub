@@ -5,6 +5,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { ApiError } from '../../../api/errors/ApiError'
 import { useActorStore } from '../../../app/stores/actor'
 import { useOverlayStore } from '../../../app/stores/overlays'
+import { formatDateTime } from '../../../app/formatters/dateTime'
 import EmptyState from '../../../components/feedback/EmptyState.vue'
 import ErrorState from '../../../components/feedback/ErrorState.vue'
 import LoadingState from '../../../components/feedback/LoadingState.vue'
@@ -60,10 +61,6 @@ function handleSortChange(change: { prop: string; order: 'ascending' | 'descendi
 function handlePageChange(nextPage: number): void {
   page.value = nextPage
   void load()
-}
-
-function formatDate(value: string): string {
-  return value.slice(0, 10)
 }
 
 async function toggleUser(user: UserSummary): Promise<void> {
@@ -155,7 +152,7 @@ onMounted(() => void load())
         <el-table-column prop="jobTitle" label="职位" min-width="130" show-overflow-tooltip><template #default="scope"><span :class="{ 'text-muted': !scope.row.jobTitle }">{{ scope.row.jobTitle ?? '未记录' }}</span></template></el-table-column>
         <el-table-column label="知识身份" min-width="210"><template #default="scope"><div v-if="scope.row.knowledgeRoles.length" class="users-table__roles"><el-tag v-for="role in scope.row.knowledgeRoles" :key="role.id" :type="role.isActive ? 'primary' : 'info'" effect="plain" size="small">{{ role.name }}<template v-if="!role.isActive"> · 停用</template></el-tag></div><span v-else class="text-muted">未配置</span></template></el-table-column>
         <el-table-column prop="isActive" label="状态" width="80" align="center"><template #default="scope"><el-tag :type="scope.row.isActive ? 'success' : 'info'" effect="plain" size="small">{{ scope.row.isActive ? '启用' : '停用' }}</el-tag></template></el-table-column>
-        <el-table-column prop="updatedAt" label="更新于" width="104" sortable="custom"><template #default="scope">{{ formatDate(scope.row.updatedAt) }}</template></el-table-column>
+        <el-table-column prop="updatedAt" label="更新于" width="156" sortable="custom"><template #default="scope">{{ formatDateTime(scope.row.updatedAt) }}</template></el-table-column>
         <el-table-column label="操作" width="164" fixed="right" class-name="users-table__actions-column"><template #default="scope"><div class="users-table__actions" @click.stop><el-button text type="primary" :icon="EditPen" @click="openEdit(scope.row.id)">编辑</el-button><el-button text :type="scope.row.isActive ? 'danger' : 'success'" :loading="activeActionId === scope.row.id" @click="toggleUser(scope.row)">{{ scope.row.isActive ? '停用' : '启用' }}</el-button></div></template></el-table-column>
       </el-table>
 

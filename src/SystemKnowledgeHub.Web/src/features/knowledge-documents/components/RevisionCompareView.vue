@@ -17,6 +17,7 @@ import {
   type RevisionComparison,
 } from '../compare/revisionCompare'
 import type { LineDiffKind } from '../compare/myersLineDiff'
+import { formatDateTime } from '../../../app/formatters/dateTime'
 
 const props = defineProps<{
   documentId: number
@@ -85,9 +86,6 @@ const metadataCards = computed(() => {
 
 function isAbort(reason: unknown): boolean {
   return reason instanceof DOMException && reason.name === 'AbortError'
-}
-function formatDate(value: string): string {
-  return value.replace('T', ' ').slice(0, 16)
 }
 function authorLabel(item: KnowledgeDocumentRevisionListItem): string {
   return item.revisionOrigin === 'MigrationBaseline'
@@ -254,7 +252,7 @@ onBeforeUnmount(() => {
           <dl>
             <div><dt>来源</dt><dd>{{ originLabels[card.snapshot.revisionOrigin] }}</dd></div>
             <div><dt>作者快照</dt><dd>{{ authorLabel(card.snapshot) }}</dd></div>
-            <div><dt>{{ capturedAtLabel(card.snapshot) }}</dt><dd>{{ formatDate(card.snapshot.createdAt) }}</dd></div>
+            <div><dt>{{ capturedAtLabel(card.snapshot) }}</dt><dd>{{ formatDateTime(card.snapshot.createdAt) }}</dd></div>
             <div><dt>修订生成时生命周期</dt><dd>{{ lifecycleLabel(card.snapshot.lifecycleContext) }}</dd></div>
             <div v-if="card.snapshot.restoredFromRevisionNumber"><dt>恢复来源</dt><dd>从修订 {{ card.snapshot.restoredFromRevisionNumber }} 恢复</dd></div>
             <div v-if="card.snapshot.restoreReason"><dt>恢复原因</dt><dd>{{ card.snapshot.restoreReason }}</dd></div>

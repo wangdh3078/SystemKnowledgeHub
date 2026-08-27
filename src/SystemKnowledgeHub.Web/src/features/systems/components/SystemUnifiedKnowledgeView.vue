@@ -4,6 +4,7 @@ import KnowledgeStatusBadge from '../../../components/data-display/KnowledgeStat
 import EmptyState from '../../../components/feedback/EmptyState.vue'
 import LoadingState from '../../../components/feedback/LoadingState.vue'
 import type { SystemKnowledgeView } from '../api/systemKnowledgeViewContracts'
+import { formatDateTime } from '../../../app/formatters/dateTime'
 
 const props = defineProps<{
   view: SystemKnowledgeView | null
@@ -26,7 +27,6 @@ const overviewCards = computed(() => props.view === null ? [] : [
   ['待确认事项', props.view.overview.openUnknownItemCount],
 ])
 
-function formatTime(value: string): string { return new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium' }).format(new Date(value)) }
 </script>
 
 <template>
@@ -44,10 +44,10 @@ function formatTime(value: string): string { return new Intl.DateTimeFormat('zh-
         <section><header><h3>数据库知识 <small>{{ view.overview.databaseObjectCount }}</small></h3></header><EmptyState v-if="!view.databaseObjects.length" title="暂无数据库对象" /><button v-for="item in view.databaseObjects" :key="item.id" class="system-unified-view__row" @click="emit('openDatabaseObject', item.id)"><span><strong class="technical-text">{{ item.title }}</strong><small>{{ item.description ?? '尚未记录业务说明' }}</small></span><KnowledgeStatusBadge :status="item.knowledgeStatus" /></button></section>
         <section><header><h3>业务规则 <small>{{ view.overview.businessRuleCount }}</small></h3></header><EmptyState v-if="!view.businessRules.length" title="暂无业务规则" /><button v-for="item in view.businessRules" :key="item.id" class="system-unified-view__row" @click="emit('openBusinessRule', item.id)"><span><strong>{{ item.title }}</strong><small>{{ item.description ?? '尚未记录规则说明' }}</small></span><KnowledgeStatusBadge :status="item.knowledgeStatus" /></button></section>
         <section><header><h3>集成 <small>{{ view.overview.integrationCount }}</small></h3></header><EmptyState v-if="!view.integrations.length" title="暂无集成关系" /><button v-for="item in view.integrations" :key="item.id" class="system-unified-view__row" @click="emit('openIntegration', item.id)"><span><strong>{{ item.name }}</strong><small>{{ item.integrationType }} · {{ item.direction }} · {{ item.relatedParty }}</small></span><KnowledgeStatusBadge :status="item.knowledgeStatus" /></button></section>
-        <section class="system-unified-view__section--wide"><header><h3>知识内容 <small>{{ view.overview.documentCount }}</small></h3><span>仅显示已建立关系的文档</span></header><EmptyState v-if="!view.documents.length" title="暂无关联知识内容" description="文档需通过明确 Relationship 与当前系统关联。" /><button v-for="item in view.documents" :key="item.id" class="system-unified-view__row" @click="emit('openDocument', item.id)"><span><strong>{{ item.title }}</strong><small>{{ item.documentType }} · {{ item.lifecycleStatus }} · {{ item.relationTypes.join(' / ') }} · 更新于 {{ formatTime(item.updatedAt) }}</small></span><KnowledgeStatusBadge :status="item.knowledgeStatus" /></button></section>
+        <section class="system-unified-view__section--wide"><header><h3>知识内容 <small>{{ view.overview.documentCount }}</small></h3><span>仅显示已建立关系的文档</span></header><EmptyState v-if="!view.documents.length" title="暂无关联知识内容" description="文档需通过明确 Relationship 与当前系统关联。" /><button v-for="item in view.documents" :key="item.id" class="system-unified-view__row" @click="emit('openDocument', item.id)"><span><strong>{{ item.title }}</strong><small>{{ item.documentType }} · {{ item.lifecycleStatus }} · {{ item.relationTypes.join(' / ') }} · 更新于 {{ formatDateTime(item.updatedAt) }}</small></span><KnowledgeStatusBadge :status="item.knowledgeStatus" /></button></section>
         <section><header><h3>系统关系 <small>{{ view.relationships.length }}</small></h3></header><EmptyState v-if="!view.relationships.length" title="暂无系统关系" /><div v-for="item in view.relationships" :key="item.id" class="system-unified-view__read-row"><span>{{ item.direction === 'Outgoing' ? '指向' : '来自' }} · {{ item.relationType }}</span><small>{{ item.relatedType }} #{{ item.relatedId }}</small><KnowledgeStatusBadge :status="item.knowledgeStatus" /></div></section>
         <section><header><h3>系统证据 <small>{{ view.overview.evidenceCount }}</small></h3><span>不包含文档证据</span></header><EmptyState v-if="!view.evidence.length" title="暂无系统级证据" /><div v-for="item in view.evidence" :key="item.id" class="system-unified-view__read-row"><span>{{ item.sourceTitle }}</span><small>{{ item.evidenceType }} · {{ item.summary ?? '未填写摘要' }}</small></div></section>
-        <section class="system-unified-view__section--wide"><header><h3>待确认事项 <small>{{ view.overview.openUnknownItemCount }}</small></h3><span>未关闭优先</span></header><EmptyState v-if="!view.unknownItems.length" title="暂无待确认事项" /><button v-for="item in view.unknownItems" :key="item.id" class="system-unified-view__row" @click="emit('openUnknownItem', item.id)"><span><strong>{{ item.itemCode }} · {{ item.question }}</strong><small>{{ item.priority }} · {{ item.status }} · 更新于 {{ formatTime(item.updatedAt) }}</small></span></button></section>
+        <section class="system-unified-view__section--wide"><header><h3>待确认事项 <small>{{ view.overview.openUnknownItemCount }}</small></h3><span>未关闭优先</span></header><EmptyState v-if="!view.unknownItems.length" title="暂无待确认事项" /><button v-for="item in view.unknownItems" :key="item.id" class="system-unified-view__row" @click="emit('openUnknownItem', item.id)"><span><strong>{{ item.itemCode }} · {{ item.question }}</strong><small>{{ item.priority }} · {{ item.status }} · 更新于 {{ formatDateTime(item.updatedAt) }}</small></span></button></section>
       </div>
     </template>
   </section>

@@ -4,6 +4,7 @@ import { ArrowRight, Plus, Search } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
 import { useActorStore } from '../../../app/stores/actor'
 import { useOverlayStore } from '../../../app/stores/overlays'
+import { formatDateTime } from '../../../app/formatters/dateTime'
 import KnowledgeStatusBadge from '../../../components/data-display/KnowledgeStatusBadge.vue'
 import EmptyState from '../../../components/feedback/EmptyState.vue'
 import ErrorState from '../../../components/feedback/ErrorState.vue'
@@ -72,10 +73,6 @@ function handleSortChange(change: { prop: string; order: 'ascending' | 'descendi
       : ascending ? 'updatedAt:asc' : 'updatedAt:desc'
   sort.value = nextSort
   resetPageAndLoad()
-}
-
-function formatDate(value: string): string {
-  return value.slice(0, 10)
 }
 
 function handlePageChange(nextPage: number): void {
@@ -178,8 +175,8 @@ onMounted(() => void load())
         <el-table-column prop="knowledgeStatus" label="知识状态" width="94" sortable="custom">
           <template #default="scope"><KnowledgeStatusBadge :status="scope.row.knowledgeStatus" /></template>
         </el-table-column>
-        <el-table-column prop="updatedAt" label="更新于" width="104" sortable="custom">
-          <template #default="scope">{{ formatDate(scope.row.updatedAt) }}</template>
+        <el-table-column prop="updatedAt" label="更新于" width="156" sortable="custom">
+          <template #default="scope">{{ formatDateTime(scope.row.updatedAt) }}</template>
         </el-table-column>
         <el-table-column width="34" align="right">
           <template #default><el-icon class="systems-table__next" title="查看系统详情"><ArrowRight /></el-icon></template>

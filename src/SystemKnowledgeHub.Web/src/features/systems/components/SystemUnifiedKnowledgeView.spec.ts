@@ -2,6 +2,7 @@ import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 import SystemUnifiedKnowledgeView from './SystemUnifiedKnowledgeView.vue'
 import type { SystemKnowledgeView } from '../api/systemKnowledgeViewContracts'
+import { formatDateTime } from '../../../app/formatters/dateTime'
 
 const populated: SystemKnowledgeView = {
   systemId: 12,
@@ -33,6 +34,8 @@ describe('SystemUnifiedKnowledgeView', () => {
     expect(wrapper.text()).toContain('只读投影')
     expect(wrapper.text()).toContain('设备操作规程')
     expect(wrapper.text()).toContain('仅显示已建立关系的文档')
+    expect(wrapper.text()).toContain(formatDateTime(populated.documents[0].updatedAt))
+    expect(wrapper.text()).toContain(formatDateTime(populated.unknownItems[0].updatedAt))
     await wrapper.get('button').trigger('click')
     expect(wrapper.emitted('openBusinessFunction')).toEqual([[1]])
   })

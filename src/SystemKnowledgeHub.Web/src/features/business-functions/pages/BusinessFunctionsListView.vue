@@ -19,6 +19,7 @@ import { useBusinessFunctionsList } from '../composables/useBusinessFunctionsLis
 import CreateBusinessFunctionFlow from '../components/CreateBusinessFunctionFlow.vue'
 import { useOverlayStore } from '../../../app/stores/overlays'
 import { useActorStore } from '../../../app/stores/actor'
+import { formatDateTime } from '../../../app/formatters/dateTime'
 
 const route = useRoute()
 const router = useRouter()
@@ -81,10 +82,6 @@ function handleSortChange(change: { prop: string; order: 'ascending' | 'descendi
       : ascending ? 'updatedAt:asc' : 'updatedAt:desc'
   sort.value = nextSort
   resetPageAndLoad()
-}
-
-function formatDate(value: string): string {
-  return value.slice(0, 10)
 }
 
 function formatRewriteStatus(value: RewriteStatus): string {
@@ -186,7 +183,7 @@ onMounted(() => {
         <el-table-column prop="unknownCount" label="待确认事项" width="90" align="center" />
         <el-table-column prop="rewriteStatus" label="改写状态" width="88"><template #default="scope"><span class="rewrite-status" :class="`rewrite-status--${scope.row.rewriteStatus.toLowerCase()}`">{{ formatRewriteStatus(scope.row.rewriteStatus) }}</span></template></el-table-column>
         <el-table-column prop="knowledgeStatus" label="知识状态" width="92" sortable="custom"><template #default="scope"><KnowledgeStatusBadge :status="scope.row.knowledgeStatus" /></template></el-table-column>
-        <el-table-column prop="updatedAt" label="更新于" width="108" sortable="custom"><template #default="scope">{{ formatDate(scope.row.updatedAt) }}</template></el-table-column>
+        <el-table-column prop="updatedAt" label="更新于" width="156" sortable="custom"><template #default="scope">{{ formatDateTime(scope.row.updatedAt) }}</template></el-table-column>
       </el-table>
 
       <footer v-if="data && data.total > 0" class="business-functions-pagination skh-pagination">

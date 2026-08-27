@@ -17,6 +17,7 @@ import {
 import KnowledgeDocumentMarkdown from '../markdown/KnowledgeDocumentMarkdown.vue'
 import RevisionCompareView from './RevisionCompareView.vue'
 import { useOverlayStore } from '../../../app/stores/overlays'
+import { formatDateTime } from '../../../app/formatters/dateTime'
 
 const props = defineProps<{
   document: KnowledgeDocumentDetail
@@ -66,9 +67,6 @@ const restoreRequiresDraft = computed(() =>
 
 function isAbort(reason: unknown): boolean {
   return reason instanceof DOMException && reason.name === 'AbortError'
-}
-function formatDate(value: string): string {
-  return value.replace('T', ' ').slice(0, 16)
 }
 function authorLabel(item: KnowledgeDocumentRevisionListItem): string {
   return item.revisionOrigin === 'MigrationBaseline'
@@ -269,7 +267,7 @@ onBeforeUnmount(() => {
               {{ originLabels[item.revisionOrigin] }} · {{ authorLabel(item) }}
             </span>
             <span class="knowledge-document-history__item-line">
-              {{ capturedAtLabel(item) }} {{ formatDate(item.createdAt) }}
+              {{ capturedAtLabel(item) }} {{ formatDateTime(item.createdAt) }}
             </span>
             <span class="knowledge-document-history__item-line">
               修订生成时生命周期：{{ lifecycleLabel(item.lifecycleContext) }}
@@ -315,7 +313,7 @@ onBeforeUnmount(() => {
               </div>
               <div>
                 <dt>{{ capturedAtLabel(detail) }}</dt>
-                <dd>{{ formatDate(detail.createdAt) }}</dd>
+                <dd>{{ formatDateTime(detail.createdAt) }}</dd>
               </div>
               <div>
                 <dt>修订生成时生命周期</dt>

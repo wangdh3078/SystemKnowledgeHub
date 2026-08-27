@@ -191,12 +191,12 @@
 .dashboard-list__arrow { color: var(--color-primary); }
 
 .dashboard-list__row--recent {
-  grid-template-columns: 18px minmax(70px, auto) max-content minmax(0, 1fr) 18px;
+  grid-template-columns: 18px minmax(126px, auto) max-content minmax(0, 1fr) 18px;
   gap: 8px;
 }
 
 .dashboard-list__time {
-  min-width: 70px;
+  min-width: 126px;
   color: var(--color-muted);
   font-variant-numeric: tabular-nums;
 }

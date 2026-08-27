@@ -4,6 +4,7 @@ import { Plus, Search } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
 import { useOverlayStore } from '../../../app/stores/overlays'
 import { useActorStore } from '../../../app/stores/actor'
+import { formatDateTime } from '../../../app/formatters/dateTime'
 import EmptyState from '../../../components/feedback/EmptyState.vue'
 import ErrorState from '../../../components/feedback/ErrorState.vue'
 import LoadingState from '../../../components/feedback/LoadingState.vue'
@@ -42,7 +43,7 @@ onMounted(() => void load())
       <el-table-column label="优先级" width="86"><template #default="scope"><span :class="`priority priority--${scope.row.priority.toLowerCase()}`">{{ priorityLabel(scope.row.priority) }}</span></template></el-table-column>
       <el-table-column label="事项状态" width="120"><template #default="scope"><span :class="`unknown-status unknown-status--${scope.row.status.toLowerCase()}`">{{ statusLabel(scope.row.status) }}</span></template></el-table-column>
       <el-table-column prop="findingCount" label="发现" width="74" align="center" /><el-table-column prop="evidenceCount" label="证据" width="74" align="center" />
-      <el-table-column label="更新于" width="150"><template #default="scope">{{ new Date(scope.row.updatedAt).toLocaleString('zh-CN') }}</template></el-table-column>
+      <el-table-column label="更新于" width="156"><template #default="scope">{{ formatDateTime(scope.row.updatedAt) }}</template></el-table-column>
     </el-table>
     <div v-if="data && data.total > data.pageSize" class="skh-pagination"><span>{{ (data.page - 1) * data.pageSize + 1 }}–{{ Math.min(data.page * data.pageSize, data.total) }} / {{ data.total }}</span><el-pagination v-model:current-page="filters.page" background :page-size="filters.pageSize" :total="data.total" layout="prev, pager, next" @current-change="load" /></div>
   </main>
