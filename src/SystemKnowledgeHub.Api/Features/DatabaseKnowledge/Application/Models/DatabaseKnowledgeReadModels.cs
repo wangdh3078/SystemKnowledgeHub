@@ -2,7 +2,7 @@ namespace SystemKnowledgeHub.Api.Features.DatabaseKnowledge.Application.Models;
 
 public sealed record SystemContext(long Id, string Name);
 
-public sealed record DatabaseSourceContext(long Id, string Name, string Engine);
+public sealed record DatabaseSourceContext(long Id, string Name, string Engine, string ConcurrencyToken);
 
 public sealed record DatabaseObjectListQuery(
     long? SystemId,

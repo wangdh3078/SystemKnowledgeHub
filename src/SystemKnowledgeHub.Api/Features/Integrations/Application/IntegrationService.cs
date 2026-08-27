@@ -24,9 +24,9 @@ public sealed class IntegrationService(KnowledgeHubDbContext dbContext, Concurre
             TopicOrQueue = type == IntegrationType.RabbitMq ? validation.Endpoint!.Topic ?? validation.Endpoint.Queue : null,
             EndpointDisplay = validation.EndpointDisplay, EndpointJson = IntegrationEndpointParser.Serialize(validation.Endpoint!, type),
             DatabaseSourceId = overview.DatabaseSourceId, DatabaseObjectId = overview.DatabaseObjectId,
-            CreatedAt = now, CreatedByName = request.Actor.DisplayName.Trim(), CreatedByRole = Normalize(request.Actor.Role), UpdatedAt = now,
+            CreatedAt = now, CreatedByUserId = request.Creator.UserId, CreatedByName = request.Creator.DisplayName, CreatedByRole = Normalize(request.Actor.Role), UpdatedAt = now,
             KnowledgeStatus = KnowledgeStatus.Unknown, KnowledgeStatusChangedAt = now,
-            KnowledgeStatusChangedByName = request.Actor.DisplayName.Trim(), KnowledgeStatusChangedByRole = Normalize(request.Actor.Role) ?? "创建人", Version = 1,
+            KnowledgeStatusChangedByName = request.Creator.DisplayName, KnowledgeStatusChangedByRole = Normalize(request.Actor.Role) ?? "创建人", Version = 1,
         };
         dbContext.Integrations.Add(integration);
         try { await dbContext.SaveChangesAsync(cancellationToken); }

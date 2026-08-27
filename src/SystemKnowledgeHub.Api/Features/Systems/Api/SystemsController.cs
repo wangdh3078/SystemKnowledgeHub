@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using SystemKnowledgeHub.Api.Features.Systems.Api.Contracts;
 using SystemKnowledgeHub.Api.Features.Systems.Application;
 using SystemKnowledgeHub.Api.Features.Systems.Application.Models;
+using SystemKnowledgeHub.Api.Features.Users.Application;
 using SystemKnowledgeHub.Api.Shared.Api.Contracts;
 using SystemKnowledgeHub.Api.Shared.Api;
 
@@ -12,7 +13,8 @@ namespace SystemKnowledgeHub.Api.Features.Systems.Api;
 public sealed class SystemsController(
     SystemQueries queries,
     SystemKnowledgeViewQueries knowledgeViewQueries,
-    SystemService service) : ControllerBase
+    SystemService service,
+    ICurrentUserContext currentUserContext) : ControllerBase
 {
     [HttpGet("{id:long}/knowledge-view")]
     [ProducesResponseType<SystemKnowledgeViewResponse>(StatusCodes.Status200OK)]
@@ -106,6 +108,9 @@ public sealed class SystemsController(
         [FromBody] CreateSystemRequest request,
         CancellationToken cancellationToken)
     {
+        var creator = await CurrentUserApiResolution.ResolveCreator(currentUserContext, cancellationToken);
+        if (creator.Error is not null) return StatusCode(creator.StatusCode!.Value, creator.Error);
+
         var result = await service.CreateSystem(
             new CreateSystemCommand(
                 request.Name ?? string.Empty,
@@ -115,7 +120,8 @@ public sealed class SystemsController(
                 request.Purpose,
                 new ActorContext(
                     request.Actor?.DisplayName ?? string.Empty,
-                    request.Actor?.Role)),
+                    request.Actor?.Role),
+                creator.Creator!),
             cancellationToken);
 
         if (result.FieldErrors is not null)

@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using SystemKnowledgeHub.Api.Features.DatabaseKnowledge.Api.Contracts;
 using SystemKnowledgeHub.Api.Features.DatabaseKnowledge.Application;
 using SystemKnowledgeHub.Api.Features.DatabaseKnowledge.Application.Models;
+using SystemKnowledgeHub.Api.Features.Users.Application;
 using SystemKnowledgeHub.Api.Shared.Api;
 using SystemKnowledgeHub.Api.Shared.Api.Contracts;
 
@@ -11,7 +12,8 @@ namespace SystemKnowledgeHub.Api.Features.DatabaseKnowledge.Api;
 [Route("api/database-objects")]
 public sealed class DatabaseObjectsController(
     DatabaseKnowledgeQueries queries,
-    DatabaseKnowledgeService service) : ControllerBase
+    DatabaseKnowledgeService service,
+    ICurrentUserContext currentUserContext) : ControllerBase
 {
     [HttpGet]
     [ProducesResponseType<DatabaseObjectsListResponse>(StatusCodes.Status200OK)]
@@ -74,6 +76,9 @@ public sealed class DatabaseObjectsController(
         [FromBody] RegisterDatabaseObjectRequest request,
         CancellationToken cancellationToken)
     {
+        var creator = await CurrentUserApiResolution.ResolveCreator(currentUserContext, cancellationToken);
+        if (creator.Error is not null) return StatusCode(creator.StatusCode!.Value, creator.Error);
+
         var result = await service.RegisterDatabaseObject(
             new RegisterDatabaseObjectCommand(
                 request.DatabaseSourceId ?? 0,
@@ -87,7 +92,8 @@ public sealed class DatabaseObjectsController(
                 request.BusinessDescription,
                 new DatabaseKnowledgeActorContext(
                     request.Actor?.DisplayName ?? string.Empty,
-                    request.Actor?.Role)),
+                    request.Actor?.Role),
+                creator.Creator!),
             cancellationToken);
 
         return result.Failure switch
@@ -115,6 +121,9 @@ public sealed class DatabaseObjectsController(
     {
         if (!ApiIdParser.TryParse(id, out var databaseObjectId)) return BadRequest(InvalidId("id"));
 
+        var creator = await CurrentUserApiResolution.ResolveCreator(currentUserContext, cancellationToken);
+        if (creator.Error is not null) return StatusCode(creator.StatusCode!.Value, creator.Error);
+
         var result = await service.RegisterDatabaseColumn(
             new RegisterDatabaseColumnCommand(
                 databaseObjectId,
@@ -126,7 +135,8 @@ public sealed class DatabaseObjectsController(
                 request.DatabaseComment,
                 request.BusinessDescription,
                 new DatabaseKnowledgeActorContext(request.Actor?.DisplayName ?? string.Empty, request.Actor?.Role),
-                request.ConcurrencyToken),
+                request.ConcurrencyToken,
+                creator.Creator!),
             cancellationToken);
 
         return result.Failure switch

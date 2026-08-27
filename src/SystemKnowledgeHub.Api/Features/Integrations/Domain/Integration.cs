@@ -25,6 +25,7 @@ public sealed class Integration
     public long? DatabaseObjectId { get; set; }
     public DatabaseObject? DatabaseObject { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
+    public long? CreatedByUserId { get; set; }
     public string CreatedByName { get; set; } = string.Empty;
     public string? CreatedByRole { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
@@ -34,6 +35,10 @@ public sealed class Integration
     public string KnowledgeStatusChangedByName { get; set; } = string.Empty;
     public string KnowledgeStatusChangedByRole { get; set; } = string.Empty;
     public long Version { get; set; } = 1;
+    public bool IsDeleted { get; set; }
+    public DateTimeOffset? DeletedAt { get; set; }
+    public long? DeletedByUserId { get; set; }
+    public string? DeletedByDisplayName { get; set; }
     public ICollection<IntegrationContractField> ContractFields { get; set; } = [];
 }
 

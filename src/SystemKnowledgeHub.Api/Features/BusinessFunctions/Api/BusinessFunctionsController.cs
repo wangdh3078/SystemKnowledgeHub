@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using SystemKnowledgeHub.Api.Features.BusinessFunctions.Api.Contracts;
 using SystemKnowledgeHub.Api.Features.BusinessFunctions.Application;
 using SystemKnowledgeHub.Api.Features.BusinessFunctions.Application.Models;
+using SystemKnowledgeHub.Api.Features.Users.Application;
 using SystemKnowledgeHub.Api.Shared.Api;
 using SystemKnowledgeHub.Api.Shared.Api.Contracts;
 
@@ -11,7 +12,8 @@ namespace SystemKnowledgeHub.Api.Features.BusinessFunctions.Api;
 [Route("api/business-functions")]
 public sealed class BusinessFunctionsController(
     BusinessFunctionQueries queries,
-    BusinessFunctionService service) : ControllerBase
+    BusinessFunctionService service,
+    ICurrentUserContext currentUserContext) : ControllerBase
 {
     [HttpGet]
     [ProducesResponseType<BusinessFunctionsListResponse>(StatusCodes.Status200OK)]
@@ -59,6 +61,9 @@ public sealed class BusinessFunctionsController(
         [FromBody] CreateBusinessFunctionRequest request,
         CancellationToken cancellationToken)
     {
+        var creator = await CurrentUserApiResolution.ResolveCreator(currentUserContext, cancellationToken);
+        if (creator.Error is not null) return StatusCode(creator.StatusCode!.Value, creator.Error);
+
         var result = await service.CreateBusinessFunction(
             new CreateBusinessFunctionCommand(
                 request.SystemId,
@@ -69,7 +74,8 @@ public sealed class BusinessFunctionsController(
                 request.RewriteStatus ?? string.Empty,
                 new BusinessFunctionActorContext(
                     request.Actor?.DisplayName ?? string.Empty,
-                    request.Actor?.Role)),
+                    request.Actor?.Role),
+                creator.Creator!),
             cancellationToken);
 
         return result.Failure switch

@@ -1,5 +1,7 @@
 namespace SystemKnowledgeHub.Api.Features.DatabaseKnowledge.Application.Models;
 
+using SystemKnowledgeHub.Api.Features.Users.Application.Models;
+
 public sealed record DatabaseKnowledgeActorContext(string DisplayName, string? Role);
 
 public sealed record CreateDatabaseSourceCommand(
@@ -12,7 +14,8 @@ public sealed record CreateDatabaseSourceCommand(
     string? DatabaseName,
     string? Description,
     bool IsPrimary,
-    DatabaseKnowledgeActorContext Actor);
+    DatabaseKnowledgeActorContext Actor,
+    CanonicalCreator Creator);
 
 public sealed record CreateDatabaseSourceResponse(
     long Id,
@@ -45,7 +48,8 @@ public sealed record RegisterDatabaseObjectCommand(
     IReadOnlyList<string>? PrimaryKeyColumns,
     IReadOnlyList<string>? BusinessKeyColumns,
     string? BusinessDescription,
-    DatabaseKnowledgeActorContext Actor);
+    DatabaseKnowledgeActorContext Actor,
+    CanonicalCreator Creator);
 
 public sealed record RegisterDatabaseObjectResponse(
     long Id,
@@ -78,7 +82,8 @@ public sealed record RegisterDatabaseColumnCommand(
     string? DatabaseComment,
     string? BusinessDescription,
     DatabaseKnowledgeActorContext Actor,
-    string? ConcurrencyToken);
+    string? ConcurrencyToken,
+    CanonicalCreator Creator);
 
 public sealed record RegisteredDatabaseColumnResponse(
     long Id,

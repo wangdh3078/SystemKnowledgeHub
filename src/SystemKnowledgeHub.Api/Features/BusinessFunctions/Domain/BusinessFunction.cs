@@ -17,6 +17,7 @@ public sealed class BusinessFunction
     public string? OutputDescription { get; set; }
     public RewriteStatus RewriteStatus { get; set; } = RewriteStatus.Unknown;
     public DateTimeOffset CreatedAt { get; set; }
+    public long? CreatedByUserId { get; set; }
     public string CreatedByName { get; set; } = string.Empty;
     public string? CreatedByRole { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
@@ -26,6 +27,10 @@ public sealed class BusinessFunction
     public string KnowledgeStatusChangedByName { get; set; } = string.Empty;
     public string KnowledgeStatusChangedByRole { get; set; } = string.Empty;
     public long Version { get; set; } = 1;
+    public bool IsDeleted { get; set; }
+    public DateTimeOffset? DeletedAt { get; set; }
+    public long? DeletedByUserId { get; set; }
+    public string? DeletedByDisplayName { get; set; }
 
     public ICollection<BusinessProcessStep> ProcessSteps { get; set; } = [];
 }

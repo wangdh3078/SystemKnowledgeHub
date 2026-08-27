@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using SystemKnowledgeHub.Api.Features.Systems.Domain;
+using SystemKnowledgeHub.Api.Features.Users.Domain;
 
 namespace SystemKnowledgeHub.Api.Features.Systems.Persistence;
 
@@ -17,6 +18,7 @@ public sealed class SystemConfiguration : IEntityTypeConfiguration<KnowledgeSyst
             table.HasCheckConstraint("ck_systems_main_projects_json", "main_projects_json IS NULL OR (json_valid(main_projects_json) AND json_type(main_projects_json) = 'array')");
             table.HasCheckConstraint("ck_systems_entry_points_json", "main_entry_points_json IS NULL OR (json_valid(main_entry_points_json) AND json_type(main_entry_points_json) = 'array')");
             table.HasCheckConstraint("ck_systems_version", "version >= 1");
+            table.HasCheckConstraint("ck_systems_deletion_audit", "is_deleted IN (0,1) AND ((is_deleted = 0 AND deleted_at IS NULL AND deleted_by_user_id IS NULL AND deleted_by_display_name IS NULL) OR (deleted_at IS NOT NULL AND deleted_by_user_id IS NOT NULL AND deleted_by_display_name IS NOT NULL AND length(trim(deleted_by_display_name)) > 0))");
         });
 
         builder.HasKey(entity => entity.Id);
@@ -34,6 +36,7 @@ public sealed class SystemConfiguration : IEntityTypeConfiguration<KnowledgeSyst
         builder.Property(entity => entity.MainEntryPointsJson).HasColumnName("main_entry_points_json");
         builder.Property(entity => entity.Notes).HasColumnName("notes");
         builder.Property(entity => entity.CreatedAt).HasColumnName("created_at").IsRequired();
+        builder.Property(entity => entity.CreatedByUserId).HasColumnName("created_by_user_id");
         builder.Property(entity => entity.CreatedByName).HasColumnName("created_by_name").IsRequired();
         builder.Property(entity => entity.CreatedByRole).HasColumnName("created_by_role");
         builder.Property(entity => entity.UpdatedAt).HasColumnName("updated_at").IsRequired();
@@ -47,9 +50,17 @@ public sealed class SystemConfiguration : IEntityTypeConfiguration<KnowledgeSyst
             .HasDefaultValue(1L)
             .IsConcurrencyToken()
             .IsRequired();
+        builder.Property(entity => entity.IsDeleted).HasColumnName("is_deleted").HasDefaultValue(false).IsRequired();
+        builder.Property(entity => entity.DeletedAt).HasColumnName("deleted_at");
+        builder.Property(entity => entity.DeletedByUserId).HasColumnName("deleted_by_user_id");
+        builder.Property(entity => entity.DeletedByDisplayName).HasColumnName("deleted_by_display_name");
 
-        builder.HasIndex(entity => entity.Name).IsUnique();
+        builder.HasOne<User>().WithMany().HasForeignKey(entity => entity.CreatedByUserId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<User>().WithMany().HasForeignKey(entity => entity.DeletedByUserId).OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasIndex(entity => entity.Name).IsUnique().HasFilter("is_deleted = 0");
         builder.HasIndex(entity => new { entity.Lifecycle, entity.KnowledgeStatus, entity.UpdatedAt });
         builder.HasIndex(entity => entity.KnowledgeStatus);
+        builder.HasQueryFilter(entity => !entity.IsDeleted);
     }
 }

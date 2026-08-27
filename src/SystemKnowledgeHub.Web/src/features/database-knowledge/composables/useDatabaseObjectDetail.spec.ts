@@ -12,7 +12,7 @@ vi.mock('../api/databaseKnowledgeApi', () => ({
 const detail = {
   id: 45,
   system: { id: 12, name: 'MES' },
-  databaseSource: { id: 9, name: 'MES Oracle', engine: 'Oracle' },
+  databaseSource: { id: 9, name: 'MES Oracle', engine: 'Oracle', concurrencyToken: 'source-token' },
   concurrencyToken: 'AAAAAQ',
   overview: {
     qualifiedName: 'MES.TABLE_EQP', objectType: 'Table' as const,

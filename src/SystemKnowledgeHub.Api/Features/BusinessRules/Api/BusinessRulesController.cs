@@ -2,13 +2,18 @@ using Microsoft.AspNetCore.Mvc;
 using SystemKnowledgeHub.Api.Features.BusinessRules.Api.Contracts;
 using SystemKnowledgeHub.Api.Features.BusinessRules.Application;
 using SystemKnowledgeHub.Api.Features.BusinessRules.Application.Models;
+using SystemKnowledgeHub.Api.Features.Users.Application;
+using SystemKnowledgeHub.Api.Shared.Api;
 using SystemKnowledgeHub.Api.Shared.Api.Contracts;
 
 namespace SystemKnowledgeHub.Api.Features.BusinessRules.Api;
 
 [ApiController]
 [Route("api/business-rules")]
-public sealed class BusinessRulesController(BusinessRuleQueries queries, BusinessRuleService service) : ControllerBase
+public sealed class BusinessRulesController(
+    BusinessRuleQueries queries,
+    BusinessRuleService service,
+    ICurrentUserContext currentUserContext) : ControllerBase
 {
     [HttpGet("{id:long}")]
     public async Task<IActionResult> GetDetail(long id, CancellationToken cancellationToken)
@@ -21,9 +26,11 @@ public sealed class BusinessRulesController(BusinessRuleQueries queries, Busines
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateBusinessRuleRequest request, CancellationToken cancellationToken)
     {
+        var creator = await CurrentUserApiResolution.ResolveCreator(currentUserContext, cancellationToken);
+        if (creator.Error is not null) return StatusCode(creator.StatusCode!.Value, creator.Error);
         var result = await service.Create(new(request.SystemId, request.Name ?? string.Empty,
             request.Description ?? string.Empty, request.Condition, request.Result, Inputs(request.InputData),
-            Actor(request.Actor)), cancellationToken);
+            Actor(request.Actor), creator.Creator!), cancellationToken);
         return Command(result, true);
     }
 

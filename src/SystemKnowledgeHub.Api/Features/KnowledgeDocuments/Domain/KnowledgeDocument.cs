@@ -26,4 +26,8 @@ public sealed class KnowledgeDocument
     public long CurrentRevisionNumber { get; set; } = 1;
     public long? LatestPublishedRevisionNumber { get; set; }
     public long Version { get; set; } = 1;
+    public bool IsDeleted { get; set; }
+    public DateTimeOffset? DeletedAt { get; set; }
+    public long? DeletedByUserId { get; set; }
+    public string? DeletedByDisplayName { get; set; }
 }

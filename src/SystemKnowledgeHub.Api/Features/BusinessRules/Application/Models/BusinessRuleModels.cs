@@ -1,9 +1,11 @@
 namespace SystemKnowledgeHub.Api.Features.BusinessRules.Application.Models;
 
+using SystemKnowledgeHub.Api.Features.Users.Application.Models;
+
 public sealed record BusinessRuleInputData(string Name, string? Description);
 public sealed record BusinessRuleActor(string DisplayName, string? Role);
 public sealed record CreateBusinessRuleCommand(long SystemId, string Name, string Description, string? Condition,
-    string? Result, IReadOnlyList<BusinessRuleInputData>? InputData, BusinessRuleActor Actor);
+    string? Result, IReadOnlyList<BusinessRuleInputData>? InputData, BusinessRuleActor Actor, CanonicalCreator Creator);
 public sealed record UpdateBusinessRuleCommand(long BusinessRuleId, string Name, string Description, string? Condition,
     string? Result, IReadOnlyList<BusinessRuleInputData>? InputData, BusinessRuleActor Actor, string ConcurrencyToken);
 

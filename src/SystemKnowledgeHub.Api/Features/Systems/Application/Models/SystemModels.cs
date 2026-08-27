@@ -1,5 +1,7 @@
 namespace SystemKnowledgeHub.Api.Features.Systems.Application.Models;
 
+using SystemKnowledgeHub.Api.Features.Users.Application.Models;
+
 public sealed record SystemsListQuery(
     string? Search,
     string? Lifecycle,
@@ -41,7 +43,8 @@ public sealed record CreateSystemCommand(
     string SystemType,
     string Lifecycle,
     string? Purpose,
-    ActorContext Actor);
+    ActorContext Actor,
+    CanonicalCreator Creator);
 
 public sealed record CreateSystemResponse(
     long Id,

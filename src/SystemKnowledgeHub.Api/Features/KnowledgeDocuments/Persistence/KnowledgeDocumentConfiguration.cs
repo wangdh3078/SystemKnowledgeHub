@@ -15,6 +15,7 @@ public sealed class KnowledgeDocumentConfiguration : IEntityTypeConfiguration<Kn
             table.HasCheckConstraint("ck_knowledge_documents_lifecycle_status", "lifecycle_status IN ('Draft','Published','Archived')");
             table.HasCheckConstraint("ck_knowledge_documents_knowledge_status", "knowledge_status IN ('Unknown','Inferred','Confirmed')");
             table.HasCheckConstraint("ck_knowledge_documents_version", "version >= 1");
+            table.HasCheckConstraint("ck_knowledge_documents_deletion_audit", "is_deleted IN (0,1) AND ((is_deleted = 0 AND deleted_at IS NULL AND deleted_by_user_id IS NULL AND deleted_by_display_name IS NULL) OR (deleted_at IS NOT NULL AND deleted_by_user_id IS NOT NULL AND deleted_by_display_name IS NOT NULL AND length(trim(deleted_by_display_name)) > 0))");
         });
 
         builder.HasKey(entity => entity.Id);
@@ -40,6 +41,10 @@ public sealed class KnowledgeDocumentConfiguration : IEntityTypeConfiguration<Kn
         builder.Property(entity => entity.CurrentRevisionNumber).HasColumnName("current_revision_number").HasDefaultValue(1L).IsRequired();
         builder.Property(entity => entity.LatestPublishedRevisionNumber).HasColumnName("latest_published_revision_number");
         builder.Property(entity => entity.Version).HasColumnName("version").HasDefaultValue(1L).IsConcurrencyToken().IsRequired();
+        builder.Property(entity => entity.IsDeleted).HasColumnName("is_deleted").HasDefaultValue(false).IsRequired();
+        builder.Property(entity => entity.DeletedAt).HasColumnName("deleted_at");
+        builder.Property(entity => entity.DeletedByUserId).HasColumnName("deleted_by_user_id");
+        builder.Property(entity => entity.DeletedByDisplayName).HasColumnName("deleted_by_display_name");
 
         builder.HasOne<User>()
             .WithMany()
@@ -49,6 +54,11 @@ public sealed class KnowledgeDocumentConfiguration : IEntityTypeConfiguration<Kn
             .WithMany()
             .HasForeignKey(entity => entity.UpdatedByUserId)
             .OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<User>()
+            .WithMany()
+            .HasForeignKey(entity => entity.DeletedByUserId)
+            .OnDelete(DeleteBehavior.Restrict);
         builder.HasIndex(entity => new { entity.DocumentType, entity.LifecycleStatus, entity.UpdatedAt });
+        builder.HasQueryFilter(entity => !entity.IsDeleted);
     }
 }

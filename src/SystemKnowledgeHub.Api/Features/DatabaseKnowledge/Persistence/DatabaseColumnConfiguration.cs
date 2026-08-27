@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using SystemKnowledgeHub.Api.Features.DatabaseKnowledge.Domain;
+using SystemKnowledgeHub.Api.Features.Users.Domain;
 
 namespace SystemKnowledgeHub.Api.Features.DatabaseKnowledge.Persistence;
 
@@ -14,6 +15,7 @@ public sealed class DatabaseColumnConfiguration : IEntityTypeConfiguration<Datab
             table.HasCheckConstraint("ck_database_columns_nullable", "is_nullable IN (0, 1)");
             table.HasCheckConstraint("ck_database_columns_knowledge_status", "knowledge_status IN ('Unknown','Inferred','Confirmed')");
             table.HasCheckConstraint("ck_database_columns_version", "version >= 1");
+            table.HasCheckConstraint("ck_database_columns_deletion_audit", "is_deleted IN (0,1) AND ((is_deleted = 0 AND deleted_at IS NULL AND deleted_by_user_id IS NULL AND deleted_by_display_name IS NULL) OR (deleted_at IS NOT NULL AND deleted_by_user_id IS NOT NULL AND deleted_by_display_name IS NOT NULL AND length(trim(deleted_by_display_name)) > 0))");
         });
 
         builder.HasKey(entity => entity.Id);
@@ -27,6 +29,8 @@ public sealed class DatabaseColumnConfiguration : IEntityTypeConfiguration<Datab
         builder.Property(entity => entity.BusinessDescription).HasColumnName("business_description");
         builder.Property(entity => entity.DatabaseComment).HasColumnName("database_comment");
         builder.Property(entity => entity.CreatedAt).HasColumnName("created_at").IsRequired();
+        builder.Property(entity => entity.CreatedByUserId).HasColumnName("created_by_user_id");
+        builder.Property(entity => entity.CreatedByDisplayName).HasColumnName("created_by_display_name");
         builder.Property(entity => entity.UpdatedAt).HasColumnName("updated_at").IsRequired();
         builder.Property(entity => entity.KnowledgeStatus).HasColumnName("knowledge_status").HasConversion<string>().IsRequired();
         builder.Property(entity => entity.KnowledgeStatusReason).HasColumnName("knowledge_status_reason");
@@ -34,16 +38,23 @@ public sealed class DatabaseColumnConfiguration : IEntityTypeConfiguration<Datab
         builder.Property(entity => entity.KnowledgeStatusChangedByName).HasColumnName("knowledge_status_changed_by_name").IsRequired();
         builder.Property(entity => entity.KnowledgeStatusChangedByRole).HasColumnName("knowledge_status_changed_by_role").IsRequired();
         builder.Property(entity => entity.Version).HasColumnName("version").HasDefaultValue(1L).IsRequired().IsConcurrencyToken();
+        builder.Property(entity => entity.IsDeleted).HasColumnName("is_deleted").HasDefaultValue(false).IsRequired();
+        builder.Property(entity => entity.DeletedAt).HasColumnName("deleted_at");
+        builder.Property(entity => entity.DeletedByUserId).HasColumnName("deleted_by_user_id");
+        builder.Property(entity => entity.DeletedByDisplayName).HasColumnName("deleted_by_display_name");
 
         builder.HasOne(entity => entity.DatabaseObject)
             .WithMany(databaseObject => databaseObject.Columns)
             .HasForeignKey(entity => entity.DatabaseObjectId)
             .OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<User>().WithMany().HasForeignKey(entity => entity.CreatedByUserId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<User>().WithMany().HasForeignKey(entity => entity.DeletedByUserId).OnDelete(DeleteBehavior.Restrict);
 
-        builder.HasIndex(entity => new { entity.DatabaseObjectId, entity.ColumnName }).IsUnique();
-        builder.HasIndex(entity => new { entity.DatabaseObjectId, entity.OrdinalPosition }).IsUnique();
+        builder.HasIndex(entity => new { entity.DatabaseObjectId, entity.ColumnName }).IsUnique().HasFilter("is_deleted = 0");
+        builder.HasIndex(entity => new { entity.DatabaseObjectId, entity.OrdinalPosition }).IsUnique().HasFilter("is_deleted = 0");
         builder.HasIndex(entity => new { entity.DatabaseObjectId, entity.OrdinalPosition });
         builder.HasIndex(entity => entity.ColumnName);
         builder.HasIndex(entity => entity.KnowledgeStatus);
+        builder.HasQueryFilter(entity => !entity.IsDeleted);
     }
 }

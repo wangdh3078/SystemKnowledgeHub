@@ -76,7 +76,10 @@ public sealed class DatabaseKnowledgeQueries(
                 .Where(source => source.Id == request.DatabaseSourceId.Value)
                 .Select(source => new
                 {
-                    Source = new DatabaseSourceContext(source.Id, source.Name, source.Engine),
+                    source.Id,
+                    source.Name,
+                    source.Engine,
+                    source.Version,
                     System = new SystemContext(source.System.Id, source.System.Name),
                 })
                 .SingleOrDefaultAsync(cancellationToken);
@@ -105,11 +108,18 @@ public sealed class DatabaseKnowledgeQueries(
             sourceQuery = sourceQuery.Where(source => source.SystemId == systemContext.Id);
         }
 
-        var sourceContexts = await sourceQuery
+        var sourceRows = await sourceQuery
             .OrderByDescending(source => source.IsPrimary)
             .ThenBy(source => source.Name)
-            .Select(source => new DatabaseSourceContext(source.Id, source.Name, source.Engine))
+            .Select(source => new { source.Id, source.Name, source.Engine, source.Version })
             .ToArrayAsync(cancellationToken);
+        var sourceContexts = sourceRows
+            .Select(source => new DatabaseSourceContext(
+                source.Id,
+                source.Name,
+                source.Engine,
+                concurrencyTokenCodec.Encode(source.Version)))
+            .ToArray();
 
         var objectQuery = dbContext.DatabaseObjects.AsNoTracking();
         if (systemContext is not null)
@@ -163,6 +173,7 @@ public sealed class DatabaseKnowledgeQueries(
                 item.DatabaseSourceId,
                 item.DatabaseSource.Name,
                 item.DatabaseSource.Engine,
+                item.DatabaseSource.Version,
                 item.SchemaName,
                 item.ObjectName,
                 item.ObjectType,
@@ -191,7 +202,11 @@ public sealed class DatabaseKnowledgeQueries(
             .Take(pageSize)
             .Select(row => new DatabaseObjectListItem(
                 row.Id,
-                new DatabaseSourceContext(row.DatabaseSourceId, row.DatabaseSourceName, row.DatabaseSourceEngine),
+                new DatabaseSourceContext(
+                    row.DatabaseSourceId,
+                    row.DatabaseSourceName,
+                    row.DatabaseSourceEngine,
+                    concurrencyTokenCodec.Encode(row.DatabaseSourceVersion)),
                 row.SchemaName,
                 row.ObjectName,
                 row.ObjectType.ToString(),
@@ -239,6 +254,7 @@ public sealed class DatabaseKnowledgeQueries(
                 SourceId = item.DatabaseSource.Id,
                 SourceName = item.DatabaseSource.Name,
                 item.DatabaseSource.Engine,
+                SourceVersion = item.DatabaseSource.Version,
                 SystemId = item.DatabaseSource.System.Id,
                 SystemName = item.DatabaseSource.System.Name,
             })
@@ -346,7 +362,8 @@ public sealed class DatabaseKnowledgeQueries(
             new DatabaseSourceContext(
                 databaseObject.SourceId,
                 databaseObject.SourceName,
-                databaseObject.Engine),
+                databaseObject.Engine,
+                concurrencyTokenCodec.Encode(databaseObject.SourceVersion)),
             concurrencyTokenCodec.Encode(databaseObject.Version),
             new DatabaseObjectOverview(
                 qualifiedName,
@@ -700,6 +717,7 @@ public sealed class DatabaseKnowledgeQueries(
         long DatabaseSourceId,
         string DatabaseSourceName,
         string DatabaseSourceEngine,
+        long DatabaseSourceVersion,
         string SchemaName,
         string ObjectName,
         DatabaseObjectType ObjectType,

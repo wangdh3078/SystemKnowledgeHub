@@ -2,13 +2,18 @@ using Microsoft.AspNetCore.Mvc;
 using SystemKnowledgeHub.Api.Features.Integrations.Api.Contracts;
 using SystemKnowledgeHub.Api.Features.Integrations.Application;
 using SystemKnowledgeHub.Api.Features.Integrations.Application.Models;
+using SystemKnowledgeHub.Api.Features.Users.Application;
+using SystemKnowledgeHub.Api.Shared.Api;
 using SystemKnowledgeHub.Api.Shared.Api.Contracts;
 
 namespace SystemKnowledgeHub.Api.Features.Integrations.Api;
 
 [ApiController]
 [Route("api/integrations")]
-public sealed class IntegrationsController(IntegrationQueries queries, IntegrationService service) : ControllerBase
+public sealed class IntegrationsController(
+    IntegrationQueries queries,
+    IntegrationService service,
+    ICurrentUserContext currentUserContext) : ControllerBase
 {
     [HttpGet("{id:long}")]
     public async Task<IActionResult> GetDetail(long id, CancellationToken cancellationToken)
@@ -20,7 +25,11 @@ public sealed class IntegrationsController(IntegrationQueries queries, Integrati
     [Microsoft.AspNetCore.Authorization.Authorize(Policy = SystemKnowledgeHub.Api.Shared.Security.AccessPolicies.Editor)]
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateIntegrationRequest request, CancellationToken cancellationToken)
-        => Command(await service.Create(new(ToOverview(request), Actor(request.Actor)), cancellationToken), true);
+    {
+        var creator = await CurrentUserApiResolution.ResolveCreator(currentUserContext, cancellationToken);
+        if (creator.Error is not null) return StatusCode(creator.StatusCode!.Value, creator.Error);
+        return Command(await service.Create(new(ToOverview(request), Actor(request.Actor), creator.Creator!), cancellationToken), true);
+    }
 
     [Microsoft.AspNetCore.Authorization.Authorize(Policy = SystemKnowledgeHub.Api.Shared.Security.AccessPolicies.Editor)]
     [HttpPut("{id:long}/overview")]

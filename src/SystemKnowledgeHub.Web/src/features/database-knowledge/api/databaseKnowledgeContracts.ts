@@ -12,6 +12,7 @@ export interface DatabaseSourceContext {
   readonly id: number
   readonly name: string
   readonly engine: string
+  readonly concurrencyToken: string
 }
 
 export type DatabaseObjectType = 'Table' | 'View'
@@ -381,6 +382,7 @@ function readDatabaseSourceContext(value: unknown, field: string): DatabaseSourc
     id: readId(source.id, `${field}.id`),
     name: readString(source.name, `${field}.name`),
     engine: readString(source.engine, `${field}.engine`),
+    concurrencyToken: readString(source.concurrencyToken, `${field}.concurrencyToken`),
   }
 }
 
@@ -457,7 +459,6 @@ export function decodeRegisterDatabaseObject(value: unknown): RegisterDatabaseOb
 
 export function decodeDatabaseObjectDetail(value: unknown): DatabaseObjectDetailResponse {
   const root = readObject(value, 'databaseObjectDetail')
-  const source = readObject(root.databaseSource, 'databaseSource')
   const overview = readObject(root.overview, 'overview')
   const metadata = readObject(root.metadata, 'metadata')
   const contextRail = readObject(root.contextRail, 'contextRail')
@@ -488,11 +489,7 @@ export function decodeDatabaseObjectDetail(value: unknown): DatabaseObjectDetail
   return {
     id: readId(root.id, 'id'),
     system: readSystemContext(root.system, 'system'),
-    databaseSource: {
-      id: readId(source.id, 'databaseSource.id'),
-      name: readString(source.name, 'databaseSource.name'),
-      engine: readString(source.engine, 'databaseSource.engine'),
-    },
+    databaseSource: readDatabaseSourceContext(root.databaseSource, 'databaseSource'),
     concurrencyToken: readString(root.concurrencyToken, 'concurrencyToken'),
     overview: {
       qualifiedName: readString(overview.qualifiedName, 'overview.qualifiedName'),

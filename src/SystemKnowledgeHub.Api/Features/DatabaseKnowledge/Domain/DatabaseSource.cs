@@ -15,9 +15,15 @@ public sealed class DatabaseSource
     public string? Description { get; set; }
     public bool IsPrimary { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
+    public long? CreatedByUserId { get; set; }
     public string CreatedByName { get; set; } = string.Empty;
     public string? CreatedByRole { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
+    public long Version { get; set; } = 1;
+    public bool IsDeleted { get; set; }
+    public DateTimeOffset? DeletedAt { get; set; }
+    public long? DeletedByUserId { get; set; }
+    public string? DeletedByDisplayName { get; set; }
 
     public KnowledgeSystem System { get; set; } = null!;
     public ICollection<DatabaseObject> DatabaseObjects { get; set; } = [];

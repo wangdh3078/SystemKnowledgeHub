@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using SystemKnowledgeHub.Api.Features.Integrations.Domain;
+using SystemKnowledgeHub.Api.Features.Users.Domain;
 
 namespace SystemKnowledgeHub.Api.Features.Integrations.Persistence;
 
@@ -16,6 +17,7 @@ public sealed class IntegrationConfiguration : IEntityTypeConfiguration<Integrat
             table.HasCheckConstraint("ck_integrations_status", "knowledge_status IN ('Unknown','Inferred','Confirmed')");
             table.HasCheckConstraint("ck_integrations_endpoint_json", "endpoint_json IS NULL OR json_valid(endpoint_json)");
             table.HasCheckConstraint("ck_integrations_version", "version >= 1");
+            table.HasCheckConstraint("ck_integrations_deletion_audit", "is_deleted IN (0,1) AND ((is_deleted = 0 AND deleted_at IS NULL AND deleted_by_user_id IS NULL AND deleted_by_display_name IS NULL) OR (deleted_at IS NOT NULL AND deleted_by_user_id IS NOT NULL AND deleted_by_display_name IS NOT NULL AND length(trim(deleted_by_display_name)) > 0))");
         });
         builder.HasKey(item => item.Id);
         builder.Property(item => item.Id).HasColumnName("id").ValueGeneratedOnAdd();
@@ -33,6 +35,7 @@ public sealed class IntegrationConfiguration : IEntityTypeConfiguration<Integrat
         builder.Property(item => item.DatabaseSourceId).HasColumnName("database_source_id");
         builder.Property(item => item.DatabaseObjectId).HasColumnName("database_object_id");
         builder.Property(item => item.CreatedAt).HasColumnName("created_at").IsRequired();
+        builder.Property(item => item.CreatedByUserId).HasColumnName("created_by_user_id");
         builder.Property(item => item.CreatedByName).HasColumnName("created_by_name").IsRequired();
         builder.Property(item => item.CreatedByRole).HasColumnName("created_by_role");
         builder.Property(item => item.UpdatedAt).HasColumnName("updated_at").IsRequired();
@@ -42,16 +45,23 @@ public sealed class IntegrationConfiguration : IEntityTypeConfiguration<Integrat
         builder.Property(item => item.KnowledgeStatusChangedByName).HasColumnName("knowledge_status_changed_by_name").IsRequired();
         builder.Property(item => item.KnowledgeStatusChangedByRole).HasColumnName("knowledge_status_changed_by_role").IsRequired();
         builder.Property(item => item.Version).HasColumnName("version").HasDefaultValue(1L).IsConcurrencyToken().IsRequired();
+        builder.Property(item => item.IsDeleted).HasColumnName("is_deleted").HasDefaultValue(false).IsRequired();
+        builder.Property(item => item.DeletedAt).HasColumnName("deleted_at");
+        builder.Property(item => item.DeletedByUserId).HasColumnName("deleted_by_user_id");
+        builder.Property(item => item.DeletedByDisplayName).HasColumnName("deleted_by_display_name");
         builder.HasOne(item => item.SourceSystem).WithMany().HasForeignKey(item => item.SourceSystemId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(item => item.TargetSystem).WithMany().HasForeignKey(item => item.TargetSystemId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(item => item.DatabaseSource).WithMany().HasForeignKey(item => item.DatabaseSourceId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(item => item.DatabaseObject).WithMany().HasForeignKey(item => item.DatabaseObjectId).OnDelete(DeleteBehavior.Restrict);
-        builder.HasIndex(item => new { item.IntegrationType, item.Name, item.SourcePartyName, item.TargetPartyName }).IsUnique();
+        builder.HasOne<User>().WithMany().HasForeignKey(item => item.CreatedByUserId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<User>().WithMany().HasForeignKey(item => item.DeletedByUserId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(item => new { item.IntegrationType, item.Name, item.SourcePartyName, item.TargetPartyName }).IsUnique().HasFilter("is_deleted = 0");
         builder.HasIndex(item => new { item.SourceSystemId, item.IntegrationType });
         builder.HasIndex(item => new { item.TargetSystemId, item.IntegrationType });
         builder.HasIndex(item => item.DatabaseSourceId);
         builder.HasIndex(item => item.DatabaseObjectId);
         builder.HasIndex(item => new { item.IntegrationType, item.KnowledgeStatus });
         builder.HasIndex(item => item.EndpointDisplay);
+        builder.HasQueryFilter(item => !item.IsDeleted);
     }
 }

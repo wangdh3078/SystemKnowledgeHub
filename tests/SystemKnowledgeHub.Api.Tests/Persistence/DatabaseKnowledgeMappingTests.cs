@@ -30,10 +30,10 @@ public sealed class DatabaseKnowledgeMappingTests
 
         var objectForeignKey = dbContext.Model.FindEntityType(typeof(DatabaseObject))!
             .GetForeignKeys()
-            .Single();
+            .Single(foreignKey => foreignKey.PrincipalEntityType.ClrType == typeof(DatabaseSource));
         var columnForeignKey = dbContext.Model.FindEntityType(typeof(DatabaseColumn))!
             .GetForeignKeys()
-            .Single();
+            .Single(foreignKey => foreignKey.PrincipalEntityType.ClrType == typeof(DatabaseObject));
         var knownValueForeignKey = dbContext.Model.FindEntityType(typeof(ColumnKnownValue))!
             .GetForeignKeys()
             .Single();

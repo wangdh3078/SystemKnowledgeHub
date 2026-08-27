@@ -1,4 +1,5 @@
 using System.Text.Json;
+using SystemKnowledgeHub.Api.Features.Users.Application.Models;
 
 namespace SystemKnowledgeHub.Api.Features.Integrations.Application.Models;
 
@@ -9,7 +10,7 @@ public sealed record IntegrationEndpoint(
 public sealed record IntegrationOverviewCommand(
     string Name, string IntegrationType, IntegrationParty? SourceParty, IntegrationParty? TargetParty,
     string FlowDirection, string? Purpose, JsonElement? Endpoint, long? DatabaseSourceId, long? DatabaseObjectId);
-public sealed record CreateIntegrationCommand(IntegrationOverviewCommand Overview, IntegrationActor Actor);
+public sealed record CreateIntegrationCommand(IntegrationOverviewCommand Overview, IntegrationActor Actor, CanonicalCreator Creator);
 public sealed record UpdateIntegrationCommand(long IntegrationId, IntegrationOverviewCommand Overview, IntegrationActor Actor, string ConcurrencyToken);
 public sealed record IntegrationContractFieldCommand(int Order, string FieldName, string? DataType, bool Required, string? Description, string? SampleValue);
 public sealed record ReplaceIntegrationContractFieldsCommand(long IntegrationId, IReadOnlyList<IntegrationContractFieldCommand>? Fields, IntegrationActor Actor, string ConcurrencyToken);

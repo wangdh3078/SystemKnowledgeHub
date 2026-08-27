@@ -320,6 +320,7 @@ public sealed class SearchQueries(KnowledgeHubDbContext dbContext)
                 FROM knowledge_documents_fts
                 INNER JOIN knowledge_documents AS d ON d.id = knowledge_documents_fts.rowid
                 WHERE knowledge_documents_fts MATCH $query
+                  AND d.is_deleted = 0
                   AND d.lifecycle_status <> 'Archived'
                 ORDER BY bm25(knowledge_documents_fts, 10.0, 4.0, 1.0), d.updated_at DESC
                 LIMIT $limit;
@@ -374,6 +375,7 @@ public sealed class SearchQueries(KnowledgeHubDbContext dbContext)
                 FROM knowledge_documents_fts
                 INNER JOIN knowledge_documents AS d ON d.id = knowledge_documents_fts.rowid
                 WHERE knowledge_documents_fts MATCH $query
+                  AND d.is_deleted = 0
                   AND d.lifecycle_status <> 'Archived';
                 """;
             AddParameter(command, "$query", ftsQuery);

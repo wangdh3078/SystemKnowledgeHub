@@ -66,9 +66,11 @@ public sealed class DatabaseKnowledgeService(
             Description = NormalizeOptional(request.Description),
             IsPrimary = request.IsPrimary,
             CreatedAt = now,
-            CreatedByName = actorName,
+            CreatedByUserId = request.Creator.UserId,
+            CreatedByName = request.Creator.DisplayName,
             CreatedByRole = NormalizeOptional(request.Actor.Role),
             UpdatedAt = now,
+            Version = 1,
         };
         dbContext.DatabaseSources.Add(source);
 
@@ -87,7 +89,7 @@ public sealed class DatabaseKnowledgeService(
                 source.SystemId,
                 source.Name,
                 source.Engine,
-                concurrencyTokenCodec.Encode(1)),
+                concurrencyTokenCodec.Encode(source.Version)),
             null,
             CreateDatabaseSourceFailure.None);
     }
@@ -146,12 +148,13 @@ public sealed class DatabaseKnowledgeService(
                 ? null
                 : JsonSerializer.Serialize(businessKeyColumns),
             CreatedAt = now,
-            CreatedByName = actorName,
+            CreatedByUserId = request.Creator.UserId,
+            CreatedByName = request.Creator.DisplayName,
             CreatedByRole = NormalizeOptional(request.Actor.Role),
             UpdatedAt = now,
             KnowledgeStatus = KnowledgeStatus.Unknown,
             KnowledgeStatusChangedAt = now,
-            KnowledgeStatusChangedByName = actorName,
+            KnowledgeStatusChangedByName = request.Creator.DisplayName,
             KnowledgeStatusChangedByRole = NormalizeOptional(request.Actor.Role) ?? "创建人",
             Version = 1,
         };
@@ -224,10 +227,12 @@ public sealed class DatabaseKnowledgeService(
             DatabaseComment = NormalizeOptional(request.DatabaseComment),
             BusinessDescription = NormalizeOptional(request.BusinessDescription),
             CreatedAt = now,
+            CreatedByUserId = request.Creator.UserId,
+            CreatedByDisplayName = request.Creator.DisplayName,
             UpdatedAt = now,
             KnowledgeStatus = KnowledgeStatus.Unknown,
             KnowledgeStatusChangedAt = now,
-            KnowledgeStatusChangedByName = actorName,
+            KnowledgeStatusChangedByName = request.Creator.DisplayName,
             KnowledgeStatusChangedByRole = NormalizeOptional(request.Actor.Role) ?? "创建人",
             Version = 1,
         };

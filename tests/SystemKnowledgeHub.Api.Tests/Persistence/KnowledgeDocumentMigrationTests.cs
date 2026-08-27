@@ -15,7 +15,7 @@ public sealed class KnowledgeDocumentMigrationTests
     [Fact]
     public async Task Migration_from_pre_knowledge_document_latest_preserves_existing_security_evidence_system_and_relationship_rows()
     {
-        await using var connection = new SqliteConnection($"Data Source={Path.Combine(Path.GetTempPath(), $"knowledge-document-migration-{Guid.NewGuid():N}.db")};Foreign Keys=True;Pooling=False");
+        await using var connection = new SqliteConnection("Data Source=:memory:;Foreign Keys=True");
         await connection.OpenAsync();
         var options = new DbContextOptionsBuilder<KnowledgeHubDbContext>().UseSqlite(connection).Options;
         await using var dbContext = new KnowledgeHubDbContext(options);
@@ -30,8 +30,11 @@ public sealed class KnowledgeDocumentMigrationTests
         dbContext.LoginIdentities.Add(loginIdentity);
         var systemA = System("KC-B01-A", timestamp);
         var systemB = System("KC-B01-B", timestamp);
-        dbContext.Systems.AddRange(systemA, systemB);
         await dbContext.SaveChangesAsync();
+        systemA.Id = 6101;
+        systemB.Id = 6102;
+        await InsertTargetEraSystem(connection, systemA);
+        await InsertTargetEraSystem(connection, systemB);
         var relation = new KnowledgeRelation
         {
             SourceType = KnowledgeTargetType.System,
@@ -127,6 +130,35 @@ public sealed class KnowledgeDocumentMigrationTests
         KnowledgeStatusChangedByRole = "创建人",
         Version = 1,
     };
+
+    private static async Task InsertTargetEraSystem(SqliteConnection connection, KnowledgeSystem system)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            INSERT INTO systems (
+                id, name, display_name, system_type, lifecycle, created_at, created_by_name, updated_at,
+                knowledge_status, knowledge_status_changed_at, knowledge_status_changed_by_name,
+                knowledge_status_changed_by_role, version)
+            VALUES (
+                $id, $name, $displayName, $systemType, $lifecycle, $createdAt, $createdByName, $updatedAt,
+                $knowledgeStatus, $knowledgeStatusChangedAt, $knowledgeStatusChangedByName,
+                $knowledgeStatusChangedByRole, $version);
+            """;
+        command.Parameters.AddWithValue("$id", system.Id);
+        command.Parameters.AddWithValue("$name", system.Name);
+        command.Parameters.AddWithValue("$displayName", system.DisplayName);
+        command.Parameters.AddWithValue("$systemType", system.SystemType);
+        command.Parameters.AddWithValue("$lifecycle", system.Lifecycle.ToString());
+        command.Parameters.AddWithValue("$createdAt", system.CreatedAt.ToString("O"));
+        command.Parameters.AddWithValue("$createdByName", system.CreatedByName);
+        command.Parameters.AddWithValue("$updatedAt", system.UpdatedAt.ToString("O"));
+        command.Parameters.AddWithValue("$knowledgeStatus", system.KnowledgeStatus.ToString());
+        command.Parameters.AddWithValue("$knowledgeStatusChangedAt", system.KnowledgeStatusChangedAt.ToString("O"));
+        command.Parameters.AddWithValue("$knowledgeStatusChangedByName", system.KnowledgeStatusChangedByName);
+        command.Parameters.AddWithValue("$knowledgeStatusChangedByRole", system.KnowledgeStatusChangedByRole);
+        command.Parameters.AddWithValue("$version", system.Version);
+        await command.ExecuteNonQueryAsync();
+    }
 
     private static async Task<T?> Scalar<T>(SqliteConnection connection, string sql)
     {

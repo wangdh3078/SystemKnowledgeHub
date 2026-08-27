@@ -14,6 +14,8 @@ public sealed class DatabaseColumn
     public string? BusinessDescription { get; set; }
     public string? DatabaseComment { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
+    public long? CreatedByUserId { get; set; }
+    public string? CreatedByDisplayName { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
     public KnowledgeStatus KnowledgeStatus { get; set; }
     public string? KnowledgeStatusReason { get; set; }
@@ -21,6 +23,10 @@ public sealed class DatabaseColumn
     public string KnowledgeStatusChangedByName { get; set; } = string.Empty;
     public string KnowledgeStatusChangedByRole { get; set; } = string.Empty;
     public long Version { get; set; } = 1;
+    public bool IsDeleted { get; set; }
+    public DateTimeOffset? DeletedAt { get; set; }
+    public long? DeletedByUserId { get; set; }
+    public string? DeletedByDisplayName { get; set; }
 
     public DatabaseObject DatabaseObject { get; set; } = null!;
     public ICollection<ColumnKnownValue> KnownValues { get; set; } = [];

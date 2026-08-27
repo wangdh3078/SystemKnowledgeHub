@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using SystemKnowledgeHub.Api.Features.DatabaseKnowledge.Api.Contracts;
 using SystemKnowledgeHub.Api.Features.DatabaseKnowledge.Application;
 using SystemKnowledgeHub.Api.Features.DatabaseKnowledge.Application.Models;
+using SystemKnowledgeHub.Api.Features.Users.Application;
 using SystemKnowledgeHub.Api.Shared.Api;
 using SystemKnowledgeHub.Api.Shared.Api.Contracts;
 
@@ -9,7 +10,9 @@ namespace SystemKnowledgeHub.Api.Features.DatabaseKnowledge.Api;
 
 [ApiController]
 [Route("api/database-sources")]
-public sealed class DatabaseSourcesController(DatabaseKnowledgeService service) : ControllerBase
+public sealed class DatabaseSourcesController(
+    DatabaseKnowledgeService service,
+    ICurrentUserContext currentUserContext) : ControllerBase
 {
     [Microsoft.AspNetCore.Authorization.Authorize(Policy = SystemKnowledgeHub.Api.Shared.Security.AccessPolicies.Editor)]
     [HttpPost]
@@ -21,6 +24,9 @@ public sealed class DatabaseSourcesController(DatabaseKnowledgeService service) 
         [FromBody] CreateDatabaseSourceRequest request,
         CancellationToken cancellationToken)
     {
+        var creator = await CurrentUserApiResolution.ResolveCreator(currentUserContext, cancellationToken);
+        if (creator.Error is not null) return StatusCode(creator.StatusCode!.Value, creator.Error);
+
         var result = await service.CreateDatabaseSource(
             new CreateDatabaseSourceCommand(
                 request.SystemId ?? 0,
@@ -34,7 +40,8 @@ public sealed class DatabaseSourcesController(DatabaseKnowledgeService service) 
                 request.IsPrimary ?? false,
                 new DatabaseKnowledgeActorContext(
                     request.Actor?.DisplayName ?? string.Empty,
-                    request.Actor?.Role)),
+                    request.Actor?.Role),
+                creator.Creator!),
             cancellationToken);
 
         return result.Failure switch

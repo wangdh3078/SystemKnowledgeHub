@@ -1,5 +1,7 @@
 namespace SystemKnowledgeHub.Api.Features.BusinessFunctions.Application.Models;
 
+using SystemKnowledgeHub.Api.Features.Users.Application.Models;
+
 public sealed record BusinessFunctionActorContext(string DisplayName, string? Role);
 
 public sealed record CreateBusinessFunctionCommand(
@@ -9,7 +11,8 @@ public sealed record CreateBusinessFunctionCommand(
     string FunctionType,
     string? Purpose,
     string RewriteStatus,
-    BusinessFunctionActorContext Actor);
+    BusinessFunctionActorContext Actor,
+    CanonicalCreator Creator);
 
 public sealed record CreateBusinessFunctionResponse(
     long Id,
