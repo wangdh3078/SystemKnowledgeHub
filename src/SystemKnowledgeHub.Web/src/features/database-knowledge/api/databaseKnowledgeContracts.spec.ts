@@ -9,8 +9,9 @@ describe('database knowledge API contracts', () => {
     const result = decodeDatabaseObjectDetail({
       id: 45,
       system: { id: 12, name: 'MES' },
-      databaseSource: { id: 9, name: 'MES Oracle', engine: 'Oracle', concurrencyToken: 'source-token' },
+      databaseSource: { id: 9, name: 'MES Oracle', engine: 'Oracle', concurrencyToken: 'source-token', canDelete: true },
       concurrencyToken: 'AAAAAQ',
+      canDelete: true,
       overview: {
         qualifiedName: 'MES.TABLE_EQP',
         objectType: 'Table',
@@ -47,6 +48,7 @@ describe('database knowledge API contracts', () => {
       parent: { databaseObjectId: 45, qualifiedName: 'MES.TABLE_EQP' },
       system: { id: 12, name: 'MES' },
       concurrencyToken: 'AAAAAQ',
+      canDelete: true,
       databaseMetadata: { columnName: 'STATE_FLAG', dataType: 'VARCHAR2(20)', nullable: false, defaultValue: null, ordinalPosition: 3 },
       businessKnowledge: { description: '设备状态标识', knowledgeStatus: 'Inferred' },
       knownValues: [{ id: 701, value: '30', meaning: 'Unknown / Offline' }],

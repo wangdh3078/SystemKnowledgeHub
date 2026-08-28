@@ -85,3 +85,8 @@ export function replaceBusinessProcessSteps(
     decode: decodeReplaceBusinessProcessSteps,
   })
 }
+
+export function deleteBusinessFunction(id: number, concurrencyToken: string): Promise<void> {
+  if (!isSafeApiId(id)) return Promise.reject(new RangeError('业务功能 ID 无效。'))
+  return apiClient.deleteWithBody(`/business-functions/${encodeURIComponent(String(id))}`, { concurrencyToken }, { decode: () => undefined })
+}

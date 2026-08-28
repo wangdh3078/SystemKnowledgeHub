@@ -112,3 +112,8 @@ export function updateSystemLifecycle(
     decode: decodeUpdateSystemLifecycle,
   })
 }
+
+export function deleteSystem(id: number, concurrencyToken: string): Promise<void> {
+  if (!isSafeApiId(id)) return Promise.reject(new RangeError('系统 ID 无效。'))
+  return apiClient.deleteWithBody(`/systems/${encodeURIComponent(String(id))}`, { concurrencyToken }, { decode: () => undefined })
+}

@@ -6,11 +6,13 @@ using SystemKnowledgeHub.Api.Features.Relationships.Domain;
 using SystemKnowledgeHub.Api.Features.UnknownItems.Domain;
 using SystemKnowledgeHub.Api.Persistence;
 using SystemKnowledgeHub.Api.Persistence.Concurrency;
+using SystemKnowledgeHub.Api.Features.SoftDelete.Application;
 
 namespace SystemKnowledgeHub.Api.Features.BusinessRules.Application;
 
 public sealed class BusinessRuleQueries(KnowledgeHubDbContext dbContext,
-    RelationshipTargetResolver targetResolver, ConcurrencyTokenCodec tokenCodec)
+    RelationshipTargetResolver targetResolver, SoftDeleteCapabilityResolver capabilityResolver,
+    ConcurrencyTokenCodec tokenCodec)
 {
     public async Task<BusinessRuleDetailResponse?> GetDetail(long id, CancellationToken cancellationToken)
     {
@@ -18,7 +20,8 @@ public sealed class BusinessRuleQueries(KnowledgeHubDbContext dbContext,
             .Select(item => new
             {
                 item.Id, item.Name, item.Description, item.ConditionText, item.ResultText, item.InputDataJson,
-                item.KnowledgeStatus, item.Version, SystemId = item.System.Id, SystemName = item.System.Name,
+                item.KnowledgeStatus, item.Version, item.CreatedByUserId,
+                SystemId = item.System.Id, SystemName = item.System.Name,
             }).SingleOrDefaultAsync(cancellationToken);
         if (rule is null) return null;
 
@@ -61,10 +64,12 @@ public sealed class BusinessRuleQueries(KnowledgeHubDbContext dbContext,
                 item.UnknownItem.Status.ToString()))
             .ToArrayAsync(cancellationToken);
 
+        var actor = await capabilityResolver.ResolveActor(cancellationToken);
         return new BusinessRuleDetailResponse(rule.Id, new(rule.SystemId, rule.SystemName), tokenCodec.Encode(rule.Version),
             new(rule.Name, rule.KnowledgeStatus.ToString()), rule.Description, rule.ConditionText, rule.ResultText,
             BusinessRuleService.DeserializeInputData(rule.InputDataJson), relatedFunctions, relatedFields, integrations,
             evidence, unknownItems, new(currentRelationshipCount, unknownItems.Length),
+            SoftDeleteCapabilityResolver.CanDelete(actor, rule.CreatedByUserId),
             ["UpdateBusinessRule", "AddKnowledgeRelation", "AddEvidence", "ChangeKnowledgeStatus", "CreateUnknownItem"]);
     }
 }

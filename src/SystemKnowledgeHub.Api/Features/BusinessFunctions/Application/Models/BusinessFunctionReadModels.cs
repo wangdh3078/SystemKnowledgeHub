@@ -95,4 +95,5 @@ public sealed record BusinessFunctionDetailResponse(
     IReadOnlyList<EvidenceSummaryResponse> Evidence,
     IReadOnlyList<UnknownItemSummaryResponse> UnknownItems,
     BusinessFunctionContextRailResponse ContextRail,
+    bool CanDelete,
     IReadOnlyList<string> AvailableActions);

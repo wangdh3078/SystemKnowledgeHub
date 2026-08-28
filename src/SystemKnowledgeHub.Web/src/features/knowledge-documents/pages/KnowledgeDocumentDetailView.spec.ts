@@ -32,7 +32,7 @@ const actorState = vi.hoisted(() => ({
   refreshCurrentUser: vi.fn(),
 }))
 const overlayState = vi.hoisted(() => ({ openDrawer: vi.fn(), openDialog: vi.fn() }))
-const routerState = vi.hoisted(() => ({ push: vi.fn() }))
+const routerState = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }))
 const traceState = vi.hoisted(() => ({ refresh: vi.fn(), mounted: vi.fn() }))
 const impactState = vi.hoisted(() => ({ refresh: vi.fn(), mounted: vi.fn() }))
 
@@ -194,6 +194,7 @@ const detail: KnowledgeDocumentDetail = {
   latestPublishedRevisionNumber: null,
   confirmationCoverage: { state: 'NoConfirmation', lastConfirmedRevisionNumber: null },
   concurrencyToken: 'token-1',
+  canDelete: true,
 }
 
 const components = {
@@ -296,6 +297,7 @@ describe('KnowledgeDocumentDetailView editing', () => {
     actorState.initialize.mockReset()
     actorState.refreshCurrentUser.mockReset()
     routerState.push.mockReset()
+    routerState.replace.mockReset()
     traceState.refresh.mockReset()
     traceState.mounted.mockReset()
     impactState.refresh.mockReset()

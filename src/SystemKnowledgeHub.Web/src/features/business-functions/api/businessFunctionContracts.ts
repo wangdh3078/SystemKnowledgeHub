@@ -122,6 +122,7 @@ export interface BusinessFunctionDetailResponse {
     readonly integrationCount: number
     readonly openUnknownCount: number
   }
+  readonly canDelete: boolean
   readonly availableActions: readonly string[]
 }
 
@@ -208,6 +209,11 @@ function readArray(value: unknown, field: string): readonly unknown[] {
 
 function readString(value: unknown, field: string): string {
   if (typeof value !== 'string') throw new Error(`${field} must be a string`)
+  return value
+}
+
+function readBoolean(value: unknown, field: string): boolean {
+  if (typeof value !== 'boolean') throw new TypeError(`${field} 必须是布尔值。`)
   return value
 }
 
@@ -357,6 +363,7 @@ export function decodeBusinessFunctionDetail(value: unknown): BusinessFunctionDe
       integrationCount: readInteger(contextRail.integrationCount, 'contextRail.integrationCount'),
       openUnknownCount: readInteger(contextRail.openUnknownCount, 'contextRail.openUnknownCount'),
     },
+    canDelete: readBoolean(root.canDelete, 'canDelete'),
     availableActions: readArray(root.availableActions, 'availableActions').map((value, index) => readString(value, `availableActions[${index}]`)),
   }
 }

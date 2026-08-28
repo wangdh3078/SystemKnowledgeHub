@@ -30,6 +30,7 @@ describe('decodeKnowledgeDocumentDetail revision contract', () => {
       publishedAt: '2026-08-23T02:00:00Z',
       archivedAt: null,
       concurrencyToken: 'opaque-token',
+      canDelete: true,
     })
 
     expect(detail.currentRevisionNumber).toBe(3)

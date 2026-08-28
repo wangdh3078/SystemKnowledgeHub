@@ -52,7 +52,8 @@ public sealed record KnowledgeDocumentDetailResponse(
     DateTimeOffset UpdatedAt,
     DateTimeOffset? PublishedAt,
     DateTimeOffset? ArchivedAt,
-    string ConcurrencyToken);
+    string ConcurrencyToken,
+    bool CanDelete);
 
 public sealed record KnowledgeDocumentConfirmationCoverageResponse(
     string State,

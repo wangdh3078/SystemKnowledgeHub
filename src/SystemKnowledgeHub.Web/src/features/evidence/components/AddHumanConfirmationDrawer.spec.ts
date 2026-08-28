@@ -50,6 +50,7 @@ const currentDocument: KnowledgeDocumentDetail = {
   latestPublishedRevisionNumber: null,
   confirmationCoverage: { state: 'ChangedSinceConfirmation', lastConfirmedRevisionNumber: 2 },
   concurrencyToken: 'current-token',
+  canDelete: true,
 }
 
 const components = {

@@ -10,12 +10,14 @@ using SystemKnowledgeHub.Api.Persistence;
 using SystemKnowledgeHub.Api.Persistence.Concurrency;
 using SystemKnowledgeHub.Api.Shared.Api;
 using SystemKnowledgeHub.Api.Shared.Domain;
+using SystemKnowledgeHub.Api.Features.SoftDelete.Application;
 
 namespace SystemKnowledgeHub.Api.Features.DatabaseKnowledge.Application;
 
 public sealed class DatabaseKnowledgeQueries(
     KnowledgeHubDbContext dbContext,
     RelationshipTargetResolver relationshipTargetResolver,
+    SoftDeleteCapabilityResolver capabilityResolver,
     ConcurrencyTokenCodec concurrencyTokenCodec)
 {
     private const int DefaultPageSize = 20;
@@ -113,14 +115,16 @@ public sealed class DatabaseKnowledgeQueries(
         var sourceRows = await sourceQuery
             .OrderByDescending(source => source.IsPrimary)
             .ThenBy(source => source.Name)
-            .Select(source => new { source.Id, source.Name, source.Engine, source.Version })
+            .Select(source => new { source.Id, source.Name, source.Engine, source.Version, source.CreatedByUserId })
             .ToArrayAsync(cancellationToken);
+        var actor = await capabilityResolver.ResolveActor(cancellationToken);
         var sourceContexts = sourceRows
             .Select(source => new DatabaseSourceContext(
                 source.Id,
                 source.Name,
                 source.Engine,
-                concurrencyTokenCodec.Encode(source.Version)))
+                concurrencyTokenCodec.Encode(source.Version),
+                SoftDeleteCapabilityResolver.CanDelete(actor, source.CreatedByUserId)))
             .ToArray();
 
         var objectQuery = dbContext.DatabaseObjects.AsNoTracking();
@@ -176,6 +180,7 @@ public sealed class DatabaseKnowledgeQueries(
                 item.DatabaseSource.Name,
                 item.DatabaseSource.Engine,
                 item.DatabaseSource.Version,
+                item.DatabaseSource.CreatedByUserId,
                 item.SchemaName,
                 item.ObjectName,
                 item.ObjectType,
@@ -208,7 +213,8 @@ public sealed class DatabaseKnowledgeQueries(
                     row.DatabaseSourceId,
                     row.DatabaseSourceName,
                     row.DatabaseSourceEngine,
-                    concurrencyTokenCodec.Encode(row.DatabaseSourceVersion)),
+                    concurrencyTokenCodec.Encode(row.DatabaseSourceVersion),
+                    SoftDeleteCapabilityResolver.CanDelete(actor, row.DatabaseSourceCreatedByUserId)),
                 row.SchemaName,
                 row.ObjectName,
                 row.ObjectType.ToString(),
@@ -253,10 +259,12 @@ public sealed class DatabaseKnowledgeQueries(
                 item.PrimaryKeyColumnsJson,
                 item.BusinessKeyColumnsJson,
                 item.Version,
+                item.CreatedByUserId,
                 SourceId = item.DatabaseSource.Id,
                 SourceName = item.DatabaseSource.Name,
                 item.DatabaseSource.Engine,
                 SourceVersion = item.DatabaseSource.Version,
+                SourceCreatedByUserId = item.DatabaseSource.CreatedByUserId,
                 SystemId = item.DatabaseSource.System.Id,
                 SystemName = item.DatabaseSource.System.Name,
             })
@@ -370,6 +378,7 @@ public sealed class DatabaseKnowledgeQueries(
                 && item.UnknownItem.Status != UnknownItemStatus.Closed, cancellationToken);
 
         var qualifiedName = $"{databaseObject.SchemaName}.{databaseObject.ObjectName}";
+        var actor = await capabilityResolver.ResolveActor(cancellationToken);
         var response = new DatabaseObjectDetailResponse(
             databaseObject.Id,
             new SystemContext(databaseObject.SystemId, databaseObject.SystemName),
@@ -377,7 +386,8 @@ public sealed class DatabaseKnowledgeQueries(
                 databaseObject.SourceId,
                 databaseObject.SourceName,
                 databaseObject.Engine,
-                concurrencyTokenCodec.Encode(databaseObject.SourceVersion)),
+                concurrencyTokenCodec.Encode(databaseObject.SourceVersion),
+                SoftDeleteCapabilityResolver.CanDelete(actor, databaseObject.SourceCreatedByUserId)),
             concurrencyTokenCodec.Encode(databaseObject.Version),
             new DatabaseObjectOverview(
                 qualifiedName,
@@ -396,6 +406,7 @@ public sealed class DatabaseKnowledgeQueries(
                 validObjectRelations.Count(item => item.SourceType == KnowledgeTargetType.Integration || item.TargetType == KnowledgeTargetType.Integration),
                 objectUnknownCount),
             selectedColumnId.HasValue ? new SelectedColumnDrawer(selectedColumnId.Value) : null,
+            SoftDeleteCapabilityResolver.CanDelete(actor, databaseObject.CreatedByUserId),
             DatabaseObjectActions);
 
         return new DatabaseObjectDetailQueryResult(response, false);
@@ -419,6 +430,7 @@ public sealed class DatabaseKnowledgeQueries(
                 item.BusinessDescription,
                 item.KnowledgeStatus,
                 item.Version,
+                item.CreatedByUserId,
                 DatabaseObjectId = item.DatabaseObject.Id,
                 item.DatabaseObject.SchemaName,
                 item.DatabaseObject.ObjectName,
@@ -494,6 +506,7 @@ public sealed class DatabaseKnowledgeQueries(
             .Select(item => new ColumnUnknownItemSummary(item.UnknownItem.Id, item.UnknownItem.Question, item.UnknownItem.Status.ToString()))
             .ToArrayAsync(cancellationToken);
 
+        var actor = await capabilityResolver.ResolveActor(cancellationToken);
         return new DatabaseColumnDetailResponse(
             column.Id,
             new ColumnParent(
@@ -514,6 +527,7 @@ public sealed class DatabaseKnowledgeQueries(
             evidence,
             relations,
             unknownItems,
+            SoftDeleteCapabilityResolver.CanDelete(actor, column.CreatedByUserId),
             DatabaseColumnActions);
     }
 
@@ -737,6 +751,7 @@ public sealed class DatabaseKnowledgeQueries(
         string DatabaseSourceName,
         string DatabaseSourceEngine,
         long DatabaseSourceVersion,
+        long? DatabaseSourceCreatedByUserId,
         string SchemaName,
         string ObjectName,
         DatabaseObjectType ObjectType,

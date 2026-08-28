@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { DocumentChecked, EditPen, Plus, Search, UserFilled } from '@element-plus/icons-vue'
+import { Delete, DocumentChecked, EditPen, Plus, Search, UserFilled } from '@element-plus/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
 import KnowledgeStatusBadge from '../../../components/data-display/KnowledgeStatusBadge.vue'
 import EmptyState from '../../../components/feedback/EmptyState.vue'
@@ -14,11 +14,12 @@ import {
   type EvidenceListItemResponse,
 } from '../../evidence/api/evidenceContracts'
 import KnowledgeStatusProgressionPanel from '../../knowledge-status/components/KnowledgeStatusProgressionPanel.vue'
-import { parseSafeApiId } from '../api/databaseKnowledgeApi'
+import { deleteDatabaseObject, parseSafeApiId } from '../api/databaseKnowledgeApi'
 import type { DatabaseColumnSummary } from '../api/databaseKnowledgeContracts'
 import DatabaseObjectContextRail from '../components/DatabaseObjectContextRail.vue'
 import RegisterDatabaseColumnDialog from '../components/RegisterDatabaseColumnDialog.vue'
 import { useDatabaseObjectDetail } from '../composables/useDatabaseObjectDetail'
+import { openDeleteDialog } from '../../soft-delete/deleteDialog'
 
 const route = useRoute()
 const router = useRouter()
@@ -166,6 +167,19 @@ async function loadRoute(): Promise<void> {
   }
 }
 
+function requestDelete(): void {
+  if (!detail.value?.canDelete) return
+  const current = detail.value
+  openDeleteDialog(overlayStore, {
+    objectTypeLabel: '数据库对象', actionLabel: '删除数据库对象', displayName: current.overview.qualifiedName,
+    concurrencyToken: current.concurrencyToken,
+    execute: () => deleteDatabaseObject(current.id, current.concurrencyToken),
+    onDeleted: () => router.push({ name: 'database-objects-list', query: { databaseSourceId: String(current.databaseSource.id) } }),
+    onRefresh: loadRoute,
+    onUnavailable: () => router.push({ name: 'database-objects-list' }),
+  })
+}
+
 watch([databaseObjectId, routeSelectedColumnId], () => {
   void loadRoute()
 })
@@ -224,7 +238,10 @@ onBeforeUnmount(() => {
             <h1 class="technical-text">{{ detail.overview.qualifiedName }}</h1>
             <p>{{ detail.overview.businessDescription ?? '尚未记录业务说明' }}</p>
           </div>
-          <el-button v-if="actorStore.canEdit" text type="primary" :icon="EditPen" @click="openObjectKnowledgeEdit">编辑</el-button>
+          <div class="database-object-header__actions">
+            <el-button v-if="detail.canDelete" type="danger" plain :icon="Delete" @click="requestDelete">删除数据库对象</el-button>
+            <el-button v-if="actorStore.canEdit" text type="primary" :icon="EditPen" @click="openObjectKnowledgeEdit">编辑</el-button>
+          </div>
         </div>
         <div class="database-object-header__tags">
           <span>{{ detail.overview.objectType === 'Table' ? '表' : '视图' }}</span>

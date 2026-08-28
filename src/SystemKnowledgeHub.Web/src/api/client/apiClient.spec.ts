@@ -38,4 +38,20 @@ describe('apiClient', () => {
       credentials: 'include',
     }))
   })
+
+  it('sends a DELETE body with antiforgery and accepts a 204 response without parsing JSON', async () => {
+    const fetchImplementation = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 204 }))
+    const decode = vi.fn(() => undefined)
+    const client = createApiClient('/api', fetchImplementation, () => 'request-token')
+
+    await client.deleteWithBody('/systems/7', { concurrencyToken: 'opaque-token' }, { decode })
+
+    expect(fetchImplementation).toHaveBeenCalledWith('/api/systems/7', expect.objectContaining({
+      method: 'DELETE',
+      body: JSON.stringify({ concurrencyToken: 'opaque-token' }),
+      headers: expect.objectContaining({ 'X-CSRF-TOKEN': 'request-token' }),
+      credentials: 'include',
+    }))
+    expect(decode).toHaveBeenCalledWith(undefined)
+  })
 })

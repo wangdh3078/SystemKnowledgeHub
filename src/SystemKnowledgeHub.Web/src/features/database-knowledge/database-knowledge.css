@@ -39,6 +39,15 @@
   justify-content: space-between;
 }
 
+.database-object-header__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.database-object-header__actions .el-button + .el-button { margin-left: 0; }
+
 .database-object-header__title h1 {
   font-size: 25px;
   letter-spacing: -0.025em;
@@ -975,6 +984,15 @@
   color: var(--color-muted);
   font-size: 9px;
 }
+
+.database-browser__source-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 34px;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.database-browser__source-row .database-browser__node { width: 100%; }
 
 .database-objects-list-page__content {
   min-width: 0;

@@ -13,6 +13,7 @@ export interface DatabaseSourceContext {
   readonly name: string
   readonly engine: string
   readonly concurrencyToken: string
+  readonly canDelete: boolean
 }
 
 export type DatabaseObjectType = 'Table' | 'View'
@@ -156,6 +157,7 @@ export interface DatabaseObjectDetailResponse {
     readonly openUnknownCount: number
   }
   readonly selectedColumnDrawer: { readonly columnId: number } | null
+  readonly canDelete: boolean
   readonly availableActions: readonly string[]
 }
 
@@ -203,6 +205,7 @@ export interface DatabaseColumnDetailResponse {
     readonly question: string
     readonly status: string
   }[]
+  readonly canDelete: boolean
   readonly availableActions: readonly string[]
 }
 
@@ -383,6 +386,7 @@ function readDatabaseSourceContext(value: unknown, field: string): DatabaseSourc
     name: readString(source.name, `${field}.name`),
     engine: readString(source.engine, `${field}.engine`),
     concurrencyToken: readString(source.concurrencyToken, `${field}.concurrencyToken`),
+    canDelete: readBoolean(source.canDelete, `${field}.canDelete`),
   }
 }
 
@@ -566,6 +570,7 @@ export function decodeDatabaseObjectDetail(value: unknown): DatabaseObjectDetail
       openUnknownCount: readInteger(contextRail.openUnknownCount, 'contextRail.openUnknownCount'),
     },
     selectedColumnDrawer,
+    canDelete: readBoolean(root.canDelete, 'canDelete'),
     availableActions: readStringArray(root.availableActions, 'availableActions'),
   }
 }
@@ -640,6 +645,7 @@ export function decodeDatabaseColumnDetail(value: unknown): DatabaseColumnDetail
         status: readString(item.status, `unknownItems[${index}].status`),
       }
     }),
+    canDelete: readBoolean(root.canDelete, 'canDelete'),
     availableActions: readStringArray(root.availableActions, 'availableActions'),
   }
 }

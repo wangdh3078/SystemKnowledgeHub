@@ -70,6 +70,7 @@ export interface KnowledgeDocumentDetail extends KnowledgeDocumentListItem {
     readonly lastConfirmedRevisionNumber: number | null
   }
   readonly concurrencyToken: string
+  readonly canDelete: boolean
 }
 
 export interface KnowledgeDocumentRevisionListItem {
@@ -267,6 +268,7 @@ export function decodeKnowledgeDocumentDetail(value: unknown): KnowledgeDocument
       ),
     },
     concurrencyToken: readString(root.concurrencyToken, 'concurrencyToken'),
+    canDelete: readBoolean(root.canDelete, 'canDelete'),
   }
 }
 

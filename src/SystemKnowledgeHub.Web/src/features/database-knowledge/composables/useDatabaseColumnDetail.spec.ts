@@ -13,6 +13,7 @@ const detail = {
   parent: { databaseObjectId: 45, qualifiedName: 'MES.TABLE_EQP' },
   system: { id: 12, name: 'MES' },
   concurrencyToken: 'v1_AAAAAAAAAAE',
+  canDelete: true,
   databaseMetadata: {
     columnName: 'STATE_FLAG', dataType: 'VARCHAR2(2)', nullable: true,
     defaultValue: null, ordinalPosition: 3,

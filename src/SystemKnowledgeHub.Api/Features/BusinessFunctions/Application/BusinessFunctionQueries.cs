@@ -9,12 +9,14 @@ using SystemKnowledgeHub.Api.Persistence.Concurrency;
 using SystemKnowledgeHub.Api.Shared.Api;
 using SystemKnowledgeHub.Api.Shared.Domain;
 using SystemKnowledgeHub.Api.Features.UnknownItems.Domain;
+using SystemKnowledgeHub.Api.Features.SoftDelete.Application;
 
 namespace SystemKnowledgeHub.Api.Features.BusinessFunctions.Application;
 
 public sealed class BusinessFunctionQueries(
     KnowledgeHubDbContext dbContext,
     RelationshipTargetResolver relationshipTargetResolver,
+    SoftDeleteCapabilityResolver capabilityResolver,
     ConcurrencyTokenCodec concurrencyTokenCodec)
 {
     private const int DefaultPageSize = 20;
@@ -141,6 +143,7 @@ public sealed class BusinessFunctionQueries(
                 item.RewriteStatus,
                 item.KnowledgeStatus,
                 item.Version,
+                item.CreatedByUserId,
                 SystemId = item.System.Id,
                 SystemName = item.System.Name,
             })
@@ -236,6 +239,7 @@ public sealed class BusinessFunctionQueries(
                 target.UnknownItem.Id, target.UnknownItem.Question, target.UnknownItem.Status.ToString()))
             .ToArrayAsync(cancellationToken);
 
+        var actor = await capabilityResolver.ResolveActor(cancellationToken);
         return new BusinessFunctionDetailResponse(
             function.Id,
             new KnowledgeSystemReferenceResponse(function.SystemId, function.SystemName),
@@ -261,6 +265,7 @@ public sealed class BusinessFunctionQueries(
                 adjacentFunctions.Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
                 integrationCount,
                 unknownItems.Length),
+            SoftDeleteCapabilityResolver.CanDelete(actor, function.CreatedByUserId),
             ["UpdateBusinessFunctionOverview", "ReplaceBusinessProcessSteps", "AddKnowledgeRelation", "AddEvidence", "ChangeKnowledgeStatus", "CreateUnknownItem"]);
     }
 

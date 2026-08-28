@@ -4,6 +4,7 @@ import { DocumentAdd } from '@element-plus/icons-vue'
 import { useOverlayStore } from '../app/stores/overlays'
 import KnowledgeStatusDialogContent from '../features/knowledge-status/components/KnowledgeStatusDialogContent.vue'
 import KnowledgeDocumentRestoreDialogContent from '../features/knowledge-documents/components/KnowledgeDocumentRestoreDialogContent.vue'
+import DeleteConfirmationDialogContent from '../features/soft-delete/components/DeleteConfirmationDialogContent.vue'
 
 const overlayStore = useOverlayStore()
 const hasFeatureDialog = computed(() =>
@@ -21,6 +22,7 @@ const hasFeatureDialog = computed(() =>
   || overlayStore.currentDialog?.kind === 'create-unknown-item'
   || overlayStore.currentDialog?.kind === 'knowledge-role-management'
   || overlayStore.currentDialog?.kind === 'restore-knowledge-document-revision'
+  || overlayStore.currentDialog?.kind === 'delete-root'
 )
 const dialogWidth = computed(() =>
   overlayStore.currentDialog?.kind === 'global-search'
@@ -29,6 +31,8 @@ const dialogWidth = computed(() =>
     ? '620px'
     : overlayStore.currentDialog?.kind === 'restore-knowledge-document-revision'
     ? '680px'
+    : overlayStore.currentDialog?.kind === 'delete-root'
+    ? '520px'
     : hasFeatureDialog.value ? '780px' : '460px',
 )
 </script>
@@ -53,6 +57,7 @@ const dialogWidth = computed(() =>
     <div id="dialog-feature-content"></div>
     <KnowledgeStatusDialogContent />
     <KnowledgeDocumentRestoreDialogContent />
+    <DeleteConfirmationDialogContent />
     <div v-if="overlayStore.isDialogOpen && !hasFeatureDialog" class="dialog-host__foundation">
       <el-icon :size="24"><DocumentAdd /></el-icon>
       <div>

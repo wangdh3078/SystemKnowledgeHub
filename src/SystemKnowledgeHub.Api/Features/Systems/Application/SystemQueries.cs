@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 using SystemKnowledgeHub.Api.Features.Systems.Application.Models;
 using SystemKnowledgeHub.Api.Features.Systems.Domain;
+using SystemKnowledgeHub.Api.Features.SoftDelete.Application;
 using SystemKnowledgeHub.Api.Persistence;
 using SystemKnowledgeHub.Api.Persistence.Concurrency;
 using SystemKnowledgeHub.Api.Shared.Domain;
@@ -10,6 +11,7 @@ namespace SystemKnowledgeHub.Api.Features.Systems.Application;
 
 public sealed class SystemQueries(
     KnowledgeHubDbContext dbContext,
+    SoftDeleteCapabilityResolver capabilityResolver,
     ConcurrencyTokenCodec concurrencyTokenCodec)
 {
     private const int DefaultPageSize = 20;
@@ -124,6 +126,7 @@ public sealed class SystemQueries(
                 item.Notes,
                 item.KnowledgeStatus,
                 item.Version,
+                item.CreatedByUserId,
                 Technologies = item.TechnologyTags
                     .OrderBy(tag => tag.Technology)
                     .Select(tag => tag.Technology)
@@ -217,6 +220,7 @@ public sealed class SystemQueries(
             ? Array.Empty<string>()
             : [$"{missingColumnDescriptionCount} 个字段缺少业务说明"];
 
+        var actor = await capabilityResolver.ResolveActor(cancellationToken);
         return new SystemDetailResponse(
             system.Id,
             concurrencyTokenCodec.Encode(system.Version),
@@ -247,6 +251,7 @@ public sealed class SystemQueries(
                 mainDatabase,
                 0,
                 knowledgeGaps),
+            SoftDeleteCapabilityResolver.CanDelete(actor, system.CreatedByUserId),
             ["UpdateSystemOverview", "UpdateSystemTechnology", "UpdateSystemLifecycle"]);
     }
 

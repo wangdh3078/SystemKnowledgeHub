@@ -6,10 +6,12 @@ using SystemKnowledgeHub.Api.Features.Relationships.Domain;
 using SystemKnowledgeHub.Api.Features.UnknownItems.Domain;
 using SystemKnowledgeHub.Api.Persistence;
 using SystemKnowledgeHub.Api.Persistence.Concurrency;
+using SystemKnowledgeHub.Api.Features.SoftDelete.Application;
 
 namespace SystemKnowledgeHub.Api.Features.Integrations.Application;
 
-public sealed class IntegrationQueries(KnowledgeHubDbContext dbContext, RelationshipTargetResolver targetResolver, ConcurrencyTokenCodec tokenCodec)
+public sealed class IntegrationQueries(KnowledgeHubDbContext dbContext, RelationshipTargetResolver targetResolver,
+    SoftDeleteCapabilityResolver capabilityResolver, ConcurrencyTokenCodec tokenCodec)
 {
     public async Task<IntegrationDetailResponse?> GetDetail(long id, CancellationToken cancellationToken)
     {
@@ -41,11 +43,13 @@ public sealed class IntegrationQueries(KnowledgeHubDbContext dbContext, Relation
         var gaps = new List<string>();
         if (!integration.ContractFields.Any()) gaps.Add("尚未补充消息 / 数据契约字段");
         if (!evidence.Any()) gaps.Add("尚未记录证据");
+        var actor = await capabilityResolver.ResolveActor(cancellationToken);
         return new IntegrationDetailResponse(integration.Id, tokenCodec.Encode(integration.Version), new(integration.Name, integration.IntegrationType.ToString(), integration.KnowledgeStatus.ToString()),
             new(integration.SourceSystemId, integration.SourcePartyName), new(integration.TargetSystemId, integration.TargetPartyName), integration.FlowDirection.ToString(), integration.Purpose,
             IntegrationEndpointParser.Deserialize(integration.EndpointJson), integration.DatabaseSourceId, integration.DatabaseObjectId,
             integration.ContractFields.OrderBy(item => item.Ordinal).Select(item => new IntegrationContractFieldResponse(item.Ordinal, item.FieldName, item.DataType, item.IsRequired, item.Description, item.SampleValue)).ToArray(),
             functions, data, evidence, unknownItems, new(participants, functions.Count, data.Count, unknownItems.Length, gaps),
+            SoftDeleteCapabilityResolver.CanDelete(actor, integration.CreatedByUserId),
             ["UpdateIntegration", "ReplaceIntegrationContractFields", "AddKnowledgeRelation", "AddEvidence", "ChangeKnowledgeStatus", "CreateUnknownItem"]);
     }
 }

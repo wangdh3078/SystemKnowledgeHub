@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Delete } from '@element-plus/icons-vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import KnowledgeStatusBadge from '../../../components/data-display/KnowledgeStatusBadge.vue'
 import KnowledgeStatusProgressionPanel from '../../knowledge-status/components/KnowledgeStatusProgressionPanel.vue'
@@ -16,6 +17,7 @@ import {
   type RelatedKnowledge,
 } from '../../relationships/api/relationshipContracts'
 import {
+  deleteKnowledgeDocument,
   getKnowledgeDocument,
   updateKnowledgeDocumentContent,
   updateKnowledgeDocumentLifecycle,
@@ -47,6 +49,7 @@ import {
 import { traceDocumentTypes, type TraceDocumentType } from '../api/traceabilityContracts'
 import TraceabilitySection from '../components/TraceabilitySection.vue'
 import ImpactContextSection from '../components/ImpactContextSection.vue'
+import { openDeleteDialog } from '../../soft-delete/deleteDialog'
 
 const KnowledgeDocumentEditor = defineAsyncComponent(
   () => import('../editor/KnowledgeDocumentEditor.vue'),
@@ -62,7 +65,7 @@ const error = ref<string | null>(null)
 const transitionError = ref<string | null>(null)
 const saveError = ref<string | null>(null)
 const savedMessage = ref<string | null>(null)
-const historyMode = ref(false)
+const historyMode = ref(route.query?.view === 'history')
 const editing = ref(false)
 const previewing = ref(false)
 const editorFullscreen = ref(false)
@@ -283,9 +286,29 @@ async function enterHistory(): Promise<void> {
   if (editing.value && !(await confirmDiscard())) return
   if (editing.value) finishEdit()
   historyMode.value = true
+  await router.replace({ query: { ...route.query, view: 'history' } })
 }
 function returnToCurrentContent(): void {
+  if (!data.value) {
+    void router.push({ name: 'knowledge-documents-list' })
+    return
+  }
   historyMode.value = false
+  const query = { ...route.query }
+  delete query.view
+  void router.replace({ query })
+}
+function requestDelete(): void {
+  if (!data.value?.canDelete || editing.value) return
+  const current = data.value
+  openDeleteDialog(overlayStore, {
+    objectTypeLabel: '知识内容', actionLabel: '删除知识内容', displayName: current.title,
+    concurrencyToken: current.concurrencyToken,
+    execute: () => deleteKnowledgeDocument(current.id, current.concurrencyToken),
+    onDeleted: () => router.push({ name: 'knowledge-documents-list' }),
+    onRefresh: load,
+    onUnavailable: () => router.push({ name: 'knowledge-documents-list' }),
+  })
 }
 function fieldError(field: string): string | null {
   return validationErrors.value[field]?.[0] ?? null
@@ -488,12 +511,18 @@ function handleRestored(event: Event): void {
   savedMessage.value = `已从修订 ${detailValue.sourceRevisionNumber} 恢复，并创建修订 ${document.currentRevisionNumber}`
 }
 watch(id, () => {
-  historyMode.value = false
+  historyMode.value = route.query?.view === 'history'
   data.value = null
   void load()
   void loadRelations()
   void loadEvidence()
 })
+watch(
+  () => route.query?.view,
+  (value) => {
+    historyMode.value = value === 'history'
+  },
+)
 watch(
   [editing, dirty],
   ([isEditing, isDirty]) => {
@@ -534,7 +563,14 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="knowledge-document-detail-page">
-    <LoadingState v-if="loading && !data" message="正在读取知识内容…" /><ErrorState
+    <KnowledgeDocumentRevisionHistory
+      v-if="historyMode && id !== null && !data"
+      :document-id="id"
+      :document="null"
+      :can-restore="false"
+      @return="returnToCurrentContent"
+    />
+    <LoadingState v-else-if="loading && !data" message="正在读取知识内容…" /><ErrorState
       v-else-if="error && !data"
       title="知识内容加载失败"
       :message="error"
@@ -555,6 +591,7 @@ onBeforeUnmount(() => {
             <el-button @click="enterHistory"
               >修订历史（{{ data.currentRevisionNumber }}）</el-button
             >
+            <el-button v-if="data.canDelete && !editing" type="danger" plain :icon="Delete" @click="requestDelete">删除知识内容</el-button>
             <template v-if="editing">
               <el-button :disabled="saving" @click="cancelEdit">取消</el-button>
               <el-button
@@ -608,6 +645,7 @@ onBeforeUnmount(() => {
       </header>
       <KnowledgeDocumentRevisionHistory
         v-if="historyMode"
+        :document-id="data.id"
         :document="data"
         :can-restore="canEdit"
         @return="returnToCurrentContent"

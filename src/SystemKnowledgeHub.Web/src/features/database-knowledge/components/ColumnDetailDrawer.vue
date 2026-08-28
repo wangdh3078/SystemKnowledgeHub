@@ -8,9 +8,10 @@ import { useOverlayStore } from '../../../app/stores/overlays'
 import KnowledgeStatusBadge from '../../../components/data-display/KnowledgeStatusBadge.vue'
 import ErrorState from '../../../components/feedback/ErrorState.vue'
 import LoadingState from '../../../components/feedback/LoadingState.vue'
-import { addColumnKnownValue, removeColumnKnownValue, updateDatabaseColumnKnowledge } from '../api/databaseKnowledgeApi'
+import { addColumnKnownValue, deleteDatabaseColumn, removeColumnKnownValue, updateDatabaseColumnKnowledge } from '../api/databaseKnowledgeApi'
 import { useDatabaseColumnDetail } from '../composables/useDatabaseColumnDetail'
 import KnowledgeStatusProgressionPanel from '../../knowledge-status/components/KnowledgeStatusProgressionPanel.vue'
+import { openDeleteDialog } from '../../soft-delete/deleteDialog'
 
 const props = defineProps<{ columnId: number | null }>()
 const overlayStore = useOverlayStore()
@@ -85,6 +86,20 @@ function createUnknownItem(): void {
   overlayStore.openDialog({ kind: 'create-unknown-item', id: null, mode: 'create', payload: { systemId: detail.value.system.id, systemName: detail.value.system.name, target: { type: 'DatabaseColumn', id: detail.value.id }, title: `${detail.value.parent.qualifiedName}.${detail.value.databaseMetadata.columnName}` } })
 }
 
+function requestDelete(): void {
+  if (!detail.value?.canDelete) return
+  const current = detail.value
+  openDeleteDialog(overlayStore, {
+    objectTypeLabel: '数据库字段', actionLabel: '删除数据库字段',
+    displayName: `${current.parent.qualifiedName}.${current.databaseMetadata.columnName}`,
+    concurrencyToken: current.concurrencyToken,
+    execute: () => deleteDatabaseColumn(current.id, current.concurrencyToken),
+    onDeleted: () => { overlayStore.closeDialog(); notifyColumnChanged() },
+    onRefresh: reload,
+    onUnavailable: () => { overlayStore.closeDialog(); notifyColumnChanged() },
+  })
+}
+
 const metadataRows = computed(() => !detail.value ? [] : [
   ['字段名', detail.value.databaseMetadata.columnName], ['数据类型', detail.value.databaseMetadata.dataType], ['允许为空', detail.value.databaseMetadata.nullable ? '是' : '否'], ['默认值', detail.value.databaseMetadata.defaultValue ?? '—'], ['字段顺序', String(detail.value.databaseMetadata.ordinalPosition)],
 ] as const)
@@ -118,7 +133,7 @@ const humanConfirmationCount = computed(() => detail.value?.evidence.filter(
         <el-collapse-item name="relations"><template #title><span class="drawer-title-with-count">字段级关系 <b>{{ detail.relations.length }}</b></span></template><div v-if="detail.relations.length" class="drawer-relation-list"><div v-for="item in detail.relations" :key="item.id"><span>{{ item.relationType }}</span><strong>{{ item.otherObject.title }}</strong></div></div><div v-else class="drawer-empty-state drawer-empty-state--compact"><p>尚未建立字段级关系。</p></div></el-collapse-item>
       </el-collapse>
       <p v-if="editError" class="authoring-error column-drawer__mutation-error" role="alert">{{ editError }}</p>
-      <footer class="column-drawer__footer"><el-button v-if="actorStore.canEdit && !editing" type="primary" :icon="EditPen" @click="startEditing">编辑字段知识</el-button><el-button v-else-if="editing" @click="stopEditing">结束编辑</el-button><el-button v-if="actorStore.canEdit" :icon="DocumentChecked" @click="addEvidence">添加证据</el-button><el-button v-if="actorStore.canEdit" :icon="QuestionFilled" @click="createUnknownItem">新建待确认事项</el-button></footer>
+      <footer class="column-drawer__footer"><el-button v-if="detail.canDelete && !editing" type="danger" plain :icon="Delete" @click="requestDelete">删除数据库字段</el-button><el-button v-if="actorStore.canEdit && !editing" type="primary" :icon="EditPen" @click="startEditing">编辑字段知识</el-button><el-button v-else-if="editing" @click="stopEditing">结束编辑</el-button><el-button v-if="actorStore.canEdit" :icon="DocumentChecked" @click="addEvidence">添加证据</el-button><el-button v-if="actorStore.canEdit" :icon="QuestionFilled" @click="createUnknownItem">新建待确认事项</el-button></footer>
     </template>
   </div>
 </template>

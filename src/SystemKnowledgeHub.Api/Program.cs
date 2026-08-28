@@ -133,6 +133,7 @@ builder.Services.AddScoped<RelationshipService>();
 builder.Services.AddScoped<SearchQueries>();
 builder.Services.AddScoped<KnowledgeDocumentSearchIndex>();
 builder.Services.AddScoped<HistoricalTargetResolver>();
+builder.Services.AddScoped<SoftDeleteCapabilityResolver>();
 builder.Services.AddScoped<SystemQueries>();
 builder.Services.AddScoped<SystemKnowledgeViewQueries>();
 builder.Services.AddScoped<SystemService>();

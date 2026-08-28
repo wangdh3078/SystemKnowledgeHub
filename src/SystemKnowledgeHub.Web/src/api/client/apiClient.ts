@@ -89,6 +89,10 @@ export function createApiClient(
       throw error
     }
 
+    if (response.status === 204) {
+      return options.decode(undefined)
+    }
+
     let payload: unknown
 
     try {
@@ -135,6 +139,14 @@ export function createApiClient(
 
     delete<TResponse>(path: string, options: RequestOptions<TResponse>): Promise<TResponse> {
       return request(path, 'DELETE', options)
+    },
+
+    deleteWithBody<TRequest, TResponse>(
+      path: string,
+      body: TRequest,
+      options: RequestWithBodyOptions<TResponse>,
+    ): Promise<TResponse> {
+      return request(path, 'DELETE', options, body, options.headers)
     },
 
     async postRoot<TRequest>(path: string, body?: TRequest): Promise<void> {

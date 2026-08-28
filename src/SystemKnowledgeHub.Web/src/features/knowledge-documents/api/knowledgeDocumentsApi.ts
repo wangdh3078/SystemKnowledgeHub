@@ -49,6 +49,11 @@ export function getKnowledgeDocument(
   })
 }
 
+export function deleteKnowledgeDocument(id: number, concurrencyToken: string): Promise<void> {
+  if (!isSafeApiId(id)) return Promise.reject(new RangeError('知识内容 ID 无效。'))
+  return apiClient.deleteWithBody(`/knowledge-documents/${encodeURIComponent(String(id))}`, { concurrencyToken }, { decode: () => undefined })
+}
+
 export function listKnowledgeDocumentRevisions(
   id: number,
   page = 1,

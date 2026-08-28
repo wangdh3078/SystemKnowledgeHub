@@ -27,6 +27,7 @@ public sealed record BusinessRuleDetailResponse(long Id, BusinessRuleSystemRespo
     IReadOnlyList<BusinessRuleEvidenceResponse> Evidence,
     IReadOnlyList<BusinessRuleUnknownItemResponse> UnknownItems,
     BusinessRuleContextRailResponse ContextRail,
+    bool CanDelete,
     IReadOnlyList<string> AvailableActions);
 
 public enum BusinessRuleFailure { None, Validation, SystemNotFound, NotFound, DuplicateName, Conflict }

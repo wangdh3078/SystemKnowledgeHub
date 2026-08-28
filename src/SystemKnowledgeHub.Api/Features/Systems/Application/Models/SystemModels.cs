@@ -131,6 +131,7 @@ public sealed record SystemDetailResponse(
     IReadOnlyList<SystemIntegrationSummaryResponse> Integrations,
     IReadOnlyList<SystemUnknownItemSummaryResponse> UnknownItems,
     SystemContextRailResponse ContextRail,
+    bool CanDelete,
     IReadOnlyList<string> AvailableActions);
 
 public sealed record UpdateSystemRepository(string? Name, string? Url);

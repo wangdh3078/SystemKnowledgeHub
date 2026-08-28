@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { ArrowRight, Coin, Plus, Search } from '@element-plus/icons-vue'
+import { ArrowRight, Coin, Delete, Plus, Search } from '@element-plus/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
 import KnowledgeStatusBadge from '../../../components/data-display/KnowledgeStatusBadge.vue'
 import EmptyState from '../../../components/feedback/EmptyState.vue'
@@ -9,13 +9,15 @@ import LoadingState from '../../../components/feedback/LoadingState.vue'
 import { useOverlayStore } from '../../../app/stores/overlays'
 import { getSystemsList } from '../../systems/api/systemsApi'
 import type { SystemSummary } from '../../systems/api/systemsContracts'
-import { parseSafeApiId } from '../api/databaseKnowledgeApi'
+import { deleteDatabaseSource, parseSafeApiId } from '../api/databaseKnowledgeApi'
 import type {
   DatabaseObjectListItem,
   DatabaseObjectType,
   DatabaseObjectsSort,
 } from '../api/databaseKnowledgeContracts'
 import { useDatabaseObjectsList } from '../composables/useDatabaseObjectsList'
+import { openDeleteDialog } from '../../soft-delete/deleteDialog'
+import type { DatabaseSourceContext } from '../api/databaseKnowledgeContracts'
 
 const route = useRoute()
 const router = useRouter()
@@ -142,6 +144,24 @@ function startCreate(): void {
   overlayStore.openDialog({ kind: 'create-database-knowledge', id: null, mode: 'create' })
 }
 
+function requestSourceDelete(source: DatabaseSourceContext): void {
+  if (!source.canDelete) return
+  openDeleteDialog(overlayStore, {
+    objectTypeLabel: '数据库来源', actionLabel: '删除数据库源', displayName: source.name,
+    concurrencyToken: source.concurrencyToken,
+    execute: () => deleteDatabaseSource(source.id, source.concurrencyToken),
+    onDeleted: async () => {
+      if (databaseSourceId.value === source.id) {
+        databaseSourceId.value = undefined
+        await router.replace({ query: systemId.value ? { systemId: String(systemId.value) } : {} })
+      }
+      await load()
+    },
+    onRefresh: load,
+    onUnavailable: load,
+  })
+}
+
 async function loadSystemOptions(): Promise<void> {
   try {
     const response = await getSystemsList({ sort: 'name:asc', page: 1, pageSize: 100 })
@@ -207,16 +227,21 @@ onMounted(() => {
             <span>全部数据库来源</span>
             <small>{{ data?.browseContext.databaseSources.length ?? 0 }}</small>
           </button>
-          <button
+          <div
             v-for="source in data?.browseContext.databaseSources ?? []"
             :key="source.id"
-            class="database-browser__node database-browser__node--source"
-            :class="{ 'database-browser__node--active': databaseSourceId === source.id }"
-            type="button"
-            @click="selectSource(source.id)"
+            class="database-browser__source-row"
           >
-            <span><strong>{{ source.name }}</strong><small>{{ source.engine }}</small></span>
-          </button>
+            <button
+              class="database-browser__node database-browser__node--source"
+              :class="{ 'database-browser__node--active': databaseSourceId === source.id }"
+              type="button"
+              @click="selectSource(source.id)"
+            ><span><strong>{{ source.name }}</strong><small>{{ source.engine }}</small></span></button>
+            <el-tooltip v-if="source.canDelete" content="删除数据库源" placement="right">
+              <el-button class="skh-icon-action" text circle type="danger" :icon="Delete" aria-label="删除数据库源" @click="requestSourceDelete(source)" />
+            </el-tooltip>
+          </div>
         </div>
 
         <div class="database-browser__group database-browser__group--schemas">

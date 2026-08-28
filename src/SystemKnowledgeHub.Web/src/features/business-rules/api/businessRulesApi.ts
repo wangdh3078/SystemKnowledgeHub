@@ -5,4 +5,5 @@ export const businessRulesApi = {
   detail: (id: number, signal?: AbortSignal): Promise<BusinessRuleDetailResponse> => apiClient.get(`/business-rules/${id}`, { signal, decode: decodeBusinessRuleDetail }),
   create: (input: CreateBusinessRuleInput): Promise<BusinessRuleWriteResponse> => apiClient.post('/business-rules', input, { decode: decodeBusinessRuleWrite }),
   update: (id: number, input: UpdateBusinessRuleInput): Promise<BusinessRuleWriteResponse> => apiClient.put(`/business-rules/${id}`, input, { decode: decodeBusinessRuleWrite }),
+  delete: (id: number, concurrencyToken: string): Promise<void> => apiClient.deleteWithBody(`/business-rules/${id}`, { concurrencyToken }, { decode: () => undefined }),
 }

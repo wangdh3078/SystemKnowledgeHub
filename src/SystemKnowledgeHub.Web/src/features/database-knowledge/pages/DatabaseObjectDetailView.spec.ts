@@ -25,8 +25,9 @@ vi.mock('../../evidence/api/evidenceApi', () => ({ getEvidenceList: vi.fn() }))
 const detail = {
   id: 45,
   system: { id: 12, name: 'MES' },
-  databaseSource: { id: 9, name: 'MES Oracle', engine: 'Oracle', concurrencyToken: 'source-token' },
+  databaseSource: { id: 9, name: 'MES Oracle', engine: 'Oracle', concurrencyToken: 'source-token', canDelete: true },
   concurrencyToken: 'object-token',
+  canDelete: true,
   overview: {
     qualifiedName: 'MES.TABLE_EQP',
     objectType: 'Table' as const,

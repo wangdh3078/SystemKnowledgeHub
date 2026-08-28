@@ -20,6 +20,7 @@ export interface BusinessRuleDetailResponse {
   readonly evidence: readonly BusinessRuleEvidence[]
   readonly unknownItems: readonly BusinessRuleUnknownItem[]
   readonly contextRail: { readonly relationshipCount: number; readonly openUnknownCount: number }
+  readonly canDelete: boolean
   readonly availableActions: readonly string[]
 }
 export interface BusinessRuleWriteInput {
@@ -40,6 +41,7 @@ function string(value: unknown, field: string): string { if (typeof value !== 's
 function nullableString(value: unknown, field: string): string | null { return value === null ? null : string(value, field) }
 function number(value: unknown, field: string): number { if (!Number.isSafeInteger(value) || Number(value) < 1) throw new TypeError(`${field} 必须是安全正整数。`); return Number(value) }
 function array(value: unknown, field: string): readonly unknown[] { if (!Array.isArray(value)) throw new TypeError(`${field} 必须是数组。`); return value }
+function boolean(value: unknown, field: string): boolean { if (typeof value !== 'boolean') throw new TypeError(`${field} 必须是布尔值。`); return value }
 function status(value: unknown): KnowledgeStatus { const text=string(value,'knowledgeStatus'); if (!['Unknown','Inferred','Confirmed'].includes(text)) throw new TypeError('knowledgeStatus 无效。'); return text as KnowledgeStatus }
 function relation(value: unknown, field: string): BusinessRuleRelationship { const item=object(value,field); return { relationshipId:number(item.relationshipId,`${field}.relationshipId`), id:number(item.id,`${field}.id`), name:string(item.name,`${field}.name`), relationType:string(item.relationType,`${field}.relationType`) } }
 
@@ -55,7 +57,7 @@ export function decodeBusinessRuleDetail(value: unknown): BusinessRuleDetailResp
     integrations:array(root.integrations,'integrations').map((value,index)=>relation(value,`integrations[${index}]`)),
     evidence:array(root.evidence,'evidence').map((value,index)=>{const item=object(value,`evidence[${index}]`);return{id:number(item.id,`evidence[${index}].id`),evidenceType:string(item.evidenceType,`evidence[${index}].evidenceType`),sourceTitle:string(item.sourceTitle,`evidence[${index}].sourceTitle`)}}),
     unknownItems:array(root.unknownItems,'unknownItems').map((value,index)=>{const item=object(value,`unknownItems[${index}]`);return{id:number(item.id,`unknownItems[${index}].id`),question:string(item.question,`unknownItems[${index}].question`),status:string(item.status,`unknownItems[${index}].status`)}}),
-    contextRail:{relationshipCount:Number(rail.relationshipCount),openUnknownCount:Number(rail.openUnknownCount)}, availableActions:array(root.availableActions,'availableActions').map((item,index)=>string(item,`availableActions[${index}]`)),
+    contextRail:{relationshipCount:Number(rail.relationshipCount),openUnknownCount:Number(rail.openUnknownCount)}, canDelete:boolean(root.canDelete,'canDelete'), availableActions:array(root.availableActions,'availableActions').map((item,index)=>string(item,`availableActions[${index}]`)),
   }
 }
 
@@ -65,6 +67,6 @@ export function decodeBusinessRuleWrite(value: unknown): BusinessRuleWriteRespon
     id:number(root.id,'id'), system:{id:number(system.id,'system.id'),name:string(system.name,'system.name')}, concurrencyToken:string(root.concurrencyToken,'concurrencyToken'),
     header:{name:string(root.name,'name'),knowledgeStatus:status(root.knowledgeStatus)}, description:string(root.description,'description'),
     condition:nullableString(root.condition,'condition'),result:nullableString(root.result,'result'),inputData:array(root.inputData,'inputData').map((value,index)=>{const item=object(value,`inputData[${index}]`);return{name:string(item.name,`inputData[${index}].name`),description:nullableString(item.description,`inputData[${index}].description`)}}),
-    relatedFunctions:[],relatedFields:[],integrations:[],evidence:[],unknownItems:[],contextRail:{relationshipCount:0,openUnknownCount:0},availableActions:[],
+    relatedFunctions:[],relatedFields:[],integrations:[],evidence:[],unknownItems:[],contextRail:{relationshipCount:0,openUnknownCount:0},canDelete:false,availableActions:[],
   }
 }

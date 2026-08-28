@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { EditPen } from '@element-plus/icons-vue'
+import { Delete, EditPen } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { parseSafeApiId } from '../../../api/contracts/id'
 import { useActorStore } from '../../../app/stores/actor'
+import { useOverlayStore } from '../../../app/stores/overlays'
 import KnowledgeStatusBadge from '../../../components/data-display/KnowledgeStatusBadge.vue'
 import ErrorState from '../../../components/feedback/ErrorState.vue'
 import LoadingState from '../../../components/feedback/LoadingState.vue'
@@ -15,10 +16,13 @@ import SystemTechnologyLifecycleSection from '../components/SystemTechnologyLife
 import SystemUnifiedKnowledgeView from '../components/SystemUnifiedKnowledgeView.vue'
 import { useSystemDetail, type SystemOverviewValues } from '../composables/useSystemDetail'
 import { useSystemKnowledgeView } from '../composables/useSystemKnowledgeView'
+import { deleteSystem } from '../api/systemsApi'
+import { openDeleteDialog } from '../../soft-delete/deleteDialog'
 
 const route = useRoute()
 const router = useRouter()
 const actorStore = useActorStore()
+const overlayStore = useOverlayStore()
 const overviewEditing = ref(false)
 const {
   detail,
@@ -89,6 +93,19 @@ async function reloadAfterConflict(): Promise<void> {
   await loadRoute()
 }
 
+function requestDelete(): void {
+  if (!detail.value?.canDelete) return
+  const current = detail.value
+  openDeleteDialog(overlayStore, {
+    objectTypeLabel: '系统', actionLabel: '删除系统', displayName: current.overview.name,
+    concurrencyToken: current.concurrencyToken,
+    execute: () => deleteSystem(current.id, current.concurrencyToken),
+    onDeleted: () => router.push({ name: 'systems-list' }),
+    onRefresh: loadRoute,
+    onUnavailable: () => router.push({ name: 'systems-list' }),
+  })
+}
+
 function openDatabaseObject(id: number): void {
   void router.push({ name: 'database-object-detail', params: { id: String(id) } })
 }
@@ -131,14 +148,17 @@ onMounted(() => void loadRoute())
             <h1 class="technical-text">{{ detail.overview.name }}</h1>
             <p>{{ detail.overview.displayName }}</p>
           </div>
-          <el-button
-            v-if="canEditOverview && !overviewEditing"
-            text
-            type="primary"
-            :icon="EditPen"
-            @click="overviewEditing = true"
-          >编辑概览</el-button>
-          <span v-else-if="overviewEditing" class="system-detail-header__editing">正在编辑概览</span>
+          <div class="system-detail-header__actions">
+            <el-button v-if="detail.canDelete && !overviewEditing" type="danger" plain :icon="Delete" @click="requestDelete">删除系统</el-button>
+            <el-button
+              v-if="canEditOverview && !overviewEditing"
+              text
+              type="primary"
+              :icon="EditPen"
+              @click="overviewEditing = true"
+            >编辑概览</el-button>
+            <span v-else-if="overviewEditing" class="system-detail-header__editing">正在编辑概览</span>
+          </div>
         </div>
         <div class="system-detail-header__tags">
           <span>{{ detail.overview.systemType }}</span>

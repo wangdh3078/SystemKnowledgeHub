@@ -30,6 +30,6 @@ public sealed record IntegrationDetailResponse(long Id, string ConcurrencyToken,
     IReadOnlyList<IntegrationContractFieldResponse> ContractFields,
     IReadOnlyList<IntegrationRelationshipResponse> RelatedFunctions, IReadOnlyList<IntegrationRelationshipResponse> RelatedData,
     IReadOnlyList<IntegrationEvidenceResponse> Evidence, IReadOnlyList<IntegrationUnknownItemResponse> UnknownItems,
-    IntegrationContextRailResponse ContextRail, IReadOnlyList<string> AvailableActions);
+    IntegrationContextRailResponse ContextRail, bool CanDelete, IReadOnlyList<string> AvailableActions);
 public enum IntegrationFailure { None, Validation, NotFound, ReferenceInvalid, Duplicate, Conflict }
 public sealed record IntegrationCommandResult(object? Response, IReadOnlyDictionary<string, string[]>? FieldErrors, IntegrationFailure Failure, string? Message = null);

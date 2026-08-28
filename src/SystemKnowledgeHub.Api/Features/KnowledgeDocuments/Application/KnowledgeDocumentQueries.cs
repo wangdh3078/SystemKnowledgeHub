@@ -13,6 +13,7 @@ namespace SystemKnowledgeHub.Api.Features.KnowledgeDocuments.Application;
 public sealed class KnowledgeDocumentQueries(
     KnowledgeHubDbContext dbContext,
     HistoricalTargetResolver historicalTargetResolver,
+    SoftDeleteCapabilityResolver capabilityResolver,
     ConcurrencyTokenCodec concurrencyTokenCodec)
 {
     private const int DefaultPageSize = 20;
@@ -220,6 +221,7 @@ public sealed class KnowledgeDocumentQueries(
                 $"KnowledgeDocument {item.Id} has a HumanConfirmation snapshot newer than current revision {item.CurrentRevisionNumber}."),
         };
 
+        var actor = await capabilityResolver.ResolveActor(cancellationToken);
         return new KnowledgeDocumentDetailResponse(
             item.Id,
             item.DocumentType.ToString(),
@@ -239,7 +241,8 @@ public sealed class KnowledgeDocumentQueries(
             item.UpdatedAt,
             item.PublishedAt,
             item.ArchivedAt,
-            concurrencyTokenCodec.Encode(item.Version));
+            concurrencyTokenCodec.Encode(item.Version),
+            SoftDeleteCapabilityResolver.CanDelete(actor, item.CreatedByUserId));
     }
 
     private static Dictionary<string, string[]> Validate(

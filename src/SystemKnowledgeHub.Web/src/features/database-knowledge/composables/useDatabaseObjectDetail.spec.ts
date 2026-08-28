@@ -12,8 +12,9 @@ vi.mock('../api/databaseKnowledgeApi', () => ({
 const detail = {
   id: 45,
   system: { id: 12, name: 'MES' },
-  databaseSource: { id: 9, name: 'MES Oracle', engine: 'Oracle', concurrencyToken: 'source-token' },
+  databaseSource: { id: 9, name: 'MES Oracle', engine: 'Oracle', concurrencyToken: 'source-token', canDelete: true },
   concurrencyToken: 'AAAAAQ',
+  canDelete: true,
   overview: {
     qualifiedName: 'MES.TABLE_EQP', objectType: 'Table' as const,
     businessDescription: '设备主数据', accessMode: 'ReadWrite' as const,

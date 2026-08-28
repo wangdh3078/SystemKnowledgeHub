@@ -38,6 +38,7 @@ const document: KnowledgeDocumentDetail = {
   latestPublishedRevisionNumber: 2,
   confirmationCoverage: { state: 'ChangedSinceConfirmation', lastConfirmedRevisionNumber: 1 },
   concurrencyToken: 'current-token',
+  canDelete: true,
 }
 const revision: KnowledgeDocumentRevisionDetail = {
   id: 101,

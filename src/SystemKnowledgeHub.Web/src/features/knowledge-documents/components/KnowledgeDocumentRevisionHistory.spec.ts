@@ -107,6 +107,7 @@ const currentDocument: KnowledgeDocumentDetail = {
   latestPublishedRevisionNumber: 2,
   confirmationCoverage: { state: 'NoConfirmation', lastConfirmedRevisionNumber: null },
   concurrencyToken: 'opaque-current-token',
+  canDelete: true,
 }
 
 const components = {
@@ -115,6 +116,7 @@ const components = {
     template: '<button type="button" @click="$emit(\'click\')"><slot /></button>',
   },
   ElIcon: { template: '<span><slot /></span>' },
+  ElTag: { template: '<span><slot /></span>' },
   ElPagination: {
     emits: ['current-change'],
     template: '<button type="button" @click="$emit(\'current-change\', 2)">下一页</button>',
@@ -144,7 +146,7 @@ function response(
 }
 function mountHistory() {
   return mount(KnowledgeDocumentRevisionHistory, {
-    props: { document: currentDocument, canRestore: true },
+    props: { documentId: currentDocument.id, document: currentDocument, canRestore: true },
     global: { components },
   })
 }
@@ -195,6 +197,30 @@ describe('KnowledgeDocumentRevisionHistory', () => {
     expect(wrapper.text()).toContain('迁移正文')
   })
 
+  it('keeps deleted-owner revisions readable while showing a tombstone and no restore action', async () => {
+    const owner = {
+      id: 7, targetType: 'KnowledgeDocument', displayName: '已删除知识内容',
+      isDeleted: true, isNavigable: false,
+    }
+    vi.mocked(listKnowledgeDocumentRevisions).mockResolvedValue({ ...response(), owner })
+    vi.mocked(getKnowledgeDocumentRevision).mockImplementation((_id, revisionNumber) =>
+      Promise.resolve({ ...details[revisionNumber], owner }),
+    )
+    const wrapper = mount(KnowledgeDocumentRevisionHistory, {
+      props: { documentId: 7, document: null, canRestore: true },
+      global: { components },
+    })
+    await flushPromises()
+    await buttonByLabel(wrapper as ReturnType<typeof mountHistory>, '查看修订 2')?.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('已删除知识内容')
+    expect(wrapper.text()).toContain('已删除')
+    expect(wrapper.text()).toContain('最近发布标题')
+    expect(wrapper.find('a').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('恢复此修订')
+  })
+
   it('renders a legacy BR snapshot safely without mutating its immutable raw body', async () => {
     const rawBody = [
       'A',
@@ -241,7 +267,7 @@ describe('KnowledgeDocumentRevisionHistory', () => {
     const extensionRevision = { ...details[3], bodyMarkdown: extensionSource }
     vi.mocked(getKnowledgeDocumentRevision).mockResolvedValue(extensionRevision)
     const wrapper = mount(KnowledgeDocumentRevisionHistory, {
-      props: { document: currentDocument, canRestore: true },
+      props: { documentId: currentDocument.id, document: currentDocument, canRestore: true },
       global: {
         components,
         stubs: {

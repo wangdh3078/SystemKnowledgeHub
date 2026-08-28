@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { ArrowRight, Connection, Document, EditPen, Link, Plus, QuestionFilled } from '@element-plus/icons-vue'
+import { ArrowRight, Connection, Delete, Document, EditPen, Link, Plus, QuestionFilled } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { parseSafeApiId } from '../../../api/contracts/id'
@@ -23,6 +23,8 @@ import {
   useBusinessFunctionDetail,
   type BusinessFunctionOverviewValues,
 } from '../composables/useBusinessFunctionDetail'
+import { deleteBusinessFunction } from '../api/businessFunctionsApi'
+import { openDeleteDialog } from '../../soft-delete/deleteDialog'
 
 const route = useRoute()
 const router = useRouter()
@@ -159,6 +161,19 @@ function createUnknownItem(): void {
   })
 }
 
+function requestDelete(): void {
+  if (!detail.value?.canDelete) return
+  const current = detail.value
+  openDeleteDialog(overlayStore, {
+    objectTypeLabel: '业务功能', actionLabel: '删除业务功能', displayName: current.header.name,
+    concurrencyToken: current.concurrencyToken,
+    execute: () => deleteBusinessFunction(current.id, current.concurrencyToken),
+    onDeleted: () => router.push({ name: 'business-functions-list' }),
+    onRefresh: loadRoute,
+    onUnavailable: () => router.push({ name: 'business-functions-list' }),
+  })
+}
+
 function reloadEvidence(): void {
   void loadRoute()
 }
@@ -195,15 +210,17 @@ onUnmounted(() => {
         </nav>
         <h1 class="technical-text">{{ detail.header.name }}</h1>
         <p>{{ detail.overview.purpose ?? '尚未记录功能用途' }}</p>
-        <el-button
-          v-if="canEditOverview && !overviewEditing"
-          class="business-function-detail-header__edit"
-          text
-          type="primary"
-          :icon="EditPen"
-          @click="overviewEditing = true; startOverviewEdit()"
-        >编辑概览</el-button>
-        <span v-else-if="overviewEditing" class="business-function-detail-header__editing">正在编辑概览</span>
+        <div class="business-function-detail-header__actions">
+          <el-button v-if="detail.canDelete && !overviewEditing" type="danger" plain :icon="Delete" @click="requestDelete">删除业务功能</el-button>
+          <el-button
+            v-if="canEditOverview && !overviewEditing"
+            text
+            type="primary"
+            :icon="EditPen"
+            @click="overviewEditing = true; startOverviewEdit()"
+          >编辑概览</el-button>
+          <span v-else-if="overviewEditing" class="business-function-detail-header__editing">正在编辑概览</span>
+        </div>
         <div class="business-function-detail-header__tags">
           <span>{{ functionTypeLabels[detail.header.functionType] ?? detail.header.functionType }}</span>
           <strong class="technical-text">{{ detail.system.name }}</strong>

@@ -115,6 +115,21 @@ export function getDatabaseColumnDetail(
   })
 }
 
+export function deleteDatabaseSource(id: number, concurrencyToken: string): Promise<void> {
+  if (!isSafeApiId(id)) return Promise.reject(new RangeError('数据库来源 ID 无效。'))
+  return apiClient.deleteWithBody(`/database-sources/${encodeURIComponent(String(id))}`, { concurrencyToken }, { decode: () => undefined })
+}
+
+export function deleteDatabaseObject(id: number, concurrencyToken: string): Promise<void> {
+  if (!isSafeApiId(id)) return Promise.reject(new RangeError('数据库对象 ID 无效。'))
+  return apiClient.deleteWithBody(`/database-objects/${encodeURIComponent(String(id))}`, { concurrencyToken }, { decode: () => undefined })
+}
+
+export function deleteDatabaseColumn(id: number, concurrencyToken: string): Promise<void> {
+  if (!isSafeApiId(id)) return Promise.reject(new RangeError('数据库字段 ID 无效。'))
+  return apiClient.deleteWithBody(`/database-columns/${encodeURIComponent(String(id))}`, { concurrencyToken }, { decode: () => undefined })
+}
+
 export function registerDatabaseColumn(
   databaseObjectId: number,
   request: RegisterDatabaseColumnRequest,

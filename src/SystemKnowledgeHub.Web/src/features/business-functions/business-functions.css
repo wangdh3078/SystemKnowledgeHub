@@ -170,11 +170,13 @@
   border-bottom: 1px solid var(--color-border-strong);
 }
 
-.business-function-detail-header__edit,
-.business-function-detail-header__editing {
+.business-function-detail-header__actions {
   position: absolute;
   top: 34px;
   right: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
 }
 
 .business-function-detail-header__editing,

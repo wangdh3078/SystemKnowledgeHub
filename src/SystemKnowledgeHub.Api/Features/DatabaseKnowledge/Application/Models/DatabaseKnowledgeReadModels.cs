@@ -2,7 +2,7 @@ namespace SystemKnowledgeHub.Api.Features.DatabaseKnowledge.Application.Models;
 
 public sealed record SystemContext(long Id, string Name);
 
-public sealed record DatabaseSourceContext(long Id, string Name, string Engine, string ConcurrencyToken);
+public sealed record DatabaseSourceContext(long Id, string Name, string Engine, string ConcurrencyToken, bool CanDelete);
 
 public sealed record DatabaseObjectListQuery(
     long? SystemId,
@@ -105,6 +105,7 @@ public sealed record DatabaseObjectDetailResponse(
     IReadOnlyList<DatabaseColumnSummary> Columns,
     DatabaseObjectContextRail ContextRail,
     SelectedColumnDrawer? SelectedColumnDrawer,
+    bool CanDelete,
     IReadOnlyList<string> AvailableActions);
 
 public sealed record ColumnParent(long DatabaseObjectId, string QualifiedName);
@@ -149,6 +150,7 @@ public sealed record DatabaseColumnDetailResponse(
     IReadOnlyList<ColumnEvidenceSummary> Evidence,
     IReadOnlyList<ColumnRelationSummary> Relations,
     IReadOnlyList<ColumnUnknownItemSummary> UnknownItems,
+    bool CanDelete,
     IReadOnlyList<string> AvailableActions);
 
 public sealed record DatabaseObjectDetailQueryResult(

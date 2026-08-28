@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import ErrorState from '../../../components/feedback/ErrorState.vue'
 import LoadingState from '../../../components/feedback/LoadingState.vue'
+import HistoricalTargetLabel from '../../../components/data-display/HistoricalTargetLabel.vue'
 import {
   getKnowledgeDocumentRevision,
   listKnowledgeDocumentRevisions,
@@ -12,6 +13,7 @@ import {
   type KnowledgeDocumentDetail,
   type KnowledgeDocumentRevisionDetail,
   type KnowledgeDocumentRevisionListItem,
+  type HistoricalTargetIdentity,
   type RevisionOrigin,
 } from '../api/knowledgeDocumentContracts'
 import KnowledgeDocumentMarkdown from '../markdown/KnowledgeDocumentMarkdown.vue'
@@ -20,7 +22,8 @@ import { useOverlayStore } from '../../../app/stores/overlays'
 import { formatDateTime } from '../../../app/formatters/dateTime'
 
 const props = defineProps<{
-  document: KnowledgeDocumentDetail
+  documentId: number
+  document: KnowledgeDocumentDetail | null
   canRestore: boolean
 }>()
 const emit = defineEmits<{ return: [] }>()
@@ -29,6 +32,7 @@ const overlayStore = useOverlayStore()
 const pageSize = 20
 const page = ref(1)
 const total = ref(0)
+const owner = ref<HistoricalTargetIdentity | null>(null)
 const items = ref<readonly KnowledgeDocumentRevisionListItem[]>([])
 const selectedRevisionNumber = ref<number | null>(null)
 const detail = ref<KnowledgeDocumentRevisionDetail | null>(null)
@@ -51,6 +55,8 @@ const originLabels: Readonly<Record<RevisionOrigin, string>> = {
 const restoreAvailable = computed(() =>
   Boolean(
     props.canRestore &&
+    props.document &&
+    !owner.value?.isDeleted &&
     props.document.lifecycleStatus === 'Draft' &&
     detail.value &&
     detail.value.revisionNumber < props.document.currentRevisionNumber,
@@ -59,11 +65,14 @@ const restoreAvailable = computed(() =>
 const restoreRequiresDraft = computed(() =>
   Boolean(
     props.canRestore &&
+    props.document &&
+    !owner.value?.isDeleted &&
     props.document.lifecycleStatus !== 'Draft' &&
     detail.value &&
     detail.value.revisionNumber < props.document.currentRevisionNumber,
   ),
 )
+const revisionCount = computed(() => props.document?.currentRevisionNumber ?? total.value)
 
 function isAbort(reason: unknown): boolean {
   return reason instanceof DOMException && reason.name === 'AbortError'
@@ -89,7 +98,7 @@ async function selectRevision(item: KnowledgeDocumentRevisionListItem): Promise<
   detail.value = null
   try {
     detail.value = await getKnowledgeDocumentRevision(
-      props.document.id,
+      props.documentId,
       item.revisionNumber,
       request.signal,
     )
@@ -118,7 +127,7 @@ async function loadList(preserveSelection = false): Promise<void> {
   }
   try {
     const response = await listKnowledgeDocumentRevisions(
-      props.document.id,
+      props.documentId,
       page.value,
       pageSize,
       request.signal,
@@ -126,6 +135,7 @@ async function loadList(preserveSelection = false): Promise<void> {
     if (listRequest !== request) return
     items.value = response.items
     total.value = response.total
+    owner.value = response.owner ?? owner.value
     if (!preserveSelection && response.items.length > 0) await selectRevision(response.items[0])
     if (response.items.length === 0) {
       detail.value = null
@@ -168,10 +178,10 @@ function returnToHistory(): void {
   compareMode.value = false
 }
 function openRestore(): void {
-  if (!detail.value || !restoreAvailable.value) return
+  if (!props.document || !detail.value || !restoreAvailable.value) return
   overlayStore.openDialog({
     kind: 'restore-knowledge-document-revision',
-    id: props.document.id,
+    id: props.documentId,
     mode: 'edit',
     payload: {
       document: props.document,
@@ -183,7 +193,7 @@ function handleHistoryRefresh(event: Event): void {
   if (!(event instanceof CustomEvent)) return
   const detailValue: unknown = event.detail
   if (typeof detailValue !== 'object' || detailValue === null) return
-  if (!('documentId' in detailValue) || detailValue.documentId !== props.document.id) return
+  if (!('documentId' in detailValue) || detailValue.documentId !== props.documentId) return
   void loadList(true)
 }
 
@@ -201,8 +211,8 @@ onBeforeUnmount(() => {
 <template>
   <RevisionCompareView
     v-if="compareMode && compareInitialRevisionNumber !== null"
-    :document-id="document.id"
-    :revision-count="document.currentRevisionNumber"
+    :document-id="documentId"
+    :revision-count="revisionCount"
     :initial-to-revision-number="compareInitialRevisionNumber"
     :initial-snapshot="compareInitialSnapshot"
     @return="returnToHistory"
@@ -210,14 +220,19 @@ onBeforeUnmount(() => {
   <section v-else class="knowledge-document-history" aria-labelledby="revision-history-heading">
     <header class="knowledge-document-history__header">
       <div>
-        <h2 id="revision-history-heading">修订历史（{{ document.currentRevisionNumber }}）</h2>
+        <h2 id="revision-history-heading">修订历史（{{ revisionCount }}）</h2>
+        <HistoricalTargetLabel
+          v-if="owner"
+          :identity="owner"
+          :to="{ name: 'knowledge-document-detail', params: { id: String(documentId) } }"
+        />
         <p>查看不可变的历史快照；生命周期表示该修订生成时的文档状态。</p>
       </div>
       <div class="knowledge-document-history__header-actions">
         <el-button :disabled="selectedRevisionNumber === null" type="primary" @click="enterCompare"
           >比较修订</el-button
         >
-        <el-button type="primary" plain @click="emit('return')">返回当前内容</el-button>
+        <el-button type="primary" plain @click="emit('return')">{{ owner?.isDeleted ? '返回知识内容列表' : '返回当前内容' }}</el-button>
       </div>
     </header>
 
@@ -230,7 +245,7 @@ onBeforeUnmount(() => {
     />
     <div v-else-if="items.length === 0" class="knowledge-document-history__empty" role="status">
       <strong>{{
-        document.currentRevisionNumber > 0 ? '无法加载修订历史' : '暂无修订历史'
+        revisionCount > 0 ? '无法加载修订历史' : '暂无修订历史'
       }}</strong>
       <p>未返回可显示的修订；当前内容不会被伪造为历史快照。</p>
       <el-button text type="primary" @click="loadList">重试</el-button>
@@ -297,6 +312,11 @@ onBeforeUnmount(() => {
           />
           <article v-else-if="detail" class="knowledge-document-history__detail">
             <header>
+              <HistoricalTargetLabel
+                v-if="detail.owner"
+                :identity="detail.owner"
+                :to="{ name: 'knowledge-document-detail', params: { id: String(documentId) } }"
+              />
               <div class="knowledge-document-history__detail-kicker">
                 <span>修订 {{ detail.revisionNumber }}</span>
                 <span>{{ originLabels[detail.revisionOrigin] }}</span>

@@ -159,6 +159,7 @@ export interface SystemDetailResponse {
   readonly integrations: readonly SystemIntegrationSummary[]
   readonly unknownItems: readonly SystemUnknownItemSummary[]
   readonly contextRail: SystemContextRail
+  readonly canDelete: boolean
   readonly availableActions: readonly string[]
 }
 
@@ -226,6 +227,11 @@ function readObject(value: unknown, field: string): JsonObject {
 
 function readString(value: unknown, field: string): string {
   if (typeof value !== 'string') throw new Error(`${field} must be a string`)
+  return value
+}
+
+function readBoolean(value: unknown, field: string): boolean {
+  if (typeof value !== 'boolean') throw new TypeError(`${field} 必须是布尔值。`)
   return value
 }
 
@@ -448,6 +454,7 @@ export function decodeSystemDetail(value: unknown): SystemDetailResponse {
       ),
       knowledgeGaps: readStringArray(contextRail.knowledgeGaps, 'contextRail.knowledgeGaps'),
     },
+    canDelete: readBoolean(root.canDelete, 'canDelete'),
     availableActions: readStringArray(root.availableActions, 'availableActions'),
   }
 }

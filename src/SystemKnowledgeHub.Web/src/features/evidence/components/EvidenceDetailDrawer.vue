@@ -9,6 +9,7 @@ import { formatDateTime } from '../../../app/formatters/dateTime'
 import KnowledgeStatusBadge from '../../../components/data-display/KnowledgeStatusBadge.vue'
 import ErrorState from '../../../components/feedback/ErrorState.vue'
 import LoadingState from '../../../components/feedback/LoadingState.vue'
+import HistoricalTargetLabel from '../../../components/data-display/HistoricalTargetLabel.vue'
 import { getEvidenceDetail, updateEvidence } from '../api/evidenceApi'
 import {
   confirmationMethodLabels,
@@ -51,6 +52,7 @@ const codeLocatorRows = computed(() => {
     return typeof value === 'string' || typeof value === 'number' ? [[label, String(value)] as const] : []
   })
 })
+const subjectDeleted = computed(() => detail.value?.subjectIdentity?.isDeleted === true)
 
 function normalize(value: string): string | null {
   const result = value.trim()
@@ -184,13 +186,13 @@ onMounted(() => void load())
       </header>
 
       <section class="evidence-subject-card">
-        <div><small>支持对象</small><strong class="technical-text">{{ detail.subjectContext?.title ?? detail.subjectIdentity?.displayName ?? `${detail.subject.type} #${detail.subject.id}` }}</strong><em v-if="detail.subjectDetailKey" class="technical-text">{{ detail.subjectDetailKey }}</em></div>
+        <div><small>支持对象</small><HistoricalTargetLabel v-if="detail.subjectIdentity" :identity="detail.subjectIdentity" /><strong v-else class="technical-text">{{ detail.subjectContext?.title ?? `${detail.subject.type} #${detail.subject.id}` }}</strong><em v-if="detail.subjectDetailKey" class="technical-text">{{ detail.subjectDetailKey }}</em></div>
         <KnowledgeStatusBadge v-if="detail.subjectContext" :status="detail.subjectContext.knowledgeStatus" />
       </section>
 
       <template v-if="!editing">
         <section class="evidence-detail-section">
-          <div class="evidence-detail-section__heading"><h3>来源</h3><el-button v-if="detail.availableActions.includes('UpdateEvidence')" text type="primary" :icon="EditPen" @click="beginEdit">纠正记录</el-button></div>
+          <div class="evidence-detail-section__heading"><h3>来源</h3><el-button v-if="!subjectDeleted && detail.availableActions.includes('UpdateEvidence')" text type="primary" :icon="EditPen" @click="beginEdit">纠正记录</el-button></div>
           <dl class="evidence-facts">
             <div><dt>来源标题</dt><dd>{{ detail.sourceTitle }}</dd></div>
             <div><dt>来源引用</dt><dd class="technical-text">{{ detail.sourceReference ?? '—' }}</dd></div>
@@ -250,7 +252,7 @@ onMounted(() => void load())
       <div v-if="errorMessage && !editing" class="evidence-drawer__error"><span>{{ errorMessage }}</span><el-button v-if="conflict" text type="primary" :icon="Refresh" @click="load">重新加载</el-button></div>
       <footer class="evidence-drawer__footer">
         <template v-if="editing"><el-button @click="editing = false">取消</el-button><el-button type="primary" :loading="saving" @click="save">保存纠正</el-button></template>
-        <template v-else><el-button @click="overlayStore.closeDrawer()">关闭</el-button><el-button v-if="detail.evidenceType !== 'HumanConfirmation'" type="primary" plain :icon="UserFilled" @click="openHumanConfirmation">添加人工确认</el-button></template>
+        <template v-else><el-button @click="overlayStore.closeDrawer()">关闭</el-button><el-button v-if="!subjectDeleted && detail.evidenceType !== 'HumanConfirmation'" type="primary" plain :icon="UserFilled" @click="openHumanConfirmation">添加人工确认</el-button></template>
       </footer>
     </template>
   </div>
