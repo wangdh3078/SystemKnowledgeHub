@@ -77,6 +77,14 @@ if (local.Lockout.MaxFailedAttempts <= 0 || local.Lockout.WindowMinutes <= 0 || 
     return;
 }
 
+var dataProtectionApplicationName = builder.Configuration["DataProtection:ApplicationName"];
+if (requiresProductionConfiguration && string.IsNullOrWhiteSpace(dataProtectionApplicationName))
+{
+    ReportStartupConfigurationFailure(
+        builder.Environment,
+        "Production Data Protection requires DataProtection:ApplicationName.");
+    return;
+}
 var dataProtectionKeyPath = builder.Configuration["DataProtection:KeyPath"];
 if (requiresProductionConfiguration && string.IsNullOrWhiteSpace(dataProtectionKeyPath))
 {
@@ -85,9 +93,32 @@ if (requiresProductionConfiguration && string.IsNullOrWhiteSpace(dataProtectionK
         "Production Data Protection requires DataProtection:KeyPath.");
     return;
 }
+if (requiresProductionConfiguration && !Path.IsPathRooted(dataProtectionKeyPath))
+{
+    ReportStartupConfigurationFailure(
+        builder.Environment,
+        "Production DataProtection:KeyPath must be an absolute persistent path outside the application deployment directory.");
+    return;
+}
+if (requiresProductionConfiguration
+    && IsPathWithinDirectory(dataProtectionKeyPath!, builder.Environment.ContentRootPath))
+{
+    ReportStartupConfigurationFailure(
+        builder.Environment,
+        "Production DataProtection:KeyPath must be outside the application deployment directory.");
+    return;
+}
+var productionConnectionStringError = requiresProductionConfiguration
+    ? DbContextConfiguration.GetProductionConfigurationError(builder.Configuration)
+    : null;
+if (productionConnectionStringError is not null)
+{
+    ReportStartupConfigurationFailure(builder.Environment, productionConnectionStringError);
+    return;
+}
 
 var dataProtection = builder.Services.AddDataProtection()
-    .SetApplicationName(builder.Configuration["DataProtection:ApplicationName"] ?? "SystemKnowledgeHub");
+    .SetApplicationName(dataProtectionApplicationName ?? "SystemKnowledgeHub");
 if (!string.IsNullOrWhiteSpace(dataProtectionKeyPath))
 {
     dataProtection.PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeyPath));
@@ -421,6 +452,17 @@ static void ReportStartupConfigurationFailure(
         $"请通过 appsettings.{environment.EnvironmentName}.json、环境变量或命令行显式修正配置；" +
         "直接启动 SystemKnowledgeHub.Api.exe 不会应用 Properties/launchSettings.json。");
     Environment.ExitCode = 1;
+}
+
+static bool IsPathWithinDirectory(string path, string directory)
+{
+    var relativePath = Path.GetRelativePath(
+        Path.GetFullPath(directory),
+        Path.GetFullPath(path));
+    return !Path.IsPathRooted(relativePath)
+        && (relativePath == "."
+        || (!relativePath.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+            && relativePath != ".."));
 }
 
 static Task WriteApiAuthenticationErrorAsync(

@@ -8,6 +8,39 @@ namespace SystemKnowledgeHub.Api.Persistence;
 
 public static class DbContextConfiguration
 {
+    public static string? GetProductionConfigurationError(IConfiguration configuration)
+    {
+        var configuredConnectionString = configuration.GetConnectionString("KnowledgeHub");
+        if (string.IsNullOrWhiteSpace(configuredConnectionString))
+        {
+            return "Production requires ConnectionStrings:KnowledgeHub.";
+        }
+
+        SqliteConnectionStringBuilder builder;
+        try
+        {
+            builder = new SqliteConnectionStringBuilder(configuredConnectionString);
+        }
+        catch (ArgumentException)
+        {
+            return "Production ConnectionStrings:KnowledgeHub must be a valid SQLite connection string.";
+        }
+
+        if (string.IsNullOrWhiteSpace(builder.DataSource))
+        {
+            return "Production ConnectionStrings:KnowledgeHub must define a SQLite Data Source.";
+        }
+
+        if (builder.DataSource is ":memory:"
+            || builder.DataSource.StartsWith("file:", StringComparison.OrdinalIgnoreCase)
+            || !Path.IsPathRooted(builder.DataSource))
+        {
+            return "Production ConnectionStrings:KnowledgeHub must use an absolute persistent SQLite Data Source path.";
+        }
+
+        return null;
+    }
+
     public static IServiceCollection AddKnowledgeHubPersistence(
         this IServiceCollection services,
         IConfiguration configuration,

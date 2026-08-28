@@ -1,183 +1,278 @@
-# AGENTS.md — System Knowledge Hub
+# AGENTS.md --- System Knowledge Hub
 
 ## 1. Purpose
+
 This repository implements **系统知识中心 / System Knowledge Hub**.
 
-This file contains only mandatory agent workflow and guardrails. Detailed product, domain, API, database, UI, and solution rules belong to the frozen specifications under `docs/specifications/`.
+This file contains repository-wide mandatory agent workflow and
+guardrails. Product, domain, API, database, UI, security, and solution
+details belong to the applicable frozen specifications and task
+documents under `docs/`.
 
 ## 2. Source of Truth
-Before changing repository content, identify the current task / Vertical Slice and read only the sources relevant to that change.
 
-Frozen sources, when applicable:
-1. `docs/specifications/System_Knowledge_Hub_MVP_Final_UI_Inventory.md`
-2. `docs/specifications/System_Knowledge_Hub_MVP_Design_Baseline.md`
-3. `docs/specifications/System_Knowledge_Hub_MVP_Domain_Model.md`
-4. `docs/specifications/System_Knowledge_Hub_MVP_Database_Model.md`
-5. `docs/specifications/System_Knowledge_Hub_MVP_Application_Use_Case_Model.md`
-6. `docs/specifications/System_Knowledge_Hub_MVP_API_Contract.md`
-7. `docs/specifications/System_Knowledge_Hub_MVP_Solution_Structure.md`
-8. Current Vertical Slice / task specification
+Before changing repository content:
 
-Also read `docs/DOCUMENT_INDEX.md` and the existing implementation documentation for the changed area when present.
+1.  Identify the current task / Vertical Slice.
+2.  Read only the frozen specifications and implementation documents
+    relevant to that task.
+3.  Read `docs/DOCUMENT_INDEX.md` when documentation is involved.
+4.  Prefer the latest explicitly frozen/confirmed source.
+5.  Never invent requirements to resolve a material conflict.
+6.  Never modify frozen specifications, Golden UI assets, or frozen task
+    definitions merely to make implementation easier.
+7.  If a requested change materially conflicts with a frozen source,
+    stop only the conflicting work and record the conflict.
 
-Rules:
-- Prefer the latest explicitly frozen/confirmed source.
-- Never invent requirements to resolve a material conflict.
-- Record material conflicts in the task/verification report and stop only the conflicting work.
-- Never modify frozen specifications, Golden UI assets, or frozen task definitions merely to make implementation easier.
+Core frozen sources, when applicable:
 
-## 3. Product and Technical Boundaries
+-   `docs/specifications/System_Knowledge_Hub_MVP_Final_UI_Inventory.md`
+-   `docs/specifications/System_Knowledge_Hub_MVP_Design_Baseline.md`
+-   `docs/specifications/System_Knowledge_Hub_MVP_Domain_Model.md`
+-   `docs/specifications/System_Knowledge_Hub_MVP_Database_Model.md`
+-   `docs/specifications/System_Knowledge_Hub_MVP_Application_Use_Case_Model.md`
+-   `docs/specifications/System_Knowledge_Hub_MVP_API_Contract.md`
+-   `docs/specifications/System_Knowledge_Hub_MVP_Solution_Structure.md`
+-   Current task / Vertical Slice specification
+
+## 3. Product and Architecture Boundaries
+
 Formal product name:
-- Chinese: **系统知识中心**
-- English: **System Knowledge Hub**
 
-Formal UI text is Simplified Chinese. Technical identifiers and frozen API wire values remain unchanged.
+-   Chinese: **系统知识中心**
+-   English: **System Knowledge Hub**
+
+Formal UI text is Simplified Chinese. Technical identifiers and frozen
+API wire values remain unchanged.
 
 MVP stack:
-- Backend: .NET 8, ASP.NET Core Controllers, EF Core, SQLite.
-- Frontend: Vue 3, strict TypeScript, Element Plus.
-- Architecture: feature-first, direct `DbContext`, explicit use cases, typed frontend API boundaries.
 
-Unless a frozen specification explicitly changes the architecture, do not introduce Generic Repository/UnitOfWork, CQRS/MediatR, Command/Query buses, AutoMapper/Mapster, FluentValidation framework, Dapper, generic CRUD/detail/table/drawer frameworks, BaseController/BaseService hierarchies, event-bus frameworks, Axios, a second data-grid library, placeholder layers, or speculative abstractions.
+-   Backend: .NET 8, ASP.NET Core Controllers, EF Core, SQLite
+-   Frontend: Vue 3, strict TypeScript, Element Plus
+-   Architecture: feature-first, direct `DbContext`, explicit use cases,
+    typed frontend API boundaries
 
-Do not replace established project libraries/patterns without a current requirement.
+Unless a frozen specification explicitly requires it, do not introduce
+or replace established patterns with:
 
-## 4. Mandatory Task Lifecycle
-For every repository-changing task:
+-   Generic Repository / UnitOfWork
+-   CQRS / MediatR / Command or Query buses
+-   AutoMapper / Mapster
+-   FluentValidation framework
+-   Dapper
+-   generic CRUD/detail/table/drawer frameworks
+-   BaseController / BaseService hierarchies
+-   event-bus frameworks
+-   Axios
+-   a second data-grid library
+-   placeholder layers or speculative abstractions
 
-1. Identify the current task / Vertical Slice.
-2. Read relevant frozen sources, documentation index, and adjacent implementation/documentation.
-3. Determine and implement the smallest coherent change.
-4. Synchronize the corresponding non-frozen documentation.
-5. Update `docs/DOCUMENT_INDEX.md` when documentation inventory/location/purpose/status changes.
-6. Run only verification applicable to the change.
-7. **Immediately after each verification cycle, stop every verification-only process/thread started by the agent and release its verification ports when practical.**
-8. If verification fails, fix the issue, resynchronize affected documentation, and repeat verification/cleanup.
-9. When verification passes, update the required verification report.
-10. Review `git status` / relevant `git diff`, then stage only current-task files.
-11. Create one task-specific local commit.
-12. Attempt to push the current branch to the configured GitHub remote.
-13. Report verification, cleanup, documentation, branch, commit SHA, and push result.
-14. Stop. Do not begin the next slice automatically.
+Reuse established project conventions. Do not replace project libraries
+or architecture without a current requirement.
 
-## 5. Scope and Implementation Discipline
-Use the **smallest implementation that satisfies the frozen requirement and current Vertical Slice**.
+## 4. Scope Discipline
 
-- YAGNI: do not build for hypothetical future needs.
-- Do not implement adjacent features/workflows unless requested.
-- Do not refactor unrelated working code for style or architectural purity.
-- Reuse existing project conventions before creating a new pattern.
-- Prefer concrete local code until real reuse is proven.
-- Do not create boilerplate merely to look “enterprise”.
-- Do not rename frozen business concepts.
-- Do not silently broaden scope.
-- Do not derive schema, routes, workflows, or UI behavior from screenshots when a frozen source exists.
+Implement the **smallest coherent change** that satisfies the current
+requirement.
 
-Application-specific behavior must follow the relevant frozen specification rather than duplicated summaries in this file.
+-   Follow YAGNI.
+-   Do not implement adjacent features unless requested.
+-   Do not silently broaden scope.
+-   Do not refactor unrelated working code for style or architectural
+    purity.
+-   Prefer concrete local code until real reuse is proven.
+-   Do not create boilerplate merely to look "enterprise".
+-   Do not rename frozen business concepts.
+-   Do not derive schema, routes, workflows, or UI behavior from
+    screenshots when a frozen source exists.
+-   Do not perform unrelated package upgrades, schema changes, cleanup,
+    or infrastructure changes.
+-   After completing the requested task, stop. Do not automatically
+    begin the next task.
 
-## 6. Documentation Synchronization — Mandatory
-Repository changes and maintainable documentation must stay synchronized in the **same task and same commit**.
+## 5. Security, Secrets, and Runtime Safety
 
-When code, configuration, schema/migrations, API behavior, UI behavior/layout, workflow, tests, development behavior, or repository structure changes:
-- update the closest existing non-frozen document that owns the subject;
-- describe the final verified state, not an intermediate attempt;
-- keep documentation changes focused;
-- do not create duplicate documents when an existing document already owns the topic.
+These rules apply to every task:
 
-If the corresponding source is frozen, do not edit it merely to match implementation. Update/create the appropriate non-frozen implementation/task/verification document that references the frozen source. If the requested change truly conflicts with a frozen requirement, report the conflict.
+-   Preserve existing fail-closed security boundaries unless an approved
+    specification explicitly changes them.
+-   Never weaken authentication/authorization merely to make a test or
+    startup succeed.
+-   Never commit passwords, tokens, client secrets, credentials, private
+    environment values, Data Protection key material, or other secrets.
+-   Use placeholders in documentation/examples for secret values.
+-   Do not silently change Production into Development or enable unsafe
+    Production defaults.
+-   Known configuration failures may be handled with actionable
+    diagnostics, but unexpected runtime failures must not be silently
+    swallowed.
 
-### Documentation index
-Maintain:
+## 6. Database and Persistent Data Safety
 
-`docs/DOCUMENT_INDEX.md`
+Repository-owned or user-owned runtime data must be treated as protected
+state.
 
-If it does not exist when documentation work is required, create it.
+Unless the current task explicitly requires a real data
+migration/change:
 
-For each maintained project document, record at least:
-- **Path** — exact repository-relative path
-- **Role / Purpose** — what the file defines, records, verifies, or guides
-- **Status / Authority** — Frozen Source, Task Spec, Implementation Note, Verification Report, Guide, etc.
-- **Related Area** — feature, Vertical Slice, architecture/workflow concern
-- **Update Trigger** — what kind of change requires review/update
+-   Do not use the repository's real SQLite database for tests or
+    verification.
+-   Do not delete, rebuild, seed, migrate, checkpoint, or otherwise
+    mutate the real database as a side effect of verification.
+-   Do not delete or alter user-owned `*.db-wal` or `*.db-shm` files.
+-   Use task-owned temporary databases for tests/runtime verification.
+-   Use task-owned temporary Data Protection directories and other
+    runtime state when practical.
+-   Never commit generated runtime databases, WAL/SHM files, Data
+    Protection keys, logs, or temporary verification artifacts.
 
-Update the index in the same task when a document is created, renamed, moved, deleted, superseded, or changes purpose/status. The index is navigation metadata; do not duplicate full document contents inside it.
+For tasks that can affect persistence, migrations, startup data
+handling, or database paths:
 
-## 7. Verification — Minimal and Risk-Based
-Verification proves the **current change works**; it is not a coverage-maximization exercise.
+1.  Record the relevant database/WAL/SHM baseline before verification
+    when practical.
+2.  Verify the repository/user database remained unchanged unless the
+    task explicitly required a change.
+3.  Report any unexpected persistent-data modification immediately.
 
-Default checks when relevant:
+## 7. Documentation Synchronization
+
+Code/configuration and maintainable non-frozen documentation must remain
+synchronized in the same task when the change affects documented
+behavior.
+
+-   Update the closest existing non-frozen document that owns the
+    subject.
+-   Describe the final verified state, not intermediate attempts.
+-   Keep documentation changes focused.
+-   Do not create duplicate documents when an existing document owns the
+    topic.
+-   Do not edit frozen sources merely to match implementation.
+-   Update `docs/DOCUMENT_INDEX.md` when a document is created, renamed,
+    moved, deleted, superseded, or changes purpose/status.
+
+The document index is navigation metadata. Do not duplicate full
+document contents inside it.
+
+## 8. Verification --- Minimal and Risk-Based
+
+Verification must be proportional to the current change. Do not run
+broad checks merely for ceremony.
+
+Typical checks when relevant:
 
 Backend:
-```bash
+
+``` bash
 dotnet build
 ```
-Run focused `dotnet test` only when affected tests exist or meaningful business/persistence behavior justifies it. Prefer a small number of high-value tests and real SQLite for relational behavior.
+
+Run focused `dotnet test` when affected tests exist or meaningful
+business/persistence behavior requires it.
 
 Frontend:
-```bash
+
+``` bash
 npm run type-check
 npm run build
 ```
-Run lint/tests only when relevant. Simple UI/copy/layout/style/type-only changes may require zero new automated tests.
 
-For an end-to-end UI/API slice, perform one focused runtime check of the changed path when practical. Do not exhaustively test unrelated screens.
+Run lint/tests only when relevant. Simple UI/copy/layout/style/type-only
+changes do not automatically require new tests.
 
-### Verification cleanup — mandatory after every cycle
-Stop any process/thread started only for verification immediately when that verification cycle ends, including `dotnet run`, ASP.NET Core dev servers, `npm run dev`, Vite, test/watch processes, temporary servers, and background verification scripts.
+For an end-to-end UI/API slice, perform one focused runtime check of the
+changed path when practical.
 
-- Prefer one-shot, non-watch commands.
-- Track agent-started verification processes and stop only those processes.
-- Do not kill pre-existing/user-started development processes.
-- Confirm agent-used verification ports are released when practical.
-- Never leave API/Web development ports occupied by an agent-started verification process.
-- If cleanup cannot be completed safely, report it explicitly.
+If the repository documents an approved workaround/gate for a known test
+infrastructure issue, use that approved gate rather than inventing a new
+workaround.
 
-A verification cycle is not finished while its verification-only processes are still running.
+### Verification cleanup
 
-## 8. Verification Reports
-Verification reports describe implementation/verification results, applicable checks, deviations, and limitations.
+After every verification cycle:
 
-Never report `PASS` when an applicable required implementation/verification check failed or was skipped.
+-   Stop only verification processes/threads started by the agent.
+-   Release agent-used verification ports when practical.
+-   Prefer one-shot, non-watch commands.
+-   Do not kill pre-existing/user-started development processes.
+-   Do not leave `dotnet run`, Vite, test/watch processes, temporary
+    servers, or verification scripts running.
+-   If cleanup cannot be completed safely, report it.
 
-GitHub delivery status is separate:
-- GitHub push failure does **not** change an otherwise valid verification `PASS`.
-- Do not mark the report incomplete/failed solely because authentication, permission, branch protection, remote configuration, or network conditions prevented push.
-- Report push failures to the user in the final task status instead.
+## 9. Verification Reports and Gaps
 
-## 9. Git and GitHub — Mandatory
-After successful verification and cleanup:
-- review `git status --short` and relevant diffs;
-- stage only files belonging to the current task;
-- keep implementation and corresponding documentation in the same task-specific commit;
-- use a concise commit message;
-- attempt to push the current branch to the configured GitHub remote;
-- report branch name, commit SHA, and push result.
+When the current task requires a verification report:
 
-Git safety:
-- Do not blindly use `git add .` when unrelated changes may exist.
-- Do not discard/reset/stash/rewrite unrelated user changes.
-- Do not use `git reset --hard`, destructive checkout/restore, force push, history rewrite, rebase, or amend unless explicitly requested.
-- Do not change branches merely to make pushing easier unless the task requires it.
-- Never commit secrets, credentials, tokens, private environment data, generated runtime databases, or temporary verification artifacts.
-- Do not create a success commit when required verification failed.
+-   Record the actual implementation and verification result.
+-   Never report `PASS` when an applicable required check failed or was
+    skipped.
+-   Clearly distinguish implementation/test status from delivery/push
+    status.
+-   Record limitations honestly.
+-   Do not claim a local smoke test proves a real Production deployment.
+-   Reuse existing Gap IDs for known issues; do not create duplicate
+    gaps.
+-   New out-of-scope issues should be recorded through the repository's
+    existing Gap mechanism rather than fixed opportunistically.
 
-If push fails, keep the verified local commit when safe and report the exact blocker, branch, and local commit SHA. **Do not rewrite an otherwise PASS verification report as failed/incomplete solely because push failed.**
+## 10. Git and GitHub Safety
 
-## 10. Completion Standard
-Repository-changing work is complete only when all applicable items are satisfied:
-- frozen requirements/contracts respected;
-- intended change complete;
-- corresponding non-frozen documentation synchronized;
-- `docs/DOCUMENT_INDEX.md` updated when required;
-- risk-based verification passed;
-- every verification cycle cleaned up agent-started verification processes/threads;
-- verification ports released when practical;
-- required verification report updated;
-- final diff reviewed for task scope;
-- task-specific local commit created with implementation + documentation;
-- GitHub push attempted;
-- branch, commit SHA, and push result reported.
+Before delivery, review `git status --short` and relevant diffs.
 
-A GitHub push failure is a separately reported delivery issue and does not invalidate an otherwise successful implementation/verification result.
+-   Stage only current-task files.
+-   Do not blindly use `git add .` when unrelated changes may exist.
+-   Do not discard, reset, stash, rewrite, or overwrite unrelated user
+    changes.
+-   Do not use `git reset --hard`, destructive checkout/restore, force
+    push, history rewrite, rebase, or amend unless explicitly requested.
+-   Do not change branches merely to make delivery easier.
+-   Do not create a success commit when required verification failed.
 
-After completing the requested task, **stop**. Do not start the next Vertical Slice or unrelated cleanup automatically.
+For repository-changing implementation tasks, unless the current task
+explicitly says otherwise:
+
+1.  Keep implementation and corresponding documentation in one
+    task-specific local commit.
+2.  Use a concise commit message.
+3.  Attempt to push the current branch to the configured GitHub remote.
+4.  Report branch, commit SHA, and push result.
+
+A push failure is a delivery issue and does not invalidate an otherwise
+valid implementation/verification `PASS`.
+
+## 11. Standard Task Lifecycle
+
+For a repository-changing task:
+
+1.  Identify task scope.
+2.  Read applicable sources.
+3.  Inspect the current implementation before editing.
+4.  Implement the smallest coherent change.
+5.  Synchronize affected non-frozen documentation.
+6.  Run applicable risk-based verification.
+7.  Clean up verification-only processes/resources.
+8.  Fix and reverify if necessary.
+9.  Update the required verification report/index when applicable.
+10. Review final diff and persistent-data safety.
+11. Commit/push according to Section 10 unless the task says otherwise.
+12. Report result, verification, cleanup, documentation, gaps,
+    branch/commit/push status.
+13. Stop.
+
+## 12. Completion Standard
+
+A task is complete only when all **applicable** items are satisfied:
+
+-   frozen requirements/contracts respected;
+-   requested change completed without scope creep;
+-   security and persistent-data safety preserved;
+-   corresponding non-frozen documentation synchronized;
+-   applicable verification passed;
+-   verification-only processes/resources cleaned up;
+-   required verification report/index updated;
+-   final diff reviewed;
+-   no undisclosed new gap or limitation remains;
+-   Git delivery performed when required by Section 10.
+
+Do not turn non-applicable checklist items into mandatory work. The
+current task should remain focused on the requested change.
