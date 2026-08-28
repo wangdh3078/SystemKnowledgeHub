@@ -6,14 +6,14 @@
 
 .evidence-drawer__header {
   position: relative;
-  padding: 24px 26px 20px 64px;
+  padding: 24px 64px 20px 26px;
   border-bottom: 1px solid var(--color-border-strong);
 }
 
 .evidence-drawer__header > .el-button {
   position: absolute;
   top: 19px;
-  left: 18px;
+  right: 18px;
 }
 
 .evidence-drawer__header > span {
@@ -141,6 +141,14 @@
 .evidence-form .technical-input input,
 .evidence-locator {
   font-family: var(--font-mono);
+}
+
+.evidence-form__help {
+  width: 100%;
+  margin: 5px 0 0;
+  color: var(--color-muted);
+  font-size: 9px;
+  line-height: 1.45;
 }
 
 .evidence-locator-facts {
@@ -475,7 +483,8 @@
 
 @media (max-width: 1440px) {
   .evidence-drawer__header {
-    padding-right: 20px;
+    padding-right: 58px;
+    padding-left: 20px;
   }
 
   .evidence-subject-card,

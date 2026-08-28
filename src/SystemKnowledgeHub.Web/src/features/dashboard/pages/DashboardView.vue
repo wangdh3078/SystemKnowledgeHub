@@ -19,13 +19,13 @@ const navigationError = ref<string | null>(null)
 const overviewItems = computed(() => {
   if (!data.value) return []
   return [
-    { key: 'systems', label: '系统', value: data.value.knowledgeOverview.systems },
-    { key: 'business-functions', label: '业务功能', value: data.value.knowledgeOverview.businessFunctions },
-    { key: 'database-objects', label: '表 / 视图', value: data.value.knowledgeOverview.databaseObjects },
-    { key: 'columns', label: '字段', value: data.value.knowledgeOverview.columns },
-    { key: 'integrations', label: '集成关系', value: data.value.knowledgeOverview.integrations },
-    { key: 'business-rules', label: '业务规则', value: data.value.knowledgeOverview.businessRules },
-    { key: 'unknown-items', label: '待确认事项', value: data.value.knowledgeOverview.unknownItems },
+    { key: 'systems', label: '系统', value: data.value.knowledgeOverview.systems, routeName: 'systems-list' },
+    { key: 'business-functions', label: '业务功能', value: data.value.knowledgeOverview.businessFunctions, routeName: 'business-functions-list' },
+    { key: 'database-objects', label: '表 / 视图', value: data.value.knowledgeOverview.databaseObjects, routeName: 'database-objects-list' },
+    { key: 'columns', label: '字段', value: data.value.knowledgeOverview.columns, routeName: 'database-objects-list' },
+    { key: 'integrations', label: '集成关系', value: data.value.knowledgeOverview.integrations, routeName: null },
+    { key: 'business-rules', label: '业务规则', value: data.value.knowledgeOverview.businessRules, routeName: null },
+    { key: 'unknown-items', label: '待确认事项', value: data.value.knowledgeOverview.unknownItems, routeName: 'unknown-items-list' },
   ] as const
 })
 
@@ -53,32 +53,12 @@ function objectTypeLabel(value: DashboardObjectType): string {
   } as const)[value]
 }
 
-function openSearch(): void {
-  overlays.openDialog({ kind: 'global-search', id: null, mode: 'read' })
-}
-
 function openCreate(): void {
   overlays.openDialog({ kind: 'create-knowledge-object', id: null, mode: 'create' })
 }
 
-function openOverview(key: (typeof overviewItems.value)[number]['key']): void {
-  if (key === 'systems') {
-    void router.push({ name: 'systems-list' })
-    return
-  }
-  if (key === 'business-functions') {
-    void router.push({ name: 'business-functions-list' })
-    return
-  }
-  if (key === 'database-objects' || key === 'columns') {
-    void router.push({ name: 'database-objects-list' })
-    return
-  }
-  if (key === 'unknown-items') {
-    void router.push({ name: 'unknown-items-list' })
-    return
-  }
-  openSearch()
+function openOverview(item: (typeof overviewItems.value)[number]): void {
+  if (item.routeName !== null) void router.push({ name: item.routeName })
 }
 
 function navigateAttention(item: DashboardNeedsAttention): void {
@@ -166,17 +146,29 @@ onMounted(() => void load())
         <section class="dashboard-section dashboard-section--overview" aria-labelledby="dashboard-overview-title">
           <h2 id="dashboard-overview-title">知识总览</h2>
           <div class="dashboard-overview-grid">
-            <button
+            <template
               v-for="item in overviewItems"
               :key="item.key"
-              class="dashboard-overview-item"
-              type="button"
-              :title="item.key === 'integrations' || item.key === 'business-rules' ? '通过全局搜索继续浏览' : `浏览${item.label}`"
-              @click="openOverview(item.key)"
             >
-              <span>{{ item.label }}</span>
-              <strong>{{ item.value.toLocaleString('zh-CN') }}</strong>
-            </button>
+              <button
+                v-if="item.routeName !== null"
+                class="dashboard-overview-item"
+                type="button"
+                :title="`浏览${item.label}`"
+                @click="openOverview(item)"
+              >
+                <span>{{ item.label }}</span>
+                <strong>{{ item.value.toLocaleString('zh-CN') }}</strong>
+              </button>
+              <div
+                v-else
+                class="dashboard-overview-item dashboard-overview-item--static"
+                :title="`${item.label}暂无独立列表页，请从相关对象详情浏览`"
+              >
+                <span>{{ item.label }}</span>
+                <strong>{{ item.value.toLocaleString('zh-CN') }}</strong>
+              </div>
+            </template>
           </div>
         </section>
 

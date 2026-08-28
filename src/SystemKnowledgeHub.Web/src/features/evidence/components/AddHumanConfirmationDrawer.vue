@@ -255,15 +255,17 @@ onMounted(() => void actorStore.initialize())
             </el-form-item>
             <el-form-item label="确认时间" prop="confirmedAt" :error="fieldErrors.confirmedAt" required>
               <el-date-picker v-model="form.confirmedAt" type="datetime" value-format="YYYY-MM-DD HH:mm:ss" format="YYYY-MM-DD HH:mm:ss" placeholder="选择本地确认时间" @change="clearFieldError('confirmedAt')" />
+              <p class="evidence-form__help">已按打开表单时的本地时间预填；仅在确认事实发生于其他时间时修改。</p>
             </el-form-item>
           </div>
           <el-form-item label="确认结论" prop="confirmationStatement" :error="fieldErrors.confirmationStatement" required>
             <el-input v-model="form.confirmationStatement" type="textarea" :rows="4" placeholder="准确记录专家确认的知识内容" @input="clearFieldError('confirmationStatement')" />
           </el-form-item>
-          <el-form-item label="为什么支持当前知识" prop="supportReason" :error="fieldErrors.supportReason" required>
-            <el-input v-model="form.supportReason" type="textarea" :rows="3" placeholder="说明当前操作者的知识身份和上下文为什么足以支持这条知识" @input="clearFieldError('supportReason')" />
+          <el-form-item label="本次确认依据" prop="supportReason" :error="fieldErrors.supportReason" required>
+            <el-input v-model="form.supportReason" type="textarea" :rows="3" placeholder="简要说明本次人工判断的依据，无需抄写已有 Evidence 内容" @input="clearFieldError('supportReason')" />
+            <p class="evidence-form__help">当前冻结 C25 Contract 要求保留非空确认依据；这里只记录本次判断依据，不重复录入系统已知的确认人资料。</p>
           </el-form-item>
-          <el-form-item label="来源说明"><el-input v-model="form.sourceNote" placeholder="例如 现场评审会议" /></el-form-item>
+          <el-form-item label="来源说明（可选）"><el-input v-model="form.sourceNote" placeholder="例如 现场评审会议" /></el-form-item>
         </section>
       </el-form>
 

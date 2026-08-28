@@ -30,4 +30,18 @@ describe('CreateKnowledgeObjectChooser', () => {
 
     expect(wrapper.get('button[title="请从对应知识对象进入知识内容维护"]').attributes('disabled')).toBeDefined()
   })
+
+  it('does not present contextual Evidence or UnknownItem creation in the global chooser', () => {
+    const wrapper = mount(CreateKnowledgeObjectChooser, {
+      props: {
+        enabledKinds: ['system', 'business-function', 'database-knowledge', 'business-rule', 'integration', 'knowledge-document'],
+      },
+      global: { stubs: { ElIcon: { template: '<span><slot /></span>' } } },
+    })
+
+    const choices = wrapper.findAll('.create-object-choice')
+    expect(choices.map(choice => choice.get('strong').text())).not.toContain('待确认事项')
+    expect(choices.map(choice => choice.get('strong').text())).not.toContain('证据')
+    expect(choices).toHaveLength(6)
+  })
 })

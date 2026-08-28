@@ -97,4 +97,25 @@ describe('AppTopBar logout confirmation', () => {
     expect(logout).toHaveBeenCalledOnce()
     expect(useActorStore().authStatus).toBe('unauthenticated')
   })
+
+  it('toggles the lightweight profile popover and closes it on outside pointer or Escape', async () => {
+    const wrapper = await mountTopBar()
+    const trigger = wrapper.get('.app-topbar__profile')
+
+    await trigger.trigger('click')
+    expect(wrapper.find('.app-topbar__current-user-panel').exists()).toBe(true)
+    await trigger.trigger('click')
+    expect(wrapper.find('.app-topbar__current-user-panel').exists()).toBe(false)
+
+    await trigger.trigger('click')
+    document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.app-topbar__current-user-panel').exists()).toBe(false)
+
+    await trigger.trigger('click')
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.app-topbar__current-user-panel').exists()).toBe(false)
+    wrapper.unmount()
+  })
 })

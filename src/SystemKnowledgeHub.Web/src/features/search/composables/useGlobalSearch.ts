@@ -29,6 +29,7 @@ export function useGlobalSearch(inputRef: Ref<{ focus: () => void } | null>) {
   const activeIndex = ref(0)
   let debounceHandle: ReturnType<typeof setTimeout> | null = null
   let activeRequest: AbortController | null = null
+  let returnFocusElement: HTMLElement | null = null
 
   const isOpen = computed(() => overlayStore.currentDialog?.kind === 'global-search')
   const normalizedQuery = computed(() => query.value.trim())
@@ -58,7 +59,6 @@ export function useGlobalSearch(inputRef: Ref<{ focus: () => void } | null>) {
     recentQueries.value = readRecentQueries()
     recentVisits.value = readRecentVisits()
     activeIndex.value = 0
-    void nextTick(() => inputRef.value?.focus())
   }
 
   async function runSearch(): Promise<void> {
@@ -196,8 +196,25 @@ export function useGlobalSearch(inputRef: Ref<{ focus: () => void } | null>) {
     overlayStore.closeDialog()
   }
 
-  watch(isOpen, open => {
-    if (open) resetForOpen()
+  watch(isOpen, (open, wasOpen) => {
+    if (open) {
+      returnFocusElement = document.activeElement instanceof HTMLElement
+        && document.activeElement !== document.body
+        ? document.activeElement
+        : null
+      resetForOpen()
+      return
+    }
+    if (!wasOpen) return
+    const target = returnFocusElement
+    returnFocusElement = null
+    void nextTick(() => {
+      if (target?.isConnected) target.focus({ preventScroll: true })
+    })
+  }, { flush: 'sync' })
+
+  watch(() => overlayStore.dialogOpenedSequence, () => {
+    if (isOpen.value) inputRef.value?.focus()
   })
 
   watch(query, () => {

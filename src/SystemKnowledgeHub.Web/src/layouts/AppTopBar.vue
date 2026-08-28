@@ -12,6 +12,8 @@ const route = useRoute()
 const actorStore = useActorStore()
 const overlayStore = useOverlayStore()
 const profileOpen = ref(false)
+const profileButtonRef = ref<HTMLElement | null>(null)
+const profilePanelRef = ref<HTMLElement | null>(null)
 const loggingOut = ref(false)
 const createEnabled = computed(() =>
   actorStore.canEdit && route.name !== 'foundation' && route.name !== 'not-found',
@@ -30,6 +32,12 @@ function openCreate(): void {
 
 function openSearch(): void {
   overlayStore.openDialog({ kind: 'global-search', id: null, mode: 'read' })
+}
+
+function handleProfileOutsidePointer(event: PointerEvent): void {
+  if (!profileOpen.value || !(event.target instanceof Node)) return
+  if (profileButtonRef.value?.contains(event.target) || profilePanelRef.value?.contains(event.target)) return
+  profileOpen.value = false
 }
 
 function handleGlobalSearchShortcut(event: KeyboardEvent): void {
@@ -62,8 +70,14 @@ async function signOut(): Promise<void> {
   }
 }
 
-onMounted(() => window.addEventListener('keydown', handleGlobalSearchShortcut))
-onBeforeUnmount(() => window.removeEventListener('keydown', handleGlobalSearchShortcut))
+onMounted(() => {
+  window.addEventListener('keydown', handleGlobalSearchShortcut)
+  document.addEventListener('pointerdown', handleProfileOutsidePointer, true)
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleGlobalSearchShortcut)
+  document.removeEventListener('pointerdown', handleProfileOutsidePointer, true)
+})
 </script>
 
 <template>
@@ -77,12 +91,12 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleGlobalSearchSh
     <div class="app-topbar__actions">
       <el-button v-if="actorStore.canEdit" type="primary" :icon="Plus" :disabled="!createEnabled" @click="openCreate">新增</el-button>
       <span v-if="actorStore.canEdit" class="app-topbar__separator" aria-hidden="true"></span>
-      <button class="app-topbar__profile" type="button" :aria-expanded="profileOpen" title="查看当前用户资料" @click="profileOpen = !profileOpen">
+      <button ref="profileButtonRef" class="app-topbar__profile" type="button" :aria-expanded="profileOpen" title="查看当前用户资料" @click="profileOpen = !profileOpen">
         <span class="app-topbar__avatar">{{ actorStore.currentUser?.displayName.slice(0, 1) ?? '?' }}</span>
         <span class="app-topbar__profile-copy"><strong>{{ actorStore.currentUser?.displayName }}</strong><small>{{ currentUserSubtitle }} · {{ actorStore.accessLevel }}</small></span>
       </button>
 
-      <section v-if="profileOpen && actorStore.currentUser" class="app-topbar__current-user-panel" aria-label="当前用户资料">
+      <section v-if="profileOpen && actorStore.currentUser" ref="profilePanelRef" class="app-topbar__current-user-panel" aria-label="当前用户资料">
         <div class="app-topbar__current-user-heading"><div><strong>当前用户</strong><p>身份由服务器认证并映射，不能在浏览器中切换。</p></div><el-tooltip content="关闭当前用户资料" placement="bottom"><button class="skh-icon-action" type="button" aria-label="关闭当前用户资料" @click="profileOpen = false">×</button></el-tooltip></div>
         <div class="app-topbar__current-user-summary"><span class="app-topbar__avatar">{{ actorStore.currentUser.displayName.slice(0, 1) }}</span><div><strong>{{ actorStore.currentUser.displayName }}</strong><span>{{ actorStore.accessLevel }}</span></div></div>
         <dl class="app-topbar__profile-details"><div><dt>工号</dt><dd>{{ actorStore.currentUser.employeeNo ?? '—' }}</dd></div><div><dt>邮箱</dt><dd>{{ actorStore.currentUser.email ?? '—' }}</dd></div><div><dt>部门 / 团队</dt><dd>{{ actorStore.currentUser.departmentOrTeam ?? '—' }}</dd></div><div><dt>职位</dt><dd>{{ actorStore.currentUser.jobTitle ?? '—' }}</dd></div><div><dt>知识身份</dt><dd>{{ actorStore.currentUser.knowledgeRoles.map((role) => role.name).join('、') || '未配置' }}</dd></div></dl>

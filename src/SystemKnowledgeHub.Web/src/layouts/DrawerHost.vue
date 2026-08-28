@@ -8,20 +8,33 @@ import BusinessRuleDrawerContent from '../features/business-rules/components/Bus
 import ColumnDetailDrawer from '../features/database-knowledge/components/ColumnDetailDrawer.vue'
 import DatabaseObjectKnowledgeDrawer from '../features/database-knowledge/components/DatabaseObjectKnowledgeDrawer.vue'
 import IntegrationDrawerContent from '../features/integrations/components/IntegrationDrawerContent.vue'
+import { overlayScrollPreserver as scrollPreserver } from './overlayScrollPreservation'
 
 const overlayStore = useOverlayStore()
 const hasTeleportedFeature = computed(() => overlayStore.currentDrawer?.kind === 'user-management')
 
 watch(
-  () => `${overlayStore.currentDrawer?.kind ?? ''}:${overlayStore.currentDrawer?.id ?? ''}`,
-  async () => {
+  () => overlayStore.currentDrawer,
+  async (drawer, previousDrawer) => {
+    if (drawer !== null && previousDrawer === null) scrollPreserver.capture()
     await nextTick()
-    requestAnimationFrame(() => {
-      const body = document.querySelector<HTMLElement>('.el-drawer__body')
-      if (body) body.scrollTop = 0
-    })
+    const body = document.querySelector<HTMLElement>('.el-drawer__body')
+    if (body) body.scrollTop = 0
   },
+  { flush: 'sync' },
 )
+
+function handleOpened(): void {
+  scrollPreserver.restoreAfterFocus()
+}
+
+function handleClosed(): void {
+  scrollPreserver.release()
+}
+
+function handleAutoFocus(): void {
+  scrollPreserver.restoreAfterFocus()
+}
 </script>
 
 <template>
@@ -34,6 +47,10 @@ watch(
     :with-header="false"
     :modal="false"
     :lock-scroll="false"
+    @opened="handleOpened"
+    @closed="handleClosed"
+    @open-auto-focus="handleAutoFocus"
+    @close-auto-focus="handleAutoFocus"
     @close="overlayStore.closeDrawer"
   >
     <div id="drawer-feature-content"></div>

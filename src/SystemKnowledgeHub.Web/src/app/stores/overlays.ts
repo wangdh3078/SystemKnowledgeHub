@@ -24,6 +24,7 @@ export const useOverlayStore = defineStore('overlays', () => {
   )
   const isDrawerOpen = computed(() => currentDrawer.value !== null)
   const isDialogOpen = computed(() => currentDialog.value !== null)
+  const dialogOpenedSequence = ref(0)
 
   function openDrawer(descriptor: Omit<OverlayDescriptor, 'surface'>): void {
     const actorStore = useActorStore()
@@ -49,15 +50,23 @@ export const useOverlayStore = defineStore('overlays', () => {
     }
   }
 
+  function notifyDialogOpened(): void {
+    if (currentOverlay.value?.surface === 'dialog') {
+      dialogOpenedSequence.value += 1
+    }
+  }
+
   return {
     currentOverlay,
     currentDrawer,
     currentDialog,
     isDrawerOpen,
     isDialogOpen,
+    dialogOpenedSequence,
     openDrawer,
     openDialog,
     closeDrawer,
     closeDialog,
+    notifyDialogOpened,
   }
 })

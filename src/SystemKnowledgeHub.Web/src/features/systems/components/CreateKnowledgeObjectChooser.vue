@@ -3,11 +3,9 @@ import {
   ArrowRight,
   Coin,
   Connection,
-  DocumentChecked,
   DocumentAdd,
   Files,
   Grid,
-  QuestionFilled,
   Tickets,
 } from '@element-plus/icons-vue'
 import { useOverlayStore } from '../../../app/stores/overlays'
@@ -31,15 +29,13 @@ const choices = [
   { kind: 'business-rule', label: '业务规则', description: '记录条件、结果及其依据', icon: Tickets },
   { kind: 'integration', label: '集成关系', description: '记录 API、MQ、文件或数据库依赖', icon: Connection },
   { kind: 'knowledge-document', label: '知识内容', description: '记录需求、规格、测试用例、SOP、故障排查和知识文章', icon: DocumentAdd },
-  { kind: null, label: '待确认事项', description: '把未知问题纳入调查闭环', icon: QuestionFilled },
-  { kind: null, label: '证据', description: '记录为什么我们相信某条知识', icon: DocumentChecked },
 ] as const
 
-function isEnabled(kind: SupportedCreateKind | null): boolean {
-  return kind !== null && props.enabledKinds.includes(kind)
+function isEnabled(kind: SupportedCreateKind): boolean {
+  return props.enabledKinds.includes(kind)
 }
 
-function choose(kind: SupportedCreateKind | null): void {
+function choose(kind: SupportedCreateKind): void {
   if (!isEnabled(kind)) return
   if (kind === 'knowledge-document') {
     overlayStore.closeDialog()

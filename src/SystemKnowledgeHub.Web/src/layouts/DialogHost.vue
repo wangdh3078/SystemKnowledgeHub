@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
 import { DocumentAdd } from '@element-plus/icons-vue'
 import { useOverlayStore } from '../app/stores/overlays'
 import KnowledgeStatusDialogContent from '../features/knowledge-status/components/KnowledgeStatusDialogContent.vue'
 import KnowledgeDocumentRestoreDialogContent from '../features/knowledge-documents/components/KnowledgeDocumentRestoreDialogContent.vue'
 import DeleteConfirmationDialogContent from '../features/soft-delete/components/DeleteConfirmationDialogContent.vue'
+import { overlayScrollPreserver as scrollPreserver } from './overlayScrollPreservation'
 
 const overlayStore = useOverlayStore()
 const hasFeatureDialog = computed(() =>
@@ -35,6 +36,27 @@ const dialogWidth = computed(() =>
     ? '520px'
     : hasFeatureDialog.value ? '780px' : '460px',
 )
+
+watch(
+  () => overlayStore.isDialogOpen,
+  (open) => {
+    if (open) scrollPreserver.capture()
+  },
+  { flush: 'sync' },
+)
+
+function handleOpened(): void {
+  scrollPreserver.restoreAfterFocus()
+  overlayStore.notifyDialogOpened()
+}
+
+function handleClosed(): void {
+  scrollPreserver.release()
+}
+
+function handleAutoFocus(): void {
+  scrollPreserver.restoreAfterFocus()
+}
 </script>
 
 <template>
@@ -52,6 +74,10 @@ const dialogWidth = computed(() =>
           overlayStore.currentDialog?.kind === 'restore-knowledge-document-revision',
       },
     ]"
+    @opened="handleOpened"
+    @closed="handleClosed"
+    @open-auto-focus="handleAutoFocus"
+    @close-auto-focus="handleAutoFocus"
     @close="overlayStore.closeDialog"
   >
     <div id="dialog-feature-content"></div>

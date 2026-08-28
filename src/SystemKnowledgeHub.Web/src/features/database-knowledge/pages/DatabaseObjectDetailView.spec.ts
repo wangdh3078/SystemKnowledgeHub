@@ -5,6 +5,7 @@ import { getDatabaseObjectDetail } from '../api/databaseKnowledgeApi'
 import DatabaseObjectDetailView from './DatabaseObjectDetailView.vue'
 
 const overlayState = vi.hoisted(() => ({ openDrawer: vi.fn(), currentDrawer: null }))
+const routerState = vi.hoisted(() => ({ replace: vi.fn(), push: vi.fn() }))
 
 vi.mock('../../../app/stores/actor', () => ({
   useActorStore: () => ({ canEdit: true }),
@@ -14,7 +15,7 @@ vi.mock('../../../app/stores/overlays', () => ({
 }))
 vi.mock('vue-router', () => ({
   useRoute: () => ({ params: { id: '45' }, query: {} }),
-  useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
+  useRouter: () => routerState,
 }))
 vi.mock('../api/databaseKnowledgeApi', async () => {
   const actual = await vi.importActual<typeof import('../api/databaseKnowledgeApi')>('../api/databaseKnowledgeApi')
@@ -108,6 +109,8 @@ describe('DatabaseObjectDetailView object-level trust closure', () => {
     vi.mocked(getDatabaseObjectDetail).mockReset().mockResolvedValue(detail)
     vi.mocked(getEvidenceList).mockReset().mockResolvedValue({ items: [evidence] })
     overlayState.openDrawer.mockReset()
+    routerState.replace.mockReset()
+    routerState.push.mockReset()
     document.body.innerHTML = '<div id="context-rail-content"></div>'
   })
 
@@ -136,6 +139,27 @@ describe('DatabaseObjectDetailView object-level trust closure', () => {
     window.dispatchEvent(new Event('evidence:changed'))
     await flushPromises()
     expect(getEvidenceList).toHaveBeenCalledTimes(2)
+    wrapper.unmount()
+  })
+
+  it('navigates only real breadcrumb ancestors and leaves the current object as text', async () => {
+    const wrapper = mount(DatabaseObjectDetailView, { global: { stubs } })
+    await flushPromises()
+    const breadcrumb = wrapper.get('.database-breadcrumb')
+    const links = breadcrumb.findAll('button')
+
+    expect(links.map((link) => link.text())).toEqual(['数据库', 'MES', 'MES Oracle'])
+    expect(breadcrumb.find('strong').text()).toBe('MES.TABLE_EQP')
+
+    await links[0]?.trigger('click')
+    expect(routerState.push).toHaveBeenLastCalledWith({ name: 'database-objects-list' })
+    await links[1]?.trigger('click')
+    expect(routerState.push).toHaveBeenLastCalledWith({ name: 'system-detail', params: { id: '12' } })
+    await links[2]?.trigger('click')
+    expect(routerState.push).toHaveBeenLastCalledWith({
+      name: 'database-objects-list',
+      query: { systemId: '12', databaseSourceId: '9' },
+    })
     wrapper.unmount()
   })
 })

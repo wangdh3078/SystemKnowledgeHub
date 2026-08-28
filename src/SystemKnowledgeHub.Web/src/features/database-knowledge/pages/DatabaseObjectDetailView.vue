@@ -180,6 +180,26 @@ function requestDelete(): void {
   })
 }
 
+function openDatabaseBrowse(): void {
+  void router.push({ name: 'database-objects-list' })
+}
+
+function openSystem(): void {
+  if (!detail.value) return
+  void router.push({ name: 'system-detail', params: { id: String(detail.value.system.id) } })
+}
+
+function openDatabaseSource(): void {
+  if (!detail.value) return
+  void router.push({
+    name: 'database-objects-list',
+    query: {
+      systemId: String(detail.value.system.id),
+      databaseSourceId: String(detail.value.databaseSource.id),
+    },
+  })
+}
+
 watch([databaseObjectId, routeSelectedColumnId], () => {
   void loadRoute()
 })
@@ -229,8 +249,9 @@ onBeforeUnmount(() => {
     <template v-else-if="detail">
       <header class="database-object-header">
         <nav class="database-breadcrumb" aria-label="面包屑">
-          <span>数据库</span><b>/</b><span>{{ detail.system.name }}</span><b>/</b
-          ><span>{{ detail.databaseSource.name }}</span><b>/</b
+          <button type="button" @click="openDatabaseBrowse">数据库</button><b>/</b
+          ><button type="button" @click="openSystem">{{ detail.system.name }}</button><b>/</b
+          ><button type="button" @click="openDatabaseSource">{{ detail.databaseSource.name }}</button><b>/</b
           ><strong class="technical-text">{{ detail.overview.qualifiedName }}</strong>
         </nav>
         <div class="database-object-header__title">

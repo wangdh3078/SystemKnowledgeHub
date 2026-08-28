@@ -71,10 +71,18 @@
 .dashboard-overview-item:first-child { padding-left: 0; }
 .dashboard-overview-item:last-child { padding-right: 0; border-right: 0; }
 
+.dashboard-overview-item--static {
+  cursor: default;
+}
+
 .dashboard-overview-item:hover,
 .dashboard-overview-item:focus-visible {
   color: var(--color-primary);
   outline: none;
+}
+
+.dashboard-overview-item--static:hover {
+  color: var(--color-muted);
 }
 
 .dashboard-overview-item span {

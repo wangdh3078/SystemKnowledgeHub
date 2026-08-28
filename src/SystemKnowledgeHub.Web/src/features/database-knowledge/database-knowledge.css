@@ -17,10 +17,20 @@
   font-size: 11px;
 }
 
-.database-breadcrumb span:first-child,
-.database-breadcrumb span:nth-child(3) {
+.database-breadcrumb button {
+  padding: 0;
+  border: 0;
+  background: transparent;
   color: var(--color-primary);
+  cursor: pointer;
+  font: inherit;
   font-weight: 650;
+}
+
+.database-breadcrumb button:hover,
+.database-breadcrumb button:focus-visible {
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .database-breadcrumb b {

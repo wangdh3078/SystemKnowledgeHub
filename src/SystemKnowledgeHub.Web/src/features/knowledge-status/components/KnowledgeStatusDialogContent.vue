@@ -12,7 +12,6 @@ const overlayStore = useOverlayStore()
 const submitting = ref(false)
 const errorMessage = ref<string | null>(null)
 const conflict = ref(false)
-const reason = ref('')
 const payload = computed(() => {
   const current = overlayStore.currentDialog
   return current?.kind === 'change-knowledge-status' && isKnowledgeStatusDialogPayload(current.payload)
@@ -33,7 +32,6 @@ const requirementText = computed(() => payload.value?.knowledgeStatus === 'Unkno
 watch(payload, () => {
   errorMessage.value = null
   conflict.value = false
-  reason.value = ''
 })
 
 async function submit(): Promise<void> {
@@ -45,7 +43,7 @@ async function submit(): Promise<void> {
     await changeKnowledgeStatus({
       target: payload.value.target,
       targetStatus: targetStatus.value,
-      reason: reason.value.trim() || null,
+      reason: null,
       concurrencyToken: payload.value.concurrencyToken,
     })
     overlayStore.closeDialog()
@@ -85,7 +83,6 @@ function reload(): void {
         <el-icon><CircleCheck v-if="requirementMet" /><Warning v-else /></el-icon>
         <div><strong>{{ requirementMet ? '推进条件已满足' : '暂时不能推进' }}</strong><p>{{ requirementText }}</p><small>{{ requirementMet ? '服务端将在保存时再次校验关联性和证据完整性。' : '请先添加所需证据；保存证据不会自动改变知识状态。' }}</small></div>
       </section>
-      <label class="knowledge-status-dialog__reason"><span>修改说明（可选）</span><el-input v-model="reason" type="textarea" :rows="3" maxlength="500" show-word-limit placeholder="记录本次状态判断的简要说明" /></label>
       <p v-if="errorMessage" class="knowledge-status-dialog__error" role="alert">{{ errorMessage }}</p>
       <footer>
         <p><el-icon><DocumentChecked /></el-icon>状态变化是显式操作，不会由证据自动触发。</p>
