@@ -76,11 +76,14 @@ public sealed partial class AttachmentReferenceService(
         }
         if (errors.Count > 0)
         {
-            return new AttachmentSelectionResult(null, errors, AttachmentSelectionFailure.Validation);
+            return new AttachmentSelectionResult(null, errors, AttachmentSelectionFailure.ReferenceInvalid);
         }
         if (desired.Any(attachment => attachment.StorageState != AttachmentStorageState.Ready))
         {
-            return new AttachmentSelectionResult(null, null, AttachmentSelectionFailure.InvalidState);
+            return new AttachmentSelectionResult(
+                null,
+                new Dictionary<string, string[]> { ["attachments"] = ["一个或多个附件不再处于可引用状态。"] },
+                AttachmentSelectionFailure.ReferenceInvalid);
         }
 
         return new AttachmentSelectionResult(
@@ -181,5 +184,5 @@ public enum AttachmentSelectionFailure
 {
     None,
     Validation,
-    InvalidState,
+    ReferenceInvalid,
 }

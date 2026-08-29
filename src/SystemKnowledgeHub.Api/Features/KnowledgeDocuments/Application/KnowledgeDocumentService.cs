@@ -101,9 +101,12 @@ public sealed class KnowledgeDocumentService(
         {
             return new KnowledgeDocumentWriteResult(null, attachmentSelection.FieldErrors, KnowledgeDocumentWriteFailure.Validation);
         }
-        if (attachmentSelection.Failure == AttachmentSelectionFailure.InvalidState)
+        if (attachmentSelection.Failure == AttachmentSelectionFailure.ReferenceInvalid)
         {
-            return new KnowledgeDocumentWriteResult(null, null, KnowledgeDocumentWriteFailure.AttachmentUnavailable);
+            return new KnowledgeDocumentWriteResult(
+                null,
+                attachmentSelection.FieldErrors,
+                KnowledgeDocumentWriteFailure.ReferenceInvalid);
         }
         if (string.Equals(document.Title, title, StringComparison.Ordinal)
             && string.Equals(document.Summary, summary, StringComparison.Ordinal)

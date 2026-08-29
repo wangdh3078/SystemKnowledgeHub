@@ -277,7 +277,10 @@ public sealed class AttachmentFoundationApiTests : IClassFixture<BootstrapWebApp
             fileAttachmentIds = Array.Empty<long>(),
         }))
         {
-            Assert.Equal(HttpStatusCode.BadRequest, wrongKind.StatusCode);
+            Assert.Equal(HttpStatusCode.UnprocessableEntity, wrongKind.StatusCode);
+            Assert.Equal(
+                "reference_invalid",
+                (await wrongKind.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
         }
 
         var attached = await SaveContent(

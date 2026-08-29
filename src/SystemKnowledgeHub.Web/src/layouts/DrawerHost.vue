@@ -11,7 +11,9 @@ import IntegrationDrawerContent from '../features/integrations/components/Integr
 import { overlayScrollPreserver as scrollPreserver } from './overlayScrollPreservation'
 
 const overlayStore = useOverlayStore()
-const hasTeleportedFeature = computed(() => overlayStore.currentDrawer?.kind === 'user-management')
+const hasTeleportedFeature = computed(() =>
+  ['user-management', 'attachment-administration'].includes(overlayStore.currentDrawer?.kind ?? ''),
+)
 
 watch(
   () => overlayStore.currentDrawer,
@@ -55,19 +57,33 @@ function handleAutoFocus(): void {
   >
     <div id="drawer-feature-content"></div>
     <EvidenceDrawerContent
-      v-if="overlayStore.currentDrawer && ['add-evidence', 'add-investigation-evidence', 'evidence', 'human-confirmation'].includes(overlayStore.currentDrawer.kind)"
+      v-if="
+        overlayStore.currentDrawer &&
+        ['add-evidence', 'add-investigation-evidence', 'evidence', 'human-confirmation'].includes(
+          overlayStore.currentDrawer.kind,
+        )
+      "
       :drawer="overlayStore.currentDrawer"
     />
     <RelationshipDrawerContent
-      v-else-if="overlayStore.currentDrawer && ['add-relationship', 'relationship'].includes(overlayStore.currentDrawer.kind)"
+      v-else-if="
+        overlayStore.currentDrawer &&
+        ['add-relationship', 'relationship'].includes(overlayStore.currentDrawer.kind)
+      "
       :drawer="overlayStore.currentDrawer"
     />
     <BusinessRuleDrawerContent
-      v-else-if="overlayStore.currentDrawer && ['business-rule', 'edit-business-rule'].includes(overlayStore.currentDrawer.kind)"
+      v-else-if="
+        overlayStore.currentDrawer &&
+        ['business-rule', 'edit-business-rule'].includes(overlayStore.currentDrawer.kind)
+      "
       :drawer="overlayStore.currentDrawer"
     />
     <IntegrationDrawerContent
-      v-else-if="overlayStore.currentDrawer && ['integration', 'edit-integration'].includes(overlayStore.currentDrawer.kind)"
+      v-else-if="
+        overlayStore.currentDrawer &&
+        ['integration', 'edit-integration'].includes(overlayStore.currentDrawer.kind)
+      "
       :drawer="overlayStore.currentDrawer"
     />
     <ColumnDetailDrawer

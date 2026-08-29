@@ -162,6 +162,7 @@ builder.Services.AddSingleton<AttachmentStorage>();
 builder.Services.AddScoped<AttachmentPreviewService>();
 builder.Services.AddScoped<AttachmentReferenceService>();
 builder.Services.AddScoped<AttachmentService>();
+builder.Services.AddScoped<AdministratorAttachmentQueries>();
 builder.Services.AddScoped<BusinessFunctionQueries>();
 builder.Services.AddScoped<BusinessFunctionService>();
 builder.Services.AddScoped<BusinessFunctionDeleteService>();

@@ -12,15 +12,60 @@ namespace SystemKnowledgeHub.Api.Features.Attachments.Api;
 [ApiController]
 [Authorize(Policy = AccessPolicies.Administrator)]
 [Route("api/admin/attachments")]
-public sealed class AdministratorAttachmentsController(AttachmentService service) : ControllerBase
+public sealed class AdministratorAttachmentsController(
+    AdministratorAttachmentQueries queries,
+    AttachmentService service) : ControllerBase
 {
+    [HttpGet]
+    public async Task<ActionResult<AdministratorAttachmentListResponse>> GetList(
+        [FromQuery] string? query,
+        [FromQuery] string? kind,
+        [FromQuery] string? extension,
+        [FromQuery] string? referenceStatus,
+        [FromQuery] string? storageState,
+        [FromQuery] int? page,
+        [FromQuery] int? pageSize,
+        CancellationToken cancellationToken)
+    {
+        var result = await queries.GetList(
+            new AdministratorAttachmentListQuery(
+                query,
+                kind,
+                extension,
+                referenceStatus,
+                storageState,
+                page,
+                pageSize),
+            cancellationToken);
+        return result.FieldErrors is null
+            ? Ok(result.Response)
+            : BadRequest(new ApiErrorResponse("validation_error", "请求内容无效。", result.FieldErrors, null));
+    }
+
+    [HttpGet("statistics")]
+    public async Task<ActionResult<AdministratorAttachmentStatisticsResponse>> GetStatistics(
+        CancellationToken cancellationToken) =>
+        Ok(await queries.GetStatistics(cancellationToken));
+
     [HttpGet("{attachmentId:long}")]
-    public async Task<ActionResult<AttachmentMetadataResponse>> Get(
+    public async Task<ActionResult<AdministratorAttachmentDetailResponse>> Get(
         long attachmentId,
         CancellationToken cancellationToken)
     {
         if (!ApiIdParser.IsSafePositive(attachmentId)) return BadRequest(ValidationError());
-        var result = await service.GetAdministratorMetadata(attachmentId, cancellationToken);
+        var result = await queries.GetDetail(attachmentId, cancellationToken);
+        return result.Failure == AttachmentFailure.None
+            ? Ok(result.Response)
+            : NotFound(Error("not_found", "未找到指定附件。"));
+    }
+
+    [HttpPost("{attachmentId:long}/integrity-check")]
+    public async Task<ActionResult<AdministratorAttachmentIntegrityResponse>> CheckIntegrity(
+        long attachmentId,
+        CancellationToken cancellationToken)
+    {
+        if (!ApiIdParser.IsSafePositive(attachmentId)) return BadRequest(ValidationError());
+        var result = await service.CheckAdministratorIntegrity(attachmentId, cancellationToken);
         return result.Failure == AttachmentFailure.None
             ? Ok(result.Response)
             : NotFound(Error("not_found", "未找到指定附件。"));

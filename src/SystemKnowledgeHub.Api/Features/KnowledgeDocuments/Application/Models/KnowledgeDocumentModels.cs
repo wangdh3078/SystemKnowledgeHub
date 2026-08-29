@@ -148,6 +148,7 @@ public enum KnowledgeDocumentWriteFailure
     InvalidState,
     BusinessRuleViolation,
     AttachmentUnavailable,
+    ReferenceInvalid,
 }
 
 public sealed record KnowledgeDocumentWriteResult(

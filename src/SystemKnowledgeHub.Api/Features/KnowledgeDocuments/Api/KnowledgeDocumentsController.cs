@@ -303,6 +303,7 @@ public sealed class KnowledgeDocumentsController(
             KnowledgeDocumentWriteFailure.Conflict => Conflict(new ApiErrorResponse("conflict", "内容已被其他操作修改，请刷新后重试。", null, new { resourceType = "KnowledgeDocument", resourceId = id })),
             KnowledgeDocumentWriteFailure.InvalidState => Conflict(new ApiErrorResponse("invalid_state", "已归档文档不允许修改内容。", null, new { resourceType = "KnowledgeDocument", resourceId = id, lifecycleStatus = "Archived" })),
             KnowledgeDocumentWriteFailure.AttachmentUnavailable => Conflict(new ApiErrorResponse("attachment_unavailable", "一个或多个附件不再处于可引用状态。", null, new { resourceType = "KnowledgeDocument", resourceId = id })),
+            KnowledgeDocumentWriteFailure.ReferenceInvalid => UnprocessableEntity(new ApiErrorResponse("reference_invalid", "一个或多个附件引用无效。", result.FieldErrors, new { resourceType = "KnowledgeDocument", resourceId = id })),
             _ => throw new InvalidOperationException("Unsupported KnowledgeDocument content result."),
         };
     }

@@ -1,8 +1,24 @@
 import type { Component } from 'vue'
-import { Coin, DataBoard, Document, Files, Grid, QuestionFilled, UserFilled } from '@element-plus/icons-vue'
+import {
+  Coin,
+  DataBoard,
+  Document,
+  Files,
+  Grid,
+  Paperclip,
+  QuestionFilled,
+  UserFilled,
+} from '@element-plus/icons-vue'
 
 export type NavigationKey =
-  'dashboard' | 'systems' | 'business-functions' | 'database' | 'knowledge-documents' | 'unknown-items' | 'users'
+  | 'dashboard'
+  | 'systems'
+  | 'business-functions'
+  | 'database'
+  | 'knowledge-documents'
+  | 'unknown-items'
+  | 'users'
+  | 'attachments'
 
 export interface NavigationItem {
   readonly key: NavigationKey
@@ -10,7 +26,15 @@ export interface NavigationItem {
   readonly icon: Component
   readonly enabled: boolean
   readonly groupLabel?: string
-  readonly routeName?: 'dashboard' | 'systems-list' | 'business-functions-list' | 'database-objects-list' | 'knowledge-documents-list' | 'unknown-items-list' | 'users-management'
+  readonly routeName?:
+    | 'dashboard'
+    | 'systems-list'
+    | 'business-functions-list'
+    | 'database-objects-list'
+    | 'knowledge-documents-list'
+    | 'unknown-items-list'
+    | 'users-management'
+    | 'attachment-administration'
   readonly minimumAccessLevel?: 'Administrator'
 }
 
@@ -31,7 +55,13 @@ export const navigationItems: readonly NavigationItem[] = [
     enabled: true,
     routeName: 'database-objects-list',
   },
-  { key: 'knowledge-documents', label: '知识内容', icon: Document, enabled: true, routeName: 'knowledge-documents-list' },
+  {
+    key: 'knowledge-documents',
+    label: '知识内容',
+    icon: Document,
+    enabled: true,
+    routeName: 'knowledge-documents-list',
+  },
   {
     key: 'unknown-items',
     label: '待确认事项',
@@ -46,6 +76,14 @@ export const navigationItems: readonly NavigationItem[] = [
     enabled: true,
     groupLabel: '管理',
     routeName: 'users-management',
+    minimumAccessLevel: 'Administrator',
+  },
+  {
+    key: 'attachments',
+    label: '附件管理',
+    icon: Paperclip,
+    enabled: true,
+    routeName: 'attachment-administration',
     minimumAccessLevel: 'Administrator',
   },
 ]

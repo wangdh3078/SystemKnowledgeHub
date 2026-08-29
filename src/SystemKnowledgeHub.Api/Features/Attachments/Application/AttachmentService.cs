@@ -255,6 +255,29 @@ public sealed class AttachmentService(
             AttachmentFailure.None);
     }
 
+    public async Task<AdministratorAttachmentIntegrityResult> CheckAdministratorIntegrity(
+        long attachmentId,
+        CancellationToken cancellationToken)
+    {
+        var attachment = await dbContext.Attachments.AsNoTracking()
+            .SingleOrDefaultAsync(item => item.Id == attachmentId, cancellationToken);
+        if (attachment is null)
+        {
+            return new AdministratorAttachmentIntegrityResult(null, AttachmentFailure.NotFound);
+        }
+        var inspection = await storage.InspectIntegrity(attachment, cancellationToken);
+        return new AdministratorAttachmentIntegrityResult(
+            new AdministratorAttachmentIntegrityResponse(
+                attachment.Id,
+                inspection.Status.ToString(),
+                attachment.SizeBytes,
+                inspection.ActualSizeBytes,
+                Convert.ToHexString(attachment.Sha256).ToLowerInvariant(),
+                inspection.ActualSha256,
+                DateTimeOffset.UtcNow),
+            AttachmentFailure.None);
+    }
+
     public async Task<AttachmentFailure> DeleteOrphan(
         long attachmentId,
         string concurrencyToken,
@@ -266,6 +289,7 @@ public sealed class AttachmentService(
         }
 
         string storageKey;
+        long deletePendingVersion;
         await using (var transaction = await SqliteImmediateTransaction.BeginAsync(dbContext, cancellationToken))
         {
             var attachment = await dbContext.Attachments.SingleOrDefaultAsync(
@@ -286,6 +310,7 @@ public sealed class AttachmentService(
                 attachment.Version++;
                 await dbContext.SaveChangesAsync(cancellationToken);
             }
+            deletePendingVersion = attachment.Version;
             await transaction.CommitAsync(cancellationToken);
         }
 
@@ -304,6 +329,11 @@ public sealed class AttachmentService(
                 item => item.Id == attachmentId,
                 cancellationToken);
             if (attachment is null) return AttachmentFailure.None;
+            if (attachment.StorageState != AttachmentStorageState.DeletePending
+                || attachment.Version != deletePendingVersion)
+            {
+                return AttachmentFailure.Conflict;
+            }
             if (await dbContext.AttachmentReferences.AnyAsync(
                 reference => reference.AttachmentId == attachmentId,
                 cancellationToken))

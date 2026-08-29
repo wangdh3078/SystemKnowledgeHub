@@ -97,6 +97,52 @@ public sealed partial class AttachmentStorage(
         }
     }
 
+    public AttachmentStorageInspection InspectShallow(Attachment attachment)
+    {
+        if (attachment.StorageState == AttachmentStorageState.DeletePending)
+        {
+            return new AttachmentStorageInspection(AttachmentStorageHealth.DeletePending, null, null);
+        }
+        try
+        {
+            var path = ResolveStorageKey(attachment.StorageKey);
+            if (!File.Exists(path))
+            {
+                return new AttachmentStorageInspection(AttachmentStorageHealth.Missing, null, null);
+            }
+            EnsureNotReparsePoint(path);
+            var actualSizeBytes = new FileInfo(path).Length;
+            return actualSizeBytes == attachment.SizeBytes
+                ? new AttachmentStorageInspection(AttachmentStorageHealth.Ready, actualSizeBytes, null)
+                : new AttachmentStorageInspection(AttachmentStorageHealth.LengthMismatch, actualSizeBytes, null);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or AttachmentStorageUnavailableException)
+        {
+            return new AttachmentStorageInspection(AttachmentStorageHealth.Unavailable, null, null);
+        }
+    }
+
+    public async Task<AttachmentStorageInspection> InspectIntegrity(
+        Attachment attachment,
+        CancellationToken cancellationToken)
+    {
+        var shallow = InspectShallow(attachment);
+        if (shallow.Status != AttachmentStorageHealth.Ready) return shallow;
+        try
+        {
+            await using var stream = OpenRead(attachment.StorageKey);
+            var actualHash = await SHA256.HashDataAsync(stream, cancellationToken);
+            var actualSha256 = Convert.ToHexString(actualHash).ToLowerInvariant();
+            return CryptographicOperations.FixedTimeEquals(actualHash, attachment.Sha256)
+                ? new AttachmentStorageInspection(AttachmentStorageHealth.Ready, stream.Length, actualSha256)
+                : new AttachmentStorageInspection(AttachmentStorageHealth.Corrupt, stream.Length, actualSha256);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or AttachmentStorageUnavailableException)
+        {
+            return new AttachmentStorageInspection(AttachmentStorageHealth.Unavailable, null, null);
+        }
+    }
+
     public FileStream OpenRead(string storageKey)
     {
         var path = ResolveStorageKey(storageKey);
@@ -204,6 +250,21 @@ public sealed partial class AttachmentStorage(
 }
 
 public sealed record StagedAttachment(string StagingPath, long SizeBytes, byte[] Sha256);
+
+public sealed record AttachmentStorageInspection(
+    AttachmentStorageHealth Status,
+    long? ActualSizeBytes,
+    string? ActualSha256);
+
+public enum AttachmentStorageHealth
+{
+    Ready,
+    Missing,
+    LengthMismatch,
+    Corrupt,
+    DeletePending,
+    Unavailable,
+}
 
 public sealed class AttachmentPayloadTooLargeException : Exception { }
 public sealed class AttachmentEmptyPayloadException : Exception { }

@@ -16,6 +16,7 @@ import UsersManagementView from '../../features/users/pages/UsersManagementView.
 import AccessForbiddenView from '../../features/bootstrap/pages/AccessForbiddenView.vue'
 import KnowledgeDocumentsListView from '../../features/knowledge-documents/pages/KnowledgeDocumentsListView.vue'
 import KnowledgeDocumentDetailView from '../../features/knowledge-documents/pages/KnowledgeDocumentDetailView.vue'
+import AdministratorAttachmentsView from '../../features/attachment-administration/pages/AdministratorAttachmentsView.vue'
 
 export const routes: readonly RouteRecordRaw[] = [
   {
@@ -91,25 +92,45 @@ export const routes: readonly RouteRecordRaw[] = [
     path: '/business-rules/:id',
     name: 'business-rule-detail',
     component: BusinessRuleDetailView,
-    meta: { title: '业务规则详情', layout: 'app-shell', navigationKey: 'business-functions', hasContextRail: true },
+    meta: {
+      title: '业务规则详情',
+      layout: 'app-shell',
+      navigationKey: 'business-functions',
+      hasContextRail: true,
+    },
   },
   {
     path: '/integrations/:id',
     name: 'integration-detail',
     component: IntegrationDetailView,
-    meta: { title: '集成关系详情', layout: 'app-shell', navigationKey: 'systems', hasContextRail: true },
+    meta: {
+      title: '集成关系详情',
+      layout: 'app-shell',
+      navigationKey: 'systems',
+      hasContextRail: true,
+    },
   },
   {
     path: '/unknown-items',
     name: 'unknown-items-list',
     component: UnknownItemsListView,
-    meta: { title: '待确认事项', layout: 'app-shell', navigationKey: 'unknown-items', hasContextRail: false },
+    meta: {
+      title: '待确认事项',
+      layout: 'app-shell',
+      navigationKey: 'unknown-items',
+      hasContextRail: false,
+    },
   },
   {
     path: '/unknown-items/:id',
     name: 'unknown-item-detail',
     component: UnknownItemDetailView,
-    meta: { title: '待确认事项详情', layout: 'app-shell', navigationKey: 'unknown-items', hasContextRail: true },
+    meta: {
+      title: '待确认事项详情',
+      layout: 'app-shell',
+      navigationKey: 'unknown-items',
+      hasContextRail: true,
+    },
   },
   {
     path: '/database-objects',
@@ -137,13 +158,23 @@ export const routes: readonly RouteRecordRaw[] = [
     path: '/knowledge-documents',
     name: 'knowledge-documents-list',
     component: KnowledgeDocumentsListView,
-    meta: { title: '知识内容', layout: 'app-shell', navigationKey: 'knowledge-documents', hasContextRail: false },
+    meta: {
+      title: '知识内容',
+      layout: 'app-shell',
+      navigationKey: 'knowledge-documents',
+      hasContextRail: false,
+    },
   },
   {
     path: '/knowledge-documents/:id',
     name: 'knowledge-document-detail',
     component: KnowledgeDocumentDetailView,
-    meta: { title: '知识内容详情', layout: 'app-shell', navigationKey: 'knowledge-documents', hasContextRail: false },
+    meta: {
+      title: '知识内容详情',
+      layout: 'app-shell',
+      navigationKey: 'knowledge-documents',
+      hasContextRail: false,
+    },
   },
   {
     path: '/admin/users',
@@ -153,6 +184,18 @@ export const routes: readonly RouteRecordRaw[] = [
       title: '用户管理',
       layout: 'app-shell',
       navigationKey: 'users',
+      hasContextRail: false,
+      minimumAccessLevel: 'Administrator',
+    },
+  },
+  {
+    path: '/admin/attachments',
+    name: 'attachment-administration',
+    component: AdministratorAttachmentsView,
+    meta: {
+      title: '附件管理',
+      layout: 'app-shell',
+      navigationKey: 'attachments',
       hasContextRail: false,
       minimumAccessLevel: 'Administrator',
     },
