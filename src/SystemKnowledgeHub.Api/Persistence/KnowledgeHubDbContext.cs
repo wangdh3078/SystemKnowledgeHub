@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SystemKnowledgeHub.Api.Features.BusinessFunctions.Domain;
+using SystemKnowledgeHub.Api.Features.Attachments.Domain;
 using SystemKnowledgeHub.Api.Features.BusinessRules.Domain;
 using SystemKnowledgeHub.Api.Features.DatabaseKnowledge.Domain;
 using SystemKnowledgeHub.Api.Features.Evidence.Domain;
@@ -42,9 +43,34 @@ public sealed class KnowledgeHubDbContext(DbContextOptions<KnowledgeHubDbContext
     public DbSet<LocalLoginCredential> LocalLoginCredentials => Set<LocalLoginCredential>();
     public DbSet<KnowledgeDocument> KnowledgeDocuments => Set<KnowledgeDocument>();
     public DbSet<KnowledgeDocumentRevision> KnowledgeDocumentRevisions => Set<KnowledgeDocumentRevision>();
+    public DbSet<Attachment> Attachments => Set<Attachment>();
+    public DbSet<AttachmentReference> AttachmentReferences => Set<AttachmentReference>();
+
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        EnforceImmutableAttachmentReferences();
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+
+    public override Task<int> SaveChangesAsync(
+        bool acceptAllChangesOnSuccess,
+        CancellationToken cancellationToken = default)
+    {
+        EnforceImmutableAttachmentReferences();
+        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(KnowledgeHubDbContext).Assembly);
+    }
+
+    private void EnforceImmutableAttachmentReferences()
+    {
+        if (ChangeTracker.Entries<AttachmentReference>()
+            .Any(entry => entry.State is EntityState.Modified or EntityState.Deleted))
+        {
+            throw new InvalidOperationException("Attachment references are immutable revision snapshots.");
+        }
     }
 }

@@ -27,6 +27,7 @@ public sealed class KnowledgeDocumentRevisionConfiguration : IEntityTypeConfigur
         });
 
         builder.HasKey(entity => entity.Id);
+        builder.HasAlternateKey(entity => new { entity.Id, entity.KnowledgeDocumentId });
         builder.Property(entity => entity.Id).HasColumnName("id").ValueGeneratedOnAdd();
         builder.Property(entity => entity.KnowledgeDocumentId).HasColumnName("knowledge_document_id").IsRequired();
         builder.Property(entity => entity.RevisionNumber).HasColumnName("revision_number").IsRequired();

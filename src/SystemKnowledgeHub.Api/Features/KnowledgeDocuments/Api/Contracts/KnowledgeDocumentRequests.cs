@@ -13,7 +13,8 @@ public sealed record UpdateKnowledgeDocumentContentRequest(
     string? Summary,
     string? BodyMarkdown,
     string? ChangeSummary,
-    string? ConcurrencyToken);
+    string? ConcurrencyToken,
+    IReadOnlyList<long>? FileAttachmentIds = null);
 
 public sealed record UpdateKnowledgeDocumentLifecycleRequest(
     string? TargetLifecycleStatus,

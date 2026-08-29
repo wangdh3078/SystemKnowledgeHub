@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using System.Text;
+using SystemKnowledgeHub.Api.Features.Attachments.Application;
 using SystemKnowledgeHub.Api.Features.KnowledgeDocuments.Application.Models;
 using SystemKnowledgeHub.Api.Features.KnowledgeDocuments.Domain;
 using SystemKnowledgeHub.Api.Features.Search.Application;
@@ -13,7 +14,8 @@ public sealed class KnowledgeDocumentService(
     KnowledgeHubDbContext dbContext,
     KnowledgeDocumentQueries queries,
     ConcurrencyTokenCodec concurrencyTokenCodec,
-    KnowledgeDocumentSearchIndex searchIndex)
+    KnowledgeDocumentSearchIndex searchIndex,
+    AttachmentReferenceService attachmentReferenceService)
 {
     public const int TitleMaximumLength = 300;
     public const int SummaryMaximumLength = 2_000;
@@ -89,9 +91,24 @@ public sealed class KnowledgeDocumentService(
         {
             return new KnowledgeDocumentWriteResult(null, null, KnowledgeDocumentWriteFailure.InvalidState);
         }
+        var attachmentSelection = await attachmentReferenceService.ResolveForContentSave(
+            document.Id,
+            document.CurrentRevisionNumber,
+            bodyMarkdown,
+            request.FileAttachmentIds,
+            cancellationToken);
+        if (attachmentSelection.Failure == AttachmentSelectionFailure.Validation)
+        {
+            return new KnowledgeDocumentWriteResult(null, attachmentSelection.FieldErrors, KnowledgeDocumentWriteFailure.Validation);
+        }
+        if (attachmentSelection.Failure == AttachmentSelectionFailure.InvalidState)
+        {
+            return new KnowledgeDocumentWriteResult(null, null, KnowledgeDocumentWriteFailure.AttachmentUnavailable);
+        }
         if (string.Equals(document.Title, title, StringComparison.Ordinal)
             && string.Equals(document.Summary, summary, StringComparison.Ordinal)
-            && string.Equals(document.BodyMarkdown, bodyMarkdown, StringComparison.Ordinal))
+            && string.Equals(document.BodyMarkdown, bodyMarkdown, StringComparison.Ordinal)
+            && attachmentSelection.Selection!.HasSameSet)
         {
             return new KnowledgeDocumentWriteResult(
                 await queries.ToDetail(document, cancellationToken),
@@ -114,15 +131,21 @@ public sealed class KnowledgeDocumentService(
             document.PublishedAt = timestamp;
         }
         document.Version = expectedVersion + 1;
-        dbContext.KnowledgeDocumentRevisions.Add(CreateRevision(
+        var revision = CreateRevision(
             document,
             nextRevisionNumber,
             request.Author,
             timestamp,
             RevisionOrigin.ContentSave,
-            changeSummary));
+            changeSummary);
+        dbContext.KnowledgeDocumentRevisions.Add(revision);
         try
         {
+            await dbContext.SaveChangesAsync(cancellationToken);
+            attachmentReferenceService.AddSnapshot(
+                document.Id,
+                revision.Id,
+                attachmentSelection.Selection!.DesiredAttachments);
             await dbContext.SaveChangesAsync(cancellationToken);
             await searchIndex.Upsert(document, cancellationToken);
             await transaction.CommitAsync(cancellationToken);
@@ -247,10 +270,20 @@ public sealed class KnowledgeDocumentService(
         {
             return new KnowledgeDocumentWriteResult(null, null, KnowledgeDocumentWriteFailure.InvalidState);
         }
+        var attachmentSelection = await attachmentReferenceService.ResolveForRestore(
+            document.Id,
+            document.CurrentRevisionNumber,
+            source.Id,
+            cancellationToken);
+        if (attachmentSelection.Unavailable)
+        {
+            return new KnowledgeDocumentWriteResult(null, null, KnowledgeDocumentWriteFailure.AttachmentUnavailable);
+        }
         if (source.RevisionNumber >= document.CurrentRevisionNumber
             || (string.Equals(document.Title, source.Title, StringComparison.Ordinal)
                 && string.Equals(document.Summary, source.Summary, StringComparison.Ordinal)
-                && string.Equals(document.BodyMarkdown, source.BodyMarkdown, StringComparison.Ordinal)))
+                && string.Equals(document.BodyMarkdown, source.BodyMarkdown, StringComparison.Ordinal)
+                && attachmentSelection.Selection!.HasSameSet))
         {
             return new KnowledgeDocumentWriteResult(
                 null,
@@ -268,7 +301,7 @@ public sealed class KnowledgeDocumentService(
         document.UpdatedAt = timestamp;
         document.CurrentRevisionNumber = nextRevisionNumber;
         document.Version = expectedVersion + 1;
-        dbContext.KnowledgeDocumentRevisions.Add(CreateRevision(
+        var revision = CreateRevision(
             document,
             nextRevisionNumber,
             request.Author,
@@ -276,10 +309,16 @@ public sealed class KnowledgeDocumentService(
             RevisionOrigin.Restore,
             null,
             reason,
-            source.RevisionNumber));
+            source.RevisionNumber);
+        dbContext.KnowledgeDocumentRevisions.Add(revision);
 
         try
         {
+            await dbContext.SaveChangesAsync(cancellationToken);
+            attachmentReferenceService.AddSnapshot(
+                document.Id,
+                revision.Id,
+                attachmentSelection.Selection!.DesiredAttachments);
             await dbContext.SaveChangesAsync(cancellationToken);
             await searchIndex.Upsert(document, cancellationToken);
             await transaction.CommitAsync(cancellationToken);

@@ -42,6 +42,7 @@ public sealed class StartupConfigurationProcessTests
         process.StartInfo.Environment["ConnectionStrings__KnowledgeHub"] =
             $"Data Source={Path.Combine(temporaryRoot, "knowledge-hub.db")}";
         process.StartInfo.Environment["DataProtection__KeyPath"] = Path.Combine(temporaryRoot, "keys");
+        process.StartInfo.Environment["Attachments__StorageRoot"] = Path.Combine(temporaryRoot, "attachments");
         process.StartInfo.Environment["DOTNET_DISABLE_GUI_ERRORS"] = "1";
 
         try
@@ -80,6 +81,8 @@ public sealed class StartupConfigurationProcessTests
     [InlineData("data-protection-missing", "Production Data Protection requires DataProtection:KeyPath.")]
     [InlineData("data-protection-relative", "Production DataProtection:KeyPath must be an absolute persistent path outside the application deployment directory.")]
     [InlineData("sqlite-relative", "Production ConnectionStrings:KnowledgeHub must use an absolute persistent SQLite Data Source path.")]
+    [InlineData("attachment-storage-missing", "Attachments:StorageRoot is required outside Development and must identify isolated persistent storage.")]
+    [InlineData("attachment-storage-relative", "Attachments:StorageRoot must be an absolute persistent path outside the application deployment directory.")]
     public async Task DirectExecutable_WithOtherInvalidProductionConfiguration_ExitsWithActionableDiagnostic(
         string scenario,
         string expectedDiagnostic)
@@ -115,6 +118,12 @@ public sealed class StartupConfigurationProcessTests
             case "sqlite-relative":
                 process.StartInfo.Environment["ConnectionStrings__KnowledgeHub"] =
                     "Data Source=App_Data/production.db";
+                break;
+            case "attachment-storage-missing":
+                process.StartInfo.Environment["Attachments__StorageRoot"] = "";
+                break;
+            case "attachment-storage-relative":
+                process.StartInfo.Environment["Attachments__StorageRoot"] = "App_Data/attachments";
                 break;
             default:
                 throw new InvalidOperationException($"Unknown test scenario '{scenario}'.");
@@ -250,6 +259,7 @@ public sealed class StartupConfigurationProcessTests
         process.StartInfo.Environment["ConnectionStrings__KnowledgeHub"] =
             $"Data Source={Path.Combine(temporaryRoot, "knowledge-hub.db")}";
         process.StartInfo.Environment["DataProtection__KeyPath"] = Path.Combine(temporaryRoot, "keys");
+        process.StartInfo.Environment["Attachments__StorageRoot"] = Path.Combine(temporaryRoot, "attachments");
         process.StartInfo.Environment["DOTNET_DISABLE_GUI_ERRORS"] = "1";
         return process;
     }

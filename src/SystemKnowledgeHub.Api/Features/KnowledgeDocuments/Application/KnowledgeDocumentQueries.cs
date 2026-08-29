@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using SystemKnowledgeHub.Api.Features.Attachments.Application;
+using SystemKnowledgeHub.Api.Features.Attachments.Application.Models;
 using SystemKnowledgeHub.Api.Features.Evidence.Domain;
 using SystemKnowledgeHub.Api.Features.KnowledgeDocuments.Application.Models;
 using SystemKnowledgeHub.Api.Features.KnowledgeDocuments.Domain;
@@ -14,7 +16,8 @@ public sealed class KnowledgeDocumentQueries(
     KnowledgeHubDbContext dbContext,
     HistoricalTargetResolver historicalTargetResolver,
     SoftDeleteCapabilityResolver capabilityResolver,
-    ConcurrencyTokenCodec concurrencyTokenCodec)
+    ConcurrencyTokenCodec concurrencyTokenCodec,
+    AttachmentService attachmentService)
 {
     private const int DefaultPageSize = 20;
     private const int MaximumPageSize = 100;
@@ -168,7 +171,7 @@ public sealed class KnowledgeDocumentQueries(
             })
             .SingleOrDefaultAsync(cancellationToken);
         if (document is null) return null;
-        return await dbContext.KnowledgeDocumentRevisions.AsNoTracking()
+        var response = await dbContext.KnowledgeDocumentRevisions.AsNoTracking()
             .Where(item => item.KnowledgeDocumentId == knowledgeDocumentId
                 && item.RevisionNumber == revisionNumber)
             .Select(item => new KnowledgeDocumentRevisionDetailResponse(
@@ -189,8 +192,17 @@ public sealed class KnowledgeDocumentQueries(
                     && item.RevisionNumber == document.LatestPublishedRevisionNumber,
                 item.Title,
                 item.Summary,
-                item.BodyMarkdown))
+                item.BodyMarkdown,
+                Array.Empty<AttachmentMetadataResponse>()))
             .SingleOrDefaultAsync(cancellationToken);
+        if (response is null) return null;
+        return response with
+        {
+            AttachmentReferences = await GetAttachmentReferences(
+                knowledgeDocumentId,
+                revisionNumber,
+                cancellationToken),
+        };
     }
 
     public async Task<KnowledgeDocumentDetailResponse> ToDetail(
@@ -242,7 +254,31 @@ public sealed class KnowledgeDocumentQueries(
             item.PublishedAt,
             item.ArchivedAt,
             concurrencyTokenCodec.Encode(item.Version),
-            SoftDeleteCapabilityResolver.CanDelete(actor, item.CreatedByUserId));
+            SoftDeleteCapabilityResolver.CanDelete(actor, item.CreatedByUserId),
+            await GetAttachmentReferences(item.Id, item.CurrentRevisionNumber, cancellationToken));
+    }
+
+    private async Task<IReadOnlyList<AttachmentMetadataResponse>> GetAttachmentReferences(
+        long knowledgeDocumentId,
+        long revisionNumber,
+        CancellationToken cancellationToken)
+    {
+        var attachments = await dbContext.KnowledgeDocumentRevisions.AsNoTracking()
+            .Where(revision => revision.KnowledgeDocumentId == knowledgeDocumentId
+                && revision.RevisionNumber == revisionNumber)
+            .Join(
+                dbContext.AttachmentReferences.AsNoTracking(),
+                revision => revision.Id,
+                reference => reference.KnowledgeDocumentRevisionId,
+                (_, reference) => reference)
+            .Join(
+                dbContext.Attachments.AsNoTracking(),
+                reference => reference.AttachmentId,
+                attachment => attachment.Id,
+                (_, attachment) => attachment)
+            .OrderBy(attachment => attachment.Id)
+            .ToArrayAsync(cancellationToken);
+        return attachments.Select(attachment => attachmentService.ToMetadata(attachment, true)).ToArray();
     }
 
     private static Dictionary<string, string[]> Validate(

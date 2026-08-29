@@ -19,11 +19,18 @@ namespace SystemKnowledgeHub.Api.Tests.TestSupport;
 public class BootstrapWebApplicationFactory : WebApplicationFactory<Program>
 {
     private readonly SqliteConnection _connection;
+    private readonly string _attachmentStorageRoot;
     private long _defaultLoginIdentityId;
     private long _defaultUserId;
 
     public BootstrapWebApplicationFactory()
     {
+        _attachmentStorageRoot = Path.Combine(
+            Path.GetTempPath(),
+            "SystemKnowledgeHub.Api.Tests",
+            "attachments",
+            Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(_attachmentStorageRoot);
         _connection = new SqliteConnection(
             "Data Source=:memory:;Foreign Keys=True;Default Timeout=5");
         _connection.Open();
@@ -44,6 +51,7 @@ public class BootstrapWebApplicationFactory : WebApplicationFactory<Program>
     {
         ConfigureAuthenticationMode(builder);
         builder.UseEnvironment(TestEnvironmentName);
+        builder.UseSetting("Attachments:StorageRoot", _attachmentStorageRoot);
         builder.ConfigureServices(services =>
         {
             services.AddDataProtection().UseEphemeralDataProtectionProvider();
@@ -111,6 +119,8 @@ public class BootstrapWebApplicationFactory : WebApplicationFactory<Program>
         ConfigureAntiforgery(client);
         return client;
     }
+
+    public string AttachmentStorageRoot => _attachmentStorageRoot;
 
     public HttpClient CreateAuthenticatedClientWithoutAntiforgery()
     {
@@ -196,6 +206,10 @@ public class BootstrapWebApplicationFactory : WebApplicationFactory<Program>
         if (disposing)
         {
             _connection.Dispose();
+            if (Directory.Exists(_attachmentStorageRoot))
+            {
+                Directory.Delete(_attachmentStorageRoot, recursive: true);
+            }
         }
     }
 }

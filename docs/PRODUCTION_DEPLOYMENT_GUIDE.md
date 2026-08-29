@@ -4,7 +4,7 @@
 
 This guide defines the repository-supported configuration boundary for `SystemKnowledgeHub.Api`. It does not select an IIS, Nginx, Caddy, YARP, container, cloud, certificate, secret-store, backup, or monitoring implementation. A localhost HTTP smoke test is not a real Production deployment approval; SEC-04 remains blocked until the chosen environment supplies and verifies those controls.
 
-The checked-in `appsettings.Production.json` contains structure and fail-closed values only. It contains no usable credential, Client Secret, machine path, database path, or Data Protection key material.
+The checked-in `appsettings.Production.json` contains structure and fail-closed values only. It contains no usable credential, Client Secret, machine path, database path, attachment-storage path, or Data Protection key material.
 
 ## Configuration model and precedence
 
@@ -26,6 +26,7 @@ The Host environment is supplied by the standard ASP.NET Core host inputs. Deplo
 | Authentication boundary | At least one method outside Testing | Test-only schemes are isolated to tests | At least one of Local/OIDC; otherwise exit `1` |
 | Data Protection | Framework development fallback unless a path is supplied | Test-owned ephemeral/key directory | Absolute persistent path outside the deployment directory is required |
 | SQLite | Relative base path resolves against API Content Root | Test-owned SQLite | Absolute persistent Data Source path is required |
+| Attachment binaries | `App_Data/attachments` below API Content Root | Fixture-owned absolute temporary directory | Explicit absolute persistent filesystem root outside the deployment directory is required |
 | Logging | Console, configured levels | Captured by test host | Console/stderr; external transport and retention are deployment-owned |
 | URLs | launch profile uses `http://localhost:5090` | Isolated test port | Explicit `ASPNETCORE_URLS`; public HTTPS/proxy topology is deployment-owned |
 | HTTPS/proxy | Development HTTP only | Not Production evidence | Secure Cookie and HTTPS redirection are enabled; trusted proxy topology is not guessed |
@@ -36,6 +37,8 @@ The Host environment is supplied by the standard ASP.NET Core host inputs. Deplo
 - OIDC requires non-empty Provider, Authority and ClientId. ClientSecret is configuration-bound but must come from the deployment secret source, never a committed JSON file.
 - `DataProtection:ApplicationName` must be non-empty and stable. `DataProtection:KeyPath` must be an absolute path outside the application deployment directory. The location must persist across restarts/redeployments and deployment operators must restrict access and provide approved encryption at rest. The application currently configures filesystem persistence but does not select a key-encryption provider.
 - `ConnectionStrings:KnowledgeHub` must contain a valid SQLite connection string with an absolute, persistent Data Source. `:memory:`, URI/relative Data Sources, repository `App_Data`, build output and publish directories are not supported Production locations.
+- `Attachments:StorageRoot` must be a non-root absolute persistent path outside the application deployment directory. Production startup fails when the value is empty, relative, inside the deployment tree, or a filesystem root. The directory must be private application data: never map it as a static/public web directory.
+- Attachment limits must be valid positive integers within the application safety ceilings. The defaults are 10 MiB for images, 50 MiB for ordinary files, 100 stored metadata rows per document, 256 KiB for text preview, 200×50 for CSV, and 20 sheets/200×50 cells with a 10 MiB workbook preview ceiling for XLSX. Kestrel's request-body ceiling is derived from the larger configured upload limit plus multipart overhead; any upstream proxy ceiling must be at least as large.
 - Known startup configuration failures write an actionable message to stderr and exit `1`. They do not fall back to Development, Local authentication, anonymous access, temporary keys, or the repository database.
 - Normal Production host startup does not automatically migrate or seed the database. The existing administrator bootstrap commands migrate only when an operator explicitly invokes them. A deployment-owned migration/backup/rollback procedure remains required before real rollout.
 
@@ -50,6 +53,19 @@ $env:ASPNETCORE_URLS = 'http://127.0.0.1:5090'
 $env:ConnectionStrings__KnowledgeHub = 'Data Source=D:\SystemKnowledgeHub\Data\system-knowledge-hub.db'
 $env:DataProtection__ApplicationName = 'SystemKnowledgeHub'
 $env:DataProtection__KeyPath = 'D:\SystemKnowledgeHub\DataProtection-Keys'
+$env:Attachments__StorageRoot = 'D:\SystemKnowledgeHub\Attachments'
+$env:Attachments__MaxImageBytes = '10485760'
+$env:Attachments__MaxFileBytes = '52428800'
+$env:Attachments__MaxStoredAttachmentsPerDocument = '100'
+$env:Attachments__PreviewTextMaxBytes = '262144'
+$env:Attachments__PreviewCsvMaxRows = '200'
+$env:Attachments__PreviewCsvMaxColumns = '50'
+$env:Attachments__PreviewCsvMaxCharacters = '262144'
+$env:Attachments__PreviewSpreadsheetMaxWorkbookBytes = '10485760'
+$env:Attachments__PreviewSpreadsheetMaxSheets = '20'
+$env:Attachments__PreviewSpreadsheetMaxRows = '200'
+$env:Attachments__PreviewSpreadsheetMaxColumns = '50'
+$env:Attachments__PreviewSpreadsheetMaxSharedStringCharacters = '1048576'
 ```
 
 Local-only mode:
@@ -95,12 +111,20 @@ Outside Development the authentication Cookie is always Secure and the app enabl
 
 `ASPNETCORE_URLS=http://127.0.0.1:5090` is only an origin-binding example for an approved same-host TLS proxy. It must not be exposed publicly or cited as HTTPS verification. Direct Kestrel HTTPS, certificate loading, HSTS ownership, proxy header rules, public callback URLs and path-base behavior must be defined and verified for the selected deployment.
 
+Attachment uploads use authenticated multipart API requests and are never served from a public filesystem mapping. Antiforgery validation may buffer multipart bodies to the host's protected temporary storage before the application streams them into its own same-root staging area, so the service account's temporary directory must have restricted ACLs and capacity for the configured maximum request size. The application subsequently enforces its own exact byte limit, content recognition, streaming SHA-256, opaque storage key, and atomic same-filesystem move.
+
+## Attachment storage, backup, and recovery
+
+SQLite owns attachment metadata and immutable revision references; `Attachments:StorageRoot` owns binary objects. They are one logical backup set. A valid operational backup must coordinate both locations under a write-quiesced or otherwise consistency-preserving procedure, capture SQLite with an SQLite-aware method (including any live WAL state), and capture the complete attachment object tree. Copying only SQLite or only the filesystem is not a recoverable System Knowledge Hub backup.
+
+Restore the matched database/object pair to approved persistent paths, apply least-privilege ACLs, validate SQLite `integrity_check` and `foreign_key_check`, and verify referenced object size/SHA-256 before reopening writes. Do not edit opaque object names, reconstruct paths from display filenames, delete unreferenced objects manually, or treat a current-revision removal as an orphan: physical deletion is Administrator-only and zero-reference across all revisions.
+
 ## Operational checks before rollout
 
 - Inject all required values from the deployment configuration/secret system and confirm no secret or key material is present in the artifact or repository.
-- Provision the SQLite directory and Data Protection directory outside the deployment tree with least-privilege ACLs, durable storage, backup ownership and approved encryption at rest.
+- Provision the SQLite directory, attachment storage root and Data Protection directory outside the deployment tree with least-privilege ACLs, durable storage, backup ownership and approved encryption at rest. The API service account requires read/write/create/delete access to its private attachment root; web/proxy/static-file identities do not.
 - Prepare the database through an approved backup/migration procedure; do not point verification at repository `App_Data`.
-- Verify real HTTPS, callback registration, proxy trust, Secure Cookie behavior, login/logout, restart cookie continuity, logging transport/redaction, backup/restore and rollback.
+- Verify real HTTPS, callback registration, proxy trust, request-body limits, protected temporary-file capacity, Secure Cookie behavior, login/logout, restart cookie continuity, logging transport/redaction, coordinated SQLite+attachment backup/restore and rollback.
 - Confirm `/api/auth/options` returns the intended enabled methods and anonymous `/api/current-user` returns `401`.
 
 Until these real-environment checks pass, report `NOT VERIFIED AS REAL PRODUCTION DEPLOYMENT` and keep `SEC-04 BLOCKED`.

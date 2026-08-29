@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using System.Threading.RateLimiting;
+using SystemKnowledgeHub.Api.Features.Attachments.Application;
 using SystemKnowledgeHub.Api.Features.BusinessFunctions.Application;
 using SystemKnowledgeHub.Api.Features.BusinessFunctions.Persistence;
 using SystemKnowledgeHub.Api.Features.BusinessRules.Application;
@@ -116,6 +117,17 @@ if (productionConnectionStringError is not null)
     ReportStartupConfigurationFailure(builder.Environment, productionConnectionStringError);
     return;
 }
+if (!AttachmentOptions.TryCreate(builder.Configuration, builder.Environment, out var attachmentOptions, out var attachmentConfigurationError))
+{
+    ReportStartupConfigurationFailure(builder.Environment, attachmentConfigurationError!);
+    return;
+}
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Limits.MaxRequestBodySize = Math.Max(
+        attachmentOptions!.MaxImageBytes,
+        attachmentOptions.MaxFileBytes) + 2L * 1024 * 1024;
+});
 
 var dataProtection = builder.Services.AddDataProtection()
     .SetApplicationName(dataProtectionApplicationName ?? "SystemKnowledgeHub");
@@ -136,6 +148,12 @@ builder.Services
     });
 
 builder.Services.AddKnowledgeHubPersistence(builder.Configuration, builder.Environment);
+builder.Services.AddSingleton(attachmentOptions!);
+builder.Services.AddSingleton<AttachmentFilePolicy>();
+builder.Services.AddSingleton<AttachmentStorage>();
+builder.Services.AddScoped<AttachmentPreviewService>();
+builder.Services.AddScoped<AttachmentReferenceService>();
+builder.Services.AddScoped<AttachmentService>();
 builder.Services.AddScoped<BusinessFunctionQueries>();
 builder.Services.AddScoped<BusinessFunctionService>();
 builder.Services.AddScoped<BusinessFunctionDeleteService>();
@@ -422,9 +440,23 @@ app.Use(async (context, next) =>
         return;
     }
 
+    var isAttachmentMultipartUpload = HttpMethods.IsPost(context.Request.Method)
+        && context.Request.Path.Value?.EndsWith("/attachments", StringComparison.OrdinalIgnoreCase) == true
+        && context.Request.ContentType?.StartsWith("multipart/form-data", StringComparison.OrdinalIgnoreCase) == true;
+    if (isAttachmentMultipartUpload)
+    {
+        context.Request.EnableBuffering(
+            bufferThreshold: 64 * 1024,
+            bufferLimit: Math.Max(attachmentOptions!.MaxImageBytes, attachmentOptions.MaxFileBytes) + 2L * 1024 * 1024);
+    }
+
     try
     {
         await context.RequestServices.GetRequiredService<IAntiforgery>().ValidateRequestAsync(context);
+        if (isAttachmentMultipartUpload && context.Request.Body.CanSeek)
+        {
+            context.Request.Body.Position = 0;
+        }
     }
     catch (AntiforgeryValidationException)
     {
@@ -432,6 +464,16 @@ app.Use(async (context, next) =>
         await context.Response.WriteAsJsonAsync(new ApiErrorResponse(
             "antiforgery_failed",
             "请求验证失败，请刷新页面后重试。",
+            null,
+            null));
+        return;
+    }
+    catch (IOException) when (isAttachmentMultipartUpload)
+    {
+        context.Response.StatusCode = StatusCodes.Status413PayloadTooLarge;
+        await context.Response.WriteAsJsonAsync(new ApiErrorResponse(
+            "payload_too_large",
+            "附件超过配置的大小限制。",
             null,
             null));
         return;

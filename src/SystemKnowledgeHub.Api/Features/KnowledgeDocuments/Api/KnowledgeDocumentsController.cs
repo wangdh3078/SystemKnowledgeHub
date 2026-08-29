@@ -258,6 +258,11 @@ public sealed class KnowledgeDocumentsController(
                 "所选修订不能恢复：请选择早于当前版本且内容不同的历史修订。",
                 null,
                 new { resourceType = "KnowledgeDocumentRevision", knowledgeDocumentId = id, revisionNumber })),
+            KnowledgeDocumentWriteFailure.AttachmentUnavailable => Conflict(new ApiErrorResponse(
+                "attachment_unavailable",
+                "源修订包含不可读取的附件，未执行恢复。",
+                null,
+                new { resourceType = "KnowledgeDocumentRevision", knowledgeDocumentId = id, revisionNumber })),
             _ => throw new InvalidOperationException("Unsupported KnowledgeDocument restore result."),
         };
     }
@@ -289,7 +294,7 @@ public sealed class KnowledgeDocumentsController(
         if (!ApiIdParser.IsSafePositive(id)) return BadRequest(ValidationError(new Dictionary<string, string[]> { ["id"] = ["文档 ID 必须是 JavaScript 安全范围内的正整数。"] }));
         var author = await ResolveAuthor(cancellationToken);
         if (author.Result is not null) return author.Result;
-        var result = await service.UpdateContent(new UpdateKnowledgeDocumentContentCommand(id, request.Title ?? string.Empty, request.Summary, request.BodyMarkdown, request.ChangeSummary, request.ConcurrencyToken ?? string.Empty, author.Author!), cancellationToken);
+        var result = await service.UpdateContent(new UpdateKnowledgeDocumentContentCommand(id, request.Title ?? string.Empty, request.Summary, request.BodyMarkdown, request.ChangeSummary, request.ConcurrencyToken ?? string.Empty, request.FileAttachmentIds, author.Author!), cancellationToken);
         return result.Failure switch
         {
             KnowledgeDocumentWriteFailure.None => Ok(result.Response),
@@ -297,6 +302,7 @@ public sealed class KnowledgeDocumentsController(
             KnowledgeDocumentWriteFailure.NotFound => NotFound(NotFound(id)),
             KnowledgeDocumentWriteFailure.Conflict => Conflict(new ApiErrorResponse("conflict", "内容已被其他操作修改，请刷新后重试。", null, new { resourceType = "KnowledgeDocument", resourceId = id })),
             KnowledgeDocumentWriteFailure.InvalidState => Conflict(new ApiErrorResponse("invalid_state", "已归档文档不允许修改内容。", null, new { resourceType = "KnowledgeDocument", resourceId = id, lifecycleStatus = "Archived" })),
+            KnowledgeDocumentWriteFailure.AttachmentUnavailable => Conflict(new ApiErrorResponse("attachment_unavailable", "一个或多个附件不再处于可引用状态。", null, new { resourceType = "KnowledgeDocument", resourceId = id })),
             _ => throw new InvalidOperationException("Unsupported KnowledgeDocument content result."),
         };
     }

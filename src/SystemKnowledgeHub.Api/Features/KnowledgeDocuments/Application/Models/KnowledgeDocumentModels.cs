@@ -1,5 +1,6 @@
 namespace SystemKnowledgeHub.Api.Features.KnowledgeDocuments.Application.Models;
 
+using SystemKnowledgeHub.Api.Features.Attachments.Application.Models;
 using SystemKnowledgeHub.Api.Features.SoftDelete.Application;
 
 public sealed record KnowledgeDocumentListQuery(
@@ -53,7 +54,8 @@ public sealed record KnowledgeDocumentDetailResponse(
     DateTimeOffset? PublishedAt,
     DateTimeOffset? ArchivedAt,
     string ConcurrencyToken,
-    bool CanDelete);
+    bool CanDelete,
+    IReadOnlyList<AttachmentMetadataResponse> AttachmentReferences);
 
 public sealed record KnowledgeDocumentConfirmationCoverageResponse(
     string State,
@@ -102,7 +104,8 @@ public sealed record KnowledgeDocumentRevisionDetailResponse(
     bool IsLatestPublished,
     string Title,
     string? Summary,
-    string BodyMarkdown);
+    string BodyMarkdown,
+    IReadOnlyList<AttachmentMetadataResponse> AttachmentReferences);
 
 public sealed record KnowledgeDocumentAuthor(long UserId, string DisplayName);
 
@@ -120,6 +123,7 @@ public sealed record UpdateKnowledgeDocumentContentCommand(
     string? BodyMarkdown,
     string? ChangeSummary,
     string ConcurrencyToken,
+    IReadOnlyList<long>? FileAttachmentIds,
     KnowledgeDocumentAuthor Author);
 
 public sealed record UpdateKnowledgeDocumentLifecycleCommand(
@@ -143,6 +147,7 @@ public enum KnowledgeDocumentWriteFailure
     Conflict,
     InvalidState,
     BusinessRuleViolation,
+    AttachmentUnavailable,
 }
 
 public sealed record KnowledgeDocumentWriteResult(
