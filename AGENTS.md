@@ -187,6 +187,32 @@ If the repository documents an approved workaround/gate for a known test
 infrastructure issue, use that approved gate rather than inventing a new
 workaround.
 
+### Runtime startup rules
+
+For local development, automated verification, browser verification, and task-owned runtime smoke tests:
+
+- Do not launch `SystemKnowledgeHub.Api.exe` directly from `bin/Debug`, `bin/Release`, or another build-output directory as the default verification method.
+- Do not double-click or shell-launch the generated `.exe` merely to start a verification runtime.
+- For ordinary feature verification, prefer the repository-supported development command:
+
+  ```bash
+  dotnet run --project src/SystemKnowledgeHub.Api
+  ```
+
+- Ordinary feature/runtime verification must use `Development` or another explicitly supported verification environment with complete task-owned configuration. Do not accidentally run as `Production` merely because `launchSettings.json` was bypassed.
+- Runtime verification must explicitly provide all task-required isolated configuration when applicable, including:
+  - temporary SQLite database;
+  - temporary Data Protection directory;
+  - temporary Attachment StorageRoot;
+  - isolated ports;
+  - other task-specific persistent/runtime paths.
+- Never fall back to repository-owned or user-owned Production data merely because a verification configuration value is missing.
+- Direct `.exe` startup is allowed only when the current task explicitly verifies Production startup, published executable behavior, or direct-executable startup.
+- When direct `.exe` startup is explicitly required, provide the complete required Production configuration and treat missing/invalid configuration as an intentional fail-closed test case.
+- A normal feature verification must not use direct `.exe` startup as a shortcut for `dotnet run`.
+- If runtime startup fails, inspect and report the actual startup error. Do not repeatedly relaunch the executable, switch environments silently, or weaken Production validation merely to make verification pass.
+
+
 ### Verification cleanup
 
 After every verification cycle:

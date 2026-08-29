@@ -38,6 +38,7 @@ function createRequestInit(
   body?: unknown,
   headers?: Readonly<Record<string, string>>,
   antiforgeryToken?: string | null,
+  bodyKind: 'json' | 'form' = 'json',
 ): RequestInit {
   const isUnsafe = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)
   return {
@@ -45,14 +46,14 @@ function createRequestInit(
     signal,
     headers: {
       Accept: 'application/json',
-      ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+      ...(body === undefined || bodyKind === 'form' ? {} : { 'Content-Type': 'application/json' }),
       ...headers,
-      ...(!isUnsafe || !antiforgeryToken
-        ? {}
-        : { 'X-CSRF-TOKEN': antiforgeryToken }),
+      ...(!isUnsafe || !antiforgeryToken ? {} : { 'X-CSRF-TOKEN': antiforgeryToken }),
     },
     credentials: 'include',
-    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    ...(body === undefined
+      ? {}
+      : { body: bodyKind === 'form' ? (body as FormData) : JSON.stringify(body) }),
   }
 }
 
@@ -67,13 +68,14 @@ export function createApiClient(
     options: RequestOptions<TResponse>,
     body?: unknown,
     headers?: Readonly<Record<string, string>>,
+    bodyKind: 'json' | 'form' = 'json',
   ): Promise<TResponse> {
     let response: Response
 
     try {
       response = await fetchImplementation(
         joinUrl(baseUrl, path),
-        createRequestInit(method, options.signal, body, headers, getAntiforgeryToken()),
+        createRequestInit(method, options.signal, body, headers, getAntiforgeryToken(), bodyKind),
       )
     } catch (error: unknown) {
       if (error instanceof DOMException && error.name === 'AbortError') {
@@ -129,6 +131,14 @@ export function createApiClient(
       return request(path, 'POST', options, body, options.headers)
     },
 
+    postForm<TResponse>(
+      path: string,
+      body: FormData,
+      options: RequestWithBodyOptions<TResponse>,
+    ): Promise<TResponse> {
+      return request(path, 'POST', options, body, options.headers, 'form')
+    },
+
     put<TRequest, TResponse>(
       path: string,
       body: TRequest,
@@ -152,7 +162,10 @@ export function createApiClient(
     async postRoot<TRequest>(path: string, body?: TRequest): Promise<void> {
       let response: Response
       try {
-        response = await fetchImplementation(path, createRequestInit('POST', undefined, body, undefined, getAntiforgeryToken()))
+        response = await fetchImplementation(
+          path,
+          createRequestInit('POST', undefined, body, undefined, getAntiforgeryToken()),
+        )
       } catch {
         throw new NetworkRequestError()
       }
@@ -165,8 +178,6 @@ export function createApiClient(
   }
 }
 
-export const apiClient = createApiClient(
-  environment.apiBaseUrl,
-  fetch,
-  () => antiforgeryTokenProvider(),
+export const apiClient = createApiClient(environment.apiBaseUrl, fetch, () =>
+  antiforgeryTokenProvider(),
 )

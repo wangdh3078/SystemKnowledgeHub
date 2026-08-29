@@ -196,12 +196,47 @@
   color: #a21caf;
 }
 
-.knowledge-markdown-content .knowledge-document-code-card.is-collapsed .knowledge-document-code-card__body {
+.knowledge-markdown-content
+  .knowledge-document-code-card.is-collapsed
+  .knowledge-document-code-card__body {
   display: none;
 }
 
 .knowledge-markdown-content a {
   color: var(--color-primary);
+}
+
+.knowledge-markdown-content .knowledge-document-attachment-image {
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  margin: 1em 0;
+}
+
+.knowledge-markdown-content .knowledge-document-attachment-image img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface-subtle);
+  object-fit: contain;
+}
+
+.knowledge-markdown-content .knowledge-document-attachment-image-unavailable {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  padding: 8px 12px;
+  border: 1px dashed var(--color-border-strong);
+  border-radius: 8px;
+  background: var(--color-surface-subtle);
+  color: var(--color-muted);
+  font-size: 13px;
+}
+
+.knowledge-markdown-content .knowledge-document-attachment-image-unavailable[hidden] {
+  display: none;
 }
 
 .knowledge-markdown-content blockquote {

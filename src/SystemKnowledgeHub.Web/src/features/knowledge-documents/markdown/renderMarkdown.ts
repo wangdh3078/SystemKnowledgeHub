@@ -30,6 +30,18 @@ import { icon } from '@fortawesome/fontawesome-svg-core'
 import { faCheck, faChevronDown, faChevronUp, faCopy } from '@fortawesome/free-solid-svg-icons'
 import { controlledColorMarkdownItPlugin } from './colorSyntax'
 import { isLegacyBreakParagraph } from './legacyMarkdownBreaks'
+import { knowledgeDocumentImageContentUrl } from '../api/knowledgeDocumentAttachmentsApi'
+
+export interface MarkdownAttachmentImageContext {
+  readonly documentId: number
+  readonly revisionNumber?: number
+  readonly imageAttachmentIds: readonly number[]
+  readonly transientImageUrls?: ReadonlyMap<number, string>
+}
+
+interface MarkdownRenderEnvironment {
+  readonly attachmentImageContext?: MarkdownAttachmentImageContext
+}
 
 const renderer = new MarkdownIt({ html: false, linkify: true })
 renderer.use(controlledColorMarkdownItPlugin)
@@ -154,7 +166,9 @@ function renderVueSfc(source: string): string {
     rendered += hljs.highlight(closing, { language: 'xml', ignoreIllegals: true }).value
     offset = index + match[0].length
   }
-  return rendered + hljs.highlight(source.slice(offset), { language: 'xml', ignoreIllegals: true }).value
+  return (
+    rendered + hljs.highlight(source.slice(offset), { language: 'xml', ignoreIllegals: true }).value
+  )
 }
 
 function renderHighlightedCode(source: string, language: string): string {
@@ -165,7 +179,9 @@ function renderHighlightedCode(source: string, language: string): string {
   if (!highlighterLanguage) return renderer.utils.escapeHtml(source)
   return hljs.highlight(source, { language: highlighterLanguage, ignoreIllegals: true }).value
 }
-const codeCopyIcon = icon(faCopy, { classes: ['knowledge-document-code-card__control-icon'] }).html.join('')
+const codeCopyIcon = icon(faCopy, {
+  classes: ['knowledge-document-code-card__control-icon'],
+}).html.join('')
 const codeCopiedIcon = icon(faCheck, {
   classes: ['knowledge-document-code-card__control-icon'],
 }).html.join('')
@@ -315,6 +331,62 @@ renderer.renderer.rules.link_open = (tokens, index, options, environment, self) 
     : self.renderToken(tokens, index, options)
 }
 
-export function renderMarkdown(markdown: string): string {
-  return renderer.render(markdown)
+function unavailableAttachmentImage(alt: string, attachmentId?: number): string {
+  const label = alt.trim() ? `图片不可用：${alt}` : '图片不可用'
+  const id = attachmentId === undefined ? '' : ` data-attachment-id="${attachmentId}"`
+  return `<span class="knowledge-document-attachment-image-unavailable" role="img" aria-label="${renderer.utils.escapeHtml(label)}"${id}>图片暂不可用</span>`
+}
+
+const originalImage = renderer.renderer.rules.image
+renderer.renderer.rules.image = (tokens, index, options, environment, self) => {
+  const token = tokens[index]!
+  const sourceValue = token.attrGet('src')
+  const source = typeof sourceValue === 'string' ? sourceValue : String(sourceValue ?? '')
+  if (!source.startsWith('attachment:')) {
+    return originalImage
+      ? originalImage(tokens, index, options, environment, self)
+      : self.renderToken(tokens, index, options)
+  }
+
+  const alt = token.content
+  const match = /^attachment:([1-9]\d*)$/u.exec(source)
+  if (!match) return unavailableAttachmentImage(alt)
+  const attachmentId = Number(match[1])
+  if (!Number.isSafeInteger(attachmentId)) return unavailableAttachmentImage(alt)
+
+  const imageContext = (environment as MarkdownRenderEnvironment | undefined)
+    ?.attachmentImageContext
+  if (!imageContext?.imageAttachmentIds.includes(attachmentId)) {
+    return unavailableAttachmentImage(alt, attachmentId)
+  }
+
+  const transientUrl = imageContext.transientImageUrls?.get(attachmentId)
+  let resolvedSource: string
+  try {
+    resolvedSource =
+      transientUrl ??
+      knowledgeDocumentImageContentUrl(
+        imageContext.documentId,
+        attachmentId,
+        imageContext.revisionNumber,
+      )
+  } catch {
+    return unavailableAttachmentImage(alt, attachmentId)
+  }
+
+  const escapedAlt = renderer.utils.escapeHtml(alt)
+  const escapedSource = renderer.utils.escapeHtml(resolvedSource)
+  return [
+    `<span class="knowledge-document-attachment-image" data-knowledge-document-attachment-image-container data-attachment-id="${attachmentId}">`,
+    `<img src="${escapedSource}" alt="${escapedAlt}" loading="lazy" decoding="async" data-knowledge-document-attachment-image>`,
+    `<span class="knowledge-document-attachment-image-unavailable" role="img" aria-label="${renderer.utils.escapeHtml(alt.trim() ? `图片不可用：${alt}` : '图片不可用')}" hidden>图片暂不可用</span>`,
+    '</span>',
+  ].join('')
+}
+
+export function renderMarkdown(
+  markdown: string,
+  attachmentImageContext?: MarkdownAttachmentImageContext,
+): string {
+  return renderer.render(markdown, { attachmentImageContext })
 }

@@ -70,6 +70,7 @@ const details: Readonly<Record<number, KnowledgeDocumentRevisionDetail>> = {
     title: '当前草稿标题',
     summary: '当前草稿摘要',
     bodyMarkdown: '# 当前草稿\n\n<script>alert(1)</script>\n\n[危险](javascript:alert(1))',
+    attachmentReferences: [],
   },
   2: {
     ...publishedRestore,
@@ -77,6 +78,7 @@ const details: Readonly<Record<number, KnowledgeDocumentRevisionDetail>> = {
     title: '最近发布标题',
     summary: '发布摘要',
     bodyMarkdown: '## 已发布正文',
+    attachmentReferences: [],
   },
   1: {
     ...baseline,
@@ -84,6 +86,7 @@ const details: Readonly<Record<number, KnowledgeDocumentRevisionDetail>> = {
     title: '迁移标题',
     summary: null,
     bodyMarkdown: '## 迁移正文',
+    attachmentReferences: [],
   },
 }
 
@@ -108,6 +111,7 @@ const currentDocument: KnowledgeDocumentDetail = {
   confirmationCoverage: { state: 'NoConfirmation', lastConfirmedRevisionNumber: null },
   concurrencyToken: 'opaque-current-token',
   canDelete: true,
+  attachmentReferences: [],
 }
 
 const components = {
@@ -199,12 +203,36 @@ describe('KnowledgeDocumentRevisionHistory', () => {
 
   it('keeps deleted-owner revisions readable while showing a tombstone and no restore action', async () => {
     const owner = {
-      id: 7, targetType: 'KnowledgeDocument', displayName: '已删除知识内容',
-      isDeleted: true, isNavigable: false,
+      id: 7,
+      targetType: 'KnowledgeDocument',
+      displayName: '已删除知识内容',
+      isDeleted: true,
+      isNavigable: false,
     }
     vi.mocked(listKnowledgeDocumentRevisions).mockResolvedValue({ ...response(), owner })
+    const historicalImage = {
+      attachmentId: 123,
+      kind: 'Image' as const,
+      originalFileName: '历史图.png',
+      extension: '.png',
+      contentType: 'image/png',
+      sizeBytes: 24,
+      sha256: 'a'.repeat(64),
+      previewMode: 'Image' as const,
+      canPreview: true,
+      canDownload: true,
+    }
     vi.mocked(getKnowledgeDocumentRevision).mockImplementation((_id, revisionNumber) =>
-      Promise.resolve({ ...details[revisionNumber], owner }),
+      Promise.resolve(
+        revisionNumber === 2
+          ? {
+              ...details[revisionNumber],
+              owner,
+              bodyMarkdown: '![历史图](attachment:123)',
+              attachmentReferences: [historicalImage],
+            }
+          : { ...details[revisionNumber], owner },
+      ),
     )
     const wrapper = mount(KnowledgeDocumentRevisionHistory, {
       props: { documentId: 7, document: null, canRestore: true },
@@ -217,6 +245,9 @@ describe('KnowledgeDocumentRevisionHistory', () => {
     expect(wrapper.text()).toContain('已删除知识内容')
     expect(wrapper.text()).toContain('已删除')
     expect(wrapper.text()).toContain('最近发布标题')
+    expect(wrapper.get('[data-knowledge-document-attachment-image]').attributes('src')).toBe(
+      '/api/knowledge-documents/7/revisions/2/attachments/123/content',
+    )
     expect(wrapper.find('a').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('恢复此修订')
   })

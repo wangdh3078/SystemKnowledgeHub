@@ -15,6 +15,12 @@ export const apiErrorCodes = [
   'invalid_credentials',
   'too_many_requests',
   'already_authenticated',
+  'payload_too_large',
+  'unsupported_media_type',
+  'attachment_storage_unavailable',
+  'attachment_unavailable',
+  'preview_not_supported',
+  'preview_limit_exceeded',
 ] as const
 
 export type ApiErrorCode = (typeof apiErrorCodes)[number]

@@ -17,6 +17,57 @@ describe('renderMarkdown', () => {
     expect(renderMarkdown('[官网](https://example.test)')).toContain('rel="noopener noreferrer"')
   })
 
+  it('resolves exact attachment image tokens through the authorized current context', () => {
+    const rendered = renderMarkdown('![MES 设备状态](attachment:123)', {
+      documentId: 7,
+      imageAttachmentIds: [123],
+    })
+
+    expect(rendered).toContain('src="/api/knowledge-documents/7/attachments/123/content"')
+    expect(rendered).toContain('alt="MES 设备状态"')
+    expect(rendered).toContain('data-attachment-id="123"')
+    expect(rendered).not.toContain('storageKey')
+    expect(rendered).not.toContain('objects/')
+  })
+
+  it('uses the exact revision route for historical attachment images', () => {
+    const rendered = renderMarkdown('![历史截图](attachment:123)', {
+      documentId: 7,
+      revisionNumber: 4,
+      imageAttachmentIds: [123],
+    })
+
+    expect(rendered).toContain(
+      'src="/api/knowledge-documents/7/revisions/4/attachments/123/content"',
+    )
+    expect(rendered).not.toContain('/knowledge-documents/7/attachments/123/content"')
+  })
+
+  it('uses only an editor-owned Blob URL for the exact unsaved upload', () => {
+    const rendered = renderMarkdown('![截图](attachment:124)', {
+      documentId: 7,
+      imageAttachmentIds: [124],
+      transientImageUrls: new Map([[124, 'blob:https://local.test/session-image']]),
+    })
+
+    expect(rendered).toContain('src="blob:https://local.test/session-image"')
+    expect(rendered).not.toContain('/attachments/124/content')
+  })
+
+  it.each([
+    '![未知](attachment:999)',
+    '![非法](attachment:0)',
+    '![非法](attachment:abc)',
+    '![过大](attachment:9007199254740992)',
+  ])('keeps unavailable or malformed internal images inert: %s', (source) => {
+    const rendered = renderMarkdown(source, { documentId: 7, imageAttachmentIds: [123] })
+
+    expect(rendered).toContain('knowledge-document-attachment-image-unavailable')
+    expect(rendered).toContain('图片暂不可用')
+    expect(rendered).not.toContain('<img src="attachment:')
+    expect(rendered).not.toContain('objects/')
+  })
+
   it('renders fenced code as safe technical cards with a language fallback', () => {
     const rendered = renderMarkdown('```sql\nSELECT 1;\n```\n\n```\nplain text\n```')
 
@@ -36,9 +87,21 @@ describe('renderMarkdown', () => {
     ['csharp', 'public class Sample {}', true],
     ['javascript', 'const total = 1;', true],
     ['typescript', 'interface Item { id: number }', true],
-    ['tsx', 'type Props = { title: string }\nexport const Header = ({ title }: Props) => <header>{title}</header>', true],
-    ['jsx', 'export function App() { return <button onClick={() => alert("ok")}>Hello</button> }', true],
-    ['vue', '<template><button @click="count++">{{ count }}</button></template>\n<script setup lang="ts">\nconst count: number = 0\n</script>\n<style scoped lang="scss">button { color: #409eff; }</style>', true],
+    [
+      'tsx',
+      'type Props = { title: string }\nexport const Header = ({ title }: Props) => <header>{title}</header>',
+      true,
+    ],
+    [
+      'jsx',
+      'export function App() { return <button onClick={() => alert("ok")}>Hello</button> }',
+      true,
+    ],
+    [
+      'vue',
+      '<template><button @click="count++">{{ count }}</button></template>\n<script setup lang="ts">\nconst count: number = 0\n</script>\n<style scoped lang="scss">button { color: #409eff; }</style>',
+      true,
+    ],
     ['json', '{"name":"value","enabled":true}', true],
     ['sql', 'SELECT id FROM users;', true],
     ['bash', 'echo "$HOME"', true],
@@ -67,19 +130,23 @@ describe('renderMarkdown', () => {
     ['toml', '[server]\nport = 8080', true],
     ['ini', '[server]\nport=8080', true],
     ['nginx', 'server { listen 80; }', true],
-  ] as const)('uses the selected %s highlighter without executing source', (language, source, highlighted) => {
-    const rendered = renderMarkdown(`\`\`\`${language}\n${source}\n\`\`\``)
-    const container = document.createElement('div')
-    container.innerHTML = rendered
-    const code = container.querySelector('code')
+  ] as const)(
+    'uses the selected %s highlighter without executing source',
+    (language, source, highlighted) => {
+      const rendered = renderMarkdown(`\`\`\`${language}\n${source}\n\`\`\``)
+      const container = document.createElement('div')
+      container.innerHTML = rendered
+      const code = container.querySelector('code')
 
-    expect(code?.classList.contains(`language-${language}`)).toBe(true)
-    expect(code?.classList.contains('hljs')).toBe(true)
-    expect(code?.textContent).toBe(`${source}\n`)
-    expect(code?.querySelectorAll('span[class^="hljs-"]').length)
-      .toBeGreaterThanOrEqual(highlighted ? 1 : 0)
-    expect(container.querySelector('script')).toBeNull()
-  })
+      expect(code?.classList.contains(`language-${language}`)).toBe(true)
+      expect(code?.classList.contains('hljs')).toBe(true)
+      expect(code?.textContent).toBe(`${source}\n`)
+      expect(code?.querySelectorAll('span[class^="hljs-"]').length).toBeGreaterThanOrEqual(
+        highlighted ? 1 : 0,
+      )
+      expect(container.querySelector('script')).toBeNull()
+    },
+  )
 
   it('wraps GFM tables for responsive internal scrolling while preserving table semantics', () => {
     const rendered = renderMarkdown('| 字段 | 类型 |\n| --- | --- |\n| Id | bigint |')

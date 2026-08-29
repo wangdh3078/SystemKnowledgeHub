@@ -2,14 +2,19 @@
 /* eslint-disable vue/no-v-html -- renderMarkdown keeps author-provided raw HTML disabled. */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { hydrateMermaidBlocks } from './mermaidHydrator'
-import { codeCardIcons, renderMarkdown } from './renderMarkdown'
+import {
+  codeCardIcons,
+  renderMarkdown,
+  type MarkdownAttachmentImageContext,
+} from './renderMarkdown'
 
 const props = defineProps<{
   markdown: string
+  attachmentImageContext?: MarkdownAttachmentImageContext
 }>()
 
 const rootElement = ref<HTMLElement | null>(null)
-const renderedHtml = computed(() => renderMarkdown(props.markdown))
+const renderedHtml = computed(() => renderMarkdown(props.markdown, props.attachmentImageContext))
 let hydrationVersion = 0
 const copyResetTimers = new Map<HTMLButtonElement, ReturnType<typeof setTimeout>>()
 
@@ -38,9 +43,11 @@ function clearCopyResetTimer(button: HTMLButtonElement): void {
 }
 
 function copyFeedbackElement(button: HTMLButtonElement): HTMLElement | null {
-  return getCodeCard(button)?.querySelector<HTMLElement>(
-    '[data-knowledge-document-code-copy-feedback]',
-  ) ?? null
+  return (
+    getCodeCard(button)?.querySelector<HTMLElement>(
+      '[data-knowledge-document-code-copy-feedback]',
+    ) ?? null
+  )
 }
 
 function resetCopyState(button: HTMLButtonElement): void {
@@ -94,7 +101,9 @@ async function handleCodeCardClick(event: MouseEvent): Promise<void> {
     return
   }
 
-  const collapseButton = target.closest<HTMLButtonElement>('[data-knowledge-document-code-collapse]')
+  const collapseButton = target.closest<HTMLButtonElement>(
+    '[data-knowledge-document-code-collapse]',
+  )
   if (!collapseButton) return
   const card = getCodeCard(collapseButton)
   if (!card) return
@@ -103,6 +112,25 @@ async function handleCodeCardClick(event: MouseEvent): Promise<void> {
   collapseButton.setAttribute('aria-label', collapsed ? '展开代码' : '收起代码')
   collapseButton.setAttribute('title', collapsed ? '展开代码' : '收起代码')
   collapseButton.innerHTML = collapsed ? codeCardIcons.expand : codeCardIcons.collapse
+}
+
+function handleAttachmentImageError(event: Event): void {
+  const image = event.target
+  if (
+    !(image instanceof HTMLImageElement) ||
+    !image.hasAttribute('data-knowledge-document-attachment-image')
+  ) {
+    return
+  }
+  const container = image.closest<HTMLElement>(
+    '[data-knowledge-document-attachment-image-container]',
+  )
+  const fallback = container?.querySelector<HTMLElement>(
+    '.knowledge-document-attachment-image-unavailable',
+  )
+  image.hidden = true
+  container?.classList.add('is-unavailable')
+  if (fallback) fallback.hidden = false
 }
 
 function hydrateRenderedMarkdown(): void {
@@ -130,6 +158,7 @@ watch(renderedHtml, hydrateRenderedMarkdown, { flush: 'post' })
     ref="rootElement"
     class="knowledge-document-markdown knowledge-markdown-content"
     @click="handleCodeCardClick"
+    @error.capture="handleAttachmentImageError"
     v-html="renderedHtml"
   ></div>
 </template>

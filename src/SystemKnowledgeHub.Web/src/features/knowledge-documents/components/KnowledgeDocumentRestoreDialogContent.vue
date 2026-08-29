@@ -14,6 +14,7 @@ import {
   type RevisionOrigin,
 } from '../api/knowledgeDocumentContracts'
 import KnowledgeDocumentMarkdown from '../markdown/KnowledgeDocumentMarkdown.vue'
+import type { MarkdownAttachmentImageContext } from '../markdown/renderMarkdown'
 import { formatDateTime } from '../../../app/formatters/dateTime'
 
 interface RestoreDialogPayload {
@@ -43,6 +44,17 @@ const payload = computed(() => {
     : null
 })
 const normalizedReason = computed(() => reason.value.trim())
+function sameAttachmentSet(
+  first: KnowledgeDocumentDetail['attachmentReferences'],
+  second: KnowledgeDocumentRevisionDetail['attachmentReferences'],
+): boolean {
+  const firstIds = first.map((item) => item.attachmentId).sort((left, right) => left - right)
+  const secondIds = second.map((item) => item.attachmentId).sort((left, right) => left - right)
+  return (
+    firstIds.length === secondIds.length &&
+    firstIds.every((attachmentId, index) => attachmentId === secondIds[index])
+  )
+}
 const reasonError = computed(() => {
   if (reasonServerError.value) return reasonServerError.value
   if (normalizedReason.value.length === 0) return '请输入恢复原因。'
@@ -56,8 +68,23 @@ const sourceEqualsCurrent = computed(() =>
     currentDocument.value &&
     payload.value.revision.title === currentDocument.value.title &&
     payload.value.revision.summary === currentDocument.value.summary &&
-    payload.value.revision.bodyMarkdown === currentDocument.value.bodyMarkdown,
+    payload.value.revision.bodyMarkdown === currentDocument.value.bodyMarkdown &&
+    sameAttachmentSet(
+      currentDocument.value.attachmentReferences,
+      payload.value.revision.attachmentReferences,
+    ),
   ),
+)
+const sourceImageContext = computed<MarkdownAttachmentImageContext | undefined>(() =>
+  payload.value
+    ? {
+        documentId: payload.value.document.id,
+        revisionNumber: payload.value.revision.revisionNumber,
+        imageAttachmentIds: payload.value.revision.attachmentReferences
+          .filter((attachment) => attachment.kind === 'Image')
+          .map((attachment) => attachment.attachmentId),
+      }
+    : undefined,
 )
 const restorable = computed(() =>
   Boolean(
@@ -268,7 +295,10 @@ async function submit(): Promise<void> {
       aria-labelledby="restore-preview-title"
     >
       <h3 id="restore-preview-title">历史正文预览</h3>
-      <KnowledgeDocumentMarkdown :markdown="payload.revision.bodyMarkdown" />
+      <KnowledgeDocumentMarkdown
+        :markdown="payload.revision.bodyMarkdown"
+        :attachment-image-context="sourceImageContext"
+      />
     </section>
 
     <label class="knowledge-document-restore-dialog__reason">

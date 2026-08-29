@@ -29,6 +29,7 @@ function revision(
     title: revisionNumber < 5 ? 'Oracle Listener' : 'Oracle Listener Runbook',
     summary: revisionNumber < 3 ? null : `摘要 ${revisionNumber}`,
     bodyMarkdown: `# Oracle Listener\n\n检查监听服务。\n\n修订 ${revisionNumber}`,
+    attachmentReferences: [],
     ...overrides,
   }
 }

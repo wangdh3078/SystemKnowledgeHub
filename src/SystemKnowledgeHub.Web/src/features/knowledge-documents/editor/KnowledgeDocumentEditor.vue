@@ -1,7 +1,5 @@
 <script setup lang="ts">
-import {
-  Minus,
-} from '@element-plus/icons-vue'
+import { Minus } from '@element-plus/icons-vue'
 import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome'
 import {
   faCode,
@@ -26,7 +24,11 @@ import { markdown } from '@codemirror/lang-markdown'
 import { EditorState } from '@codemirror/state'
 import { EditorView, keymap } from '@codemirror/view'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { ApiError, NetworkRequestError } from '../../../api/errors/ApiError'
+import type { AttachmentMetadata } from '../api/attachmentContracts'
+import { uploadKnowledgeDocumentImage } from '../api/knowledgeDocumentAttachmentsApi'
 import KnowledgeDocumentMarkdown from '../markdown/KnowledgeDocumentMarkdown.vue'
+import type { MarkdownAttachmentImageContext } from '../markdown/renderMarkdown'
 import {
   applyHeading,
   insertCodeBlock,
@@ -49,8 +51,16 @@ const props = withDefaults(
     previewing?: boolean
     fullscreen?: boolean
     viewport?: 'detail' | 'dialog'
+    documentId?: number
+    attachmentReferences?: readonly AttachmentMetadata[]
   }>(),
-  { previewing: false, fullscreen: false, viewport: 'detail' },
+  {
+    previewing: false,
+    fullscreen: false,
+    viewport: 'detail',
+    documentId: undefined,
+    attachmentReferences: () => [],
+  },
 )
 const model = defineModel<string>({ required: true })
 const emit = defineEmits<{
@@ -58,6 +68,7 @@ const emit = defineEmits<{
   preview: []
   'request-save': []
   'toggle-fullscreen': []
+  'uploading-change': [uploading: boolean]
 }>()
 
 type CodeLanguage =
@@ -146,7 +157,10 @@ const codeLanguages: ReadonlyArray<{ readonly value: CodeLanguage; readonly labe
   { value: 'ini', label: 'INI' },
   { value: 'nginx', label: 'Nginx' },
 ]
-const diagramOptions: ReadonlyArray<{ readonly value: MermaidDiagramType; readonly label: string }> = [
+const diagramOptions: ReadonlyArray<{
+  readonly value: MermaidDiagramType
+  readonly label: string
+}> = [
   { value: 'flowchart', label: '流程图' },
   { value: 'sequence', label: '时序图' },
   { value: 'gantt', label: '甘特图' },
@@ -158,6 +172,7 @@ const diagramOptions: ReadonlyArray<{ readonly value: MermaidDiagramType; readon
 ]
 const tooltipTriggers: ('hover' | 'focus')[] = ['hover', 'focus']
 const editorRoot = ref<HTMLElement | null>(null)
+const fileInput = ref<HTMLInputElement | null>(null)
 const sourceReady = ref(false)
 const tableDialogOpen = ref(false)
 const linkDialogOpen = ref(false)
@@ -171,10 +186,46 @@ const linkDisplayText = ref('')
 const linkError = ref<string | null>(null)
 const canUndo = ref(false)
 const canRedo = ref(false)
+const uploadingImages = ref(false)
+const dragActive = ref(false)
+const uploadMessage = ref<string | null>(null)
+const uploadError = ref<string | null>(null)
+const transientImageUrls = ref<ReadonlyMap<number, string>>(new Map())
 const fullscreenLabel = computed(() => (props.fullscreen ? '退出全屏' : '全屏'))
 const formattingDisabled = computed(() => !sourceReady.value || props.previewing)
+const imageUploadDisabled = computed(
+  () => formattingDisabled.value || uploadingImages.value || props.documentId === undefined,
+)
+const imageUploadTooltip = computed(() => {
+  if (props.documentId === undefined) return '创建草稿后可插入图片'
+  if (uploadingImages.value) return '图片上传中'
+  return '插入图片'
+})
+const imageAccept = '.png,.jpg,.jpeg,.gif,.webp,image/png,image/jpeg,image/gif,image/webp'
+const previewImageContext = computed<MarkdownAttachmentImageContext | undefined>(() => {
+  if (props.documentId === undefined) return undefined
+  const savedIds = props.attachmentReferences
+    .filter((attachment) => attachment.kind === 'Image')
+    .map((attachment) => attachment.attachmentId)
+  return {
+    documentId: props.documentId,
+    imageAttachmentIds: [...new Set([...savedIds, ...transientImageUrls.value.keys()])],
+    transientImageUrls: transientImageUrls.value,
+  }
+})
 let view: EditorView | null = null
 let applyingExternalSource = false
+let uploadAbortController: AbortController | null = null
+let unmounted = false
+const pendingInsertionAnchors = new Set<{ position: number }>()
+
+interface PendingImage {
+  readonly file: File
+  readonly altOverride?: string
+}
+
+const approvedExtensions = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp'])
+const approvedMimeTypes = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp'])
 
 function refreshHistoryState(): void {
   if (!view) return
@@ -295,6 +346,254 @@ function redoSource(): void {
   refreshHistoryState()
 }
 
+function openImagePicker(): void {
+  if (imageUploadDisabled.value) return
+  uploadError.value = null
+  fileInput.value?.click()
+}
+
+function fileExtension(fileName: string): string {
+  const match = /\.[^.]+$/u.exec(fileName.trim())
+  return match?.[0].toLowerCase() ?? ''
+}
+
+function isApprovedImageCandidate(file: File): boolean {
+  const extension = fileExtension(file.name)
+  const mime = file.type.toLowerCase()
+  return (
+    approvedExtensions.has(extension) &&
+    (mime === '' || mime === 'application/octet-stream' || approvedMimeTypes.has(mime))
+  )
+}
+
+function normalizedAlt(value: string): string {
+  return (
+    value
+      .replace(/[\r\n\t]+/gu, ' ')
+      .replace(/\s+/gu, ' ')
+      .trim() || '图片'
+  )
+}
+
+function safeMarkdownAlt(value: string): string {
+  return normalizedAlt(value).replace(/\\/gu, '\\\\').replace(/\]/gu, '\\]')
+}
+
+function altFromMetadata(metadata: AttachmentMetadata): string {
+  const extension = metadata.extension.toLowerCase()
+  const name = metadata.originalFileName
+  return normalizedAlt(
+    name.toLowerCase().endsWith(extension) ? name.slice(0, -extension.length) : name,
+  )
+}
+
+function uploadFailureMessage(reason: unknown, fileName: string): string {
+  if (reason instanceof ApiError) {
+    if (reason.status === 413) return `${fileName} 超过图片大小限制，未插入正文。`
+    if (reason.status === 415) return `${fileName} 不是受支持的 PNG、JPEG、GIF 或 WEBP 图片。`
+    if (reason.status === 401) return '登录状态已失效，图片未上传。'
+    if (reason.status === 403) return '当前身份无权向此文档上传图片。'
+    if (reason.status === 404) return '当前知识内容不存在或已删除，图片未上传。'
+    if (reason.status === 409) return '当前文档已不可编辑，请刷新状态后重试。'
+    if (reason.status === 422) return '图片引用上下文无效，未插入正文。'
+    if (reason.status === 503 || reason.status === 507) return '附件存储暂不可用，图片未上传。'
+    return reason.message
+  }
+  if (reason instanceof NetworkRequestError) return '网络连接失败，图片未上传；正文保持不变。'
+  return reason instanceof Error ? reason.message : `${fileName} 上传失败，未插入正文。`
+}
+
+function setTransientImageUrl(attachmentId: number, file: File): void {
+  const next = new Map(transientImageUrls.value)
+  const previous = next.get(attachmentId)
+  if (previous) URL.revokeObjectURL(previous)
+  next.set(attachmentId, URL.createObjectURL(file))
+  transientImageUrls.value = next
+}
+
+function insertImageToken(
+  anchor: { position: number },
+  metadata: AttachmentMetadata,
+  alt: string,
+): void {
+  if (!view) return
+  const token = `![${safeMarkdownAlt(alt)}](attachment:${metadata.attachmentId})`
+  view.dispatch({
+    changes: { from: anchor.position, insert: token },
+    selection: { anchor: anchor.position + token.length },
+  })
+  view.contentDOM.focus({ preventScroll: true })
+  refreshHistoryState()
+}
+
+async function uploadImages(
+  images: readonly PendingImage[],
+  insertionPosition?: number,
+): Promise<void> {
+  if (!view || props.documentId === undefined || images.length === 0) return
+  if (uploadingImages.value) {
+    uploadError.value = '已有图片正在上传，请等待完成后再试。'
+    if (fileInput.value) fileInput.value.value = ''
+    return
+  }
+
+  const candidates = images.filter((item) => isApprovedImageCandidate(item.file))
+  const rejected = images.length - candidates.length
+  uploadError.value =
+    rejected > 0 ? `${rejected} 个文件不是受支持的 PNG、JPEG、GIF 或 WEBP 图片，未上传。` : null
+  if (candidates.length === 0) {
+    if (fileInput.value) fileInput.value.value = ''
+    return
+  }
+
+  const anchor = {
+    position:
+      insertionPosition === undefined
+        ? view.state.selection.main.head
+        : Math.min(Math.max(insertionPosition, 0), view.state.doc.length),
+  }
+  pendingInsertionAnchors.add(anchor)
+  uploadingImages.value = true
+  emit('uploading-change', true)
+  uploadMessage.value = `正在上传 1 / ${candidates.length}…`
+  const failures: string[] = []
+  let succeeded = 0
+  try {
+    for (let index = 0; index < candidates.length; index += 1) {
+      if (unmounted) break
+      const item = candidates[index]!
+      uploadMessage.value = `正在上传 ${index + 1} / ${candidates.length}：${item.file.name}`
+      const controller = new AbortController()
+      uploadAbortController = controller
+      try {
+        const metadata = await uploadKnowledgeDocumentImage(
+          props.documentId,
+          item.file,
+          controller.signal,
+        )
+        if (metadata.kind !== 'Image' || metadata.previewMode !== 'Image') {
+          throw new Error('服务器未将该文件识别为可用图片。')
+        }
+        if (unmounted || !view) break
+        setTransientImageUrl(metadata.attachmentId, item.file)
+        insertImageToken(anchor, metadata, item.altOverride ?? altFromMetadata(metadata))
+        succeeded += 1
+      } catch (reason: unknown) {
+        if (reason instanceof DOMException && reason.name === 'AbortError') continue
+        failures.push(uploadFailureMessage(reason, item.file.name))
+      }
+    }
+  } finally {
+    uploadAbortController = null
+    pendingInsertionAnchors.delete(anchor)
+    uploadingImages.value = false
+    emit('uploading-change', false)
+    if (fileInput.value) fileInput.value.value = ''
+  }
+
+  if (unmounted) return
+  if (succeeded > 0) {
+    uploadMessage.value = `已上传并插入 ${succeeded} 张图片；保存文档后才会写入修订。取消编辑不会删除已上传文件。`
+  } else {
+    uploadMessage.value = null
+  }
+  if (failures.length > 0) {
+    uploadError.value = [uploadError.value, ...failures].filter(Boolean).join(' ')
+  }
+}
+
+function handleFileInput(event: Event): void {
+  const target = event.target
+  if (!(target instanceof HTMLInputElement)) return
+  void uploadImages(Array.from(target.files ?? []).map((file) => ({ file })))
+}
+
+function hasDraggedFiles(event: DragEvent): boolean {
+  return Array.from(event.dataTransfer?.types ?? []).includes('Files')
+}
+
+function handleDragEnter(event: DragEvent): boolean {
+  if (props.documentId === undefined) return false
+  if (!hasDraggedFiles(event)) return false
+  event.preventDefault()
+  dragActive.value = true
+  return true
+}
+
+function handleDragOver(event: DragEvent): boolean {
+  if (props.documentId === undefined) return false
+  if (!hasDraggedFiles(event)) return false
+  event.preventDefault()
+  if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'
+  dragActive.value = true
+  return true
+}
+
+function handleDragLeave(event: DragEvent): boolean {
+  if (props.documentId === undefined) return false
+  if (!hasDraggedFiles(event)) return false
+  if (!(event.relatedTarget instanceof Node) || !view?.dom.contains(event.relatedTarget)) {
+    dragActive.value = false
+  }
+  return true
+}
+
+function handleDrop(event: DragEvent): boolean {
+  if (props.documentId === undefined) return false
+  if (!hasDraggedFiles(event)) return false
+  event.preventDefault()
+  dragActive.value = false
+  const files = Array.from(event.dataTransfer?.files ?? [])
+  let dropPosition: number | undefined
+  try {
+    dropPosition = view?.posAtCoords({ x: event.clientX, y: event.clientY }) ?? undefined
+  } catch {
+    dropPosition = undefined
+  }
+  void uploadImages(
+    files.map((file) => ({ file })),
+    dropPosition,
+  )
+  return true
+}
+
+function clipboardImageFiles(event: ClipboardEvent): readonly File[] {
+  const items = Array.from(event.clipboardData?.items ?? [])
+  return items
+    .filter((item) => item.kind === 'file')
+    .map((item) => item.getAsFile())
+    .filter((file): file is File => file !== null)
+    .filter(
+      (file) =>
+        file.type.toLowerCase().startsWith('image/') ||
+        approvedExtensions.has(fileExtension(file.name)),
+    )
+    .map((file, index) => {
+      const extensionByMime: Readonly<Record<string, string>> = {
+        'image/png': '.png',
+        'image/jpeg': '.jpg',
+        'image/gif': '.gif',
+        'image/webp': '.webp',
+      }
+      const extension =
+        extensionByMime[file.type.toLowerCase()] ?? (fileExtension(file.name) || '.bin')
+      const stamp = new Date().toISOString().replace(/[:.]/gu, '-')
+      return new File([file], `截图-${stamp}-${index + 1}${extension}`, {
+        type: file.type,
+        lastModified: file.lastModified,
+      })
+    })
+}
+
+function handlePaste(event: ClipboardEvent): boolean {
+  if (props.documentId === undefined) return false
+  const files = clipboardImageFiles(event)
+  if (files.length === 0) return false
+  event.preventDefault()
+  void uploadImages(files.map((file) => ({ file, altOverride: '截图' })))
+  return true
+}
+
 function replaceExternalSource(nextSource: string): void {
   if (!view || view.state.doc.toString() === nextSource) return
   applyingExternalSource = true
@@ -327,8 +626,18 @@ onMounted(() => {
         ]),
         EditorView.updateListener.of((update) => {
           if (!update.docChanged) return
+          pendingInsertionAnchors.forEach((anchor) => {
+            anchor.position = update.changes.mapPos(anchor.position, 1)
+          })
           if (!applyingExternalSource) model.value = update.state.doc.toString()
           refreshHistoryState()
+        }),
+        EditorView.domEventHandlers({
+          dragenter: handleDragEnter,
+          dragover: handleDragOver,
+          dragleave: handleDragLeave,
+          drop: handleDrop,
+          paste: handlePaste,
         }),
       ],
     }),
@@ -340,6 +649,12 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  unmounted = true
+  uploadAbortController?.abort()
+  uploadAbortController = null
+  transientImageUrls.value.forEach((url) => URL.revokeObjectURL(url))
+  transientImageUrls.value = new Map()
+  if (uploadingImages.value) emit('uploading-change', false)
   sourceReady.value = false
   view?.destroy()
   view = null
@@ -406,8 +721,7 @@ onBeforeUnmount(() => {
             :disabled="formattingDisabled"
             @click="applyTransform((source, selection) => toggleInlineWrap(source, selection, '`'))"
             ><font-awesome-icon :icon="faCode" fixed-width /></el-button
-          ></el-tooltip
-        >
+        ></el-tooltip>
       </div>
       <div class="knowledge-document-editor__tool-group">
         <el-tooltip content="引用" placement="top" :trigger="tooltipTriggers"
@@ -418,8 +732,7 @@ onBeforeUnmount(() => {
             :disabled="formattingDisabled"
             @click="applyTransform(toggleQuote)"
             ><font-awesome-icon :icon="faQuoteLeft" fixed-width /></el-button
-          ></el-tooltip
-        >
+        ></el-tooltip>
         <el-tooltip content="无序列表" placement="top" :trigger="tooltipTriggers"
           ><el-button
             class="knowledge-document-editor__icon-button"
@@ -437,8 +750,7 @@ onBeforeUnmount(() => {
             :disabled="formattingDisabled"
             @click="applyTransform(toggleOrderedList)"
             ><font-awesome-icon :icon="faListOl" fixed-width /></el-button
-          ></el-tooltip
-        >
+        ></el-tooltip>
         <el-tooltip content="任务列表" placement="top" :trigger="tooltipTriggers"
           ><el-button
             class="knowledge-document-editor__icon-button"
@@ -458,8 +770,7 @@ onBeforeUnmount(() => {
             :disabled="formattingDisabled"
             @click="openCodeDialog"
             ><font-awesome-icon :icon="faFileCode" fixed-width /></el-button
-          ></el-tooltip
-        >
+        ></el-tooltip>
         <el-tooltip content="插入链接" placement="top" :trigger="tooltipTriggers"
           ><el-button
             class="knowledge-document-editor__icon-button"
@@ -502,8 +813,9 @@ onBeforeUnmount(() => {
               type="button"
               role="menuitem"
               @click="insertDiagramTemplate(option.value)"
-              >{{ option.label }}</button
             >
+              {{ option.label }}
+            </button>
           </div>
         </div>
         <el-tooltip content="插入分隔线" placement="top" :trigger="tooltipTriggers"
@@ -515,15 +827,30 @@ onBeforeUnmount(() => {
             @click="applyTransform(insertHorizontalRule)"
             ><el-icon><Minus /></el-icon></el-button
         ></el-tooltip>
-        <el-tooltip content="图片上传功能开发中" placement="top" :trigger="tooltipTriggers"
-          ><span class="knowledge-document-editor__disabled-tooltip" tabindex="0"
+        <el-tooltip :content="imageUploadTooltip" placement="top" :trigger="tooltipTriggers"
+          ><span class="knowledge-document-editor__disabled-tooltip"
             ><el-button
               class="knowledge-document-editor__icon-button"
-              aria-label="图片上传功能开发中"
+              aria-label="插入图片"
               size="small"
-              disabled
-              ><font-awesome-icon :icon="faImage" fixed-width /></el-button></span
+              :loading="uploadingImages"
+              :disabled="imageUploadDisabled"
+              @click="openImagePicker"
+              ><font-awesome-icon
+                v-if="!uploadingImages"
+                :icon="faImage"
+                fixed-width /></el-button></span
         ></el-tooltip>
+        <input
+          ref="fileInput"
+          class="knowledge-document-editor__file-input"
+          type="file"
+          :accept="imageAccept"
+          multiple
+          tabindex="-1"
+          aria-hidden="true"
+          @change="handleFileInput"
+        />
       </div>
       <div class="knowledge-document-editor__tool-group knowledge-document-editor__workspace-group">
         <el-tooltip content="撤销（Ctrl+Z）" placement="top" :trigger="tooltipTriggers"
@@ -559,8 +886,7 @@ onBeforeUnmount(() => {
             plain
             @click="emit('edit')"
             ><font-awesome-icon :icon="faCode" fixed-width /></el-button
-          ></el-tooltip
-        >
+        ></el-tooltip>
         <el-tooltip content="预览" placement="top" :trigger="tooltipTriggers"
           ><el-button
             class="knowledge-document-editor__icon-button knowledge-document-editor__view-button"
@@ -571,8 +897,7 @@ onBeforeUnmount(() => {
             plain
             @click="emit('preview')"
             ><font-awesome-icon :icon="faEye" fixed-width /></el-button
-          ></el-tooltip
-        >
+        ></el-tooltip>
         <el-tooltip :content="fullscreenLabel" placement="top" :trigger="tooltipTriggers"
           ><el-button
             class="knowledge-document-editor__icon-button"
@@ -586,14 +911,30 @@ onBeforeUnmount(() => {
     </div>
 
     <div
+      v-if="uploadingImages || uploadMessage || uploadError"
+      class="knowledge-document-editor__upload-feedback"
+      aria-live="polite"
+    >
+      <p v-if="uploadingImages || uploadMessage" role="status">{{ uploadMessage }}</p>
+      <p v-if="uploadError" class="is-error" role="alert">{{ uploadError }}</p>
+    </div>
+
+    <div
       v-show="!previewing"
       ref="editorRoot"
-      class="knowledge-document-editor__source"
+      :class="['knowledge-document-editor__source', { 'is-drag-active': dragActive }]"
       aria-label="Markdown 原始源码"
-    ></div>
+    >
+      <div v-if="dragActive" class="knowledge-document-editor__drop-feedback" role="status">
+        释放以依次上传并插入图片
+      </div>
+    </div>
     <div v-show="previewing" class="knowledge-document-editor__preview" aria-live="polite">
       <p class="knowledge-document-editor__preview-note">预览未保存内容</p>
-      <KnowledgeDocumentMarkdown :markdown="model" />
+      <KnowledgeDocumentMarkdown
+        :markdown="model"
+        :attachment-image-context="previewImageContext"
+      />
     </div>
 
     <el-dialog v-model="linkDialogOpen" title="插入链接" width="420px" append-to-body>

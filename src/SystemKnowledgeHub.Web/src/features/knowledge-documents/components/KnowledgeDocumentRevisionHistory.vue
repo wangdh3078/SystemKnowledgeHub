@@ -17,6 +17,7 @@ import {
   type RevisionOrigin,
 } from '../api/knowledgeDocumentContracts'
 import KnowledgeDocumentMarkdown from '../markdown/KnowledgeDocumentMarkdown.vue'
+import type { MarkdownAttachmentImageContext } from '../markdown/renderMarkdown'
 import RevisionCompareView from './RevisionCompareView.vue'
 import { useOverlayStore } from '../../../app/stores/overlays'
 import { formatDateTime } from '../../../app/formatters/dateTime'
@@ -73,6 +74,17 @@ const restoreRequiresDraft = computed(() =>
   ),
 )
 const revisionCount = computed(() => props.document?.currentRevisionNumber ?? total.value)
+const detailImageContext = computed<MarkdownAttachmentImageContext | undefined>(() =>
+  detail.value
+    ? {
+        documentId: props.documentId,
+        revisionNumber: detail.value.revisionNumber,
+        imageAttachmentIds: detail.value.attachmentReferences
+          .filter((attachment) => attachment.kind === 'Image')
+          .map((attachment) => attachment.attachmentId),
+      }
+    : undefined,
+)
 
 function isAbort(reason: unknown): boolean {
   return reason instanceof DOMException && reason.name === 'AbortError'
@@ -232,7 +244,9 @@ onBeforeUnmount(() => {
         <el-button :disabled="selectedRevisionNumber === null" type="primary" @click="enterCompare"
           >比较修订</el-button
         >
-        <el-button type="primary" plain @click="emit('return')">{{ owner?.isDeleted ? '返回知识内容列表' : '返回当前内容' }}</el-button>
+        <el-button type="primary" plain @click="emit('return')">{{
+          owner?.isDeleted ? '返回知识内容列表' : '返回当前内容'
+        }}</el-button>
       </div>
     </header>
 
@@ -244,9 +258,7 @@ onBeforeUnmount(() => {
       @retry="loadList"
     />
     <div v-else-if="items.length === 0" class="knowledge-document-history__empty" role="status">
-      <strong>{{
-        revisionCount > 0 ? '无法加载修订历史' : '暂无修订历史'
-      }}</strong>
+      <strong>{{ revisionCount > 0 ? '无法加载修订历史' : '暂无修订历史' }}</strong>
       <p>未返回可显示的修订；当前内容不会被伪造为历史快照。</p>
       <el-button text type="primary" @click="loadList">重试</el-button>
     </div>
@@ -355,7 +367,11 @@ onBeforeUnmount(() => {
             <section class="knowledge-document-history__body">
               <h3>历史正文</h3>
               <p v-if="!detail.bodyMarkdown.trim()" class="text-muted">该修订暂无正文。</p>
-              <KnowledgeDocumentMarkdown v-else :markdown="detail.bodyMarkdown" />
+              <KnowledgeDocumentMarkdown
+                v-else
+                :markdown="detail.bodyMarkdown"
+                :attachment-image-context="detailImageContext"
+              />
             </section>
             <footer
               v-if="restoreAvailable || restoreRequiresDraft"

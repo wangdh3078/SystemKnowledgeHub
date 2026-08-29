@@ -48,7 +48,14 @@ vi.mock('vue', async (importOriginal) => {
           previewing: Boolean,
           fullscreen: Boolean,
         },
-        emits: ['update:modelValue', 'request-save', 'edit', 'preview', 'toggle-fullscreen'],
+        emits: [
+          'update:modelValue',
+          'request-save',
+          'edit',
+          'preview',
+          'toggle-fullscreen',
+          'uploading-change',
+        ],
         setup(props, { emit }) {
           return () =>
             actual.h('div', { class: { 'is-fullscreen': props.fullscreen } }, [
@@ -95,6 +102,16 @@ vi.mock('vue', async (importOriginal) => {
                   onClick: () => emit('toggle-fullscreen'),
                 },
                 props.fullscreen ? '退出全屏' : '全屏',
+              ),
+              actual.h(
+                'button',
+                { type: 'button', onClick: () => emit('uploading-change', true) },
+                '开始图片上传',
+              ),
+              actual.h(
+                'button',
+                { type: 'button', onClick: () => emit('uploading-change', false) },
+                '完成图片上传',
               ),
               props.previewing
                 ? actual.h('div', [
@@ -195,6 +212,7 @@ const detail: KnowledgeDocumentDetail = {
   confirmationCoverage: { state: 'NoConfirmation', lastConfirmedRevisionNumber: null },
   concurrencyToken: 'token-1',
   canDelete: true,
+  attachmentReferences: [],
 }
 
 const components = {
@@ -205,6 +223,8 @@ const components = {
   },
   ElTag: { template: '<span><slot /></span>' },
   ElAlert: { template: '<div><span>{{ $attrs.title }}</span><slot /></div>' },
+  // Test-only form stub exposes the validation surface used by this feature.
+  // eslint-disable-next-line vue/one-component-per-file
   ElForm: defineComponent({
     setup(_props, { slots, expose }) {
       expose({ validate: () => Promise.resolve(true) })
@@ -291,6 +311,7 @@ describe('KnowledgeDocumentDetailView editing', () => {
       title: '历史标题',
       summary: null,
       bodyMarkdown: '## 历史正文',
+      attachmentReferences: [],
     })
     overlayState.openDrawer.mockReset()
     overlayState.openDialog.mockReset()
@@ -302,6 +323,35 @@ describe('KnowledgeDocumentDetailView editing', () => {
     traceState.mounted.mockReset()
     impactState.refresh.mockReset()
     impactState.mounted.mockReset()
+  })
+
+  it('renders a current image only through its protected current reference context', async () => {
+    vi.mocked(getKnowledgeDocument).mockResolvedValue({
+      ...detail,
+      bodyMarkdown: '![设备状态](attachment:123)',
+      attachmentReferences: [
+        {
+          attachmentId: 123,
+          kind: 'Image',
+          originalFileName: '设备状态.png',
+          extension: '.png',
+          contentType: 'image/png',
+          sizeBytes: 24,
+          sha256: 'a'.repeat(64),
+          previewMode: 'Image',
+          canPreview: true,
+          canDownload: true,
+        },
+      ],
+    })
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.get('[data-knowledge-document-attachment-image]').attributes('src')).toBe(
+      '/api/knowledge-documents/1/attachments/123/content',
+    )
+    expect(wrapper.html()).not.toContain('objects/')
   })
 
   it('previews unsaved Markdown and saves title, summary, body and token atomically', async () => {
@@ -343,6 +393,21 @@ describe('KnowledgeDocumentDetailView editing', () => {
     expect(wrapper.find('.knowledge-document-body > h2').exists()).toBe(false)
     expect(wrapper.find('textarea').exists()).toBe(false)
     expect(wrapper.text()).toContain('更新后的 SOP')
+  })
+
+  it('blocks semantic save while an image upload is pending without locking source editing', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    await button(wrapper, '编辑')?.trigger('click')
+    await button(wrapper, '修改正文')?.trigger('click')
+    await button(wrapper, '开始图片上传')?.trigger('click')
+
+    expect(wrapper.text()).toContain('图片上传中…')
+    expect(button(wrapper, '保存')?.attributes('disabled')).toBeDefined()
+    expect(button(wrapper, '修改正文')?.attributes('disabled')).toBeUndefined()
+
+    await button(wrapper, '完成图片上传')?.trigger('click')
+    expect(button(wrapper, '保存')?.attributes('disabled')).toBeUndefined()
   })
 
   it('routes the source Ctrl/Cmd+S request through the Published confirmation state machine', async () => {
@@ -979,9 +1044,11 @@ describe('KnowledgeDocumentDetailView editing', () => {
     expect(wrapper.find('.traceability-section-stub').exists()).toBe(true)
     expect(wrapper.find('.impact-context-section-stub').exists()).toBe(true)
     expect(
-      Array.from(wrapper.element.querySelectorAll(
-        '.knowledge-document-body, .traceability-section-stub, .impact-context-section-stub, .knowledge-document-relations',
-      ) as NodeListOf<HTMLElement>).map((element) => element.className),
+      Array.from(
+        wrapper.element.querySelectorAll(
+          '.knowledge-document-body, .traceability-section-stub, .impact-context-section-stub, .knowledge-document-relations',
+        ) as NodeListOf<HTMLElement>,
+      ).map((element) => element.className),
     ).toEqual([
       'knowledge-document-body',
       'traceability-section-stub',

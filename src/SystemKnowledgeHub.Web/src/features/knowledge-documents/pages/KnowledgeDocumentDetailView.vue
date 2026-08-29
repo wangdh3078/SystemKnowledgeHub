@@ -30,6 +30,7 @@ import {
   type KnowledgeDocumentDetail,
 } from '../api/knowledgeDocumentContracts'
 import KnowledgeDocumentMarkdown from '../markdown/KnowledgeDocumentMarkdown.vue'
+import type { MarkdownAttachmentImageContext } from '../markdown/renderMarkdown'
 import {
   confirmDocumentEditDiscard,
   isDocumentEditDirty,
@@ -71,6 +72,7 @@ const previewing = ref(false)
 const editorFullscreen = ref(false)
 const saving = ref(false)
 const saveConfirming = ref(false)
+const imageUploading = ref(false)
 const editTitle = ref('')
 const editSummary = ref('')
 const editBodyMarkdown = ref('')
@@ -92,7 +94,9 @@ const id = computed(() => {
 const canEdit = computed(() => actorStore.canEdit)
 const isArchived = computed(() => data.value?.lifecycleStatus === 'Archived')
 const supportsTraceability = computed(
-  () => data.value !== null && traceDocumentTypes.includes(data.value.documentType as TraceDocumentType),
+  () =>
+    data.value !== null &&
+    traceDocumentTypes.includes(data.value.documentType as TraceDocumentType),
 )
 const evidenceSubject = computed<EvidenceSubjectPayload | null>(() =>
   data.value
@@ -129,11 +133,27 @@ const editSnapshot = computed<DocumentEditSnapshot>(() => ({
 const dirty = computed(
   () => initialEdit.value !== null && isDocumentEditDirty(editSnapshot.value, initialEdit.value),
 )
+const currentImageContext = computed<MarkdownAttachmentImageContext | undefined>(() =>
+  data.value
+    ? {
+        documentId: data.value.id,
+        imageAttachmentIds: data.value.attachmentReferences
+          .filter((attachment) => attachment.kind === 'Image')
+          .map((attachment) => attachment.attachmentId),
+      }
+    : undefined,
+)
 const titleValid = computed(
   () => editTitle.value.trim().length > 0 && editTitle.value.trim().length <= 300,
 )
 const canSave = computed(
-  () => editing.value && dirty.value && titleValid.value && !saving.value && !saveConfirming.value,
+  () =>
+    editing.value &&
+    dirty.value &&
+    titleValid.value &&
+    !saving.value &&
+    !saveConfirming.value &&
+    !imageUploading.value,
 )
 async function load(): Promise<void> {
   const requestedId = id.value
@@ -261,11 +281,24 @@ function beginEdit(): void {
   previewing.value = false
   editorFullscreen.value = false
   saveError.value = null
+  imageUploading.value = false
   validationErrors.value = {}
   savedMessage.value = null
   editing.value = true
 }
 async function confirmDiscard(): Promise<boolean> {
+  if (imageUploading.value) {
+    try {
+      await ElMessageBox.confirm(
+        '图片仍在上传。离开编辑会中止本次请求；服务端若已完成上传，文件会保留为未引用图片。未保存正文也会丢失。',
+        '确认离开编辑',
+        { confirmButtonText: '确认离开', cancelButtonText: '继续编辑', type: 'warning' },
+      )
+      return true
+    } catch {
+      return false
+    }
+  }
   if (!dirty.value) return true
   setActiveDocumentEditDirty(true)
   return confirmDocumentEditDiscard()
@@ -278,6 +311,7 @@ function finishEdit(): void {
   editing.value = false
   previewing.value = false
   editorFullscreen.value = false
+  imageUploading.value = false
   initialEdit.value = null
   saveError.value = null
   validationErrors.value = {}
@@ -302,7 +336,9 @@ function requestDelete(): void {
   if (!data.value?.canDelete || editing.value) return
   const current = data.value
   openDeleteDialog(overlayStore, {
-    objectTypeLabel: '知识内容', actionLabel: '删除知识内容', displayName: current.title,
+    objectTypeLabel: '知识内容',
+    actionLabel: '删除知识内容',
+    displayName: current.title,
     concurrencyToken: current.concurrencyToken,
     execute: () => deleteKnowledgeDocument(current.id, current.concurrencyToken),
     onDeleted: () => router.push({ name: 'knowledge-documents-list' }),
@@ -349,6 +385,18 @@ async function performSave(): Promise<void> {
     if (reason instanceof ApiError && reason.status === 403) {
       await actorStore.refreshCurrentUser()
       saveError.value = '权限已变化，未保存内容仍保留。'
+      return
+    }
+    if (reason instanceof ApiError && reason.status === 404) {
+      saveError.value = '当前文档已不存在；未保存正文仍保留，请复制需要的内容后返回列表。'
+      return
+    }
+    if (reason instanceof ApiError && reason.status === 422) {
+      saveError.value = '正文中的图片引用无效或不可用；未保存正文仍保留，请检查图片后重试。'
+      return
+    }
+    if (reason instanceof ApiError && reason.status === 503) {
+      saveError.value = '附件存储暂不可用；未保存正文仍保留，请稍后重试。'
       return
     }
     saveError.value = reason instanceof Error ? reason.message : '保存失败，请稍后重试。'
@@ -407,7 +455,7 @@ function handleShortcut(event: KeyboardEvent): void {
   }
 }
 function beforeUnload(event: BeforeUnloadEvent): void {
-  if (!editing.value || !dirty.value) return
+  if (!editing.value || (!dirty.value && !imageUploading.value)) return
   event.preventDefault()
   event.returnValue = ''
 }
@@ -524,9 +572,9 @@ watch(
   },
 )
 watch(
-  [editing, dirty],
-  ([isEditing, isDirty]) => {
-    setActiveDocumentEditDirty(isEditing && isDirty)
+  [editing, dirty, imageUploading],
+  ([isEditing, isDirty, isUploading]) => {
+    setActiveDocumentEditDirty(isEditing && (isDirty || isUploading))
   },
   { immediate: true },
 )
@@ -591,7 +639,14 @@ onBeforeUnmount(() => {
             <el-button @click="enterHistory"
               >修订历史（{{ data.currentRevisionNumber }}）</el-button
             >
-            <el-button v-if="data.canDelete && !editing" type="danger" plain :icon="Delete" @click="requestDelete">删除知识内容</el-button>
+            <el-button
+              v-if="data.canDelete && !editing"
+              type="danger"
+              plain
+              :icon="Delete"
+              @click="requestDelete"
+              >删除知识内容</el-button
+            >
             <template v-if="editing">
               <el-button :disabled="saving" @click="cancelEdit">取消</el-button>
               <el-button
@@ -663,7 +718,9 @@ onBeforeUnmount(() => {
               { 'is-dirty': dirty, 'is-saving': saving },
             ]"
           >
-            {{ saving ? '正在保存…' : dirty ? '未保存' : '已保存' }}
+            {{
+              imageUploading ? '图片上传中…' : saving ? '正在保存…' : dirty ? '未保存' : '已保存'
+            }}
           </span>
         </div>
         <p
@@ -690,10 +747,13 @@ onBeforeUnmount(() => {
           v-model="editBodyMarkdown"
           :previewing="previewing"
           :fullscreen="editorFullscreen"
+          :document-id="data.id"
+          :attachment-references="data.attachmentReferences"
           @edit="previewing = false"
           @preview="previewing = true"
           @request-save="requestSave"
           @toggle-fullscreen="editorFullscreen = !editorFullscreen"
+          @uploading-change="imageUploading = $event"
         />
         <p v-if="fieldError('bodyMarkdown')" class="knowledge-document-error">
           {{ fieldError('bodyMarkdown') }}
@@ -711,7 +771,11 @@ onBeforeUnmount(() => {
       </section>
       <section v-else-if="!historyMode" class="knowledge-document-body">
         <p v-if="!data.bodyMarkdown.trim()" class="text-muted">该文档暂无正文。</p>
-        <KnowledgeDocumentMarkdown v-else :markdown="data.bodyMarkdown" />
+        <KnowledgeDocumentMarkdown
+          v-else
+          :markdown="data.bodyMarkdown"
+          :attachment-image-context="currentImageContext"
+        />
       </section>
       <TraceabilitySection
         v-if="!historyMode && supportsTraceability"

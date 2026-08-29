@@ -39,6 +39,7 @@ const document: KnowledgeDocumentDetail = {
   confirmationCoverage: { state: 'ChangedSinceConfirmation', lastConfirmedRevisionNumber: 1 },
   concurrencyToken: 'current-token',
   canDelete: true,
+  attachmentReferences: [],
 }
 const revision: KnowledgeDocumentRevisionDetail = {
   id: 101,
@@ -57,6 +58,7 @@ const revision: KnowledgeDocumentRevisionDetail = {
   title: '历史标题',
   summary: '历史摘要',
   bodyMarkdown: '历史正文',
+  attachmentReferences: [],
 }
 
 const components = {
@@ -92,7 +94,8 @@ function mountDialog() {
       components,
       stubs: {
         KnowledgeDocumentMarkdown: {
-          props: ['markdown'],
+          name: 'KnowledgeDocumentMarkdown',
+          props: ['markdown', 'attachmentImageContext'],
           template: '<div class="knowledge-markdown-content">{{ markdown }}</div>',
         },
       },
@@ -203,6 +206,42 @@ describe('KnowledgeDocumentRestoreDialogContent', () => {
     const event = restoredListener.mock.calls[0]?.[0] as CustomEvent | undefined
     expect(event?.detail.document.bodyMarkdown).toBe(extensionSource)
     window.removeEventListener('knowledge-document:restored', restoredListener)
+  })
+
+  it('treats a different attachment snapshot as restorable and previews it in exact revision context', async () => {
+    const image = {
+      attachmentId: 123,
+      kind: 'Image' as const,
+      originalFileName: '历史截图.png',
+      extension: '.png',
+      contentType: 'image/png',
+      sizeBytes: 24,
+      sha256: 'a'.repeat(64),
+      previewMode: 'Image' as const,
+      canPreview: true,
+      canDownload: true,
+    }
+    const source = {
+      ...revision,
+      title: document.title,
+      summary: document.summary,
+      bodyMarkdown: document.bodyMarkdown,
+      attachmentReferences: [image],
+    }
+    setActivePinia(createPinia())
+    openDialog(document, source)
+    const wrapper = mountDialog()
+
+    await wrapper.get('textarea').setValue('恢复历史图片引用')
+
+    expect(button(wrapper, '恢复并创建新修订')?.attributes('disabled')).toBeUndefined()
+    expect(
+      wrapper.getComponent({ name: 'KnowledgeDocumentMarkdown' }).props('attachmentImageContext'),
+    ).toEqual({
+      documentId: 7,
+      revisionNumber: 1,
+      imageAttachmentIds: [123],
+    })
   })
 
   it('validates 5–500 trimmed characters and Cancel performs no request', async () => {

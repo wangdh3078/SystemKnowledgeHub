@@ -1,4 +1,5 @@
 import { isKnowledgeStatus, type KnowledgeStatus } from '../../../api/contracts/knowledge'
+import { decodeAttachmentMetadataList, type AttachmentMetadata } from './attachmentContracts'
 
 export const documentTypes = [
   'Requirement',
@@ -71,6 +72,7 @@ export interface KnowledgeDocumentDetail extends KnowledgeDocumentListItem {
   }
   readonly concurrencyToken: string
   readonly canDelete: boolean
+  readonly attachmentReferences: readonly AttachmentMetadata[]
 }
 
 export interface KnowledgeDocumentRevisionListItem {
@@ -110,6 +112,7 @@ export interface KnowledgeDocumentRevisionDetail extends KnowledgeDocumentRevisi
   readonly title: string
   readonly summary: string | null
   readonly bodyMarkdown: string
+  readonly attachmentReferences: readonly AttachmentMetadata[]
 }
 
 export interface KnowledgeDocumentListParameters {
@@ -171,10 +174,13 @@ function readBoolean(value: unknown, field: string): boolean {
 }
 function readConfirmationCoverageState(value: unknown, field: string): ConfirmationCoverageState {
   const state = readString(value, field)
-  if (state === 'NoConfirmation'
-    || state === 'LegacyConfirmationUnknown'
-    || state === 'CurrentRevisionConfirmed'
-    || state === 'ChangedSinceConfirmation') return state
+  if (
+    state === 'NoConfirmation' ||
+    state === 'LegacyConfirmationUnknown' ||
+    state === 'CurrentRevisionConfirmed' ||
+    state === 'ChangedSinceConfirmation'
+  )
+    return state
   throw new Error(`${field} has an unsupported confirmation coverage state`)
 }
 function readType(value: unknown, field: string): DocumentType {
@@ -261,7 +267,10 @@ export function decodeKnowledgeDocumentDetail(value: unknown): KnowledgeDocument
       'latestPublishedRevisionNumber',
     ),
     confirmationCoverage: {
-      state: readConfirmationCoverageState(confirmationCoverage.state, 'confirmationCoverage.state'),
+      state: readConfirmationCoverageState(
+        confirmationCoverage.state,
+        'confirmationCoverage.state',
+      ),
       lastConfirmedRevisionNumber: readNullableRevisionNumber(
         confirmationCoverage.lastConfirmedRevisionNumber,
         'confirmationCoverage.lastConfirmedRevisionNumber',
@@ -269,6 +278,10 @@ export function decodeKnowledgeDocumentDetail(value: unknown): KnowledgeDocument
     },
     concurrencyToken: readString(root.concurrencyToken, 'concurrencyToken'),
     canDelete: readBoolean(root.canDelete, 'canDelete'),
+    attachmentReferences: decodeAttachmentMetadataList(
+      root.attachmentReferences,
+      'attachmentReferences',
+    ),
   }
 }
 
@@ -337,5 +350,9 @@ export function decodeKnowledgeDocumentRevisionDetail(
     title: readString(root.title, 'title'),
     summary: readNullableString(root.summary, 'summary'),
     bodyMarkdown: readString(root.bodyMarkdown, 'bodyMarkdown'),
+    attachmentReferences: decodeAttachmentMetadataList(
+      root.attachmentReferences,
+      'attachmentReferences',
+    ),
   }
 }

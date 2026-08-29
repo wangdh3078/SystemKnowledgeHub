@@ -31,6 +31,20 @@ describe('decodeKnowledgeDocumentDetail revision contract', () => {
       archivedAt: null,
       concurrencyToken: 'opaque-token',
       canDelete: true,
+      attachmentReferences: [
+        {
+          attachmentId: 91,
+          kind: 'Image',
+          originalFileName: '拓扑.png',
+          extension: '.png',
+          contentType: 'image/png',
+          sizeBytes: 24,
+          sha256: 'a'.repeat(64),
+          previewMode: 'Image',
+          canPreview: true,
+          canDownload: true,
+        },
+      ],
     })
 
     expect(detail.currentRevisionNumber).toBe(3)
@@ -40,6 +54,13 @@ describe('decodeKnowledgeDocumentDetail revision contract', () => {
       lastConfirmedRevisionNumber: 2,
     })
     expect(detail.concurrencyToken).toBe('opaque-token')
+    expect(detail.attachmentReferences[0]).toEqual(
+      expect.objectContaining({
+        attachmentId: 91,
+        kind: 'Image',
+        previewMode: 'Image',
+      }),
+    )
   })
 })
 
@@ -61,7 +82,13 @@ describe('revision history read contracts', () => {
 
   it('decodes list metadata without inventing historical content fields', () => {
     const response = decodeKnowledgeDocumentRevisionList({
-      owner: { id: 7, targetType: 'KnowledgeDocument', displayName: 'Document', isDeleted: false, isNavigable: true },
+      owner: {
+        id: 7,
+        targetType: 'KnowledgeDocument',
+        displayName: 'Document',
+        isDeleted: false,
+        isNavigable: true,
+      },
       items: [revision],
       page: 1,
       pageSize: 20,
@@ -75,7 +102,13 @@ describe('revision history read contracts', () => {
 
   it('decodes baseline null actors and immutable detail content', () => {
     const detail = decodeKnowledgeDocumentRevisionDetail({
-      owner: { id: 7, targetType: 'KnowledgeDocument', displayName: 'Document', isDeleted: true, isNavigable: false },
+      owner: {
+        id: 7,
+        targetType: 'KnowledgeDocument',
+        displayName: 'Document',
+        isDeleted: true,
+        isNavigable: false,
+      },
       ...revision,
       id: 11,
       revisionNumber: 1,
@@ -87,11 +120,26 @@ describe('revision history read contracts', () => {
       title: 'Migrated knowledge',
       summary: null,
       bodyMarkdown: '# Snapshot',
+      attachmentReferences: [
+        {
+          attachmentId: 92,
+          kind: 'Image',
+          originalFileName: '历史图.webp',
+          extension: '.webp',
+          contentType: 'image/webp',
+          sizeBytes: 42,
+          sha256: 'b'.repeat(64),
+          previewMode: 'Image',
+          canPreview: true,
+          canDownload: true,
+        },
+      ],
     })
 
     expect(detail.authorDisplayName).toBeNull()
     expect(detail.knowledgeDocumentId).toBe(7)
     expect(detail.bodyMarkdown).toBe('# Snapshot')
+    expect(detail.attachmentReferences[0]?.attachmentId).toBe(92)
     expect('concurrencyToken' in detail).toBe(false)
   })
 })

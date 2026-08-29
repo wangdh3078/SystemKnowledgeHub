@@ -66,6 +66,27 @@ describe('KnowledgeDocumentMarkdown', () => {
     wrapper.unmount()
   })
 
+  it('isolates a protected image load failure with an accessible fallback', async () => {
+    const wrapper = mount(KnowledgeDocumentMarkdown, {
+      props: {
+        markdown: 'before\n\n![设备状态](attachment:123)\n\nafter',
+        attachmentImageContext: { documentId: 7, imageAttachmentIds: [123] },
+      },
+    })
+    const image = wrapper.get('[data-knowledge-document-attachment-image]')
+
+    await image.trigger('error')
+
+    expect(image.attributes('hidden')).toBeDefined()
+    const fallback = wrapper.get('.knowledge-document-attachment-image-unavailable')
+    expect(fallback.attributes('hidden')).toBeUndefined()
+    expect(fallback.attributes('role')).toBe('img')
+    expect(fallback.attributes('aria-label')).toBe('图片不可用：设备状态')
+    expect(wrapper.text()).toContain('before')
+    expect(wrapper.text()).toContain('after')
+    wrapper.unmount()
+  })
+
   it('copies raw code only and collapses each rendered code card independently', async () => {
     vi.useFakeTimers()
     const clipboard = { writeText: vi.fn().mockResolvedValue(undefined) }
@@ -77,17 +98,21 @@ describe('KnowledgeDocumentMarkdown', () => {
 
     const cards = wrapper.findAll('[data-knowledge-document-code-card]')
     expect(cards).toHaveLength(2)
-    expect(cards[0]!.find('[data-knowledge-document-code-copy] svg[data-icon="copy"]').exists()).toBe(
-      true,
-    )
     expect(
-      cards[0]!.find('[data-knowledge-document-code-collapse] svg[data-icon="chevron-up"]').exists(),
+      cards[0]!.find('[data-knowledge-document-code-copy] svg[data-icon="copy"]').exists(),
+    ).toBe(true)
+    expect(
+      cards[0]!
+        .find('[data-knowledge-document-code-collapse] svg[data-icon="chevron-up"]')
+        .exists(),
     ).toBe(true)
     expect(cards[0]!.get('[data-knowledge-document-code-copy]').text()).toBe('')
     await cards[0]!.get('[data-knowledge-document-code-copy]').trigger('click')
     await flushPromises()
     expect(clipboard.writeText).toHaveBeenCalledWith('echo "hello"\n')
-    expect(cards[0]!.get('[data-knowledge-document-code-copy]').attributes('aria-label')).toBe('已复制')
+    expect(cards[0]!.get('[data-knowledge-document-code-copy]').attributes('aria-label')).toBe(
+      '已复制',
+    )
     expect(cards[0]!.get('[data-knowledge-document-code-copy]').attributes('title')).toBe('已复制')
     expect(cards[0]!.find('svg[data-icon="check"]').exists()).toBe(true)
 
@@ -100,11 +125,13 @@ describe('KnowledgeDocumentMarkdown', () => {
     await cards[0]!.get('[data-knowledge-document-code-collapse]').trigger('click')
     expect(cards[0]!.classes()).toContain('is-collapsed')
     expect(cards[1]!.classes()).not.toContain('is-collapsed')
-    expect(cards[0]!.get('[data-knowledge-document-code-collapse]').attributes('aria-expanded')).toBe(
-      'false',
-    )
     expect(
-      cards[0]!.find('[data-knowledge-document-code-collapse] svg[data-icon="chevron-down"]').exists(),
+      cards[0]!.get('[data-knowledge-document-code-collapse]').attributes('aria-expanded'),
+    ).toBe('false')
+    expect(
+      cards[0]!
+        .find('[data-knowledge-document-code-collapse] svg[data-icon="chevron-down"]')
+        .exists(),
     ).toBe(true)
 
     if (clipboardDescriptor) {

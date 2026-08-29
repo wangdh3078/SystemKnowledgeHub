@@ -51,13 +51,15 @@ const currentDocument: KnowledgeDocumentDetail = {
   confirmationCoverage: { state: 'ChangedSinceConfirmation', lastConfirmedRevisionNumber: 2 },
   concurrencyToken: 'current-token',
   canDelete: true,
+  attachmentReferences: [],
 }
 
 const components = {
   ElButton: {
     props: { disabled: Boolean, loading: Boolean },
     emits: ['click'],
-    template: '<button type="button" :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
+    template:
+      '<button type="button" :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
   },
   ElAlert: { template: '<div><span>{{ $attrs.title }}</span><slot /></div>' },
   ElIcon: { template: '<span><slot /></span>' },
@@ -71,7 +73,8 @@ const components = {
   ElInput: {
     props: { modelValue: String },
     emits: ['update:modelValue', 'input'],
-    template: '<textarea :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value); $emit(\'input\', $event.target.value)" />',
+    template:
+      '<textarea :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value); $emit(\'input\', $event.target.value)" />',
   },
   ElDatePicker: {
     props: { modelValue: String },
@@ -135,22 +138,26 @@ describe('AddHumanConfirmationDrawer revision context', () => {
     await flushPromises()
 
     expect(addHumanConfirmation).toHaveBeenCalledTimes(1)
-    expect(addHumanConfirmation).toHaveBeenCalledWith(expect.objectContaining({
-      subject: { type: 'KnowledgeDocument', id: 7 },
-      subjectRevisionNumber: 2,
-      confirmationStatement: '确认当前文档内容正确。',
-      supportReason: '专家已复核当前展示的完整内容。',
-    }))
+    expect(addHumanConfirmation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        subject: { type: 'KnowledgeDocument', id: 7 },
+        subjectRevisionNumber: 2,
+        confirmationStatement: '确认当前文档内容正确。',
+        supportReason: '专家已复核当前展示的完整内容。',
+      }),
+    )
   })
 
   it('keeps fact fields on stale conflict, reloads the revision, and never auto-retries', async () => {
     vi.mocked(addHumanConfirmation)
-      .mockRejectedValueOnce(new ApiError(409, {
-        code: 'conflict',
-        message: 'stale revision',
-        fieldErrors: null,
-        details: { currentRevisionNumber: 3 },
-      }))
+      .mockRejectedValueOnce(
+        new ApiError(409, {
+          code: 'conflict',
+          message: 'stale revision',
+          fieldErrors: null,
+          details: { currentRevisionNumber: 3 },
+        }),
+      )
       .mockResolvedValueOnce({
         id: 82,
         evidenceType: 'HumanConfirmation',
@@ -186,21 +193,25 @@ describe('AddHumanConfirmationDrawer revision context', () => {
     await button(wrapper, '保存人工确认')?.trigger('click')
     await flushPromises()
     expect(addHumanConfirmation).toHaveBeenCalledTimes(2)
-    expect(addHumanConfirmation).toHaveBeenLastCalledWith(expect.objectContaining({
-      subjectRevisionNumber: 3,
-      confirmationStatement: '确认当前文档内容正确。',
-      supportReason: '专家已复核当前展示的完整内容。',
-    }))
+    expect(addHumanConfirmation).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        subjectRevisionNumber: 3,
+        confirmationStatement: '确认当前文档内容正确。',
+        supportReason: '专家已复核当前展示的完整内容。',
+      }),
+    )
     window.removeEventListener('knowledge-document:current-refreshed', refreshedListener)
   })
 
   it('does not emit Evidence or Detail refresh events when the confirmation save fails', async () => {
-    vi.mocked(addHumanConfirmation).mockRejectedValue(new ApiError(400, {
-      code: 'validation_error',
-      message: '确认信息无效。',
-      fieldErrors: null,
-      details: null,
-    }))
+    vi.mocked(addHumanConfirmation).mockRejectedValue(
+      new ApiError(400, {
+        code: 'validation_error',
+        message: '确认信息无效。',
+        fieldErrors: null,
+        details: null,
+      }),
+    )
     const evidenceChanged = vi.fn()
     const confirmationChanged = vi.fn()
     window.addEventListener('evidence:changed', evidenceChanged)

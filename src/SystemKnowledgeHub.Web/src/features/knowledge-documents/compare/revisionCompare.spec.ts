@@ -9,7 +9,9 @@ import {
   maximumCombinedContentUnits,
 } from './revisionCompare'
 
-function revision(overrides: Partial<KnowledgeDocumentRevisionDetail> = {}): KnowledgeDocumentRevisionDetail {
+function revision(
+  overrides: Partial<KnowledgeDocumentRevisionDetail> = {},
+): KnowledgeDocumentRevisionDetail {
   return {
     id: 1,
     knowledgeDocumentId: 7,
@@ -27,6 +29,7 @@ function revision(overrides: Partial<KnowledgeDocumentRevisionDetail> = {}): Kno
     title: '',
     summary: null,
     bodyMarkdown: '',
+    attachmentReferences: [],
     ...overrides,
   }
 }
@@ -75,8 +78,9 @@ describe('revision comparison limits', () => {
     const fiveThousandLines = Array.from({ length: 5_000 }, () => 'a').join('\n')
     const exactFrom = revision({ bodyMarkdown: fiveThousandLines })
     const exactTo = revision({ bodyMarkdown: fiveThousandLines, revisionNumber: 2 })
-    expect(inspectRevisionComparisonLimits(exactFrom, exactTo).combinedBodyLines)
-      .toBe(maximumCombinedBodyLines)
+    expect(inspectRevisionComparisonLimits(exactFrom, exactTo).combinedBodyLines).toBe(
+      maximumCombinedBodyLines,
+    )
     expect(compareRevisionSnapshots(exactFrom, exactTo).kind).toBe('ready')
 
     const over = revision({
@@ -98,8 +102,9 @@ describe('revision raw Markdown comparison', () => {
 
     expect(result.kind).toBe('ready')
     if (result.kind !== 'ready') return
-    expect(result.body.some((segment) => segment.kind === 'removed'
-      && segment.lines.includes('<br />'))).toBe(true)
+    expect(
+      result.body.some((segment) => segment.kind === 'removed' && segment.lines.includes('<br />')),
+    ).toBe(true)
     expect(from.bodyMarkdown).toBe(legacyBody)
   })
 })
