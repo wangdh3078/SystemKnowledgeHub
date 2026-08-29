@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { Delete, DocumentChecked, EditPen, Plus, Search, UserFilled } from '@element-plus/icons-vue'
+import { Delete, DocumentChecked, EditPen, Search, UserFilled } from '@element-plus/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
 import KnowledgeStatusBadge from '../../../components/data-display/KnowledgeStatusBadge.vue'
 import EmptyState from '../../../components/feedback/EmptyState.vue'
@@ -294,8 +294,8 @@ onBeforeUnmount(() => {
             <span>{{ objectEvidence.length }} 条对象级证据</span>
           </div>
           <div v-if="actorStore.canEdit" class="database-object-evidence-section__actions">
-            <el-button type="primary" plain :icon="Plus" @click="openAddEvidence">添加证据</el-button>
-            <el-button :icon="UserFilled" @click="openAddHumanConfirmation">添加人工确认</el-button>
+            <el-button class="skh-section-action skh-evidence-action" type="primary" :icon="DocumentChecked" @click="openAddEvidence">添加证据</el-button>
+            <el-button class="skh-section-action skh-human-confirmation-action" plain :icon="UserFilled" @click="openAddHumanConfirmation">添加人工确认</el-button>
           </div>
         </div>
         <p class="database-object-evidence-section__scope">这里只显示并维护当前表或视图的对象级证据；字段证据继续在对应字段详情中独立维护。</p>

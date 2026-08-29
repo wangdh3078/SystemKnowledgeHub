@@ -21,10 +21,67 @@
 .el-button--primary.is-disabled {
   background-color: #a9a6ed;
   border-color: #a9a6ed;
+  color: #ffffff;
+}
+
+.el-button:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.el-button--primary:not(.is-plain):not(.is-text):focus-visible,
+.el-button.skh-evidence-action:focus-visible {
+  border-color: var(--color-primary-hover);
+  background: var(--color-primary-hover);
+  color: #ffffff;
+}
+
+.el-button.is-plain:focus-visible,
+.el-button.skh-human-confirmation-action:focus-visible {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+  color: var(--color-primary-hover);
+}
+
+.el-button.is-text:focus-visible,
+.el-button--text:focus-visible {
+  background: var(--color-primary-soft);
+  color: var(--color-primary-hover);
+}
+
+.el-button--danger:focus-visible {
+  outline-color: var(--status-danger);
+}
+
+.el-button--danger.is-plain:focus-visible {
+  border-color: var(--status-danger);
+  background: var(--status-danger-surface);
+  color: #9f2844;
+}
+
+.el-button--danger:not(.is-plain):focus-visible {
+  border-color: #9f2844;
+  background: #9f2844;
+  color: #ffffff;
 }
 
 .el-drawer {
   box-shadow: var(--shadow-drawer);
+}
+
+.skh-drawer-overlay {
+  background-color: rgb(23 32 51 / 24%);
+}
+
+.skh-drawer-host .el-drawer__body,
+.skh-drawer-host__content {
+  height: 100%;
+  min-height: 0;
+}
+
+.skh-drawer-host .el-drawer__body {
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .el-drawer__header {

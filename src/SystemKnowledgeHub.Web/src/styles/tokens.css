@@ -63,6 +63,8 @@
   --context-rail-width: 356px;
   --content-max-width: 1500px;
   --drawer-width: 500px;
+  --drawer-width-standard: min(500px, calc(100vw - 96px));
+  --drawer-width-large: min(600px, calc(100vw - 72px));
 
   --shadow-drawer: -10px 0 30px rgb(35 43 69 / 10%);
   --transition-fast: 160ms ease;
@@ -74,5 +76,7 @@
 @media (max-width: 1440px) {
   :root {
     --skh-page-padding-inline: 24px;
+    --drawer-width-standard: min(460px, calc(100vw - 80px));
+    --drawer-width-large: min(560px, calc(100vw - 64px));
   }
 }

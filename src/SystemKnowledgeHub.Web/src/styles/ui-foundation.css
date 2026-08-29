@@ -149,3 +149,66 @@
   justify-content: flex-end;
   gap: var(--space-2);
 }
+
+.el-button.skh-page-primary-action {
+  min-height: 36px;
+  padding-right: 16px;
+  padding-left: 16px;
+  border-radius: var(--radius-md);
+  font-weight: 650;
+}
+
+.el-button.skh-section-action {
+  min-height: 32px;
+  padding-right: 12px;
+  padding-left: 12px;
+  border-radius: var(--radius-md);
+  font-weight: 620;
+}
+
+.el-button.skh-section-action .el-icon,
+.el-button.skh-page-primary-action .el-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.el-button.skh-evidence-action {
+  --el-button-text-color: #ffffff;
+  --el-button-bg-color: var(--color-primary);
+  --el-button-border-color: var(--color-primary);
+  --el-button-hover-text-color: #ffffff;
+  --el-button-hover-bg-color: var(--color-primary-hover);
+  --el-button-hover-border-color: var(--color-primary-hover);
+  --el-button-active-text-color: #ffffff;
+  --el-button-active-bg-color: #3730a3;
+  --el-button-active-border-color: #3730a3;
+}
+
+.el-button.skh-human-confirmation-action {
+  --el-button-text-color: var(--color-primary);
+  --el-button-bg-color: var(--color-surface);
+  --el-button-border-color: #8c86ea;
+  --el-button-hover-text-color: var(--color-primary-hover);
+  --el-button-hover-bg-color: var(--color-primary-soft);
+  --el-button-hover-border-color: var(--color-primary);
+  --el-button-active-text-color: #3730a3;
+  --el-button-active-bg-color: #e3e7ff;
+  --el-button-active-border-color: #3730a3;
+}
+
+.skh-drawer-header {
+  position: relative;
+  min-height: 86px;
+  padding: 22px 64px 18px 24px !important;
+  border-bottom: 1px solid var(--color-border) !important;
+}
+
+.skh-drawer-header > button[aria-label^='关闭'],
+.skh-drawer-header > .el-button[aria-label^='关闭'] {
+  position: absolute !important;
+  top: 14px !important;
+  right: 16px !important;
+  left: auto !important;
+  min-width: 32px;
+  min-height: 32px;
+}

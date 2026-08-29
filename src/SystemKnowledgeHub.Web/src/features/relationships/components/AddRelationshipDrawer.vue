@@ -104,7 +104,7 @@ onBeforeUnmount(()=>{if(searchTimer!==null)clearTimeout(searchTimer)})
 
 <template>
   <div class="relationship-drawer add-relationship-drawer">
-    <header><el-button text circle :icon="Close" aria-label="关闭添加关系" @click="overlayStore.closeDrawer()"/><span>添加关系</span><h2>建立显式知识关系</h2><p v-if="source">源对象 · <template v-if="source.systemName">{{ source.systemName }} · </template><b>{{ source.title }}</b></p></header>
+    <header class="skh-drawer-header"><el-button text circle :icon="Close" aria-label="关闭添加关系" @click="overlayStore.requestDrawerClose()"/><span>添加关系</span><h2>建立显式知识关系</h2><p v-if="source">源对象 · <template v-if="source.systemName">{{ source.systemName }} · </template><b>{{ source.title }}</b></p></header>
     <template v-if="source">
       <div class="relationship-steps"><strong><b>1</b>关系类型</strong><i></i><strong><b>2</b>目标对象</strong><i></i><span><b>3</b>确认</span></div>
       <section><h3>关系类型</h3><el-select v-model="relationType" class="relationship-full" placeholder="请选择关系类型"><template v-if="recommendedRelationOptions.length"><el-option-group label="推荐关系"><el-option v-for="type in recommendedRelationOptions" :key="type" :label="relationTypeLabels[type]" :value="type"/></el-option-group><el-option-group v-if="otherRelationOptions.length" label="其他合法关系"><el-option v-for="type in otherRelationOptions" :key="type" :label="relationTypeLabels[type]" :value="type"/></el-option-group></template><el-option-group v-else label="可用关系"><el-option v-for="type in relationOptions" :key="type" :label="relationTypeLabels[type]" :value="type"/></el-option-group></el-select><small>{{ relationHelper ?? '必须选择符合 Source / Target 端点矩阵的明确关系。' }}</small></section>
@@ -115,7 +115,7 @@ onBeforeUnmount(()=>{if(searchTimer!==null)clearTimeout(searchTimer)})
       <section v-if="selected" class="relationship-preview"><h3>目标对象预览</h3><strong class="technical-text">{{ selected.title }}</strong><p>{{ selected.systemContext.map(x=>x.name).join(' / ') }} · {{ selected.objectTypeLabel }}</p><small>{{ selected.shortDescription ?? '尚无业务说明' }}</small></section>
       <section><h3>关系说明（可选）</h3><el-input v-model="description" type="textarea" :rows="3" maxlength="500" show-word-limit placeholder="说明目标对象如何参与当前知识"/><div v-if="selected && relationType" class="relationship-path"><b>{{ source.title }}</b><span>— {{ relationTypeLabels[relationType] }} →</span><b>{{ selected.title }}</b></div></section>
       <p v-if="errorMessage" class="relationship-error">{{ errorMessage }}</p>
-      <footer><p>保存后关系成为正式记录，初始知识状态为“未知”。</p><div><el-button @click="overlayStore.closeDrawer()">取消</el-button><el-button type="primary" :icon="Connection" :disabled="!selected || !relationType" :loading="saving" @click="save">保存关系</el-button></div></footer>
+      <footer><p>保存后关系成为正式记录，初始知识状态为“未知”。</p><div><el-button @click="overlayStore.requestDrawerClose()">取消</el-button><el-button type="primary" :icon="Connection" :disabled="!selected || !relationType" :loading="saving" @click="save">保存关系</el-button></div></footer>
     </template>
   </div>
 </template>

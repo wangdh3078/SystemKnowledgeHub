@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { DocumentAdd, Search } from '@element-plus/icons-vue'
+import { Plus, Search } from '@element-plus/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
 import KnowledgeStatusBadge from '../../../components/data-display/KnowledgeStatusBadge.vue'
 import EmptyState from '../../../components/feedback/EmptyState.vue'
@@ -124,7 +124,7 @@ onMounted(() => void load())
       </div>
       <div>
         <span v-if="data">共 {{ data.total }} 篇</span
-        ><el-button v-if="canEdit" type="primary" :icon="DocumentAdd" @click="createOpen = true"
+        ><el-button v-if="canEdit" class="skh-page-primary-action" type="primary" :icon="Plus" @click="createOpen = true"
           >新增知识内容</el-button
         >
       </div>

@@ -124,13 +124,13 @@ onMounted(() => void load())
 
 <template>
   <section class="user-drawer" :aria-labelledby="'user-drawer-title'">
-    <header class="user-drawer__header">
+    <header class="user-drawer__header skh-drawer-header">
       <div>
         <span>ADMIN · USER PROFILE</span>
         <h2 id="user-drawer-title">{{ title }}</h2>
         <p>维护人员资料、KnowledgeRole 与 LoginIdentity 映射；AccessLevel 由独立安全操作管理。</p>
       </div>
-      <el-tooltip content="关闭用户编辑" placement="bottom"><button class="skh-icon-action" type="button" aria-label="关闭用户编辑" @click="overlayStore.closeDrawer">×</button></el-tooltip>
+      <el-tooltip content="关闭用户编辑" placement="bottom"><button class="skh-icon-action" type="button" aria-label="关闭用户编辑" @click="overlayStore.requestDrawerClose">×</button></el-tooltip>
     </header>
 
     <div v-if="loading" class="user-drawer__state">正在读取用户资料…</div>
@@ -197,7 +197,7 @@ onMounted(() => void load())
 
       <footer class="user-drawer__actions">
         <span>{{ isEdit ? '启用 / 停用请使用列表中的独立操作。' : '新用户创建后默认为启用。' }}</span>
-        <div><el-button @click="overlayStore.closeDrawer">取消</el-button><el-button type="primary" :loading="submitting" @click="submit">{{ isEdit ? '保存修改' : '创建用户' }}</el-button></div>
+        <div><el-button @click="overlayStore.requestDrawerClose">取消</el-button><el-button type="primary" :loading="submitting" @click="submit">{{ isEdit ? '保存修改' : '创建用户' }}</el-button></div>
       </footer>
     </template>
   </section>

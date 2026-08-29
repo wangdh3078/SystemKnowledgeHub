@@ -20,7 +20,11 @@ const actorState = vi.hoisted(() => ({
   initialize: vi.fn(),
   refreshCurrentUser: vi.fn(),
 }))
-const overlayState = vi.hoisted(() => ({ closeDrawer: vi.fn(), openDrawer: vi.fn() }))
+const overlayState = vi.hoisted(() => ({
+  closeDrawer: vi.fn(),
+  requestDrawerClose: vi.fn(),
+  openDrawer: vi.fn(),
+}))
 
 vi.mock('../../../app/stores/actor', () => ({ useActorStore: () => actorState }))
 vi.mock('../../../app/stores/overlays', () => ({ useOverlayStore: () => overlayState }))

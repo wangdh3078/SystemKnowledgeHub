@@ -104,7 +104,7 @@ onMounted(() => void load())
       </div>
       <div class="systems-page__header-actions skh-page-header__actions">
         <span v-if="data">共 {{ data.total }} 个系统</span>
-        <el-button v-if="actorStore.canEdit" type="primary" :icon="Plus" @click="openCreate">新增系统</el-button>
+        <el-button v-if="actorStore.canEdit" class="skh-page-primary-action" type="primary" :icon="Plus" @click="openCreate">新增系统</el-button>
       </div>
     </header>
 

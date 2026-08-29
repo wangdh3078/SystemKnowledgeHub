@@ -165,8 +165,8 @@ async function save(): Promise<void> {
 
 <template>
   <div class="evidence-drawer">
-    <header class="evidence-drawer__header">
-      <el-button text circle :icon="Close" aria-label="关闭添加证据" @click="overlayStore.closeDrawer()" />
+    <header class="evidence-drawer__header skh-drawer-header">
+      <el-button text circle :icon="Close" aria-label="关闭添加证据" @click="overlayStore.requestDrawerClose()" />
       <span>添加证据</span>
       <h2>说明为什么相信这条知识</h2>
       <p>证据保存后不会自动改变知识状态。</p>
@@ -226,7 +226,7 @@ async function save(): Promise<void> {
 
       <div class="evidence-impact-note"><el-icon><InfoFilled /></el-icon><span><strong>知识状态保持 {{ subject.knowledgeStatus === 'Unknown' ? '未知' : subject.knowledgeStatus === 'Inferred' ? '推断' : '已确认' }}</strong><small>保存 Evidence 与推进 Knowledge Status 是两个明确操作。</small></span></div>
       <footer class="evidence-drawer__footer">
-        <el-button @click="overlayStore.closeDrawer()">取消</el-button>
+        <el-button @click="overlayStore.requestDrawerClose()">取消</el-button>
         <el-button type="primary" :icon="DocumentAdd" :loading="saving" @click="save">保存证据</el-button>
       </footer>
     </template>

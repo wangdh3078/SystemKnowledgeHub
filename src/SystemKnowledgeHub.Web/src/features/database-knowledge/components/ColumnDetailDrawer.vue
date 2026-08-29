@@ -12,6 +12,11 @@ import { addColumnKnownValue, deleteDatabaseColumn, removeColumnKnownValue, upda
 import { useDatabaseColumnDetail } from '../composables/useDatabaseColumnDetail'
 import KnowledgeStatusProgressionPanel from '../../knowledge-status/components/KnowledgeStatusProgressionPanel.vue'
 import { openDeleteDialog } from '../../soft-delete/deleteDialog'
+import {
+  confirmDrawerDiscard,
+  markDrawerDirty,
+  resetDrawerDirty,
+} from '../../../layouts/drawerDirtyState'
 
 const props = defineProps<{ columnId: number | null }>()
 const overlayStore = useOverlayStore()
@@ -38,7 +43,12 @@ function startEditing(): void {
   if (!activeSections.value.includes('knownValues')) activeSections.value.push('knownValues')
 }
 
-function stopEditing(): void { editing.value = false; editError.value = null }
+async function stopEditing(): Promise<void> {
+  if (!(await confirmDrawerDiscard())) return
+  resetDrawerDirty()
+  editing.value = false
+  editError.value = null
+}
 function mutationError(error: unknown, fallback: string): string { return error instanceof ApiError ? error.message : error instanceof Error ? error.message : fallback }
 
 async function saveBusinessKnowledge(): Promise<void> {
@@ -46,7 +56,7 @@ async function saveBusinessKnowledge(): Promise<void> {
   saving.value = true; editError.value = null
   try {
     await updateDatabaseColumnKnowledge(detail.value.id, { businessDescription: businessDescription.value.trim() || null, actor: actorStore.actor, concurrencyToken: detail.value.concurrencyToken })
-    await reload(); notifyColumnChanged(); editing.value = false
+    await reload(); notifyColumnChanged(); editing.value = false; resetDrawerDirty()
     ElMessage.success('字段业务知识已保存，知识状态未自动改变。')
   } catch (error: unknown) { editError.value = mutationError(error, '字段业务知识保存失败。') } finally { saving.value = false }
 }
@@ -57,7 +67,8 @@ async function addKnownValue(): Promise<void> {
   knownValueSubmitting.value = true; editError.value = null
   try {
     await addColumnKnownValue(detail.value.id, { value: knownValueForm.value.trim(), meaning: knownValueForm.meaning.trim(), sortOrder: knownValueForm.sortOrder, actor: actorStore.actor, concurrencyToken: detail.value.concurrencyToken })
-    await reload(); notifyColumnChanged(); knownValueForm.value = ''; knownValueForm.meaning = ''
+    await reload(); notifyColumnChanged(); knownValueForm.value = ''; knownValueForm.meaning = ''; resetDrawerDirty()
+    if (businessDescription.value !== (detail.value?.businessKnowledge.description ?? '')) markDrawerDirty()
     ElMessage.success('已添加字段已知值，知识状态未自动改变。')
   } catch (error: unknown) { editError.value = mutationError(error, '添加已知值失败。') } finally { knownValueSubmitting.value = false }
 }
@@ -113,7 +124,7 @@ const humanConfirmationCount = computed(() => detail.value?.evidence.filter(
     <LoadingState v-if="loading" message="正在读取字段详情…" />
     <ErrorState v-else-if="errorMessage" title="字段详情加载失败" :message="errorMessage" @retry="reload" />
     <template v-else-if="detail">
-      <header class="column-drawer__header"><el-button class="column-drawer__close" text circle :icon="Close" aria-label="关闭字段详情" @click="overlayStore.closeDrawer()" /><span class="column-drawer__eyebrow">字段详情</span><h2 class="technical-text">{{ detail.databaseMetadata.columnName }}</h2><p><span class="technical-text">{{ detail.parent.qualifiedName }}</span> · <span class="technical-text">{{ detail.databaseMetadata.dataType }}</span></p></header>
+      <header class="column-drawer__header skh-drawer-header"><el-button class="column-drawer__close" text circle :icon="Close" aria-label="关闭字段详情" @click="overlayStore.requestDrawerClose()" /><span class="column-drawer__eyebrow">字段详情</span><h2 class="technical-text">{{ detail.databaseMetadata.columnName }}</h2><p><span class="technical-text">{{ detail.parent.qualifiedName }}</span> · <span class="technical-text">{{ detail.databaseMetadata.dataType }}</span></p></header>
       <KnowledgeStatusProgressionPanel
         :id="detail.id"
         target-type="DatabaseColumn"
@@ -126,14 +137,14 @@ const humanConfirmationCount = computed(() => detail.value?.evidence.filter(
       />
       <el-collapse v-model="activeSections" class="column-drawer__sections">
         <el-collapse-item name="businessKnowledge"><template #title><div class="drawer-collapse-title"><span>业务知识</span><el-button v-if="actorStore.canEdit && !editing" text type="primary" :icon="EditPen" @click.stop="startEditing">编辑</el-button><span v-else-if="editing" class="drawer-editing-label">正在编辑</span></div></template><el-form v-if="editing" label-position="top" class="drawer-edit-form" @submit.prevent><el-form-item label="业务说明"><el-input v-model="businessDescription" type="textarea" :rows="3" maxlength="500" show-word-limit placeholder="说明字段的业务含义" /></el-form-item><p class="drawer-section-note">数据库元数据、知识状态、证据和关系不会在此修改。</p><div class="drawer-edit-actions"><el-button @click="stopEditing">取消</el-button><el-button type="primary" :loading="saving" @click="saveBusinessKnowledge">保存业务知识</el-button></div></el-form><template v-else><dl class="drawer-facts"><div><dt>描述</dt><dd>{{ detail.businessKnowledge.description ?? '尚未记录业务含义' }}</dd></div><div><dt>知识状态</dt><dd><KnowledgeStatusBadge :status="detail.businessKnowledge.knowledgeStatus" /></dd></div></dl><p class="drawer-section-note">业务含义与支撑它的证据分开保存。</p></template></el-collapse-item>
-        <el-collapse-item name="evidence"><template #title><div class="drawer-collapse-title"><span>证据 <b>{{ detail.evidence.length }}</b></span><el-button v-if="actorStore.canEdit" text type="primary" :icon="Plus" @click.stop="addEvidence">添加</el-button></div></template><div v-if="detail.evidence.length" class="drawer-evidence-list"><article v-for="item in detail.evidence" :key="item.id" role="button" tabindex="0" @click="openEvidence(item.id)" @keydown.enter="openEvidence(item.id)"><el-icon><DocumentChecked /></el-icon><div><small>{{ item.evidenceType }}</small><strong>{{ item.sourceTitle }}</strong><p>{{ item.supportReason }}</p></div></article></div><div v-else class="drawer-empty-state"><el-icon><DocumentChecked /></el-icon><div><strong>尚无字段级证据</strong><p>添加代码、SQL、数据库样本或人工确认，说明为什么相信这条知识。</p></div></div></el-collapse-item>
+        <el-collapse-item name="evidence"><template #title><div class="drawer-collapse-title"><span>证据 <b>{{ detail.evidence.length }}</b></span><el-button v-if="actorStore.canEdit" class="skh-evidence-action" type="primary" :icon="DocumentChecked" @click.stop="addEvidence">添加</el-button></div></template><div v-if="detail.evidence.length" class="drawer-evidence-list"><article v-for="item in detail.evidence" :key="item.id" role="button" tabindex="0" @click="openEvidence(item.id)" @keydown.enter="openEvidence(item.id)"><el-icon><DocumentChecked /></el-icon><div><small>{{ item.evidenceType }}</small><strong>{{ item.sourceTitle }}</strong><p>{{ item.supportReason }}</p></div></article></div><div v-else class="drawer-empty-state"><el-icon><DocumentChecked /></el-icon><div><strong>尚无字段级证据</strong><p>添加代码、SQL、数据库样本或人工确认，说明为什么相信这条知识。</p></div></div></el-collapse-item>
         <el-collapse-item name="unknownItems"><template #title><div class="drawer-collapse-title"><span>待确认事项 <b>{{ detail.unknownItems.length }}</b></span><el-button v-if="actorStore.canEdit" text type="primary" :icon="Plus" @click.stop="createUnknownItem">添加</el-button></div></template><div v-if="detail.unknownItems.length" class="drawer-unknown-list"><article v-for="item in detail.unknownItems" :key="item.id"><el-icon><QuestionFilled /></el-icon><div><strong>{{ item.question }}</strong><span>{{ item.status }}</span></div></article></div><div v-else class="drawer-empty-state drawer-empty-state--compact"><p>当前字段没有开放待确认事项。</p></div></el-collapse-item>
         <el-collapse-item name="databaseMetadata" title="数据库元数据"><dl class="drawer-facts drawer-facts--metadata"><div v-for="row in metadataRows" :key="row[0]"><dt>{{ row[0] }}</dt><dd class="technical-text">{{ row[1] }}</dd></div></dl></el-collapse-item>
         <el-collapse-item name="knownValues"><template #title><div class="drawer-collapse-title"><span>已知值 <b>{{ detail.knownValues.length }}</b></span><el-button v-if="editing" text type="primary" :icon="Plus" @click.stop="addKnownValue">添加值</el-button></div></template><div v-if="detail.knownValues.length" class="known-values-list"><div v-for="item in detail.knownValues" :key="item.id"><code>{{ item.value }}</code><span>{{ item.meaning }}</span><el-button v-if="editing" text type="danger" :icon="Delete" :disabled="knownValueSubmitting" @click="removeKnownValue(item.id, item.value)">移除</el-button></div></div><div v-else class="drawer-empty-state drawer-empty-state--compact"><p>尚无已知值。</p></div><el-form v-if="editing" class="known-value-editor" inline @submit.prevent><el-form-item label="值"><el-input v-model="knownValueForm.value" class="technical-input" placeholder="例如 30" /></el-form-item><el-form-item label="业务含义"><el-input v-model="knownValueForm.meaning" placeholder="例如 Unknown / Offline" /></el-form-item><el-form-item label="排序"><el-input-number v-model="knownValueForm.sortOrder" :min="0" :precision="0" controls-position="right" /></el-form-item><el-button type="primary" plain :loading="knownValueSubmitting" @click="addKnownValue">添加</el-button></el-form></el-collapse-item>
         <el-collapse-item name="relations"><template #title><span class="drawer-title-with-count">字段级关系 <b>{{ detail.relations.length }}</b></span></template><div v-if="detail.relations.length" class="drawer-relation-list"><div v-for="item in detail.relations" :key="item.id"><span>{{ item.relationType }}</span><strong>{{ item.otherObject.title }}</strong></div></div><div v-else class="drawer-empty-state drawer-empty-state--compact"><p>尚未建立字段级关系。</p></div></el-collapse-item>
       </el-collapse>
       <p v-if="editError" class="authoring-error column-drawer__mutation-error" role="alert">{{ editError }}</p>
-      <footer class="column-drawer__footer"><el-button v-if="detail.canDelete && !editing" type="danger" plain :icon="Delete" @click="requestDelete">删除数据库字段</el-button><el-button v-if="actorStore.canEdit && !editing" type="primary" :icon="EditPen" @click="startEditing">编辑字段知识</el-button><el-button v-else-if="editing" @click="stopEditing">结束编辑</el-button><el-button v-if="actorStore.canEdit" :icon="DocumentChecked" @click="addEvidence">添加证据</el-button><el-button v-if="actorStore.canEdit" :icon="QuestionFilled" @click="createUnknownItem">新建待确认事项</el-button></footer>
+      <footer class="column-drawer__footer"><el-button v-if="detail.canDelete && !editing" type="danger" plain :icon="Delete" @click="requestDelete">删除数据库字段</el-button><el-button v-if="actorStore.canEdit && !editing" type="primary" :icon="EditPen" @click="startEditing">编辑字段知识</el-button><el-button v-else-if="editing" @click="stopEditing">结束编辑</el-button><el-button v-if="actorStore.canEdit" class="skh-section-action skh-evidence-action" type="primary" :icon="DocumentChecked" @click="addEvidence">添加证据</el-button><el-button v-if="actorStore.canEdit" :icon="QuestionFilled" @click="createUnknownItem">新建待确认事项</el-button></footer>
     </template>
   </div>
 </template>

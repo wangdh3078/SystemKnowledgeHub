@@ -71,8 +71,8 @@ watch(() => props.databaseObjectId, () => void load(), { immediate: true })
     <LoadingState v-if="loading" message="正在读取数据库对象…" />
     <ErrorState v-else-if="errorMessage" title="数据库对象加载失败" :message="errorMessage" @retry="load" />
     <template v-else-if="detail">
-      <header class="column-drawer__header">
-        <el-button class="column-drawer__close" text circle :icon="Close" aria-label="关闭编辑" @click="overlayStore.closeDrawer()" />
+      <header class="column-drawer__header skh-drawer-header">
+        <el-button class="column-drawer__close" text circle :icon="Close" aria-label="关闭编辑" @click="overlayStore.requestDrawerClose()" />
         <span class="column-drawer__eyebrow">编辑数据库知识</span>
         <h2 class="technical-text">{{ detail.overview.qualifiedName }}</h2>
         <p>只维护对象级业务知识；Schema、对象名、类型和技术元数据保持只读。</p>
@@ -87,7 +87,7 @@ watch(() => props.databaseObjectId, () => void load(), { immediate: true })
         <p class="drawer-section-note">业务唯一键只能引用当前已登记字段。知识状态、字段、证据和关系均通过各自明确操作维护。</p>
         <p v-if="saveError" class="authoring-error" role="alert">{{ saveError }}</p>
       </section>
-      <footer class="column-drawer__footer"><el-button @click="overlayStore.closeDrawer">取消</el-button><el-button type="primary" :loading="saving" @click="save">保存业务知识</el-button></footer>
+      <footer class="column-drawer__footer"><el-button @click="overlayStore.requestDrawerClose">取消</el-button><el-button type="primary" :loading="saving" @click="save">保存业务知识</el-button></footer>
     </template>
   </div>
 </template>

@@ -184,8 +184,8 @@ onMounted(() => void actorStore.initialize())
 
 <template>
   <div class="evidence-drawer human-confirmation-drawer">
-    <header class="evidence-drawer__header">
-      <el-button text circle :icon="Close" aria-label="关闭人工确认" @click="overlayStore.closeDrawer()" />
+    <header class="evidence-drawer__header skh-drawer-header">
+      <el-button text circle :icon="Close" aria-label="关闭人工确认" @click="overlayStore.requestDrawerClose()" />
       <span>添加人工确认</span>
       <h2>记录谁确认了这条知识</h2>
       <p>人工确认是 Evidence，不会自动推进知识状态。</p>
@@ -276,7 +276,7 @@ onMounted(() => void actorStore.initialize())
       </section>
 
       <footer class="evidence-drawer__footer">
-        <el-button @click="overlayStore.closeDrawer()">取消</el-button>
+        <el-button @click="overlayStore.requestDrawerClose()">取消</el-button>
         <el-button type="primary" :icon="UserFilled" :loading="saving" :disabled="!canSave" @click="save">保存人工确认</el-button>
       </footer>
     </template>

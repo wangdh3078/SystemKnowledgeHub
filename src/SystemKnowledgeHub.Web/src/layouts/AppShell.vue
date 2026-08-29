@@ -22,9 +22,6 @@ import GlobalSearchOverlay from '../features/search/components/GlobalSearchOverl
 const overlayStore = useOverlayStore()
 const route = useRoute()
 const globalDocumentCreateOpen = ref(false)
-const shellClass = computed(() => ({
-  'app-shell--drawer-open': overlayStore.isDrawerOpen,
-}))
 const createSystemContextId = computed(() =>
   route.name === 'system-detail' ? parseSafeApiId(route.params.id) ?? undefined : undefined,
 )
@@ -35,7 +32,7 @@ function openGlobalDocumentCreate(): void {
 </script>
 
 <template>
-  <div class="app-shell" :class="shellClass">
+  <div class="app-shell">
     <AppSidebar />
     <div class="app-shell__workspace">
       <AppTopBar />

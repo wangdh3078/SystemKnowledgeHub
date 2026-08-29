@@ -201,13 +201,13 @@ onBeforeUnmount(() => requestController?.abort())
 
 <template>
   <article class="attachment-admin-detail" aria-labelledby="attachment-admin-detail-title">
-    <header class="attachment-admin-detail__header">
+    <header class="attachment-admin-detail__header skh-drawer-header">
       <div>
         <span>ADMIN · ATTACHMENT GOVERNANCE</span>
         <h2 id="attachment-admin-detail-title" :title="detail?.originalFileName">附件详情</h2>
         <p>查看不可变 metadata、全修订引用和受控存储健康；不显示任何物理路径。</p>
       </div>
-      <button type="button" aria-label="关闭附件详情" @click="overlayStore.closeDrawer">×</button>
+      <button type="button" aria-label="关闭附件详情" @click="overlayStore.requestDrawerClose">×</button>
     </header>
 
     <div v-if="loading" class="attachment-admin-detail__state" role="status">正在读取附件详情…</div>

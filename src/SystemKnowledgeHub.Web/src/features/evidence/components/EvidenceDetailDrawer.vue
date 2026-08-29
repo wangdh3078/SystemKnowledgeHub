@@ -178,8 +178,8 @@ onMounted(() => void load())
     <LoadingState v-if="loading && !detail" message="正在读取证据详情…" />
     <ErrorState v-else-if="errorMessage && !detail" title="证据详情加载失败" :message="errorMessage" @retry="load" />
     <template v-else-if="detail">
-      <header class="evidence-drawer__header">
-        <el-button text circle :icon="Close" aria-label="关闭证据详情" @click="overlayStore.closeDrawer()" />
+      <header class="evidence-drawer__header skh-drawer-header">
+        <el-button text circle :icon="Close" aria-label="关闭证据详情" @click="overlayStore.requestDrawerClose()" />
         <span>{{ evidenceTypeLabels[detail.evidenceType] }}</span>
         <h2>{{ detail.sourceTitle }}</h2>
         <p>证据详情</p>
@@ -252,7 +252,7 @@ onMounted(() => void load())
       <div v-if="errorMessage && !editing" class="evidence-drawer__error"><span>{{ errorMessage }}</span><el-button v-if="conflict" text type="primary" :icon="Refresh" @click="load">重新加载</el-button></div>
       <footer class="evidence-drawer__footer">
         <template v-if="editing"><el-button @click="editing = false">取消</el-button><el-button type="primary" :loading="saving" @click="save">保存纠正</el-button></template>
-        <template v-else><el-button @click="overlayStore.closeDrawer()">关闭</el-button><el-button v-if="!subjectDeleted && detail.evidenceType !== 'HumanConfirmation'" type="primary" plain :icon="UserFilled" @click="openHumanConfirmation">添加人工确认</el-button></template>
+        <template v-else><el-button @click="overlayStore.requestDrawerClose()">关闭</el-button><el-button v-if="!subjectDeleted && detail.evidenceType !== 'HumanConfirmation'" class="skh-section-action skh-human-confirmation-action" plain :icon="UserFilled" @click="openHumanConfirmation">添加人工确认</el-button></template>
       </footer>
     </template>
   </div>

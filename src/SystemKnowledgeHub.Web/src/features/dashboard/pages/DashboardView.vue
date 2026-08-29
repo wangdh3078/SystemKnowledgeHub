@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { ArrowRight, CircleCloseFilled, Clock, WarningFilled } from '@element-plus/icons-vue'
+import { ArrowRight, CircleCloseFilled, Clock, Plus, WarningFilled } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
 import { useOverlayStore } from '../../../app/stores/overlays'
 import EmptyState from '../../../components/feedback/EmptyState.vue'
@@ -139,7 +139,7 @@ onMounted(() => void load())
           title="尚未登记知识"
           description="先记录一个系统，随后可以逐步补充业务功能、数据库对象、证据和待确认事项。"
         />
-        <el-button type="primary" @click="openCreate">新增知识对象</el-button>
+        <el-button class="skh-page-primary-action" type="primary" :icon="Plus" @click="openCreate">新增知识对象</el-button>
       </div>
 
       <template v-else>

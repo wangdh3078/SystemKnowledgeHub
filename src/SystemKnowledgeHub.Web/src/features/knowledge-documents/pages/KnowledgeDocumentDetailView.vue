@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Delete } from '@element-plus/icons-vue'
+import { Delete, DocumentChecked, UserFilled } from '@element-plus/icons-vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import KnowledgeStatusBadge from '../../../components/data-display/KnowledgeStatusBadge.vue'
 import KnowledgeStatusProgressionPanel from '../../knowledge-status/components/KnowledgeStatusProgressionPanel.vue'
@@ -891,8 +891,8 @@ onBeforeUnmount(() => {
             <p>记录支持当前知识结论的依据；保存后不会自动改变知识状态。</p>
           </div>
           <div v-if="canEdit && !isArchived" class="knowledge-document-evidence__actions">
-            <el-button plain size="small" @click="addEvidence">添加证据</el-button
-            ><el-button plain size="small" @click="addHumanConfirmation">添加人工确认</el-button>
+            <el-button class="skh-section-action skh-evidence-action" type="primary" :icon="DocumentChecked" @click="addEvidence">添加证据</el-button
+            ><el-button class="skh-section-action skh-human-confirmation-action" plain :icon="UserFilled" @click="addHumanConfirmation">添加人工确认</el-button>
           </div>
         </div>
         <p v-if="evidenceLoading">正在加载证据…</p>

@@ -89,7 +89,7 @@ onBeforeUnmount(() => {
     </button>
 
     <div class="app-topbar__actions">
-      <el-button v-if="actorStore.canEdit" type="primary" :icon="Plus" :disabled="!createEnabled" @click="openCreate">新增</el-button>
+      <el-button v-if="actorStore.canEdit" class="skh-page-primary-action" type="primary" :icon="Plus" :disabled="!createEnabled" @click="openCreate">新增</el-button>
       <span v-if="actorStore.canEdit" class="app-topbar__separator" aria-hidden="true"></span>
       <button ref="profileButtonRef" class="app-topbar__profile" type="button" :aria-expanded="profileOpen" title="查看当前用户资料" @click="profileOpen = !profileOpen">
         <span class="app-topbar__avatar">{{ actorStore.currentUser?.displayName.slice(0, 1) ?? '?' }}</span>

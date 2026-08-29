@@ -41,7 +41,7 @@ describe('AppShell', () => {
     })
 
     expect(wrapper.text()).toContain('系统知识中心')
-    expect(wrapper.text()).toContain('关系与缺口')
+    expect(wrapper.text()).toContain('待确认事项')
     expect(wrapper.find('[data-test="content"]').exists()).toBe(true)
   })
 })

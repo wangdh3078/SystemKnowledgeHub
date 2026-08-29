@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { DocumentChecked, Promotion } from '@element-plus/icons-vue'
+import { DocumentChecked, Promotion, UserFilled } from '@element-plus/icons-vue'
 import type { KnowledgeStatus } from '../../../api/contracts/knowledge'
 import { useOverlayStore } from '../../../app/stores/overlays'
 import { useActorStore } from '../../../app/stores/actor'
@@ -80,7 +80,7 @@ function addHumanConfirmation(): void {
     <div class="knowledge-status-panel__title">
       <div><el-icon><Promotion /></el-icon><span><strong>知识进展</strong><small>状态只通过明确操作改变</small></span></div>
       <div class="knowledge-status-panel__actions">
-        <el-button v-if="actorStore.canEdit && status === 'Inferred' && canChange && humanConfirmationCount === 0" plain size="small" @click="addHumanConfirmation">添加人工确认</el-button>
+        <el-button v-if="actorStore.canEdit && status === 'Inferred' && canChange && humanConfirmationCount === 0" class="skh-section-action skh-human-confirmation-action" plain :icon="UserFilled" @click="addHumanConfirmation">添加人工确认</el-button>
         <el-button v-if="actorStore.canEdit && nextLabel && canChange && canAdvance" type="primary" plain size="small" @click="openChangeDialog">{{ nextLabel }}</el-button>
       </div>
     </div>

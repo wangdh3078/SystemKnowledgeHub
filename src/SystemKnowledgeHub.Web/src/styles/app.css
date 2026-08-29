@@ -28,11 +28,6 @@ button {
   min-width: 1180px;
   min-height: 100vh;
   background: var(--color-canvas);
-  transition: padding-right var(--transition-fast);
-}
-
-.app-shell--drawer-open {
-  padding-right: var(--drawer-width);
 }
 
 .app-shell__workspace {
@@ -777,23 +772,6 @@ button {
 @media (max-width: 1440px) {
   :root {
     --context-rail-width: 268px;
-    --drawer-width: 440px;
-  }
-
-  .app-shell--drawer-open .app-content-area {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .app-shell--drawer-open .app-content-area__rail {
-    display: none;
-  }
-
-  .app-shell--drawer-open .app-topbar__search {
-    width: min(360px, 42vw);
-  }
-
-  .app-shell--drawer-open .app-topbar__profile-copy {
-    display: none;
   }
 
   .foundation-view {

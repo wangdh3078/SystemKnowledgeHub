@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { ArrowRight, Connection, Delete, Document, EditPen, Link, Plus, QuestionFilled } from '@element-plus/icons-vue'
+import { ArrowRight, Connection, Delete, Document, DocumentChecked, EditPen, Link, Plus, QuestionFilled } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { parseSafeApiId } from '../../../api/contracts/id'
@@ -298,7 +298,7 @@ onUnmounted(() => {
           <div v-else class="business-section-empty business-section-empty--compact"><el-icon><Link /></el-icon><span>尚未记录 MQ、API 或其他系统集成。</span></div>
         </div>
         <div>
-          <div class="business-function-section__heading business-function-evidence-heading"><h2>证据</h2><div><span>{{ detail.evidence.length }} 条</span><el-button v-if="canAddEvidence" text type="primary" :icon="Plus" @click="openAddEvidence">添加证据</el-button></div></div>
+          <div class="business-function-section__heading business-function-evidence-heading"><h2>证据</h2><div><span>{{ detail.evidence.length }} 条</span><el-button v-if="canAddEvidence" class="skh-section-action skh-evidence-action" type="primary" :icon="DocumentChecked" @click="openAddEvidence">添加证据</el-button></div></div>
           <div v-if="detail.evidence.length" class="business-function-evidence-list">
             <button v-for="item in detail.evidence" :key="item.id" @click="openEvidence(item.id)"><el-icon><Document /></el-icon><span><small>{{ item.evidenceType }}</small><strong>{{ item.sourceTitle }}</strong></span><el-icon><ArrowRight /></el-icon></button>
           </div>

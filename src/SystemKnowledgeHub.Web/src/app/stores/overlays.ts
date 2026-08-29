@@ -1,6 +1,7 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { useActorStore } from './actor'
+import { confirmDrawerDiscard, resetDrawerDirty } from '../../layouts/drawerDirtyState'
 
 export type OverlayMode = 'read' | 'create' | 'edit'
 
@@ -35,8 +36,15 @@ export const useOverlayStore = defineStore('overlays', () => {
 
   function closeDrawer(): void {
     if (currentOverlay.value?.surface === 'drawer') {
+      resetDrawerDirty()
       currentOverlay.value = null
     }
+  }
+
+  async function requestDrawerClose(): Promise<boolean> {
+    if (!(await confirmDrawerDiscard())) return false
+    closeDrawer()
+    return true
   }
 
   function closeDrawerAfterClosed(): Promise<void> {
@@ -82,6 +90,7 @@ export const useOverlayStore = defineStore('overlays', () => {
     openDrawer,
     openDialog,
     closeDrawer,
+    requestDrawerClose,
     closeDrawerAfterClosed,
     notifyDrawerClosed,
     closeDialog,

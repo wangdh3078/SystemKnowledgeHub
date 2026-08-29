@@ -27,7 +27,7 @@ onMounted(() => void load())
 
 <template>
   <main class="unknown-list-page skh-page">
-    <header class="unknown-list-header skh-page-header"><div><p>知识发现 / 待确认事项</p><h1>待确认事项</h1><span>集中处理尚未确认的问题、调查发现与证据。</span></div><el-button v-if="actorStore.canEdit" type="primary" :icon="Plus" @click="create">新增待确认事项</el-button></header>
+    <header class="unknown-list-header skh-page-header"><div><p>知识发现 / 待确认事项</p><h1>待确认事项</h1><span>集中处理尚未确认的问题、调查发现与证据。</span></div><el-button v-if="actorStore.canEdit" class="skh-page-primary-action" type="primary" :icon="Plus" @click="create">新增待确认事项</el-button></header>
     <section class="unknown-list-toolbar skh-filter-bar" aria-label="待确认事项筛选">
       <el-input v-model="filters.keyword" :prefix-icon="Search" clearable placeholder="搜索问题、上下文或关联对象" />
       <el-select v-model="filters.priority" clearable placeholder="优先级"><el-option label="高" value="High" /><el-option label="中" value="Medium" /><el-option label="低" value="Low" /></el-select>

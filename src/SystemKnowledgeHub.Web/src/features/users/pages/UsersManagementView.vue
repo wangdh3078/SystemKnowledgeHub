@@ -120,7 +120,7 @@ onMounted(() => void load())
       <div><nav>管理 / 用户管理</nav><h1>用户管理</h1><p>维护人员资料与知识身份。此页面不是身份认证或权限控制边界。</p></div>
       <div class="users-page__header-actions skh-page-header__actions">
         <el-button :icon="Setting" @click="openRoles">知识身份管理</el-button>
-        <el-button type="primary" :icon="Plus" @click="openCreate">新增用户</el-button>
+        <el-button class="skh-page-primary-action" type="primary" :icon="Plus" @click="openCreate">新增用户</el-button>
       </div>
     </header>
 

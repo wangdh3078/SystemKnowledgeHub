@@ -129,7 +129,7 @@ onMounted(() => {
       </div>
       <div class="business-functions-page__header-actions skh-page-header__actions">
         <span v-if="data">共 {{ data.total }} 个业务功能</span>
-        <el-button v-if="actorStore.canEdit" type="primary" :icon="Plus" @click="openCreate">新增业务功能</el-button>
+        <el-button v-if="actorStore.canEdit" class="skh-page-primary-action" type="primary" :icon="Plus" @click="openCreate">新增业务功能</el-button>
       </div>
     </header>
 
