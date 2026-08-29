@@ -219,13 +219,25 @@ let uploadAbortController: AbortController | null = null
 let unmounted = false
 const pendingInsertionAnchors = new Set<{ position: number }>()
 
+type ImageInputSource = 'picker' | 'drop' | 'clipboard'
+
+interface IncomingImage {
+  readonly file: File
+  readonly declaredMimeType?: string
+}
+
 interface PendingImage {
   readonly file: File
   readonly altOverride?: string
 }
 
 const approvedExtensions = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp'])
-const approvedMimeTypes = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp'])
+const extensionByMimeType: Readonly<Record<string, string>> = {
+  'image/png': '.png',
+  'image/jpeg': '.jpg',
+  'image/gif': '.gif',
+  'image/webp': '.webp',
+}
 
 function refreshHistoryState(): void {
   if (!view) return
@@ -353,17 +365,69 @@ function openImagePicker(): void {
 }
 
 function fileExtension(fileName: string): string {
-  const match = /\.[^.]+$/u.exec(fileName.trim())
-  return match?.[0].toLowerCase() ?? ''
+  const normalizedName = fileName.trim()
+  const suffixStart = normalizedName.lastIndexOf('.')
+  if (suffixStart <= 0 || suffixStart === normalizedName.length - 1) return ''
+  return normalizedName.slice(suffixStart).toLowerCase()
 }
 
-function isApprovedImageCandidate(file: File): boolean {
-  const extension = fileExtension(file.name)
-  const mime = file.type.toLowerCase()
-  return (
-    approvedExtensions.has(extension) &&
-    (mime === '' || mime === 'application/octet-stream' || approvedMimeTypes.has(mime))
-  )
+function normalizedMimeType(value: string | undefined): string {
+  return value?.split(';', 1)[0]?.trim().toLowerCase() ?? ''
+}
+
+function clipboardImageName(extension: string, index: number): string {
+  const now = new Date()
+  const part = (value: number): string => String(value).padStart(2, '0')
+  const timestamp = `${now.getFullYear()}${part(now.getMonth() + 1)}${part(now.getDate())}-${part(now.getHours())}${part(now.getMinutes())}${part(now.getSeconds())}`
+  const sequence = index === 0 ? '' : `-${index + 1}`
+  return `截图-${timestamp}${sequence}${extension}`
+}
+
+function normalizeImageCandidates(
+  images: readonly IncomingImage[],
+  source: ImageInputSource,
+): { readonly candidates: readonly PendingImage[]; readonly rejected: number } {
+  const candidates: PendingImage[] = []
+  let rejected = 0
+
+  images.forEach((item, index) => {
+    const extension = fileExtension(item.file.name)
+    const fileMime = normalizedMimeType(item.file.type)
+    const declaredMime = normalizedMimeType(item.declaredMimeType)
+    const approvedMime = extensionByMimeType[fileMime]
+      ? fileMime
+      : extensionByMimeType[declaredMime]
+        ? declaredMime
+        : ''
+
+    if (!approvedExtensions.has(extension) && !approvedMime) {
+      rejected += 1
+      return
+    }
+
+    let normalizedFile = item.file
+    if (source === 'clipboard' && approvedMime) {
+      const normalizedExtension = approvedExtensions.has(extension)
+        ? extension
+        : extensionByMimeType[approvedMime]!
+      const normalizedName = approvedExtensions.has(extension)
+        ? item.file.name
+        : clipboardImageName(normalizedExtension, index)
+      if (normalizedName !== item.file.name || fileMime !== approvedMime) {
+        normalizedFile = new File([item.file], normalizedName, {
+          type: approvedMime,
+          lastModified: item.file.lastModified,
+        })
+      }
+    }
+
+    candidates.push({
+      file: normalizedFile,
+      altOverride: source === 'clipboard' ? '截图' : undefined,
+    })
+  })
+
+  return { candidates, rejected }
 }
 
 function normalizedAlt(value: string): string {
@@ -427,24 +491,13 @@ function insertImageToken(
 }
 
 async function uploadImages(
-  images: readonly PendingImage[],
+  candidates: readonly PendingImage[],
+  rejected: number,
   insertionPosition?: number,
 ): Promise<void> {
-  if (!view || props.documentId === undefined || images.length === 0) return
-  if (uploadingImages.value) {
-    uploadError.value = '已有图片正在上传，请等待完成后再试。'
-    if (fileInput.value) fileInput.value.value = ''
-    return
-  }
-
-  const candidates = images.filter((item) => isApprovedImageCandidate(item.file))
-  const rejected = images.length - candidates.length
+  if (!view || props.documentId === undefined || candidates.length === 0) return
   uploadError.value =
     rejected > 0 ? `${rejected} 个文件不是受支持的 PNG、JPEG、GIF 或 WEBP 图片，未上传。` : null
-  if (candidates.length === 0) {
-    if (fileInput.value) fileInput.value.value = ''
-    return
-  }
 
   const anchor = {
     position:
@@ -502,14 +555,58 @@ async function uploadImages(
   }
 }
 
+function beginImageUpload(
+  images: readonly IncomingImage[],
+  source: ImageInputSource,
+  insertionPosition?: number,
+): boolean {
+  if (!view || props.documentId === undefined || images.length === 0) return false
+  const normalized = normalizeImageCandidates(images, source)
+  if (normalized.candidates.length === 0) {
+    if (normalized.rejected > 0) {
+      uploadError.value = `${normalized.rejected} 个文件不是受支持的 PNG、JPEG、GIF 或 WEBP 图片，未上传。`
+    }
+    if (fileInput.value) fileInput.value.value = ''
+    return false
+  }
+  if (uploadingImages.value) {
+    uploadError.value = '已有图片正在上传，请等待完成后再试。'
+    if (fileInput.value) fileInput.value.value = ''
+    return true
+  }
+  void uploadImages(normalized.candidates, normalized.rejected, insertionPosition)
+  return true
+}
+
 function handleFileInput(event: Event): void {
   const target = event.target
   if (!(target instanceof HTMLInputElement)) return
-  void uploadImages(Array.from(target.files ?? []).map((file) => ({ file })))
+  beginImageUpload(
+    Array.from(target.files ?? []).map((file) => ({ file })),
+    'picker',
+  )
 }
 
 function hasDraggedFiles(event: DragEvent): boolean {
-  return Array.from(event.dataTransfer?.types ?? []).includes('Files')
+  const transfer = event.dataTransfer
+  if (!transfer) return false
+  return (
+    Array.from(transfer.types ?? []).some((type) => type.toLowerCase() === 'files') ||
+    Array.from(transfer.items ?? []).some((item) => item.kind === 'file') ||
+    (transfer.files?.length ?? 0) > 0
+  )
+}
+
+function dataTransferImages(transfer: DataTransfer | null): readonly IncomingImage[] {
+  if (!transfer) return []
+  const files = Array.from(transfer.files ?? [])
+  if (files.length > 0) return files.map((file) => ({ file }))
+  return Array.from(transfer.items ?? [])
+    .filter((item) => item.kind === 'file')
+    .map((item) => ({ file: item.getAsFile(), declaredMimeType: item.type }))
+    .filter((item): item is { readonly file: File; readonly declaredMimeType: string } =>
+      Boolean(item.file),
+    )
 }
 
 function handleDragEnter(event: DragEvent): boolean {
@@ -543,54 +640,34 @@ function handleDrop(event: DragEvent): boolean {
   if (!hasDraggedFiles(event)) return false
   event.preventDefault()
   dragActive.value = false
-  const files = Array.from(event.dataTransfer?.files ?? [])
+  const files = dataTransferImages(event.dataTransfer)
   let dropPosition: number | undefined
   try {
     dropPosition = view?.posAtCoords({ x: event.clientX, y: event.clientY }) ?? undefined
   } catch {
     dropPosition = undefined
   }
-  void uploadImages(
-    files.map((file) => ({ file })),
-    dropPosition,
-  )
+  beginImageUpload(files, 'drop', dropPosition)
   return true
 }
 
-function clipboardImageFiles(event: ClipboardEvent): readonly File[] {
+function clipboardImageFiles(event: ClipboardEvent): readonly IncomingImage[] {
   const items = Array.from(event.clipboardData?.items ?? [])
   return items
     .filter((item) => item.kind === 'file')
-    .map((item) => item.getAsFile())
-    .filter((file): file is File => file !== null)
-    .filter(
-      (file) =>
-        file.type.toLowerCase().startsWith('image/') ||
-        approvedExtensions.has(fileExtension(file.name)),
+    .map((item) => ({ file: item.getAsFile(), declaredMimeType: item.type }))
+    .filter((item): item is { readonly file: File; readonly declaredMimeType: string } =>
+      Boolean(item.file),
     )
-    .map((file, index) => {
-      const extensionByMime: Readonly<Record<string, string>> = {
-        'image/png': '.png',
-        'image/jpeg': '.jpg',
-        'image/gif': '.gif',
-        'image/webp': '.webp',
-      }
-      const extension =
-        extensionByMime[file.type.toLowerCase()] ?? (fileExtension(file.name) || '.bin')
-      const stamp = new Date().toISOString().replace(/[:.]/gu, '-')
-      return new File([file], `截图-${stamp}-${index + 1}${extension}`, {
-        type: file.type,
-        lastModified: file.lastModified,
-      })
-    })
 }
 
 function handlePaste(event: ClipboardEvent): boolean {
   if (props.documentId === undefined) return false
   const files = clipboardImageFiles(event)
   if (files.length === 0) return false
+  const handled = beginImageUpload(files, 'clipboard')
+  if (!handled) return false
   event.preventDefault()
-  void uploadImages(files.map((file) => ({ file, altOverride: '截图' })))
   return true
 }
 

@@ -8,6 +8,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
+using Xunit.Abstractions;
 using SystemKnowledgeHub.Api.Features.Attachments.Application;
 using SystemKnowledgeHub.Api.Features.Attachments.Domain;
 using SystemKnowledgeHub.Api.Features.KnowledgeDocuments.Domain;
@@ -20,8 +21,15 @@ namespace SystemKnowledgeHub.Api.Tests.Api;
 public sealed class AttachmentFoundationApiTests : IClassFixture<BootstrapWebApplicationFactory>
 {
     private readonly BootstrapWebApplicationFactory _factory;
+    private readonly ITestOutputHelper _output;
 
-    public AttachmentFoundationApiTests(BootstrapWebApplicationFactory factory) => _factory = factory;
+    public AttachmentFoundationApiTests(
+        BootstrapWebApplicationFactory factory,
+        ITestOutputHelper output)
+    {
+        _factory = factory;
+        _output = output;
+    }
 
     [Fact]
     public async Task Upload_is_streamed_validated_orphaned_and_role_bounded()
@@ -94,6 +102,43 @@ public sealed class AttachmentFoundationApiTests : IClassFixture<BootstrapWebApp
         Assert.Equal("Archived", archived.GetProperty("lifecycleStatus").GetString());
         using var archivedUpload = await Upload(editor, documentId, "archived.txt", "text/plain", "denied"u8.ToArray());
         Assert.Equal(HttpStatusCode.Conflict, archivedUpload.StatusCode);
+    }
+
+    [Fact]
+    public async Task Real_png_and_jpeg_multipart_preserve_bytes_through_antiforgery_form_and_staging()
+    {
+        var editorId = await CreateUser(AccessLevel.Editor, "Attachment binary editor");
+        using var editor = await _factory.CreateAuthenticatedClientAsync(editorId);
+        var document = await CreateDocument(editor, "Attachment binary round trip");
+        var documentId = document.GetProperty("id").GetInt64();
+
+        await AssertImageMultipartRoundTrip(
+            editor,
+            documentId,
+            "真实图片.png",
+            "image/png",
+            Convert.FromBase64String(RealPngBase64),
+            "89 50 4E 47 0D 0A 1A 0A 00 00 00 0D 49 48 44 52 00 00 00 01 00 00 00 01");
+        await AssertImageMultipartRoundTrip(
+            editor,
+            documentId,
+            "真实照片.jpg",
+            "image/jpeg",
+            Convert.FromBase64String(RealJpegBase64),
+            "FF D8 FF E0 00 10 4A 46 49 46 00 01 01 01 00 60 00 60 00 00 FF DB 00 43");
+
+        using var mislabeled = await Upload(
+            editor,
+            documentId,
+            "微信截图_20260201110642.png",
+            "image/png",
+            Convert.FromBase64String(RealJpegBase64));
+        Assert.Equal(HttpStatusCode.UnsupportedMediaType, mislabeled.StatusCode);
+        var error = await mislabeled.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Contains(
+            "PNG 文件头无效。",
+            error.GetProperty("fieldErrors").GetProperty("file")[0].GetString(),
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -558,6 +603,80 @@ public sealed class AttachmentFoundationApiTests : IClassFixture<BootstrapWebApp
         return (await response.Content.ReadFromJsonAsync<JsonElement>()).Clone();
     }
 
+    private async Task AssertImageMultipartRoundTrip(
+        HttpClient client,
+        long documentId,
+        string fileName,
+        string contentType,
+        byte[] originalBytes,
+        string expectedFirst24)
+    {
+        Assert.Equal(expectedFirst24, HexPrefix(originalBytes));
+        var expectedHash = Convert.ToHexString(SHA256.HashData(originalBytes));
+        using var fileContent = new ByteArrayContent(originalBytes);
+        fileContent.Headers.ContentType = MediaTypeHeaderValue.Parse(contentType);
+        using var multipart = new MultipartFormDataContent($"----WebKitFormBoundary{Guid.NewGuid():N}");
+        multipart.Add(fileContent, "file", fileName);
+        await multipart.LoadIntoBufferAsync();
+        var requestContentLength = multipart.Headers.ContentLength;
+        Assert.NotNull(requestContentLength);
+        Assert.True(requestContentLength > originalBytes.LongLength);
+
+        using var response = await client.PostAsync(
+            $"/api/knowledge-documents/{documentId}/attachments",
+            multipart);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var formObservation = _factory.Services
+            .GetRequiredService<MultipartUploadCapture>()
+            .GetRequired(fileName);
+        Assert.Equal(requestContentLength, formObservation.RequestContentLength);
+        Assert.Equal(originalBytes.LongLength, formObservation.FormFileLength);
+        Assert.Equal(expectedFirst24, HexPrefix(formObservation.First24Bytes));
+        Assert.Equal(expectedHash, Convert.ToHexString(formObservation.Sha256));
+        var metadata = (await response.Content.ReadFromJsonAsync<JsonElement>()).Clone();
+        var attachmentId = metadata.GetProperty("attachmentId").GetInt64();
+        Assert.Equal(originalBytes.LongLength, metadata.GetProperty("sizeBytes").GetInt64());
+        Assert.Equal(expectedHash.ToLowerInvariant(), metadata.GetProperty("sha256").GetString());
+
+        string storedPath;
+        long stagingSize;
+        byte[] stagingHash;
+        await using (var scope = _factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<KnowledgeHubDbContext>();
+            var attachment = await db.Attachments.AsNoTracking().SingleAsync(item => item.Id == attachmentId);
+            stagingSize = attachment.SizeBytes;
+            stagingHash = attachment.Sha256;
+            storedPath = Path.Combine(
+                _factory.AttachmentStorageRoot,
+                attachment.StorageKey.Replace('/', Path.DirectorySeparatorChar));
+        }
+
+        var storedBytes = await File.ReadAllBytesAsync(storedPath);
+        Assert.Equal(originalBytes.LongLength, stagingSize);
+        Assert.Equal(originalBytes, storedBytes);
+        Assert.Equal(expectedFirst24, HexPrefix(storedBytes));
+        Assert.Equal(expectedHash, Convert.ToHexString(stagingHash));
+        Assert.Equal(expectedHash, Convert.ToHexString(SHA256.HashData(storedBytes)));
+        Assert.Empty(Directory.EnumerateFiles(
+            Path.Combine(_factory.AttachmentStorageRoot, "staging"),
+            "*",
+            SearchOption.AllDirectories));
+
+        _output.WriteLine(
+            "{0}: request Content-Length={1}; IFormFile.Length={2}; staging SizeBytes={3}; SHA-256={4}; first24={5}",
+            fileName,
+            formObservation.RequestContentLength,
+            formObservation.FormFileLength,
+            stagingSize,
+            expectedHash,
+            expectedFirst24);
+    }
+
+    private static string HexPrefix(byte[] bytes) => string.Join(
+        ' ',
+        bytes.Take(24).Select(value => value.ToString("X2")));
+
     private static async Task<HttpResponseMessage> Upload(
         HttpClient client,
         long documentId,
@@ -714,4 +833,8 @@ public sealed class AttachmentFoundationApiTests : IClassFixture<BootstrapWebApp
     private const string XlsxContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
     private const string DocxContentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
     private const string PptxContentType = "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+    private const string RealPngBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+    private const string RealJpegBase64 = """
+        /9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAMCAgMCAgMDAwMEAwMEBQgFBQQEBQoHBwYIDAoMDAsKCwsNDhIQDQ4RDgsLEBYQERMUFRUVDA8XGBYUGBIUFRT/2wBDAQMEBAUEBQkFBQkUDQsNFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBT/wAARCAACAAIDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwD7V/Z2+C3w91v9n74ZajqPgTwzf6heeF9MuLm7utHt5JZ5XtImd3dkJZmJJJJySSTRRRXyOL/3ip/if5nwmO/3qr/il+bP/9k=
+        """;
 }

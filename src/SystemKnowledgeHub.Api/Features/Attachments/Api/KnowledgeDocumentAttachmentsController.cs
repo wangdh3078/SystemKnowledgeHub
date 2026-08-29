@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Net.Http.Headers;
 using SystemKnowledgeHub.Api.Features.Attachments.Application;
 using SystemKnowledgeHub.Api.Features.Attachments.Application.Models;
@@ -36,44 +35,51 @@ public sealed class KnowledgeDocumentAttachmentsController(
         }
         var actor = await ResolveActor(cancellationToken);
         if (actor.Result is not null) return actor.Result;
-        if (!MediaTypeHeaderValue.TryParse(Request.ContentType, out var mediaType)
-            || !string.Equals(mediaType.MediaType.Value, "multipart/form-data", StringComparison.OrdinalIgnoreCase))
+        if (!Request.HasFormContentType)
         {
             return BadRequest(ValidationError(new Dictionary<string, string[]>
             {
                 ["file"] = ["请求必须使用 multipart/form-data 并包含一个 file 字段。"],
             }));
         }
-        var boundary = HeaderUtilities.RemoveQuotes(mediaType.Boundary).Value;
-        if (string.IsNullOrWhiteSpace(boundary) || boundary.Length > 200)
+
+        IFormCollection form;
+        try
+        {
+            form = await Request.ReadFormAsync(cancellationToken);
+        }
+        catch (BadHttpRequestException exception) when (exception.StatusCode == StatusCodes.Status413PayloadTooLarge)
+        {
+            return StatusCode(
+                StatusCodes.Status413PayloadTooLarge,
+                Error("payload_too_large", "附件超过配置的大小限制。"));
+        }
+        catch (Exception exception) when (exception is InvalidDataException or IOException)
         {
             return BadRequest(ValidationError(new Dictionary<string, string[]>
             {
-                ["file"] = ["multipart boundary 无效。"],
+                ["file"] = ["multipart 请求无效或无法完整读取。"],
             }));
         }
 
-        var reader = new MultipartReader(boundary, Request.Body);
-        var section = await reader.ReadNextSectionAsync(cancellationToken);
-        if (section is null
-            || !ContentDispositionHeaderValue.TryParse(section.ContentDisposition, out var disposition)
-            || !string.Equals(disposition.DispositionType.Value, "form-data", StringComparison.OrdinalIgnoreCase)
-            || !string.Equals(HeaderUtilities.RemoveQuotes(disposition.Name).Value, "file", StringComparison.Ordinal)
-            || (!disposition.FileNameStar.HasValue && !disposition.FileName.HasValue))
+        if (form.Files.Count != 1
+            || !string.Equals(form.Files[0].Name, "file", StringComparison.Ordinal)
+            || string.IsNullOrWhiteSpace(form.Files[0].FileName))
         {
             return BadRequest(ValidationError(new Dictionary<string, string[]>
             {
-                ["file"] = ["multipart 请求必须以 file 文件字段开始。"],
+                ["file"] = ["multipart 请求必须包含且只能包含一个 file 文件字段。"],
             }));
         }
 
-        var fileName = HeaderUtilities.RemoveQuotes(
-            disposition.FileNameStar.HasValue ? disposition.FileNameStar : disposition.FileName).Value;
+        var file = form.Files[0];
+        await using var content = file.OpenReadStream();
         var result = await service.Upload(
             knowledgeDocumentId,
-            fileName,
-            section.ContentType,
-            section.Body,
+            file.FileName,
+            file.ContentType,
+            file.Length,
+            content,
             actor.Actor!,
             cancellationToken);
         return result.Failure switch

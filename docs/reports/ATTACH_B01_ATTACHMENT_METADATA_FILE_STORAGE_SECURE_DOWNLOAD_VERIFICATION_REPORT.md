@@ -10,6 +10,8 @@ ATTACH PREVIEW SLICE READY: YES
 
 Completed on 2026-08-29. No unresolved Blocker or High gap was found. This report covers the backend foundation only; it does not claim ATTACH-B02/B03/B03-PREVIEW frontend UX or a real Production deployment.
 
+2026-08-29 corrective verification: a reported real-browser `PNG 文件头无效` response was investigated without weakening the frozen file policy. The submitted file named `微信截图_20260201110642.png` starts with `FF D8 FF` and is a valid JPEG/JFIF binary, not a PNG; its rejection remains correct. The multipart boundary was nevertheless hardened by removing application-level request-body buffering/reset and manual multipart parsing. Antiforgery and the upload controller now reuse ASP.NET Core's one bounded form parse and `IFormFile`, and staging rejects any mismatch between `IFormFile.Length` and the bytes actually written. Real PNG/JPEG multipart regression proves identical prefixes, lengths and SHA-256 through antiforgery, form parsing and staging.
+
 ## Source and baseline
 
 The implementation follows the repository `AGENTS.md`, the frozen ATTACH-A01 architecture, the approved ATTACH-A02 preview amendment, current KnowledgeDocument/Revision/authentication/authorization behavior, and the Production deployment boundary. Frozen sources and Golden UI assets were not edited.
@@ -61,9 +63,9 @@ Migration `20260829012501_AddAttachmentFoundation` adds:
 - Keys use `objects/<2hex>/<32hex>.bin`; filenames, IDs and MIME values never enter a path.
 - Upload remains distinct from attach/revision. A successful upload is a `Ready` zero-reference orphan and projects `canDownload: false`.
 - Request authorization and editable active owner are checked before streaming. The owner/state/count are rechecked under an SQLite immediate transaction before metadata insert.
-- Multipart bytes are bounded, streamed into a same-root staging file, and hashed incrementally with SHA-256. Validation precedes atomic move. DB failure compensation removes the committed object; failed/oversized staging writes remove the temporary file.
+- Multipart bytes are bounded by `FormOptions`, streamed from the parsed `IFormFile` into a same-root staging file, and hashed incrementally with SHA-256. `IFormFile.Length` must equal staging `SizeBytes`; a mismatch fails closed before content validation or metadata insert. Validation precedes atomic move. DB failure compensation removes the committed object; failed/oversized staging writes remove the temporary file.
 - Filename NFC/scalar/control/path/device-name checks, extension whitelist, declared MIME contradiction checks, signatures, strict UTF-8/no-NUL, bounded ZIP/OOXML metadata, macro rejection, entry/expanded-size/compression-ratio ceilings and server canonical MIME are enforced.
-- The global header-based antiforgery boundary remains authoritative. Multipart bodies use bounded protected buffering required by ASP.NET Core antiforgery, then the controller resets and streams the body through the attachment staging/hashing pipeline; neither the complete payload nor preview is held as a trusted application object.
+- The global header-based antiforgery boundary remains authoritative. Antiforgery and the controller reuse ASP.NET Core's cached bounded form parse; the application no longer rewinds `Request.Body` or runs a second `MultipartReader`. The controller requires exactly one `file` `IFormFile` and streams its body once into staging; neither extension nor declared MIME can bypass signature validation.
 
 ### Revision binding
 
@@ -160,8 +162,11 @@ Production configuration, least-privilege storage, proxy/temp capacity and coord
 | `dotnet build SystemKnowledgeHub.sln -c Release --no-restore` | PASS — 0 warnings, 0 errors |
 | Focused `FullyQualifiedName~Attachment|FullyQualifiedName~StartupConfigurationProcessTests` | PASS — 19/19, 0 failed, 0 skipped |
 | Approved serial full backend with `xUnit.ParallelizeTestCollections=false` | PASS — 186/186, 0 failed, 0 skipped, 1 min 25 s |
+| Corrective `AttachmentFoundationApiTests` | PASS — 9/9, including real PNG/JPEG multipart byte round trip |
 
 Focused coverage includes schema/check/FK/index/no-cascade/ownership/duplicate/immutability, upload image/file/empty/extension/MIME/signature/UTF-8/filename/role/archived/SHA/staging cleanup, exact semantic snapshots, image token/kind, current/history/soft-delete/restore, secure headers/path non-disclosure, bounded PDF/text/CSV/XLSX, macro/invalid/oversized XLSX, DOCX/PPTX/ZIP download-only behavior, admin role/reference/stale token/DeletePending retry and storage removal.
+
+The corrective multipart regression additionally captures the request `Content-Length`, cached `IFormFile.Length`, first 24 `IFormFile` bytes, staging `SizeBytes`, staging first 24 bytes and SHA-256. The valid PNG case recorded `366 / 68 / 68` bytes and SHA-256 `431CED6916A2A21A156E38701AFE55BBD7F88969FBBFC56D7FE099D47F265460`; the valid JPEG case recorded `994 / 695 / 695` bytes and SHA-256 `5518D9ADEE1D3DB049900AE8F8829E9A57E0F4DC7E0E27D7386D3AB405BC0CE7`. Both stored byte arrays equal their originals. The same JPEG fixture deliberately mislabeled `.png` / `image/png` remains 415 with `PNG 文件头无效。`.
 
 The approved serial full gate was used because existing low `REV-GAP-011` records that the default parallel SQLite/WebApplicationFactory collections can stall.
 

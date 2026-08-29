@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
@@ -146,6 +147,13 @@ builder.Services
         options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
         options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
     });
+builder.Services.Configure<FormOptions>(options =>
+{
+    options.MemoryBufferThreshold = 64 * 1024;
+    options.MultipartBodyLengthLimit = Math.Max(
+        attachmentOptions!.MaxImageBytes,
+        attachmentOptions.MaxFileBytes) + 2L * 1024 * 1024;
+});
 
 builder.Services.AddKnowledgeHubPersistence(builder.Configuration, builder.Environment);
 builder.Services.AddSingleton(attachmentOptions!);
@@ -440,23 +448,9 @@ app.Use(async (context, next) =>
         return;
     }
 
-    var isAttachmentMultipartUpload = HttpMethods.IsPost(context.Request.Method)
-        && context.Request.Path.Value?.EndsWith("/attachments", StringComparison.OrdinalIgnoreCase) == true
-        && context.Request.ContentType?.StartsWith("multipart/form-data", StringComparison.OrdinalIgnoreCase) == true;
-    if (isAttachmentMultipartUpload)
-    {
-        context.Request.EnableBuffering(
-            bufferThreshold: 64 * 1024,
-            bufferLimit: Math.Max(attachmentOptions!.MaxImageBytes, attachmentOptions.MaxFileBytes) + 2L * 1024 * 1024);
-    }
-
     try
     {
         await context.RequestServices.GetRequiredService<IAntiforgery>().ValidateRequestAsync(context);
-        if (isAttachmentMultipartUpload && context.Request.Body.CanSeek)
-        {
-            context.Request.Body.Position = 0;
-        }
     }
     catch (AntiforgeryValidationException)
     {
@@ -468,17 +462,6 @@ app.Use(async (context, next) =>
             null));
         return;
     }
-    catch (IOException) when (isAttachmentMultipartUpload)
-    {
-        context.Response.StatusCode = StatusCodes.Status413PayloadTooLarge;
-        await context.Response.WriteAsJsonAsync(new ApiErrorResponse(
-            "payload_too_large",
-            "附件超过配置的大小限制。",
-            null,
-            null));
-        return;
-    }
-
     await next();
 });
 app.MapControllers();

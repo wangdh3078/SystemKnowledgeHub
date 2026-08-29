@@ -21,6 +21,7 @@ public sealed class AttachmentService(
         long knowledgeDocumentId,
         string? originalFileName,
         string? declaredContentType,
+        long expectedSizeBytes,
         Stream content,
         KnowledgeDocumentAuthor actor,
         CancellationToken cancellationToken)
@@ -61,7 +62,25 @@ public sealed class AttachmentService(
             var maximumBytes = descriptor.Kind == AttachmentKind.Image
                 ? options.MaxImageBytes
                 : options.MaxFileBytes;
+            if (expectedSizeBytes > maximumBytes)
+            {
+                return new AttachmentUploadResult(null, null, AttachmentFailure.PayloadTooLarge);
+            }
             staged = await storage.Stage(content, maximumBytes, cancellationToken);
+            if (staged.SizeBytes != expectedSizeBytes)
+            {
+                logger.LogWarning(
+                    "Attachment multipart length mismatch: form file declared {ExpectedSizeBytes} bytes but staging received {StagedSizeBytes} bytes.",
+                    expectedSizeBytes,
+                    staged.SizeBytes);
+                return new AttachmentUploadResult(
+                    null,
+                    new Dictionary<string, string[]>
+                    {
+                        ["file"] = ["附件内容长度与 multipart 文件长度不一致。"],
+                    },
+                    AttachmentFailure.Validation);
+            }
             await filePolicy.ValidateContent(staged, descriptor, cancellationToken);
             storageKey = storage.Commit(staged);
 

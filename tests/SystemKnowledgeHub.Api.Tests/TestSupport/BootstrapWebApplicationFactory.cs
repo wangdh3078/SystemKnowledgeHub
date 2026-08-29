@@ -55,6 +55,8 @@ public class BootstrapWebApplicationFactory : WebApplicationFactory<Program>
         builder.ConfigureServices(services =>
         {
             services.AddDataProtection().UseEphemeralDataProtectionProvider();
+            services.AddSingleton<MultipartUploadCapture>();
+            services.AddTransient<IStartupFilter, MultipartUploadCaptureStartupFilter>();
             services.RemoveAll<DbContextOptions<KnowledgeHubDbContext>>();
             services.AddDbContext<KnowledgeHubDbContext>(options =>
                 options.UseSqlite(_connection));

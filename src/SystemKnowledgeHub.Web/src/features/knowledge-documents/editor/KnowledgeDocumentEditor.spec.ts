@@ -65,12 +65,21 @@ function mountEditor(markdown = '## 标题\n\n正文'): VueWrapper {
 }
 
 function uploadedImage(attachmentId: number, name = 'diagram.png') {
+  const suffixStart = name.lastIndexOf('.')
+  const extension = suffixStart > 0 ? name.slice(suffixStart).toLowerCase() : '.png'
+  const contentTypeByExtension: Readonly<Record<string, string>> = {
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.gif': 'image/gif',
+    '.webp': 'image/webp',
+  }
   return {
     attachmentId,
     kind: 'Image' as const,
     originalFileName: name,
-    extension: name.toLowerCase().endsWith('.webp') ? '.webp' : '.png',
-    contentType: name.toLowerCase().endsWith('.webp') ? 'image/webp' : 'image/png',
+    extension,
+    contentType: contentTypeByExtension[extension] ?? 'image/png',
     sizeBytes: 24,
     sha256: 'a'.repeat(64),
     previewMode: 'Image' as const,
@@ -103,6 +112,10 @@ function dispatchEditorEvent(
 async function waitForSourceEditor(wrapper: VueWrapper): Promise<void> {
   await vi.waitFor(() => expect(wrapper.find('.cm-content').exists()).toBe(true))
   await flushPromises()
+}
+
+async function fileBytes(file: File): Promise<number[]> {
+  return Array.from(new Uint8Array(await file.arrayBuffer()))
 }
 
 describe('KnowledgeDocumentEditor', () => {
@@ -235,6 +248,49 @@ describe('KnowledgeDocumentEditor', () => {
     expect(wrapper.emitted('uploading-change')).toEqual([[true], [false]])
   })
 
+  it('uses the final filename suffix for picker JPEG validation', async () => {
+    uploadMock.mockResolvedValue(uploadedImage(124, '照片.jpg1.jpg'))
+    const wrapper = mountEditor('正文')
+    await waitForSourceEditor(wrapper)
+
+    const originalBytes = [0xff, 0xd8, 0xff, 0xe0, 0x4a, 0x46, 0x49, 0x46, 0xff, 0xd9]
+    const jpeg = new File([new Uint8Array(originalBytes)], '照片.jpg1.jpg', {
+      type: 'image/jpeg',
+    })
+    await selectFiles(wrapper, [jpeg])
+
+    expect(uploadMock).toHaveBeenCalledWith(7, jpeg, expect.any(AbortSignal))
+    expect(await fileBytes(uploadMock.mock.calls[0]?.[1] as File)).toEqual(originalBytes)
+    expect((wrapper.emitted('update:modelValue') ?? []).at(-1)?.[0]).toBe(
+      '![照片.jpg1](attachment:124)正文',
+    )
+  })
+
+  it('uses the same final-suffix validation for a dragged JPEG with a browser MIME variant', async () => {
+    uploadMock.mockResolvedValue(uploadedImage(125, '照片.jpg1.jpg'))
+    const wrapper = mountEditor('正文')
+    await waitForSourceEditor(wrapper)
+    const originalBytes = [0xff, 0xd8, 0xff, 0xe1, 0x45, 0x78, 0x69, 0x66, 0xff, 0xd9]
+    const jpeg = new File([new Uint8Array(originalBytes)], '照片.jpg1.jpg', {
+      type: 'image/jpg',
+    })
+
+    const event = dispatchEditorEvent(wrapper, 'drop', {
+      types: [],
+      files: [jpeg],
+      items: [],
+      dropEffect: 'none',
+    })
+    await flushPromises()
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(uploadMock).toHaveBeenCalledWith(7, jpeg, expect.any(AbortSignal))
+    expect(await fileBytes(uploadMock.mock.calls[0]?.[1] as File)).toEqual(originalBytes)
+    expect((wrapper.emitted('update:modelValue') ?? []).at(-1)?.[0]).toBe(
+      '![照片.jpg1](attachment:125)正文',
+    )
+  })
+
   it('uploads multiple dropped images sequentially and preserves success order across one failure', async () => {
     uploadMock
       .mockResolvedValueOnce(uploadedImage(201, '第一张.png'))
@@ -294,7 +350,8 @@ describe('KnowledgeDocumentEditor', () => {
     uploadMock.mockResolvedValue(uploadedImage(301, '截图-accepted.png'))
     const wrapper = mountEditor('正文')
     await waitForSourceEditor(wrapper)
-    const pasted = new File(['png'], '', { type: 'image/png' })
+    const originalBytes = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x49, 0x48]
+    const pasted = new File([new Uint8Array(originalBytes)], '', { type: 'image/png' })
 
     const event = dispatchEditorEvent(wrapper, 'paste', {
       items: [
@@ -306,9 +363,33 @@ describe('KnowledgeDocumentEditor', () => {
 
     expect(event.defaultPrevented).toBe(true)
     const uploadedFile = uploadMock.mock.calls[0]?.[1] as File
-    expect(uploadedFile.name).toMatch(/^截图-.*-1\.png$/u)
+    expect(uploadedFile.name).toMatch(/^截图-\d{8}-\d{6}\.png$/u)
+    expect(uploadedFile.type).toBe('image/png')
+    expect(await fileBytes(uploadedFile)).toEqual(originalBytes)
     expect((wrapper.emitted('update:modelValue') ?? []).at(-1)?.[0]).toBe(
       '![截图](attachment:301)正文',
+    )
+  })
+
+  it('uses the clipboard item JPEG MIME when the pasted File has no name or MIME', async () => {
+    uploadMock.mockResolvedValue(uploadedImage(302, '截图-accepted.jpg'))
+    const wrapper = mountEditor('正文')
+    await waitForSourceEditor(wrapper)
+    const originalBytes = [0xff, 0xd8, 0xff, 0xe0, 0x4a, 0x46, 0x49, 0x46, 0xff, 0xd9]
+    const pasted = new File([new Uint8Array(originalBytes)], '', { type: '' })
+
+    const event = dispatchEditorEvent(wrapper, 'paste', {
+      items: [{ kind: 'file', type: 'image/jpeg', getAsFile: () => pasted }],
+    })
+    await flushPromises()
+
+    expect(event.defaultPrevented).toBe(true)
+    const uploadedFile = uploadMock.mock.calls[0]?.[1] as File
+    expect(uploadedFile.name).toMatch(/^截图-\d{8}-\d{6}\.jpg$/u)
+    expect(uploadedFile.type).toBe('image/jpeg')
+    expect(await fileBytes(uploadedFile)).toEqual(originalBytes)
+    expect((wrapper.emitted('update:modelValue') ?? []).at(-1)?.[0]).toBe(
+      '![截图](attachment:302)正文',
     )
   })
 
