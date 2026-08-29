@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { Delete } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { useRouter } from 'vue-router'
 import { ApiError } from '../../../api/errors/ApiError'
 import { formatDateTime } from '../../../app/formatters/dateTime'
 import { useOverlayStore } from '../../../app/stores/overlays'
@@ -15,10 +17,16 @@ import type {
   AdministratorAttachmentDetail,
   AdministratorAttachmentIntegrity,
 } from '../api/administratorAttachmentContracts'
+import {
+  administratorAttachmentReferenceLabels,
+  administratorAttachmentStorageLabels,
+  formatAdministratorAttachmentReferenceCounts,
+} from '../attachmentAdministrationPresentation'
 
 const props = defineProps<{ attachmentId: number }>()
 const emit = defineEmits<{ deleted: [attachmentId: number]; changed: [] }>()
 const overlayStore = useOverlayStore()
+const router = useRouter()
 const detail = ref<AdministratorAttachmentDetail | null>(null)
 const integrity = ref<AdministratorAttachmentIntegrity | null>(null)
 const loading = ref(false)
@@ -61,20 +69,6 @@ const canRetry = computed(
     detail.value.storageState === 'DeletePending' &&
     !deleting.value,
 )
-
-const referenceStatusLabels = {
-  Referenced: '当前修订引用',
-  HistoricalOnly: '仅历史修订引用',
-  Orphan: '孤立附件',
-} as const
-const storageLabels = {
-  Ready: '可用',
-  Missing: '文件缺失',
-  LengthMismatch: '长度不一致',
-  Corrupt: '校验不一致',
-  DeletePending: '等待删除重试',
-  Unavailable: '文件不可用',
-} as const
 
 function formatFileSize(sizeBytes: number): string {
   if (sizeBytes < 1024) return `${sizeBytes} B`
@@ -143,6 +137,18 @@ function openPreview(): void {
   })
 }
 
+async function openOwnerDocument(): Promise<void> {
+  const attachment = detail.value
+  if (!attachment || attachment.owner.isDeleted) return
+  const target = {
+    name: 'knowledge-document-detail' as const,
+    params: { id: String(attachment.owner.documentId) },
+  }
+
+  await overlayStore.closeDrawerAfterClosed()
+  await router.push(target)
+}
+
 async function permanentlyDelete(): Promise<void> {
   const attachment = detail.value
   if (!attachment || (!canDelete.value && !canRetry.value)) return
@@ -174,7 +180,7 @@ async function permanentlyDelete(): Promise<void> {
     } else if (reason instanceof ApiError && reason.status === 422) {
       ElMessage.error('附件已新增修订引用，永久删除已拒绝。')
     } else if (reason instanceof ApiError && (reason.status === 503 || reason.status === 507)) {
-      ElMessage.error('物理文件删除失败，附件已保留为 DeletePending，可稍后单项重试。')
+      ElMessage.error('物理文件删除失败，附件已保留为等待删除重试状态，可稍后单项重试。')
     } else {
       ElMessage.error(reason instanceof Error ? reason.message : '附件永久删除失败。')
     }
@@ -226,10 +232,10 @@ onBeforeUnmount(() => requestController?.abort())
             :type="detail.referenceStatus === 'Orphan' ? 'warning' : 'success'"
             effect="plain"
           >
-            {{ referenceStatusLabels[detail.referenceStatus] }}
+            {{ administratorAttachmentReferenceLabels[detail.referenceStatus] }}
           </el-tag>
           <el-tag :type="detail.storageHealth === 'Ready' ? 'success' : 'danger'" effect="plain">
-            {{ storageLabels[detail.storageHealth] }}
+            {{ administratorAttachmentStorageLabels[detail.storageHealth] }}
           </el-tag>
         </div>
       </section>
@@ -257,8 +263,8 @@ onBeforeUnmount(() => requestController?.abort())
             <dd>{{ detail.previewMode }}</dd>
           </div>
           <div>
-            <dt>Storage State</dt>
-            <dd>{{ detail.storageState }}</dd>
+            <dt>存储状态</dt>
+            <dd>{{ administratorAttachmentStorageLabels[detail.storageState] }}</dd>
           </div>
           <div>
             <dt>Size</dt>
@@ -291,13 +297,13 @@ onBeforeUnmount(() => requestController?.abort())
             <span>{{ detail.owner.lifecycleStatus }}</span>
           </div>
           <el-tag v-if="detail.owner.isDeleted" type="danger" effect="plain">已删除</el-tag>
-          <router-link
+          <el-button
             v-else
-            :to="{
-              name: 'knowledge-document-detail',
-              params: { id: String(detail.owner.documentId) },
-            }"
-            >查看当前文档</router-link
+            class="attachment-admin-detail__owner-link"
+            link
+            type="primary"
+            @click="openOwnerDocument"
+            >查看当前文档</el-button
           >
         </div>
       </section>
@@ -308,10 +314,7 @@ onBeforeUnmount(() => requestController?.abort())
       >
         <div class="attachment-admin-detail__section-heading">
           <h3 id="attachment-admin-reference-title">Revision 引用</h3>
-          <span
-            >全部 {{ detail.referenceCount }} · 当前 {{ detail.currentReferenceCount }} · 历史
-            {{ detail.historicalReferenceCount }}</span
-          >
+          <span>{{ formatAdministratorAttachmentReferenceCounts(detail) }}</span>
         </div>
         <p v-if="detail.referenceCount === 0" class="attachment-admin-detail__empty">
           全部修订引用数为 0；这是可永久删除的孤立附件。
@@ -342,7 +345,7 @@ onBeforeUnmount(() => requestController?.abort())
         <dl v-if="integrity" class="attachment-admin-detail__integrity" aria-live="polite">
           <div>
             <dt>检查结果</dt>
-            <dd>{{ storageLabels[integrity.status] }}</dd>
+            <dd>{{ administratorAttachmentStorageLabels[integrity.status] }}</dd>
           </div>
           <div>
             <dt>实际大小</dt>
@@ -380,6 +383,8 @@ onBeforeUnmount(() => requestController?.abort())
         <el-button
           v-if="canDelete || canRetry"
           type="danger"
+          plain
+          :icon="Delete"
           :loading="deleting"
           :aria-label="`${canRetry ? '重试永久删除' : '永久删除'}附件 ${detail.originalFileName}`"
           @click="permanentlyDelete"

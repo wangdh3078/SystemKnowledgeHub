@@ -39,4 +39,22 @@ describe('overlayStore', () => {
       mode: 'create',
     })
   })
+
+  it('resolves close-then-continue work only after DrawerHost reports closed', async () => {
+    const store = useOverlayStore()
+    store.openDrawer({ kind: 'Detail', id: 7, mode: 'read' })
+
+    let continued = false
+    const closed = store.closeDrawerAfterClosed().then(() => {
+      continued = true
+    })
+
+    expect(store.currentDrawer).toBeNull()
+    expect(continued).toBe(false)
+
+    store.notifyDrawerClosed()
+    await closed
+
+    expect(continued).toBe(true)
+  })
 })

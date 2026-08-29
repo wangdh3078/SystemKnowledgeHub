@@ -25,6 +25,7 @@ export const useOverlayStore = defineStore('overlays', () => {
   const isDrawerOpen = computed(() => currentDrawer.value !== null)
   const isDialogOpen = computed(() => currentDialog.value !== null)
   const dialogOpenedSequence = ref(0)
+  const drawerCloseWaiters = new Set<() => void>()
 
   function openDrawer(descriptor: Omit<OverlayDescriptor, 'surface'>): void {
     const actorStore = useActorStore()
@@ -36,6 +37,21 @@ export const useOverlayStore = defineStore('overlays', () => {
     if (currentOverlay.value?.surface === 'drawer') {
       currentOverlay.value = null
     }
+  }
+
+  function closeDrawerAfterClosed(): Promise<void> {
+    if (!isDrawerOpen.value) return Promise.resolve()
+
+    return new Promise((resolve) => {
+      drawerCloseWaiters.add(resolve)
+      closeDrawer()
+    })
+  }
+
+  function notifyDrawerClosed(): void {
+    const waiters = [...drawerCloseWaiters]
+    drawerCloseWaiters.clear()
+    for (const resolve of waiters) resolve()
   }
 
   function openDialog(descriptor: Omit<OverlayDescriptor, 'surface'>): void {
@@ -66,6 +82,8 @@ export const useOverlayStore = defineStore('overlays', () => {
     openDrawer,
     openDialog,
     closeDrawer,
+    closeDrawerAfterClosed,
+    notifyDrawerClosed,
     closeDialog,
     notifyDialogOpened,
   }

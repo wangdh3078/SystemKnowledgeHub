@@ -2,12 +2,19 @@ import { createPinia, setActivePinia } from 'pinia'
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { useOverlayStore } from '../../../app/stores/overlays'
 import {
   deleteAdministratorAttachment,
   getAdministratorAttachment,
 } from '../api/administratorAttachmentsApi'
 import type { AdministratorAttachmentDetail } from '../api/administratorAttachmentContracts'
 import AdministratorAttachmentDetailDrawer from './AdministratorAttachmentDetailDrawer.vue'
+
+const { routerPush } = vi.hoisted(() => ({ routerPush: vi.fn() }))
+
+vi.mock('vue-router', () => ({
+  useRouter: () => ({ push: routerPush }),
+}))
 
 vi.mock('element-plus', () => ({
   ElMessage: { success: vi.fn(), error: vi.fn() },
@@ -57,21 +64,32 @@ function detail(
 }
 
 function mountDrawer() {
-  return mount(AdministratorAttachmentDetailDrawer, {
+  const pinia = createPinia()
+  setActivePinia(pinia)
+  const overlays = useOverlayStore()
+  overlays.openDrawer({ kind: 'attachment-administration', id: 17, mode: 'read' })
+  const wrapper = mount(AdministratorAttachmentDetailDrawer, {
     props: { attachmentId: 17 },
     global: {
-      plugins: [createPinia()],
+      plugins: [pinia],
       components: {
         ElButton: {
-          props: ['loading'],
+          props: {
+            loading: Boolean,
+            type: String,
+            plain: Boolean,
+            icon: { type: [Object, Function], default: null },
+            link: Boolean,
+          },
           emits: ['click'],
-          template: '<button type="button" @click="$emit(\'click\')"><slot /></button>',
+          template:
+            '<button type="button" :data-type="type" :data-plain="String(plain)" :data-has-icon="String(Boolean(icon))" @click="$emit(\'click\')"><slot /></button>',
         },
         ElTag: { template: '<span><slot /></span>' },
-        RouterLink: { template: '<a><slot /></a>' },
       },
     },
   })
+  return { overlays, wrapper }
 }
 
 describe('AdministratorAttachmentDetailDrawer', () => {
@@ -82,14 +100,15 @@ describe('AdministratorAttachmentDetailDrawer', () => {
     vi.mocked(ElMessageBox.confirm).mockReset()
     vi.mocked(ElMessage.success).mockReset()
     vi.mocked(ElMessage.error).mockReset()
+    routerPush.mockReset()
   })
 
   it('preserves historical references for a deleted owner and uses exact revision download', async () => {
     vi.mocked(getAdministratorAttachment).mockResolvedValue(detail())
-    const wrapper = mountDrawer()
+    const { wrapper } = mountDrawer()
     await flushPromises()
 
-    expect(wrapper.text()).toContain('仅历史修订引用')
+    expect(wrapper.text()).toContain('仅历史引用')
     expect(wrapper.text()).toContain('Revision 4')
     expect(wrapper.text()).toContain('已删除')
     expect(wrapper.text()).not.toContain('查看当前文档')
@@ -115,7 +134,7 @@ describe('AdministratorAttachmentDetailDrawer', () => {
     )
     vi.mocked(ElMessageBox.confirm).mockResolvedValue({} as never)
     vi.mocked(deleteAdministratorAttachment).mockResolvedValue()
-    const wrapper = mountDrawer()
+    const { wrapper } = mountDrawer()
     await flushPromises()
 
     await wrapper.get('button[aria-label="永久删除附件 孤立附件.txt"]').trigger('click')
@@ -128,5 +147,84 @@ describe('AdministratorAttachmentDetailDrawer', () => {
     )
     expect(deleteAdministratorAttachment).toHaveBeenCalledWith(17, 'version-4')
     expect(wrapper.emitted('deleted')).toEqual([[17]])
+  })
+
+  it('uses the shared danger action style only for zero-reference Ready items', async () => {
+    vi.mocked(getAdministratorAttachment).mockResolvedValue(
+      detail({
+        originalFileName: '孤立附件.txt',
+        referenceCount: 0,
+        currentReferenceCount: 0,
+        historicalReferenceCount: 0,
+        referenceStatus: 'Orphan',
+        references: [],
+      }),
+    )
+    const { wrapper } = mountDrawer()
+    await flushPromises()
+
+    const action = wrapper.get('button[aria-label="永久删除附件 孤立附件.txt"]')
+    expect(action.attributes('data-type')).toBe('danger')
+    expect(action.attributes('data-plain')).toBe('true')
+    expect(action.attributes('data-has-icon')).toBe('true')
+  })
+
+  it('does not expose permanent deletion for a referenced attachment', async () => {
+    vi.mocked(getAdministratorAttachment).mockResolvedValue(detail())
+    const { wrapper } = mountDrawer()
+    await flushPromises()
+
+    expect(wrapper.find('button[aria-label^="永久删除附件"]').exists()).toBe(false)
+    expect(wrapper.find('button[aria-label^="重试永久删除附件"]').exists()).toBe(false)
+  })
+
+  it('uses the same danger action style for a zero-reference DeletePending retry', async () => {
+    vi.mocked(getAdministratorAttachment).mockResolvedValue(
+      detail({
+        originalFileName: '等待重试.txt',
+        storageState: 'DeletePending',
+        storageHealth: 'DeletePending',
+        referenceCount: 0,
+        currentReferenceCount: 0,
+        historicalReferenceCount: 0,
+        referenceStatus: 'Orphan',
+        references: [],
+      }),
+    )
+    const { wrapper } = mountDrawer()
+    await flushPromises()
+
+    const action = wrapper.get('button[aria-label="重试永久删除附件 等待重试.txt"]')
+    expect(action.attributes('data-type')).toBe('danger')
+    expect(action.attributes('data-plain')).toBe('true')
+    expect(action.attributes('data-has-icon')).toBe('true')
+  })
+
+  it('closes through DrawerHost before navigating to the current owner document', async () => {
+    vi.mocked(getAdministratorAttachment).mockResolvedValue(
+      detail({
+        owner: { documentId: 8, title: '活跃文档', lifecycleStatus: 'Draft', isDeleted: false },
+        currentReferenceCount: 1,
+        historicalReferenceCount: 0,
+        referenceStatus: 'Referenced',
+        references: [{ revisionNumber: 5, isCurrent: true, createdAt: '2026-08-29T01:00:00Z' }],
+      }),
+    )
+    const { overlays, wrapper } = mountDrawer()
+    await flushPromises()
+
+    await wrapper.get('button.attachment-admin-detail__owner-link').trigger('click')
+    await flushPromises()
+
+    expect(overlays.currentDrawer).toBeNull()
+    expect(routerPush).not.toHaveBeenCalled()
+
+    overlays.notifyDrawerClosed()
+    await flushPromises()
+
+    expect(routerPush).toHaveBeenCalledWith({
+      name: 'knowledge-document-detail',
+      params: { id: '8' },
+    })
   })
 })

@@ -32,6 +32,7 @@ function handleOpened(): void {
 
 function handleClosed(): void {
   scrollPreserver.release()
+  overlayStore.notifyDrawerClosed()
 }
 
 function handleAutoFocus(): void {

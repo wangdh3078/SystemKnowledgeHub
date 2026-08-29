@@ -8,6 +8,12 @@ import EmptyState from '../../../components/feedback/EmptyState.vue'
 import ErrorState from '../../../components/feedback/ErrorState.vue'
 import LoadingState from '../../../components/feedback/LoadingState.vue'
 import type { AdministratorAttachmentListItem } from '../api/administratorAttachmentContracts'
+import {
+  administratorAttachmentReferenceLabels,
+  administratorAttachmentStorageFilterOptions,
+  administratorAttachmentStorageLabels,
+  formatAdministratorAttachmentReferenceCounts,
+} from '../attachmentAdministrationPresentation'
 import AdministratorAttachmentDetailDrawer from '../components/AdministratorAttachmentDetailDrawer.vue'
 import { useAdministratorAttachments } from '../composables/useAdministratorAttachments'
 
@@ -32,20 +38,6 @@ const {
   refresh,
 } = useAdministratorAttachments()
 let queryTimer: ReturnType<typeof setTimeout> | null = null
-
-const referenceLabels = {
-  Referenced: '有当前引用',
-  HistoricalOnly: '仅历史引用',
-  Orphan: '孤立附件',
-} as const
-const storageLabels = {
-  Ready: '可用',
-  Missing: '文件缺失',
-  LengthMismatch: '长度不一致',
-  Corrupt: '校验不一致',
-  DeletePending: '等待重试',
-  Unavailable: '文件不可用',
-} as const
 
 watch(query, () => {
   if (queryTimer) clearTimeout(queryTimer)
@@ -81,11 +73,11 @@ function abbreviatedSha(hash: string): string {
 }
 
 function referenceLabel(status: AdministratorAttachmentListItem['referenceStatus']): string {
-  return referenceLabels[status]
+  return administratorAttachmentReferenceLabels[status]
 }
 
 function storageLabel(health: AdministratorAttachmentListItem['storageHealth']): string {
-  return storageLabels[health]
+  return administratorAttachmentStorageLabels[health]
 }
 
 function openRow(row: AdministratorAttachmentListItem): void {
@@ -146,7 +138,7 @@ onBeforeUnmount(() => {
         }}</small>
       </div>
       <div>
-        <span>DeletePending</span><strong>{{ statistics?.deletePendingCount ?? '—' }}</strong
+        <span>等待删除重试</span><strong>{{ statistics?.deletePendingCount ?? '—' }}</strong
         ><small>单项重试，不自动清理</small>
       </div>
     </section>
@@ -211,9 +203,12 @@ onBeforeUnmount(() => {
         placeholder="存储状态：全部"
         @change="resetPageAndLoad"
       >
-        <el-option label="全部存储状态" value="" />
-        <el-option label="Ready" value="Ready" />
-        <el-option label="DeletePending" value="DeletePending" />
+        <el-option
+          v-for="option in administratorAttachmentStorageFilterOptions"
+          :key="option.value || 'all'"
+          :label="option.label"
+          :value="option.value"
+        />
       </el-select>
       <el-button
         v-if="query || kind || extension || referenceStatus || storageState"
@@ -290,10 +285,7 @@ onBeforeUnmount(() => {
               effect="plain"
               size="small"
               >{{ referenceLabel(scope.row.referenceStatus) }}</el-tag
-            ><small
-              >全部 {{ scope.row.referenceCount }} · 当前
-              {{ scope.row.currentReferenceCount }}</small
-            ></template
+            ><small>{{ formatAdministratorAttachmentReferenceCounts(scope.row) }}</small></template
           ></el-table-column
         >
         <el-table-column label="存储" min-width="118"
@@ -303,7 +295,7 @@ onBeforeUnmount(() => {
               effect="plain"
               size="small"
               >{{ storageLabel(scope.row.storageHealth) }}</el-tag
-            ><small>{{ scope.row.storageState }}</small></template
+            ></template
           ></el-table-column
         >
         <el-table-column label="SHA-256" min-width="165"
