@@ -19,9 +19,10 @@ public sealed class DatabaseKnowledgeDeleteService(KnowledgeHubDbContext dbConte
         if (source is null) return new(SoftDeleteFailure.NotFound);
         if (!SoftDeleteAuthorization.CanDelete(actor, source.CreatedByUserId)) return new(SoftDeleteFailure.Forbidden);
         if (source.Version != expectedVersion) return new(SoftDeleteFailure.Conflict);
-        var blockers = new List<DeleteDependencyBlocker>(5);
+        var blockers = new List<DeleteDependencyBlocker>(6);
         await Add(blockers, "databaseObjects", "数据库对象", dbContext.DatabaseObjects.CountAsync(item => item.DatabaseSourceId == id, cancellationToken));
         await Add(blockers, "integrations", "集成关系", dbContext.Integrations.CountAsync(item => item.DatabaseSourceId == id, cancellationToken));
+        await Add(blockers, "enabledDatabaseConnectionProfiles", "已启用数据库连接配置", dbContext.DatabaseConnectionProfiles.CountAsync(item => item.DatabaseSourceId == id && item.IsEnabled, cancellationToken));
         await AddControlled(blockers, KnowledgeTargetType.DatabaseSource, id, cancellationToken);
         if (blockers.Count > 0) return new(SoftDeleteFailure.Dependencies, Blockers: blockers);
         source.IsDeleted = true; source.DeletedAt = DateTimeOffset.UtcNow; source.DeletedByUserId = actor.UserId; source.DeletedByDisplayName = actor.DisplayName; source.Version = expectedVersion + 1;

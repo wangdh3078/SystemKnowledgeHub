@@ -3,6 +3,7 @@ using SystemKnowledgeHub.Api.Features.BusinessFunctions.Domain;
 using SystemKnowledgeHub.Api.Features.Attachments.Domain;
 using SystemKnowledgeHub.Api.Features.BusinessRules.Domain;
 using SystemKnowledgeHub.Api.Features.DatabaseKnowledge.Domain;
+using SystemKnowledgeHub.Api.Features.DatabaseDiscovery.Domain;
 using SystemKnowledgeHub.Api.Features.Evidence.Domain;
 using SystemKnowledgeHub.Api.Features.Integrations.Domain;
 using SystemKnowledgeHub.Api.Features.KnowledgeDocuments.Domain;
@@ -26,6 +27,9 @@ public sealed class KnowledgeHubDbContext(DbContextOptions<KnowledgeHubDbContext
     public DbSet<DatabaseObject> DatabaseObjects => Set<DatabaseObject>();
     public DbSet<DatabaseColumn> DatabaseColumns => Set<DatabaseColumn>();
     public DbSet<ColumnKnownValue> ColumnKnownValues => Set<ColumnKnownValue>();
+    public DbSet<DatabaseConnectionProfile> DatabaseConnectionProfiles => Set<DatabaseConnectionProfile>();
+    public DbSet<DatabaseConnectionSecret> DatabaseConnectionSecrets => Set<DatabaseConnectionSecret>();
+    public DbSet<DatabaseConnectionAuditEvent> DatabaseConnectionAuditEvents => Set<DatabaseConnectionAuditEvent>();
     public DbSet<Evidence> Evidence => Set<Evidence>();
     public DbSet<Integration> Integrations => Set<Integration>();
     public DbSet<IntegrationContractField> IntegrationContractFields => Set<IntegrationContractField>();
