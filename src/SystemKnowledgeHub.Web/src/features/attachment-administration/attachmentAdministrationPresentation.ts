@@ -18,7 +18,7 @@ export const administratorAttachmentStorageLabels: Readonly<
   Ready: '可用',
   Missing: '文件缺失',
   LengthMismatch: '长度不一致',
-  Corrupt: '校验不一致',
+  Corrupt: '校验异常',
   DeletePending: '等待删除重试',
   Unavailable: '文件不可用',
 }
@@ -42,19 +42,18 @@ interface AttachmentReferenceCounts {
   readonly historicalReferenceCount: number
 }
 
-export function formatAdministratorAttachmentReferenceCounts(
+export function formatAdministratorAttachmentReferenceSummary(
   attachment: AttachmentReferenceCounts,
 ): string {
   if (attachment.referenceStatus === 'Orphan') {
-    return `${attachment.referenceCount} 个引用`
+    return `${administratorAttachmentReferenceLabels.Orphan} · 无引用`
   }
 
   if (attachment.referenceStatus === 'HistoricalOnly') {
-    return `${attachment.historicalReferenceCount} 个历史修订引用`
+    return `${administratorAttachmentReferenceLabels.HistoricalOnly} · ${attachment.historicalReferenceCount} 个历史修订`
   }
 
-  const current = `${attachment.currentReferenceCount} 个当前修订引用`
-  return attachment.historicalReferenceCount > 0
-    ? `${current} · ${attachment.historicalReferenceCount} 个历史修订引用`
-    : current
+  const revisionCount =
+    attachment.referenceCount === 1 ? '1 个修订' : `共 ${attachment.referenceCount} 个修订`
+  return `${administratorAttachmentReferenceLabels.Referenced} · ${revisionCount}`
 }

@@ -3,7 +3,7 @@ import {
   administratorAttachmentReferenceLabels,
   administratorAttachmentStorageFilterOptions,
   administratorAttachmentStorageLabels,
-  formatAdministratorAttachmentReferenceCounts,
+  formatAdministratorAttachmentReferenceSummary,
 } from './attachmentAdministrationPresentation'
 
 describe('attachment administration presentation', () => {
@@ -18,7 +18,7 @@ describe('attachment administration presentation', () => {
       DeletePending: '等待删除重试',
       Missing: '文件缺失',
       LengthMismatch: '长度不一致',
-      Corrupt: '校验不一致',
+      Corrupt: '校验异常',
       Unavailable: '文件不可用',
     })
   })
@@ -30,28 +30,36 @@ describe('attachment administration presentation', () => {
       Orphan: '孤立附件',
     })
     expect(
-      formatAdministratorAttachmentReferenceCounts({
+      formatAdministratorAttachmentReferenceSummary({
         referenceStatus: 'Orphan',
         referenceCount: 0,
         currentReferenceCount: 0,
         historicalReferenceCount: 0,
       }),
-    ).toBe('0 个引用')
+    ).toBe('孤立附件 · 无引用')
     expect(
-      formatAdministratorAttachmentReferenceCounts({
+      formatAdministratorAttachmentReferenceSummary({
+        referenceStatus: 'Referenced',
+        referenceCount: 1,
+        currentReferenceCount: 1,
+        historicalReferenceCount: 0,
+      }),
+    ).toBe('当前引用 · 1 个修订')
+    expect(
+      formatAdministratorAttachmentReferenceSummary({
         referenceStatus: 'Referenced',
         referenceCount: 3,
         currentReferenceCount: 1,
         historicalReferenceCount: 2,
       }),
-    ).toBe('1 个当前修订引用 · 2 个历史修订引用')
+    ).toBe('当前引用 · 共 3 个修订')
     expect(
-      formatAdministratorAttachmentReferenceCounts({
+      formatAdministratorAttachmentReferenceSummary({
         referenceStatus: 'HistoricalOnly',
         referenceCount: 2,
         currentReferenceCount: 0,
         historicalReferenceCount: 2,
       }),
-    ).toBe('2 个历史修订引用')
+    ).toBe('仅历史引用 · 2 个历史修订')
   })
 })

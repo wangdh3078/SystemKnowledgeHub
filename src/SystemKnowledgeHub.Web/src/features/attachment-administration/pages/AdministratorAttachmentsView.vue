@@ -9,10 +9,9 @@ import ErrorState from '../../../components/feedback/ErrorState.vue'
 import LoadingState from '../../../components/feedback/LoadingState.vue'
 import type { AdministratorAttachmentListItem } from '../api/administratorAttachmentContracts'
 import {
-  administratorAttachmentReferenceLabels,
   administratorAttachmentStorageFilterOptions,
   administratorAttachmentStorageLabels,
-  formatAdministratorAttachmentReferenceCounts,
+  formatAdministratorAttachmentReferenceSummary,
 } from '../attachmentAdministrationPresentation'
 import AdministratorAttachmentDetailDrawer from '../components/AdministratorAttachmentDetailDrawer.vue'
 import { useAdministratorAttachments } from '../composables/useAdministratorAttachments'
@@ -70,10 +69,6 @@ function afterDetailChange(): void {
 
 function abbreviatedSha(hash: string): string {
   return `${hash.slice(0, 10)}…${hash.slice(-8)}`
-}
-
-function referenceLabel(status: AdministratorAttachmentListItem['referenceStatus']): string {
-  return administratorAttachmentReferenceLabels[status]
 }
 
 function storageLabel(health: AdministratorAttachmentListItem['storageHealth']): string {
@@ -278,23 +273,31 @@ onBeforeUnmount(() => {
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="引用" min-width="130"
+        <el-table-column label="引用" min-width="168"
           ><template #default="scope"
-            ><el-tag
-              :type="scope.row.referenceStatus === 'Orphan' ? 'warning' : 'success'"
-              effect="plain"
-              size="small"
-              >{{ referenceLabel(scope.row.referenceStatus) }}</el-tag
-            ><small>{{ formatAdministratorAttachmentReferenceCounts(scope.row) }}</small></template
+            ><span
+              class="attachment-admin-table__status attachment-admin-table__reference-status"
+              :class="{
+                'attachment-admin-table__status--warning': scope.row.referenceStatus === 'Orphan',
+                'attachment-admin-table__status--positive':
+                  scope.row.referenceStatus === 'Referenced',
+                'attachment-admin-table__status--historical':
+                  scope.row.referenceStatus === 'HistoricalOnly',
+              }"
+              >{{ formatAdministratorAttachmentReferenceSummary(scope.row) }}</span
+            ></template
           ></el-table-column
         >
-        <el-table-column label="存储" min-width="118"
+        <el-table-column label="存储" min-width="130"
           ><template #default="scope"
-            ><el-tag
-              :type="scope.row.storageHealth === 'Ready' ? 'success' : 'danger'"
-              effect="plain"
-              size="small"
-              >{{ storageLabel(scope.row.storageHealth) }}</el-tag
+            ><span
+              class="attachment-admin-table__status attachment-admin-table__storage-status"
+              :class="
+                scope.row.storageHealth === 'Ready'
+                  ? 'attachment-admin-table__status--positive'
+                  : 'attachment-admin-table__status--danger'
+              "
+              >{{ storageLabel(scope.row.storageHealth) }}</span
             ></template
           ></el-table-column
         >
@@ -308,9 +311,9 @@ onBeforeUnmount(() => {
             ><el-button
               text
               type="primary"
-              :aria-label="`查看附件 ${scope.row.originalFileName}`"
+              :aria-label="`查看附件详情 ${scope.row.originalFileName}`"
               @click.stop="openDetail(scope.row.attachmentId)"
-              >查看</el-button
+              >详情</el-button
             ></template
           ></el-table-column
         >

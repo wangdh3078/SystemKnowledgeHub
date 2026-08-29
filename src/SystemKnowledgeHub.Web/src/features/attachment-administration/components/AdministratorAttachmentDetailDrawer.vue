@@ -20,7 +20,7 @@ import type {
 import {
   administratorAttachmentReferenceLabels,
   administratorAttachmentStorageLabels,
-  formatAdministratorAttachmentReferenceCounts,
+  formatAdministratorAttachmentReferenceSummary,
 } from '../attachmentAdministrationPresentation'
 
 const props = defineProps<{ attachmentId: number }>()
@@ -314,7 +314,7 @@ onBeforeUnmount(() => requestController?.abort())
       >
         <div class="attachment-admin-detail__section-heading">
           <h3 id="attachment-admin-reference-title">Revision 引用</h3>
-          <span>{{ formatAdministratorAttachmentReferenceCounts(detail) }}</span>
+          <span>{{ formatAdministratorAttachmentReferenceSummary(detail) }}</span>
         </div>
         <p v-if="detail.referenceCount === 0" class="attachment-admin-detail__empty">
           全部修订引用数为 0；这是可永久删除的孤立附件。
