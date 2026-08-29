@@ -189,7 +189,7 @@
   font-size: 15px;
 }
 
-.database-object-evidence-section__heading span,
+.database-object-evidence-section__heading > div:first-child > span,
 .database-object-evidence-section__scope {
   color: var(--color-muted);
   font-size: 11px;

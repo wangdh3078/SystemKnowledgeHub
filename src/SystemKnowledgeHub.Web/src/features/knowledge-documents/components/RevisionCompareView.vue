@@ -349,7 +349,7 @@ onBeforeUnmount(() => {
         >
           <header>
             <h3 id="attachment-diff-heading">附件集合变化</h3>
-            <span>按 Attachment ID + Kind 比较，不比较二进制内容</span>
+            <span>按附件编号与类型比较，不比较二进制内容</span>
           </header>
           <div class="knowledge-document-compare__attachment-groups">
             <section v-for="group in attachmentGroups" :key="group.key" :class="`is-${group.key}`">

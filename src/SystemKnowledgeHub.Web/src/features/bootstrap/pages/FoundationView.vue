@@ -77,7 +77,7 @@ onBeforeUnmount(() => activeRequest?.abort())
           <span class="section-heading__eyebrow">运行状态</span>
           <h2 id="readiness-title">基础链路就绪情况</h2>
         </div>
-        <el-tag type="success" effect="plain" round>Bootstrap</el-tag>
+        <el-tag type="success" effect="plain" round>基础工程</el-tag>
       </div>
 
       <LoadingState v-if="loading" />
@@ -87,8 +87,8 @@ onBeforeUnmount(() => activeRequest?.abort())
         <article class="readiness-item readiness-item--ready">
           <div class="readiness-item__icon"><DataBoard /></div>
           <div>
-            <span>Frontend</span>
-            <strong>Ready</strong>
+            <span>前端</span>
+            <strong>就绪</strong>
             <small>Vue 3 · TypeScript · Vite</small>
           </div>
           <el-icon color="var(--status-confirmed)"><CircleCheck /></el-icon>
@@ -97,9 +97,9 @@ onBeforeUnmount(() => activeRequest?.abort())
         <article class="readiness-item" :class="{ 'readiness-item--ready': backendReady }">
           <div class="readiness-item__icon"><Connection /></div>
           <div>
-            <span>Backend</span>
-            <strong>{{ backendReady ? 'Ready' : 'Pending' }}</strong>
-            <small>Vite Proxy → ASP.NET Core Controller</small>
+            <span>后端</span>
+            <strong>{{ backendReady ? '就绪' : '等待中' }}</strong>
+            <small>Vite 代理 → ASP.NET Core 控制器</small>
           </div>
           <el-icon v-if="backendReady" color="var(--status-confirmed)">
             <CircleCheck />
@@ -109,9 +109,9 @@ onBeforeUnmount(() => activeRequest?.abort())
         <article class="readiness-item" :class="{ 'readiness-item--ready': backendReady }">
           <div class="readiness-item__icon"><DocumentChecked /></div>
           <div>
-            <span>Database Provider</span>
+            <span>数据库提供方</span>
             <strong class="technical-text">{{ databaseProvider }}</strong>
-            <small>真实 EF Core SQLite Provider</small>
+            <small>真实 EF Core SQLite 提供方</small>
           </div>
           <el-icon v-if="backendReady" color="var(--status-confirmed)">
             <CircleCheck />

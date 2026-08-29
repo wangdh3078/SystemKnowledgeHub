@@ -109,7 +109,7 @@ describe('AdministratorAttachmentDetailDrawer', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('仅历史引用')
-    expect(wrapper.text()).toContain('Revision 4')
+    expect(wrapper.text()).toContain('修订 4')
     expect(wrapper.text()).toContain('已删除')
     expect(wrapper.text()).not.toContain('查看当前文档')
     expect(wrapper.get('a[download]').attributes('href')).toBe(
@@ -141,7 +141,7 @@ describe('AdministratorAttachmentDetailDrawer', () => {
     await flushPromises()
 
     expect(ElMessageBox.confirm).toHaveBeenCalledWith(
-      expect.stringContaining('删除附件 metadata 和物理文件，且不可恢复'),
+      expect.stringContaining('删除附件元数据和物理文件，且不可恢复'),
       '永久删除附件？',
       expect.objectContaining({ confirmButtonText: '永久删除' }),
     )

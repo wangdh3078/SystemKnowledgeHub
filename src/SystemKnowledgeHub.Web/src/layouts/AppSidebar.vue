@@ -35,7 +35,7 @@ function isVisible(item: (typeof navigationItems)[number]): boolean {
       </span>
       <span class="app-sidebar__brand-copy">
         <strong>系统知识中心</strong>
-        <small>System Knowledge Hub</small>
+        <small>系统知识中心</small>
       </span>
     </button>
 
@@ -64,7 +64,7 @@ function isVisible(item: (typeof navigationItems)[number]): boolean {
 
     <div class="app-sidebar__footer">
       <span class="app-sidebar__status-dot" aria-hidden="true"></span>
-      <span>MVP · 渐进知识整理</span>
+      <span>渐进知识整理</span>
     </div>
   </aside>
 </template>

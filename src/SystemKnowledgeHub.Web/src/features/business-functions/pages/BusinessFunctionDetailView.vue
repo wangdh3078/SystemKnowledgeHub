@@ -10,7 +10,9 @@ import KnowledgeStatusBadge from '../../../components/data-display/KnowledgeStat
 import ErrorState from '../../../components/feedback/ErrorState.vue'
 import LoadingState from '../../../components/feedback/LoadingState.vue'
 import KnowledgeStatusProgressionPanel from '../../knowledge-status/components/KnowledgeStatusProgressionPanel.vue'
+import { evidenceTypeLabels, type EvidenceType } from '../../evidence/api/evidenceContracts'
 import { relationTypeLabels, relationTypes } from '../../relationships/api/relationshipContracts'
+import { unknownItemStatusLabels, type UnknownItemStatus } from '../../unknown-items/api/unknownItemContracts'
 import {
   functionTypeLabels,
   rewriteStatusLabels,
@@ -37,6 +39,8 @@ function getRelationTypeLabel(value: unknown): string {
   const relationType = relationTypes.find((item) => item === value)
   return relationType ? relationTypeLabels[relationType] : '未知关系'
 }
+const evidenceTypeLabel = (value: string) => evidenceTypeLabels[value as EvidenceType] ?? value
+const unknownStatusLabel = (value: string) => unknownItemStatusLabels[value as UnknownItemStatus] ?? value
 const {
   detail,
   loading,
@@ -300,7 +304,7 @@ onUnmounted(() => {
         <div>
           <div class="business-function-section__heading business-function-evidence-heading"><h2>证据</h2><div><span>{{ detail.evidence.length }} 条</span><el-button v-if="canAddEvidence" class="skh-section-action skh-evidence-action" type="primary" :icon="DocumentChecked" @click="openAddEvidence">添加证据</el-button></div></div>
           <div v-if="detail.evidence.length" class="business-function-evidence-list">
-            <button v-for="item in detail.evidence" :key="item.id" @click="openEvidence(item.id)"><el-icon><Document /></el-icon><span><small>{{ item.evidenceType }}</small><strong>{{ item.sourceTitle }}</strong></span><el-icon><ArrowRight /></el-icon></button>
+            <button v-for="item in detail.evidence" :key="item.id" @click="openEvidence(item.id)"><el-icon><Document /></el-icon><span><small>{{ evidenceTypeLabel(item.evidenceType) }}</small><strong>{{ item.sourceTitle }}</strong></span><el-icon><ArrowRight /></el-icon></button>
           </div>
           <div v-else class="business-section-empty business-section-empty--compact"><el-icon><Document /></el-icon><span>尚未添加支持该功能知识的证据。</span></div>
         </div>
@@ -309,7 +313,7 @@ onUnmounted(() => {
       <section class="business-function-section business-function-section--last">
 <div class="business-function-section__heading"><h2>待确认事项</h2><div><span>{{ detail.unknownItems.length }} 项</span><el-button v-if="actorStore.canEdit" text type="primary" :icon="Plus" @click="createUnknownItem">创建待确认事项</el-button></div></div>
         <div v-if="detail.unknownItems.length" class="business-function-evidence-list">
-          <button v-for="item in detail.unknownItems" :key="item.id" @click="router.push({ name: 'unknown-item-detail', params: { id: String(item.id) } })"><el-icon><QuestionFilled /></el-icon><span><small>{{ item.status }}</small><strong>{{ item.question }}</strong></span><el-icon><ArrowRight /></el-icon></button>
+          <button v-for="item in detail.unknownItems" :key="item.id" @click="router.push({ name: 'unknown-item-detail', params: { id: String(item.id) } })"><el-icon><QuestionFilled /></el-icon><span><small>{{ unknownStatusLabel(item.status) }}</small><strong>{{ item.question }}</strong></span><el-icon><ArrowRight /></el-icon></button>
         </div>
         <div v-else class="business-section-empty business-section-empty--compact"><el-icon><QuestionFilled /></el-icon><span>当前没有功能级待确认事项。</span></div>
       </section>

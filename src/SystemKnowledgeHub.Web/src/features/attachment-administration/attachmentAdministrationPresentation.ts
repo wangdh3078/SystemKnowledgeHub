@@ -3,6 +3,27 @@ import type {
   AdministratorAttachmentStorageHealth,
   AdministratorAttachmentStorageState,
 } from './api/administratorAttachmentContracts'
+import type {
+  AttachmentKind,
+  AttachmentPreviewMode,
+} from '../knowledge-documents/api/attachmentContracts'
+
+export const administratorAttachmentKindLabels: Readonly<Record<AttachmentKind, string>> = {
+  Image: '图片',
+  File: '文件',
+}
+
+export const administratorAttachmentPreviewModeLabels: Readonly<
+  Record<AttachmentPreviewMode, string>
+> = {
+  Image: '图片',
+  Pdf: 'PDF',
+  Text: '文本',
+  Markdown: 'Markdown',
+  Csv: 'CSV',
+  Spreadsheet: '电子表格',
+  None: '不可预览',
+}
 
 export const administratorAttachmentReferenceLabels: Readonly<
   Record<AdministratorAttachmentReferenceStatus, string>
@@ -56,4 +77,13 @@ export function formatAdministratorAttachmentReferenceSummary(
   const revisionCount =
     attachment.referenceCount === 1 ? '1 个修订' : `共 ${attachment.referenceCount} 个修订`
   return `${administratorAttachmentReferenceLabels.Referenced} · ${revisionCount}`
+}
+
+export function formatAdministratorAttachmentOwnerLifecycle(value: string): string {
+  const labels: Readonly<Record<string, string>> = {
+    Draft: '草稿',
+    Published: '已发布',
+    Archived: '已归档',
+  }
+  return labels[value] ?? value
 }

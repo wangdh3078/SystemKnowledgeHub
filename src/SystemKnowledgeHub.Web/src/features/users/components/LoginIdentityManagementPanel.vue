@@ -48,7 +48,7 @@ onMounted(() => void load())
 
 <template>
   <section class="user-drawer__section login-identities">
-    <div class="user-drawer__section-title"><span>03</span><div><h3>登录身份映射（OIDC / SSO）</h3><p>用于把企业身份提供方的稳定登录身份映射到当前用户，不是知识身份或权限角色。技术对象名：LoginIdentity。</p></div></div>
+    <div class="user-drawer__section-title"><span>03</span><div><h3>登录身份映射（OIDC / SSO）</h3><p>用于把企业身份提供方的稳定登录身份映射到当前用户，不是知识身份或权限角色。</p></div></div>
     <p v-if="loading" class="user-drawer__help">正在读取登录映射…</p>
     <el-alert v-else-if="error" type="error" :title="error" :closable="false" show-icon><template #default><el-button size="small" @click="load">重试</el-button></template></el-alert>
     <template v-else>
@@ -64,7 +64,7 @@ onMounted(() => void load())
         <el-input v-model="form.subject" maxlength="240" placeholder="稳定 Subject / sub（由身份提供方提供）" class="technical-input" />
         <el-button type="primary" :loading="submitting" @click="create">添加映射</el-button>
       </div>
-      <p class="user-drawer__help">Provider 必须使用部署中已配置的身份提供方标识；Subject / sub 必须复制身份提供方给出的稳定值，不能用姓名或邮箱代替。</p>
+      <p class="user-drawer__help">身份提供方标识必须使用部署中的已配置值；稳定 Subject / sub 必须复制身份提供方给出的值，不能用姓名或邮箱代替。</p>
     </template>
   </section>
 </template>

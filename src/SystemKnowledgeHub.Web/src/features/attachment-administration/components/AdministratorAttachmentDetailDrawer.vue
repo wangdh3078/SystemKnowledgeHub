@@ -18,8 +18,11 @@ import type {
   AdministratorAttachmentIntegrity,
 } from '../api/administratorAttachmentContracts'
 import {
+  administratorAttachmentKindLabels,
+  administratorAttachmentPreviewModeLabels,
   administratorAttachmentReferenceLabels,
   administratorAttachmentStorageLabels,
+  formatAdministratorAttachmentOwnerLifecycle,
   formatAdministratorAttachmentReferenceSummary,
 } from '../attachmentAdministrationPresentation'
 
@@ -155,7 +158,7 @@ async function permanentlyDelete(): Promise<void> {
   const retrying = attachment.storageState === 'DeletePending'
   try {
     await ElMessageBox.confirm(
-      `该操作会删除附件 metadata 和物理文件，且不可恢复。\n仅零引用附件允许删除。\n\n文件：${attachment.originalFileName}\n大小：${formatFileSize(attachment.sizeBytes)}`,
+      `该操作会删除附件元数据和物理文件，且不可恢复。\n仅零引用附件允许删除。\n\n文件：${attachment.originalFileName}\n大小：${formatFileSize(attachment.sizeBytes)}`,
       retrying ? '重试永久删除附件？' : '永久删除附件？',
       {
         confirmButtonText: retrying ? '重试永久删除' : '永久删除',
@@ -203,9 +206,9 @@ onBeforeUnmount(() => requestController?.abort())
   <article class="attachment-admin-detail" aria-labelledby="attachment-admin-detail-title">
     <header class="attachment-admin-detail__header skh-drawer-header">
       <div>
-        <span>ADMIN · ATTACHMENT GOVERNANCE</span>
+        <span>附件管理</span>
         <h2 id="attachment-admin-detail-title" :title="detail?.originalFileName">附件详情</h2>
-        <p>查看不可变 metadata、全修订引用和受控存储健康；不显示任何物理路径。</p>
+        <p>查看不可变元数据、全部修订引用和受控存储健康；不显示任何物理路径。</p>
       </div>
       <button type="button" aria-label="关闭附件详情" @click="overlayStore.requestDrawerClose">×</button>
     </header>
@@ -223,7 +226,7 @@ onBeforeUnmount(() => requestController?.abort())
     <template v-else-if="detail">
       <section class="attachment-admin-detail__identity">
         <div>
-          <small>ATTACHMENT #{{ detail.attachmentId }}</small>
+          <small>附件编号 #{{ detail.attachmentId }}</small>
           <h3 :title="detail.originalFileName">{{ detail.originalFileName }}</h3>
           <p>{{ detail.contentType }} · {{ formatFileSize(detail.sizeBytes) }}</p>
         </div>
@@ -244,30 +247,30 @@ onBeforeUnmount(() => requestController?.abort())
         class="attachment-admin-detail__section"
         aria-labelledby="attachment-admin-metadata-title"
       >
-        <h3 id="attachment-admin-metadata-title">附件 metadata</h3>
+        <h3 id="attachment-admin-metadata-title">附件元数据</h3>
         <dl class="attachment-admin-detail__grid">
           <div>
-            <dt>Attachment ID</dt>
+            <dt>附件编号</dt>
             <dd>{{ detail.attachmentId }}</dd>
           </div>
           <div>
-            <dt>Kind</dt>
-            <dd>{{ detail.kind }}</dd>
+            <dt>类型</dt>
+            <dd>{{ administratorAttachmentKindLabels[detail.kind] }}</dd>
           </div>
           <div>
-            <dt>Extension</dt>
+            <dt>扩展名</dt>
             <dd>{{ detail.extension }}</dd>
           </div>
           <div>
-            <dt>Preview Mode</dt>
-            <dd>{{ detail.previewMode }}</dd>
+            <dt>预览方式</dt>
+            <dd>{{ administratorAttachmentPreviewModeLabels[detail.previewMode] }}</dd>
           </div>
           <div>
             <dt>存储状态</dt>
             <dd>{{ administratorAttachmentStorageLabels[detail.storageState] }}</dd>
           </div>
           <div>
-            <dt>Size</dt>
+            <dt>文件大小</dt>
             <dd>{{ formatFileSize(detail.sizeBytes) }}</dd>
           </div>
           <div>
@@ -289,12 +292,12 @@ onBeforeUnmount(() => requestController?.abort())
         class="attachment-admin-detail__section"
         aria-labelledby="attachment-admin-owner-title"
       >
-        <h3 id="attachment-admin-owner-title">所属 KnowledgeDocument</h3>
+        <h3 id="attachment-admin-owner-title">所属知识内容</h3>
         <div class="attachment-admin-detail__owner">
           <div>
-            <small>DOCUMENT #{{ detail.owner.documentId }}</small>
+            <small>知识内容编号 #{{ detail.owner.documentId }}</small>
             <strong>{{ detail.owner.title }}</strong>
-            <span>{{ detail.owner.lifecycleStatus }}</span>
+            <span>{{ formatAdministratorAttachmentOwnerLifecycle(detail.owner.lifecycleStatus) }}</span>
           </div>
           <el-tag v-if="detail.owner.isDeleted" type="danger" effect="plain">已删除</el-tag>
           <el-button
@@ -313,7 +316,7 @@ onBeforeUnmount(() => requestController?.abort())
         aria-labelledby="attachment-admin-reference-title"
       >
         <div class="attachment-admin-detail__section-heading">
-          <h3 id="attachment-admin-reference-title">Revision 引用</h3>
+          <h3 id="attachment-admin-reference-title">修订引用</h3>
           <span>{{ formatAdministratorAttachmentReferenceSummary(detail) }}</span>
         </div>
         <p v-if="detail.referenceCount === 0" class="attachment-admin-detail__empty">
@@ -321,13 +324,13 @@ onBeforeUnmount(() => requestController?.abort())
         </p>
         <ol v-else class="attachment-admin-detail__references">
           <li v-for="reference in detail.references" :key="reference.revisionNumber">
-            <span>Revision {{ reference.revisionNumber }}</span>
+            <span>修订 {{ reference.revisionNumber }}</span>
             <el-tag v-if="reference.isCurrent" size="small" effect="plain">当前指针</el-tag>
             <time>{{ formatDateTime(reference.createdAt) }}</time>
           </li>
         </ol>
         <p v-if="detail.referencesTruncated" class="attachment-admin-detail__notice">
-          引用摘要已截断；Reference Count 仍为全部修订的精确计数。
+          引用摘要已截断；引用总数仍为全部修订的精确计数。
         </p>
       </section>
 
@@ -338,7 +341,7 @@ onBeforeUnmount(() => requestController?.abort())
         <div class="attachment-admin-detail__section-heading">
           <div>
             <h3 id="attachment-admin-integrity-title">存储完整性</h3>
-            <p>按需读取并计算 SHA-256；不会修改 metadata 或文件。</p>
+            <p>按需读取并计算 SHA-256；不会修改元数据或文件。</p>
           </div>
           <el-button :loading="integrityLoading" @click="checkIntegrity">执行完整性检查</el-button>
         </div>
@@ -378,7 +381,7 @@ onBeforeUnmount(() => requestController?.abort())
             :aria-label="`下载附件 ${detail.originalFileName}`"
             >下载</a
           >
-          <span v-else>零引用附件没有可用的 current / historical 下载上下文。</span>
+          <span v-else>零引用附件没有可用的当前或历史下载上下文。</span>
         </div>
         <el-button
           v-if="canDelete || canRetry"

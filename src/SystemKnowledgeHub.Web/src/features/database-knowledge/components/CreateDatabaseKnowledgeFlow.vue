@@ -265,7 +265,7 @@ watch(kind, (nextKind) => {
           <el-select v-model="objectForm.databaseSourceId" filterable placeholder="选择数据库来源"><el-option v-for="item in sourceOptions" :key="item.id" :label="`${item.name} · ${item.engine}`" :value="item.id" /></el-select>
         </el-form-item>
         <div class="create-database-form-dialog__row">
-          <el-form-item label="Schema" prop="schemaName" :error="fieldErrors.schemaName" required><el-input v-model="objectForm.schemaName" class="technical-input" placeholder="例如 MES" /></el-form-item>
+          <el-form-item label="架构（Schema）" prop="schemaName" :error="fieldErrors.schemaName" required><el-input v-model="objectForm.schemaName" class="technical-input" placeholder="例如 MES" /></el-form-item>
           <el-form-item label="对象名称" prop="objectName" :error="fieldErrors.objectName" required><el-input v-model="objectForm.objectName" class="technical-input" placeholder="例如 TABLE_EQP" /></el-form-item>
           <el-form-item label="对象类型" prop="objectType" :error="fieldErrors.objectType" required><el-select v-model="objectForm.objectType"><el-option label="表" value="Table" /><el-option label="视图" value="View" /></el-select></el-form-item>
         </div>

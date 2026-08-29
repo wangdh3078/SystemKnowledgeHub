@@ -145,7 +145,7 @@ onMounted(() => void load())
 <template>
   <section class="role-dialog" aria-labelledby="role-dialog-title">
     <header class="role-dialog__header">
-      <div><span>ADMIN · KNOWLEDGE ROLE</span><h2 id="role-dialog-title">知识身份管理</h2><p>知识身份表达专业背景，不授予任何系统权限。</p></div>
+      <div><span>用户管理</span><h2 id="role-dialog-title">知识身份管理</h2><p>知识身份表达专业背景，不授予任何系统权限。</p></div>
       <el-tooltip content="关闭知识身份管理" placement="bottom"><button class="skh-icon-action" type="button" aria-label="关闭知识身份管理" @click="overlayStore.closeDialog">×</button></el-tooltip>
     </header>
 
@@ -165,7 +165,7 @@ onMounted(() => void load())
 
     <div class="role-dialog__body">
       <section class="role-dialog__list" aria-label="知识身份列表">
-        <header><h3>Knowledge Roles</h3><span>{{ roles.length }} 项</span></header>
+        <header><h3>知识身份</h3><span>{{ roles.length }} 项</span></header>
         <div v-if="loading" class="role-dialog__loading">正在读取知识身份…</div>
         <div v-else-if="roles.length === 0" class="role-dialog__empty">尚未创建知识身份。</div>
         <button v-for="role in roles" v-else :key="role.id" type="button" :class="{ 'is-selected': editingRole?.id === role.id }" @click="edit(role)">
@@ -187,6 +187,6 @@ onMounted(() => void load())
       </section>
     </div>
 
-    <footer class="role-dialog__footer"><p>停用不会删除角色，也不会清除已有 UserKnowledgeRole 映射。</p><el-button @click="overlayStore.closeDialog">完成</el-button></footer>
+    <footer class="role-dialog__footer"><p>停用不会删除知识身份，也不会清除已有的用户与知识身份映射。</p><el-button @click="overlayStore.closeDialog">完成</el-button></footer>
   </section>
 </template>

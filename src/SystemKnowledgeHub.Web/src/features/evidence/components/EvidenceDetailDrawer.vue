@@ -45,7 +45,7 @@ const confirmationMethod = computed(() => {
 const codeLocatorRows = computed(() => {
   if (detail.value?.evidenceType !== 'CodeReference' || !detail.value.sourceLocator) return []
   const labels: Readonly<Record<string, string>> = {
-    repository: 'Repository', file: 'File', class: 'Class', method: 'Method', startLine: 'Start Line', endLine: 'End Line',
+    repository: '代码仓库', file: '文件', class: '类', method: '方法', startLine: '起始行', endLine: '结束行',
   }
   return Object.entries(labels).flatMap(([key, label]) => {
     const value = detail.value?.sourceLocator?.[key]
@@ -108,7 +108,7 @@ async function save(): Promise<void> {
     try {
       const parsed: unknown = JSON.parse(rawLocator)
       if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-        errorMessage.value = '来源定位必须是 JSON Object。'
+        errorMessage.value = '来源定位必须是 JSON 对象。'
         return
       }
       locator = parsed as Readonly<Record<string, unknown>>
@@ -144,7 +144,7 @@ async function save(): Promise<void> {
       concurrencyToken: detail.value.concurrencyToken,
     })
     editing.value = false
-    ElMessage.success('证据已更新；Subject 与知识状态均未改变。')
+    ElMessage.success('证据已更新；支持对象与知识状态均未改变。')
     window.dispatchEvent(new CustomEvent('evidence:changed'))
   } catch (error: unknown) {
     conflict.value = error instanceof ApiError && error.status === 409
@@ -223,7 +223,7 @@ onMounted(() => void load())
         </section>
 
         <section v-if="detail.subjectContext" class="evidence-knowledge-impact">
-          <div><small>知识影响</small><strong>当前状态不会因 Evidence 自动变化</strong></div>
+          <div><small>知识影响</small><strong>当前状态不会因证据自动变化</strong></div>
           <KnowledgeStatusBadge :status="detail.subjectContext.knowledgeStatus" />
         </section>
       </template>
@@ -233,7 +233,7 @@ onMounted(() => void load())
         <section class="evidence-form-section"><h3>纠正来源与说明</h3>
           <el-form-item label="来源标题" required><el-input v-model="form.sourceTitle" /></el-form-item>
           <el-form-item label="来源引用"><el-input v-model="form.sourceReference" class="technical-input" /></el-form-item>
-          <el-form-item label="来源定位（JSON Object）"><el-input v-model="form.locatorJson" type="textarea" :rows="4" class="technical-input" /></el-form-item>
+          <el-form-item label="来源定位（JSON 对象）"><el-input v-model="form.locatorJson" type="textarea" :rows="4" class="technical-input" /></el-form-item>
           <el-form-item label="证据摘要"><el-input v-model="form.summary" type="textarea" :rows="2" /></el-form-item>
           <el-form-item label="为什么支持当前知识" required><el-input v-model="form.supportReason" type="textarea" :rows="3" /></el-form-item>
           <el-form-item label="可信度"><el-select v-model="form.confidence" clearable><el-option label="高" value="High" /><el-option label="中" value="Medium" /><el-option label="低" value="Low" /></el-select></el-form-item>
@@ -242,7 +242,7 @@ onMounted(() => void load())
           <el-form-item label="姓名" required><el-input v-model="form.providerName" /></el-form-item>
           <el-form-item label="角色 / 身份" required><el-input v-model="form.providerRole" /></el-form-item>
           <el-form-item label="团队"><el-input v-model="form.team" /></el-form-item>
-          <el-form-item label="External User Key"><el-input v-model="form.providerExternalKey" class="technical-input" /></el-form-item>
+          <el-form-item label="外部用户标识"><el-input v-model="form.providerExternalKey" class="technical-input" /></el-form-item>
           <el-form-item label="快照来源"><el-input v-model="form.providerSource" /></el-form-item>
           <el-form-item label="提供时间（UTC）"><el-input v-model="form.occurredAt" class="technical-input" /></el-form-item>
           <el-form-item label="备注"><el-input v-model="form.providerNote" /></el-form-item>

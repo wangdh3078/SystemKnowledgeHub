@@ -126,7 +126,7 @@ onMounted(() => void load())
 
     <section class="users-page__summary" aria-label="用户管理说明">
       <div><span>人员资料</span><strong>{{ data?.total ?? '—' }}</strong><small>当前筛选结果</small></div>
-      <p><strong>Active / Inactive</strong><span>用户与知识身份均通过明确的启用 / 停用操作维护，不提供物理删除。</span></p>
+      <p><strong>启用 / 停用</strong><span>用户与知识身份均通过明确的启用 / 停用操作维护，不提供物理删除。</span></p>
     </section>
 
     <section class="users-filter-bar skh-filter-bar" aria-label="用户筛选">

@@ -82,7 +82,7 @@ function sourceLocator(): Readonly<Record<string, unknown>> | null {
     if (!raw) return null
     const parsed: unknown = JSON.parse(raw)
     if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-      throw new Error('来源定位必须是 JSON Object。')
+      throw new Error('来源定位必须是 JSON 对象。')
     }
     return parsed as Readonly<Record<string, unknown>>
   }
@@ -193,12 +193,12 @@ async function save(): Promise<void> {
           <el-form-item label="来源标题" prop="sourceTitle" :error="fieldErrors.sourceTitle" required><el-input v-model="form.sourceTitle" placeholder="例如 EquipmentStatusService.cs : line 184" @input="clearFieldError('sourceTitle')" /></el-form-item>
           <el-form-item label="来源引用"><el-input v-model="form.sourceReference" placeholder="文件名、SQL 名、文档名或 Endpoint" /></el-form-item>
           <div v-if="form.evidenceType === 'CodeReference'" class="evidence-form__grid">
-            <el-form-item label="Repository"><el-input v-model="form.repository" class="technical-input" /></el-form-item>
-            <el-form-item label="File"><el-input v-model="form.file" class="technical-input" /></el-form-item>
-            <el-form-item label="Start Line"><el-input v-model="form.startLine" class="technical-input" /></el-form-item>
-            <el-form-item label="End Line"><el-input v-model="form.endLine" class="technical-input" /></el-form-item>
+            <el-form-item label="代码仓库"><el-input v-model="form.repository" class="technical-input" /></el-form-item>
+            <el-form-item label="文件"><el-input v-model="form.file" class="technical-input" /></el-form-item>
+            <el-form-item label="起始行"><el-input v-model="form.startLine" class="technical-input" /></el-form-item>
+            <el-form-item label="结束行"><el-input v-model="form.endLine" class="technical-input" /></el-form-item>
           </div>
-          <el-form-item v-else label="来源定位（JSON Object）"><el-input v-model="form.locatorJson" type="textarea" :rows="3" class="technical-input" placeholder="例如 { &quot;endpoint&quot;: &quot;/api/equipment/status&quot; }" /></el-form-item>
+          <el-form-item v-else label="来源定位（JSON 对象）"><el-input v-model="form.locatorJson" type="textarea" :rows="3" class="technical-input" placeholder="例如 { &quot;endpoint&quot;: &quot;/api/equipment/status&quot; }" /></el-form-item>
         </section>
 
         <section class="evidence-form-section">
@@ -216,7 +216,7 @@ async function save(): Promise<void> {
             <el-form-item label="姓名" prop="providerName" :error="fieldErrors.providerName" required><el-input v-model="form.providerName" @input="clearFieldError('providerName')" /></el-form-item>
             <el-form-item label="角色 / 身份" prop="providerRole" :error="fieldErrors.providerRole" required><el-input v-model="form.providerRole" @input="clearFieldError('providerRole')" /></el-form-item>
             <el-form-item label="团队"><el-input v-model="form.team" /></el-form-item>
-            <el-form-item label="External User Key"><el-input v-model="form.providerExternalKey" class="technical-input" /></el-form-item>
+            <el-form-item label="外部用户标识"><el-input v-model="form.providerExternalKey" class="technical-input" /></el-form-item>
             <el-form-item label="快照来源"><el-input v-model="form.providerSource" /></el-form-item>
             <el-form-item label="提供时间（UTC）"><el-input v-model="form.occurredAt" class="technical-input" /></el-form-item>
             <el-form-item label="备注"><el-input v-model="form.providerNote" /></el-form-item>
@@ -224,7 +224,7 @@ async function save(): Promise<void> {
         </section>
       </el-form>
 
-      <div class="evidence-impact-note"><el-icon><InfoFilled /></el-icon><span><strong>知识状态保持 {{ subject.knowledgeStatus === 'Unknown' ? '未知' : subject.knowledgeStatus === 'Inferred' ? '推断' : '已确认' }}</strong><small>保存 Evidence 与推进 Knowledge Status 是两个明确操作。</small></span></div>
+      <div class="evidence-impact-note"><el-icon><InfoFilled /></el-icon><span><strong>知识状态保持 {{ subject.knowledgeStatus === 'Unknown' ? '未知' : subject.knowledgeStatus === 'Inferred' ? '推断' : '已确认' }}</strong><small>保存证据与推进知识状态是两个明确操作。</small></span></div>
       <footer class="evidence-drawer__footer">
         <el-button @click="overlayStore.requestDrawerClose()">取消</el-button>
         <el-button type="primary" :icon="DocumentAdd" :loading="saving" @click="save">保存证据</el-button>

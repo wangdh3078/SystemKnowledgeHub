@@ -245,7 +245,7 @@ onMounted(() => {
         </div>
 
         <div class="database-browser__group database-browser__group--schemas">
-          <span class="database-browser__group-label">Schema</span>
+          <span class="database-browser__group-label">架构</span>
           <button
             class="database-browser__node"
             :class="{ 'database-browser__node--active': !schema }"
@@ -311,7 +311,7 @@ onMounted(() => {
                 <small v-if="scope.row.matchedColumn" class="database-objects-table__matched">字段命中：{{ scope.row.matchedColumn.columnName }}</small>
               </template>
             </el-table-column>
-            <el-table-column prop="schema" label="Schema" width="96" sortable="custom">
+            <el-table-column prop="schema" label="架构（Schema）" width="110" sortable="custom">
               <template #default="scope"><span class="technical-text">{{ scope.row.schema }}</span></template>
             </el-table-column>
             <el-table-column label="数据库来源" min-width="132">

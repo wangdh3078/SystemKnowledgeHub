@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
+  administratorAttachmentKindLabels,
+  administratorAttachmentPreviewModeLabels,
   administratorAttachmentReferenceLabels,
   administratorAttachmentStorageFilterOptions,
   administratorAttachmentStorageLabels,
+  formatAdministratorAttachmentOwnerLifecycle,
   formatAdministratorAttachmentReferenceSummary,
 } from './attachmentAdministrationPresentation'
 
@@ -61,5 +64,20 @@ describe('attachment administration presentation', () => {
         historicalReferenceCount: 2,
       }),
     ).toBe('仅历史引用 · 2 个历史修订')
+  })
+
+  it('presents attachment and owner wire values through Chinese labels', () => {
+    expect(administratorAttachmentKindLabels).toEqual({ Image: '图片', File: '文件' })
+    expect(administratorAttachmentPreviewModeLabels).toMatchObject({
+      Image: '图片',
+      Pdf: 'PDF',
+      Text: '文本',
+      Spreadsheet: '电子表格',
+      None: '不可预览',
+    })
+    expect(formatAdministratorAttachmentOwnerLifecycle('Draft')).toBe('草稿')
+    expect(formatAdministratorAttachmentOwnerLifecycle('Published')).toBe('已发布')
+    expect(formatAdministratorAttachmentOwnerLifecycle('Archived')).toBe('已归档')
+    expect(formatAdministratorAttachmentOwnerLifecycle('FutureValue')).toBe('FutureValue')
   })
 })

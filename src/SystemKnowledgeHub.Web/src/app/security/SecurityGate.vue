@@ -28,8 +28,8 @@ const oidcLoginEnabled = computed(() => options.value?.oidcLoginEnabled === true
 const oidcButtonLabel = computed(() => options.value?.oidcDisplayName || '使用企业账号登录')
 const loginFormReady = computed(() => localLoginEnabled.value && antiforgeryReady.value && !optionsLoading.value)
 const loginSubtitle = computed(() => oidcLoginEnabled.value && !localLoginEnabled.value
-  ? '使用企业身份访问 System Knowledge Hub'
-  : '登录后访问 System Knowledge Hub')
+  ? '使用企业身份访问系统知识中心'
+  : '登录后访问系统知识中心')
 
 const content = computed(() => {
   switch (actorStore.authStatus) {
@@ -38,7 +38,7 @@ const content = computed(() => {
     case 'identity-inactive': return { title: '登录身份已停用', message: '请联系系统管理员。', action: null }
     case 'account-inactive': return { title: '当前用户已停用', message: '请联系系统管理员。', action: null }
     case 'error': return { title: '无法加载当前用户', message: actorStore.message ?? '请检查网络后重试。', action: '重试' }
-    default: return { title: '需要登录', message: '需要登录后才能访问 System Knowledge Hub。', action: '使用企业账号登录' }
+    default: return { title: '需要登录', message: '需要登录后才能访问系统知识中心。', action: '使用企业账号登录' }
   }
 })
 
@@ -147,7 +147,7 @@ function login(): void {
     <div class="security-gate__layout">
       <section class="security-gate__brand" aria-label="系统知识中心">
         <div class="security-gate__brand-mark" aria-hidden="true"><el-icon :size="26"><Connection /></el-icon></div>
-        <span class="security-gate__eyebrow">System Knowledge Hub</span>
+        <span class="security-gate__eyebrow">系统知识中心</span>
         <h1>系统知识中心</h1>
         <p>连接系统、业务、数据、规则与知识内容，将分散的系统知识沉淀为可查询、可关联、可确认的知识资产。</p>
         <div class="security-gate__capabilities" aria-label="产品能力">

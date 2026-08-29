@@ -9,8 +9,11 @@ import ErrorState from '../../../components/feedback/ErrorState.vue'
 import LoadingState from '../../../components/feedback/LoadingState.vue'
 import type { AdministratorAttachmentListItem } from '../api/administratorAttachmentContracts'
 import {
+  administratorAttachmentKindLabels,
+  administratorAttachmentPreviewModeLabels,
   administratorAttachmentStorageFilterOptions,
   administratorAttachmentStorageLabels,
+  formatAdministratorAttachmentOwnerLifecycle,
   formatAdministratorAttachmentReferenceSummary,
 } from '../attachmentAdministrationPresentation'
 import AdministratorAttachmentDetailDrawer from '../components/AdministratorAttachmentDetailDrawer.vue'
@@ -75,6 +78,14 @@ function storageLabel(health: AdministratorAttachmentListItem['storageHealth']):
   return administratorAttachmentStorageLabels[health]
 }
 
+function kindLabel(value: AdministratorAttachmentListItem['kind']): string {
+  return administratorAttachmentKindLabels[value]
+}
+
+function previewModeLabel(value: AdministratorAttachmentListItem['previewMode']): string {
+  return administratorAttachmentPreviewModeLabels[value]
+}
+
 function openRow(row: AdministratorAttachmentListItem): void {
   openDetail(row.attachmentId)
 }
@@ -94,7 +105,7 @@ onBeforeUnmount(() => {
       <div>
         <nav>管理 / 附件管理</nav>
         <h1>附件管理</h1>
-        <p>治理全局附件 metadata、全部修订引用和零引用 orphan；不提供批量、强制或级联删除。</p>
+        <p>治理全局附件元数据、全部修订引用和零引用孤立附件；不提供批量、强制或级联删除。</p>
       </div>
       <el-button :icon="Document" :loading="loading || statisticsLoading" @click="refresh"
         >刷新</el-button
@@ -122,7 +133,7 @@ onBeforeUnmount(() => {
         ><small>{{ statistics ? formatFileSize(statistics.orphanSizeBytes) : '—' }}</small>
       </div>
       <div>
-        <span>Image / File</span
+        <span>图片 / 文件</span
         ><strong>{{
           statistics ? `${statistics.imageCount} / ${statistics.fileCount}` : '—'
         }}</strong
@@ -177,13 +188,13 @@ onBeforeUnmount(() => {
       </el-radio-group>
       <el-select
         v-model="kind"
-        aria-label="按附件 Kind 筛选"
-        placeholder="Kind：全部"
+        aria-label="按附件类型筛选"
+        placeholder="类型：全部"
         @change="resetPageAndLoad"
       >
-        <el-option label="全部 Kind" value="" />
-        <el-option label="Image" value="Image" />
-        <el-option label="File" value="File" />
+        <el-option label="全部类型" value="" />
+        <el-option label="图片" value="Image" />
+        <el-option label="文件" value="File" />
       </el-select>
       <el-input
         v-model="extension"
@@ -226,7 +237,7 @@ onBeforeUnmount(() => {
       <EmptyState
         v-if="data && data.items.length === 0"
         title="没有找到附件"
-        description="调整文件名、Kind、扩展名、引用状态或存储状态筛选。"
+        description="调整文件名、类型、扩展名、引用状态或存储状态筛选。"
       />
       <el-table
         v-else
@@ -248,10 +259,10 @@ onBeforeUnmount(() => {
             <small>#{{ scope.row.attachmentId }} · {{ formatFileSize(scope.row.sizeBytes) }}</small>
           </template>
         </el-table-column>
-        <el-table-column label="Kind / 类型" min-width="135"
+        <el-table-column label="类型" min-width="135"
           ><template #default="scope"
-            ><strong>{{ scope.row.kind }}</strong
-            ><small>{{ scope.row.extension }} · {{ scope.row.previewMode }}</small></template
+            ><strong>{{ kindLabel(scope.row.kind) }}</strong
+            ><small>{{ scope.row.extension }} · {{ previewModeLabel(scope.row.previewMode) }}</small></template
           ></el-table-column
         >
         <el-table-column label="上传" min-width="156"
@@ -268,7 +279,7 @@ onBeforeUnmount(() => {
                 >已删除</el-tag
               >
               <small v-else
-                >#{{ scope.row.owner.documentId }} · {{ scope.row.owner.lifecycleStatus }}</small
+                >#{{ scope.row.owner.documentId }} · {{ formatAdministratorAttachmentOwnerLifecycle(scope.row.owner.lifecycleStatus) }}</small
               >
             </div>
           </template>

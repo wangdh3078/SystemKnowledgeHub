@@ -126,9 +126,9 @@ onMounted(() => void load())
   <section class="user-drawer" :aria-labelledby="'user-drawer-title'">
     <header class="user-drawer__header skh-drawer-header">
       <div>
-        <span>ADMIN · USER PROFILE</span>
+        <span>用户管理</span>
         <h2 id="user-drawer-title">{{ title }}</h2>
-        <p>维护人员资料、KnowledgeRole 与 LoginIdentity 映射；AccessLevel 由独立安全操作管理。</p>
+        <p>维护人员资料、知识身份与登录身份映射；访问级别由独立安全操作管理。</p>
       </div>
       <el-tooltip content="关闭用户编辑" placement="bottom"><button class="skh-icon-action" type="button" aria-label="关闭用户编辑" @click="overlayStore.requestDrawerClose">×</button></el-tooltip>
     </header>
@@ -178,7 +178,7 @@ onMounted(() => void load())
 
         <section class="user-drawer__section">
           <div class="user-drawer__section-title"><span>02</span><div><h3>知识身份</h3><p>只可新增启用中的身份；已停用的既有映射继续保留并明确标记。</p></div></div>
-          <el-form-item label="Knowledge Roles" prop="knowledgeRoleIds" :error="fieldErrors.knowledgeRoleIds">
+          <el-form-item label="知识身份" prop="knowledgeRoleIds" :error="fieldErrors.knowledgeRoleIds">
             <el-select v-model="form.knowledgeRoleIds" multiple filterable clearable placeholder="选择知识身份">
               <el-option
                 v-for="role in roles"
