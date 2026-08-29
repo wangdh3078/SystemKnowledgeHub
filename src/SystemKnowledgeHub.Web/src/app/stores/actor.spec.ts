@@ -35,6 +35,18 @@ describe('actor Current User store', () => {
     expect(store.actor).toEqual({ displayName: '王敏', role: 'MES 业务专家' })
   })
 
+  it('does not reload Current User or the antiforgery token after initialization completed', async () => {
+    vi.mocked(getCurrentUser).mockResolvedValue(currentUser)
+    const store = useActorStore()
+
+    await store.initialize()
+    await store.initialize()
+
+    expect(getCurrentUser).toHaveBeenCalledTimes(1)
+    expect(getAntiforgeryToken).toHaveBeenCalledTimes(1)
+    expect(store.authStatus).toBe('authenticated')
+  })
+
   it('classifies an unauthenticated current-user response without a fallback profile', async () => {
     vi.mocked(getCurrentUser).mockRejectedValue(new ApiError(401, { code: 'unauthenticated', message: '尚未登录。', fieldErrors: null, details: { authStatus: 'missing' } }))
     const store = useActorStore()

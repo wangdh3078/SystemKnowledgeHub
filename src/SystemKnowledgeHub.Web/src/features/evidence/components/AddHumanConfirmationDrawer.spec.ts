@@ -123,6 +123,13 @@ describe('AddHumanConfirmationDrawer revision context', () => {
     actorState.initialize.mockReset()
   })
 
+  it('uses the already bootstrapped actor without reinitializing the application session', async () => {
+    mountDrawer()
+    await flushPromises()
+
+    expect(actorState.initialize).not.toHaveBeenCalled()
+  })
+
   it('sends the current displayed revision as non-editable confirmation context', async () => {
     vi.mocked(addHumanConfirmation).mockResolvedValue({
       id: 81,

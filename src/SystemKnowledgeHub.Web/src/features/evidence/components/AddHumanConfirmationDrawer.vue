@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { Close, InfoFilled, UserFilled } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import { ElMessage } from 'element-plus'
@@ -179,7 +179,6 @@ async function reloadLatestDocument(): Promise<void> {
   }
 }
 
-onMounted(() => void actorStore.initialize())
 </script>
 
 <template>
@@ -188,7 +187,7 @@ onMounted(() => void actorStore.initialize())
       <el-button text circle :icon="Close" aria-label="关闭人工确认" @click="overlayStore.requestDrawerClose()" />
       <span>添加人工确认</span>
       <h2>记录谁确认了这条知识</h2>
-      <p>人工确认是 Evidence，不会自动推进知识状态。</p>
+      <p>人工确认属于证据，不会自动推进知识状态。</p>
     </header>
 
     <div v-if="!subject" class="evidence-drawer__error">缺少有效的知识对象上下文，请关闭后重新进入。</div>
@@ -209,7 +208,7 @@ onMounted(() => void actorStore.initialize())
 
       <section class="evidence-current-user">
         <div class="evidence-current-user__heading">
-          <div><small>当前操作者</small><strong>确认人身份由服务端根据 Current User 生成</strong></div>
+          <div><small>当前操作者</small><strong>确认人身份由服务端根据当前用户生成</strong></div>
         </div>
 
         <template v-if="actorStore.currentUser">
@@ -263,7 +262,7 @@ onMounted(() => void actorStore.initialize())
           </el-form-item>
           <el-form-item label="本次确认依据" prop="supportReason" :error="fieldErrors.supportReason" required>
             <el-input v-model="form.supportReason" type="textarea" :rows="3" placeholder="简要说明本次人工判断的依据，无需抄写已有 Evidence 内容" @input="clearFieldError('supportReason')" />
-            <p class="evidence-form__help">当前冻结 C25 Contract 要求保留非空确认依据；这里只记录本次判断依据，不重复录入系统已知的确认人资料。</p>
+            <p class="evidence-form__help">当前冻结的 C25 契约要求保留非空确认依据；这里只记录本次判断依据，不重复录入系统已知的确认人资料。</p>
           </el-form-item>
           <el-form-item label="来源说明（可选）"><el-input v-model="form.sourceNote" placeholder="例如 现场评审会议" /></el-form-item>
         </section>
@@ -271,7 +270,7 @@ onMounted(() => void actorStore.initialize())
 
       <section class="evidence-confirmation-impact">
         <el-icon><InfoFilled /></el-icon>
-        <div><small>保存后的知识影响</small><strong>新增 HumanConfirmation Evidence</strong><p>Knowledge Status 保持当前状态；后续必须由明确操作推进。</p></div>
+        <div><small>保存后的知识影响</small><strong>新增人工确认证据</strong><p>知识状态保持当前状态；后续必须由明确操作推进。</p></div>
         <KnowledgeStatusBadge :status="subject.knowledgeStatus" />
       </section>
 

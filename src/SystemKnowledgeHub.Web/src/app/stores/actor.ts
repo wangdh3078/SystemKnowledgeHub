@@ -107,6 +107,7 @@ export const useActorStore = defineStore('actor', () => {
   }
 
   async function initialize(): Promise<boolean> {
+    if (initialized.value) return isAuthenticated.value
     if (initialization !== null) return initialization
     initialization = loadCurrentUser().finally(() => { initialization = null })
     return initialization
