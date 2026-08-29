@@ -3,7 +3,7 @@ import { apiClient } from '../../../api/client/apiClient'
 import { isSafeApiId } from '../../../api/contracts/id'
 import { decodeAttachmentMetadata, type AttachmentMetadata } from './attachmentContracts'
 
-export function uploadKnowledgeDocumentImage(
+export function uploadKnowledgeDocumentAttachment(
   knowledgeDocumentId: number,
   file: File,
   signal?: AbortSignal,
@@ -18,6 +18,31 @@ export function uploadKnowledgeDocumentImage(
     form,
     { signal, decode: decodeAttachmentMetadata },
   )
+}
+
+export function uploadKnowledgeDocumentImage(
+  knowledgeDocumentId: number,
+  file: File,
+  signal?: AbortSignal,
+): Promise<AttachmentMetadata> {
+  return uploadKnowledgeDocumentAttachment(knowledgeDocumentId, file, signal)
+}
+
+export function knowledgeDocumentAttachmentDownloadUrl(
+  knowledgeDocumentId: number,
+  attachmentId: number,
+  revisionNumber?: number,
+): string {
+  if (!isSafeApiId(knowledgeDocumentId) || !isSafeApiId(attachmentId)) {
+    throw new RangeError('知识内容或附件 ID 无效。')
+  }
+  const documentSegment = encodeURIComponent(String(knowledgeDocumentId))
+  const attachmentSegment = encodeURIComponent(String(attachmentId))
+  if (revisionNumber === undefined) {
+    return `${environment.apiBaseUrl}/knowledge-documents/${documentSegment}/attachments/${attachmentSegment}/download`
+  }
+  if (!isSafeApiId(revisionNumber)) throw new RangeError('修订号无效。')
+  return `${environment.apiBaseUrl}/knowledge-documents/${documentSegment}/revisions/${encodeURIComponent(String(revisionNumber))}/attachments/${attachmentSegment}/download`
 }
 
 export function knowledgeDocumentImageContentUrl(

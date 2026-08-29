@@ -51,6 +51,8 @@ import { traceDocumentTypes, type TraceDocumentType } from '../api/traceabilityC
 import TraceabilitySection from '../components/TraceabilitySection.vue'
 import ImpactContextSection from '../components/ImpactContextSection.vue'
 import { openDeleteDialog } from '../../soft-delete/deleteDialog'
+import KnowledgeDocumentAttachmentArea from '../components/KnowledgeDocumentAttachmentArea.vue'
+import type { AttachmentMetadata } from '../api/attachmentContracts'
 
 const KnowledgeDocumentEditor = defineAsyncComponent(
   () => import('../editor/KnowledgeDocumentEditor.vue'),
@@ -73,9 +75,11 @@ const editorFullscreen = ref(false)
 const saving = ref(false)
 const saveConfirming = ref(false)
 const imageUploading = ref(false)
+const fileUploading = ref(false)
 const editTitle = ref('')
 const editSummary = ref('')
 const editBodyMarkdown = ref('')
+const editFileAttachments = ref<readonly AttachmentMetadata[]>([])
 const initialEdit = ref<DocumentEditSnapshot | null>(null)
 const validationErrors = ref<Readonly<Record<string, readonly string[]>>>({})
 const relations = ref<readonly RelatedKnowledge[]>([])
@@ -129,6 +133,7 @@ const editSnapshot = computed<DocumentEditSnapshot>(() => ({
   title: editTitle.value,
   summary: editSummary.value,
   bodyMarkdown: editBodyMarkdown.value,
+  fileAttachmentIds: editFileAttachments.value.map((attachment) => attachment.attachmentId),
 }))
 const dirty = computed(
   () => initialEdit.value !== null && isDocumentEditDirty(editSnapshot.value, initialEdit.value),
@@ -143,6 +148,9 @@ const currentImageContext = computed<MarkdownAttachmentImageContext | undefined>
       }
     : undefined,
 )
+const currentFileAttachments = computed(
+  () => data.value?.attachmentReferences.filter((attachment) => attachment.kind === 'File') ?? [],
+)
 const titleValid = computed(
   () => editTitle.value.trim().length > 0 && editTitle.value.trim().length <= 300,
 )
@@ -153,7 +161,8 @@ const canSave = computed(
     titleValid.value &&
     !saving.value &&
     !saveConfirming.value &&
-    !imageUploading.value,
+    !imageUploading.value &&
+    !fileUploading.value,
 )
 async function load(): Promise<void> {
   const requestedId = id.value
@@ -273,24 +282,29 @@ function beginEdit(): void {
   editTitle.value = data.value.title
   editSummary.value = data.value.summary ?? ''
   editBodyMarkdown.value = data.value.bodyMarkdown
+  editFileAttachments.value = data.value.attachmentReferences.filter(
+    (attachment) => attachment.kind === 'File',
+  )
   initialEdit.value = {
     title: editTitle.value,
     summary: editSummary.value,
     bodyMarkdown: editBodyMarkdown.value,
+    fileAttachmentIds: editFileAttachments.value.map((attachment) => attachment.attachmentId),
   }
   previewing.value = false
   editorFullscreen.value = false
   saveError.value = null
   imageUploading.value = false
+  fileUploading.value = false
   validationErrors.value = {}
   savedMessage.value = null
   editing.value = true
 }
 async function confirmDiscard(): Promise<boolean> {
-  if (imageUploading.value) {
+  if (imageUploading.value || fileUploading.value) {
     try {
       await ElMessageBox.confirm(
-        '图片仍在上传。离开编辑会中止本次请求；服务端若已完成上传，文件会保留为未引用图片。未保存正文也会丢失。',
+        '附件仍在上传。离开编辑会中止本次请求；服务端若已完成上传，文件会保留为未引用附件。未保存内容也会丢失。',
         '确认离开编辑',
         { confirmButtonText: '确认离开', cancelButtonText: '继续编辑', type: 'warning' },
       )
@@ -312,6 +326,8 @@ function finishEdit(): void {
   previewing.value = false
   editorFullscreen.value = false
   imageUploading.value = false
+  fileUploading.value = false
+  editFileAttachments.value = []
   initialEdit.value = null
   saveError.value = null
   validationErrors.value = {}
@@ -350,7 +366,16 @@ function fieldError(field: string): string | null {
   return validationErrors.value[field]?.[0] ?? null
 }
 async function performSave(): Promise<void> {
-  if (!data.value || !editing.value || !dirty.value || !titleValid.value || saving.value) return
+  if (
+    !data.value ||
+    !editing.value ||
+    !dirty.value ||
+    !titleValid.value ||
+    saving.value ||
+    imageUploading.value ||
+    fileUploading.value
+  )
+    return
   saving.value = true
   saveError.value = null
   validationErrors.value = {}
@@ -360,6 +385,7 @@ async function performSave(): Promise<void> {
       summary: editSummary.value.trim() || null,
       bodyMarkdown: editBodyMarkdown.value,
       concurrencyToken: data.value.concurrencyToken,
+      fileAttachmentIds: editFileAttachments.value.map((attachment) => attachment.attachmentId),
     })
     data.value = response
     refreshTraceability()
@@ -367,6 +393,9 @@ async function performSave(): Promise<void> {
       title: response.title,
       summary: response.summary ?? '',
       bodyMarkdown: response.bodyMarkdown,
+      fileAttachmentIds: response.attachmentReferences
+        .filter((attachment) => attachment.kind === 'File')
+        .map((attachment) => attachment.attachmentId),
     }
     editing.value = false
     previewing.value = false
@@ -392,7 +421,7 @@ async function performSave(): Promise<void> {
       return
     }
     if (reason instanceof ApiError && reason.status === 422) {
-      saveError.value = '正文中的图片引用无效或不可用；未保存正文仍保留，请检查图片后重试。'
+      saveError.value = '图片或普通附件引用无效或不可用；未保存内容仍保留，请检查附件后重试。'
       return
     }
     if (reason instanceof ApiError && reason.status === 503) {
@@ -455,7 +484,7 @@ function handleShortcut(event: KeyboardEvent): void {
   }
 }
 function beforeUnload(event: BeforeUnloadEvent): void {
-  if (!editing.value || (!dirty.value && !imageUploading.value)) return
+  if (!editing.value || (!dirty.value && !imageUploading.value && !fileUploading.value)) return
   event.preventDefault()
   event.returnValue = ''
 }
@@ -572,9 +601,9 @@ watch(
   },
 )
 watch(
-  [editing, dirty, imageUploading],
-  ([isEditing, isDirty, isUploading]) => {
-    setActiveDocumentEditDirty(isEditing && (isDirty || isUploading))
+  [editing, dirty, imageUploading, fileUploading],
+  ([isEditing, isDirty, isImageUploading, isFileUploading]) => {
+    setActiveDocumentEditDirty(isEditing && (isDirty || isImageUploading || isFileUploading))
   },
   { immediate: true },
 )
@@ -719,7 +748,15 @@ onBeforeUnmount(() => {
             ]"
           >
             {{
-              imageUploading ? '图片上传中…' : saving ? '正在保存…' : dirty ? '未保存' : '已保存'
+              fileUploading
+                ? '附件上传中…'
+                : imageUploading
+                  ? '图片上传中…'
+                  : saving
+                    ? '正在保存…'
+                    : dirty
+                      ? '未保存'
+                      : '已保存'
             }}
           </span>
         </div>
@@ -758,6 +795,16 @@ onBeforeUnmount(() => {
         <p v-if="fieldError('bodyMarkdown')" class="knowledge-document-error">
           {{ fieldError('bodyMarkdown') }}
         </p>
+        <KnowledgeDocumentAttachmentArea
+          :document-id="data.id"
+          :attachments="editFileAttachments"
+          editable
+          @update:attachments="editFileAttachments = $event"
+          @uploading-change="fileUploading = $event"
+        />
+        <p v-if="fieldError('fileAttachmentIds')" class="knowledge-document-error">
+          {{ fieldError('fileAttachmentIds') }}
+        </p>
         <p v-if="saveError" class="knowledge-document-error">
           {{ saveError }}
           <el-button
@@ -777,6 +824,11 @@ onBeforeUnmount(() => {
           :attachment-image-context="currentImageContext"
         />
       </section>
+      <KnowledgeDocumentAttachmentArea
+        v-if="!historyMode && !editing"
+        :document-id="data.id"
+        :attachments="currentFileAttachments"
+      />
       <TraceabilitySection
         v-if="!historyMode && supportsTraceability"
         ref="traceabilitySection"

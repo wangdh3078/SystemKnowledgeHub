@@ -21,6 +21,7 @@ import type { MarkdownAttachmentImageContext } from '../markdown/renderMarkdown'
 import RevisionCompareView from './RevisionCompareView.vue'
 import { useOverlayStore } from '../../../app/stores/overlays'
 import { formatDateTime } from '../../../app/formatters/dateTime'
+import KnowledgeDocumentAttachmentArea from './KnowledgeDocumentAttachmentArea.vue'
 
 const props = defineProps<{
   documentId: number
@@ -373,6 +374,11 @@ onBeforeUnmount(() => {
                 :attachment-image-context="detailImageContext"
               />
             </section>
+            <KnowledgeDocumentAttachmentArea
+              :document-id="documentId"
+              :revision-number="detail.revisionNumber"
+              :attachments="detail.attachmentReferences"
+            />
             <footer
               v-if="restoreAvailable || restoreRequiresDraft"
               class="knowledge-document-history__restore"

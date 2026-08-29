@@ -387,12 +387,85 @@ describe('KnowledgeDocumentDetailView editing', () => {
       summary: null,
       bodyMarkdown: '## 新步骤\n\n1. 已修改',
       concurrencyToken: 'token-1',
+      fileAttachmentIds: [],
     })
     expect(wrapper.text()).not.toContain('已保存。')
     expect(ElMessage.success).toHaveBeenCalledWith('已保存。')
     expect(wrapper.find('.knowledge-document-body > h2').exists()).toBe(false)
     expect(wrapper.find('textarea').exists()).toBe(false)
     expect(wrapper.text()).toContain('更新后的 SOP')
+  })
+
+  it('initializes the complete File desired set, excludes images, and saves reference removal atomically', async () => {
+    const firstFile = {
+      attachmentId: 201,
+      kind: 'File' as const,
+      originalFileName: 'MES接口规范.pdf',
+      extension: '.pdf',
+      contentType: 'application/pdf',
+      sizeBytes: 1024,
+      sha256: 'b'.repeat(64),
+      previewMode: 'Pdf' as const,
+      canPreview: true,
+      canDownload: true,
+    }
+    const secondFile = {
+      ...firstFile,
+      attachmentId: 202,
+      originalFileName: 'Source.zip',
+      extension: '.zip',
+      contentType: 'application/zip',
+      sha256: 'c'.repeat(64),
+      previewMode: 'None' as const,
+      canPreview: false,
+    }
+    const image = {
+      ...firstFile,
+      attachmentId: 203,
+      kind: 'Image' as const,
+      originalFileName: '设备状态.png',
+      extension: '.png',
+      contentType: 'image/png',
+      sha256: 'd'.repeat(64),
+      previewMode: 'Image' as const,
+    }
+    const withAttachments = {
+      ...detail,
+      attachmentReferences: [firstFile, secondFile, image],
+    }
+    vi.mocked(getKnowledgeDocument).mockResolvedValue(withAttachments)
+    vi.mocked(updateKnowledgeDocumentContent).mockResolvedValue({
+      ...withAttachments,
+      currentRevisionNumber: 2,
+      concurrencyToken: 'token-2',
+      attachmentReferences: [secondFile, image],
+    })
+    vi.mocked(ElMessageBox.confirm).mockResolvedValue('confirm' as never)
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('MES接口规范.pdf')
+    expect(wrapper.text()).toContain('Source.zip')
+    expect(wrapper.text()).not.toContain('设备状态.png')
+    await button(wrapper, '编辑')?.trigger('click')
+    await flushPromises()
+    expect(wrapper.findAll('[data-attachment-id]')).toHaveLength(2)
+
+    await wrapper.get('[aria-label="移除附件 MES接口规范.pdf"]').trigger('click')
+    await flushPromises()
+    expect(button(wrapper, '保存')?.attributes('disabled')).toBeUndefined()
+    await button(wrapper, '保存')?.trigger('click')
+    await flushPromises()
+
+    expect(updateKnowledgeDocumentContent).toHaveBeenCalledWith(1, {
+      title: detail.title,
+      summary: detail.summary,
+      bodyMarkdown: detail.bodyMarkdown,
+      concurrencyToken: detail.concurrencyToken,
+      fileAttachmentIds: [202],
+    })
+    expect(wrapper.text()).not.toContain('MES接口规范.pdf')
+    expect(wrapper.text()).toContain('Source.zip')
   })
 
   it('blocks semantic save while an image upload is pending without locking source editing', async () => {

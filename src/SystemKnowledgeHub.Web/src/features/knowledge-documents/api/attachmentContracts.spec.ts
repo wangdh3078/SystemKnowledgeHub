@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { decodeAttachmentMetadata } from './attachmentContracts'
-import { knowledgeDocumentImageContentUrl } from './knowledgeDocumentAttachmentsApi'
+import {
+  knowledgeDocumentAttachmentDownloadUrl,
+  knowledgeDocumentImageContentUrl,
+} from './knowledgeDocumentAttachmentsApi'
 
 function imageMetadata(overrides: Readonly<Record<string, unknown>> = {}) {
   return {
@@ -46,5 +49,15 @@ describe('attachment contracts', () => {
       '/api/knowledge-documents/7/revisions/4/attachments/123/content',
     )
     expect(() => knowledgeDocumentImageContentUrl(7, 0)).toThrow('附件 ID 无效')
+  })
+
+  it('builds only exact current or historical protected download routes', () => {
+    expect(knowledgeDocumentAttachmentDownloadUrl(7, 456)).toBe(
+      '/api/knowledge-documents/7/attachments/456/download',
+    )
+    expect(knowledgeDocumentAttachmentDownloadUrl(7, 456, 9)).toBe(
+      '/api/knowledge-documents/7/revisions/9/attachments/456/download',
+    )
+    expect(() => knowledgeDocumentAttachmentDownloadUrl(7, 456, 0)).toThrow('修订号无效')
   })
 })

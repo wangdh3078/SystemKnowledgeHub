@@ -18,6 +18,7 @@ import {
 } from '../compare/revisionCompare'
 import type { LineDiffKind } from '../compare/myersLineDiff'
 import { formatDateTime } from '../../../app/formatters/dateTime'
+import type { AttachmentMetadata } from '../api/attachmentContracts'
 
 const props = defineProps<{
   documentId: number
@@ -64,9 +65,9 @@ let activeRequest: AbortController | null = null
 let requestSequence = 0
 
 if (
-  props.initialSnapshot
-  && props.initialSnapshot.knowledgeDocumentId === props.documentId
-  && props.initialSnapshot.revisionNumber === initialTo
+  props.initialSnapshot &&
+  props.initialSnapshot.knowledgeDocumentId === props.documentId &&
+  props.initialSnapshot.revisionNumber === initialTo
 ) {
   snapshotCache.set(initialTo, props.initialSnapshot)
 }
@@ -81,6 +82,14 @@ const metadataCards = computed(() => {
   return [
     { direction: '从', snapshot: fromDetail.value },
     { direction: '到', snapshot: toDetail.value },
+  ] as const
+})
+const attachmentGroups = computed(() => {
+  if (!comparison.value || comparison.value.kind !== 'ready') return []
+  return [
+    { key: 'added', label: '新增', items: comparison.value.attachments.added },
+    { key: 'removed', label: '移除', items: comparison.value.attachments.removed },
+    { key: 'unchanged', label: '未变化', items: comparison.value.attachments.unchanged },
   ] as const
 })
 
@@ -100,6 +109,10 @@ function lifecycleLabel(value: DocumentLifecycleStatus): string {
 }
 function displayValue(value: string | null): string {
   return value ?? '（空）'
+}
+function attachmentLabel(attachment: AttachmentMetadata): string {
+  const kind = attachment.kind === 'Image' ? '图片' : '普通附件'
+  return `${kind} #${attachment.attachmentId} · ${attachment.originalFileName}`
 }
 function fieldStatusLabel(field: FieldComparison): string {
   return fieldStatusLabels[field.status]
@@ -181,7 +194,9 @@ onBeforeUnmount(() => {
     <header class="knowledge-document-history__header">
       <div>
         <h2 id="revision-compare-heading">比较修订</h2>
-        <p>从较早修订到较新修订比较不可变快照；正文按行显示纯文本差异。</p>
+        <p>
+          从较早修订到较新修订比较不可变快照；正文按行显示纯文本差异，附件按 ID 与类型比较集合。
+        </p>
       </div>
       <el-button type="primary" plain @click="emit('return')">返回修订历史</el-button>
     </header>
@@ -216,7 +231,9 @@ onBeforeUnmount(() => {
           :value="revisionNumber"
         />
       </el-select>
-      <strong v-if="!samePair">从 修订 {{ fromRevisionNumber }} 到 修订 {{ toRevisionNumber }}</strong>
+      <strong v-if="!samePair"
+        >从 修订 {{ fromRevisionNumber }} 到 修订 {{ toRevisionNumber }}</strong
+      >
       <strong v-else>请选择两个不同的修订</strong>
     </div>
     <p v-if="normalizedNotice" class="knowledge-document-compare__notice" role="status">
@@ -232,51 +249,79 @@ onBeforeUnmount(() => {
       <p>请选择两个不同的修订。</p>
     </div>
     <LoadingState v-else-if="loading" message="正在加载两个修订快照…" />
-    <ErrorState
-      v-else-if="error"
-      title="修订比较加载失败"
-      :message="error"
-      @retry="retry"
-    />
+    <ErrorState v-else-if="error" title="修订比较加载失败" :message="error" @retry="retry" />
     <template v-else-if="fromDetail && toDetail && comparison">
       <div class="knowledge-document-compare__metadata" aria-label="修订元数据">
         <article v-for="card in metadataCards" :key="card.direction">
           <header>
             <strong>{{ card.direction }} · 修订 {{ card.snapshot.revisionNumber }}</strong>
-            <span v-if="card.snapshot.isCurrent" class="knowledge-document-history__marker">当前版本</span>
+            <span v-if="card.snapshot.isCurrent" class="knowledge-document-history__marker"
+              >当前版本</span
+            >
             <span
               v-if="card.snapshot.isLatestPublished"
               class="knowledge-document-history__marker is-published"
-            >最近发布</span>
+              >最近发布</span
+            >
           </header>
           <dl>
-            <div><dt>来源</dt><dd>{{ originLabels[card.snapshot.revisionOrigin] }}</dd></div>
-            <div><dt>作者快照</dt><dd>{{ authorLabel(card.snapshot) }}</dd></div>
-            <div><dt>{{ capturedAtLabel(card.snapshot) }}</dt><dd>{{ formatDateTime(card.snapshot.createdAt) }}</dd></div>
-            <div><dt>修订生成时生命周期</dt><dd>{{ lifecycleLabel(card.snapshot.lifecycleContext) }}</dd></div>
-            <div v-if="card.snapshot.restoredFromRevisionNumber"><dt>恢复来源</dt><dd>从修订 {{ card.snapshot.restoredFromRevisionNumber }} 恢复</dd></div>
-            <div v-if="card.snapshot.restoreReason"><dt>恢复原因</dt><dd>{{ card.snapshot.restoreReason }}</dd></div>
+            <div>
+              <dt>来源</dt>
+              <dd>{{ originLabels[card.snapshot.revisionOrigin] }}</dd>
+            </div>
+            <div>
+              <dt>作者快照</dt>
+              <dd>{{ authorLabel(card.snapshot) }}</dd>
+            </div>
+            <div>
+              <dt>{{ capturedAtLabel(card.snapshot) }}</dt>
+              <dd>{{ formatDateTime(card.snapshot.createdAt) }}</dd>
+            </div>
+            <div>
+              <dt>修订生成时生命周期</dt>
+              <dd>{{ lifecycleLabel(card.snapshot.lifecycleContext) }}</dd>
+            </div>
+            <div v-if="card.snapshot.restoredFromRevisionNumber">
+              <dt>恢复来源</dt>
+              <dd>从修订 {{ card.snapshot.restoredFromRevisionNumber }} 恢复</dd>
+            </div>
+            <div v-if="card.snapshot.restoreReason">
+              <dt>恢复原因</dt>
+              <dd>{{ card.snapshot.restoreReason }}</dd>
+            </div>
           </dl>
         </article>
       </div>
 
-      <div v-if="comparison.kind === 'oversized'" class="knowledge-document-compare__oversized" role="alert">
+      <div
+        v-if="comparison.kind === 'oversized'"
+        class="knowledge-document-compare__oversized"
+        role="alert"
+      >
         <strong>该版本组合超出比较限制，未生成差异结果</strong>
         <p>这两个修订内容过大，无法在页面内比较。请返回修订历史分别查看修订内容。</p>
       </div>
       <div v-else class="knowledge-document-compare__result">
         <p v-if="comparison.identical" class="knowledge-document-compare__identical" role="status">
-          两个修订的标题、摘要和正文内容一致。
+          两个修订的标题、摘要、正文和附件集合一致。
         </p>
         <section class="knowledge-document-compare__field" aria-labelledby="title-diff-heading">
           <header>
             <h3 id="title-diff-heading">标题变化</h3>
             <span>{{ fieldStatusLabel(comparison.title) }}</span>
           </header>
-          <pre v-if="comparison.title.status === 'unchanged'">{{ displayValue(comparison.title.to) }}</pre>
+          <pre v-if="comparison.title.status === 'unchanged'">{{
+            displayValue(comparison.title.to)
+          }}</pre>
           <div v-else class="knowledge-document-compare__field-values">
-            <div><strong>旧版本</strong><pre>{{ displayValue(comparison.title.from) }}</pre></div>
-            <div><strong>新版本</strong><pre>{{ displayValue(comparison.title.to) }}</pre></div>
+            <div>
+              <strong>旧版本</strong>
+              <pre>{{ displayValue(comparison.title.from) }}</pre>
+            </div>
+            <div>
+              <strong>新版本</strong>
+              <pre>{{ displayValue(comparison.title.to) }}</pre>
+            </div>
           </div>
         </section>
         <section class="knowledge-document-compare__field" aria-labelledby="summary-diff-heading">
@@ -284,10 +329,41 @@ onBeforeUnmount(() => {
             <h3 id="summary-diff-heading">摘要变化</h3>
             <span>{{ fieldStatusLabel(comparison.summary) }}</span>
           </header>
-          <pre v-if="comparison.summary.status === 'unchanged'">{{ displayValue(comparison.summary.to) }}</pre>
+          <pre v-if="comparison.summary.status === 'unchanged'">{{
+            displayValue(comparison.summary.to)
+          }}</pre>
           <div v-else class="knowledge-document-compare__field-values">
-            <div><strong>旧版本</strong><pre>{{ displayValue(comparison.summary.from) }}</pre></div>
-            <div><strong>新版本</strong><pre>{{ displayValue(comparison.summary.to) }}</pre></div>
+            <div>
+              <strong>旧版本</strong>
+              <pre>{{ displayValue(comparison.summary.from) }}</pre>
+            </div>
+            <div>
+              <strong>新版本</strong>
+              <pre>{{ displayValue(comparison.summary.to) }}</pre>
+            </div>
+          </div>
+        </section>
+        <section
+          class="knowledge-document-compare__attachments"
+          aria-labelledby="attachment-diff-heading"
+        >
+          <header>
+            <h3 id="attachment-diff-heading">附件集合变化</h3>
+            <span>按 Attachment ID + Kind 比较，不比较二进制内容</span>
+          </header>
+          <div class="knowledge-document-compare__attachment-groups">
+            <section v-for="group in attachmentGroups" :key="group.key" :class="`is-${group.key}`">
+              <h4>{{ group.label }}（{{ group.items.length }}）</h4>
+              <p v-if="group.items.length === 0">无</p>
+              <ul v-else>
+                <li
+                  v-for="attachment in group.items"
+                  :key="`${attachment.kind}:${attachment.attachmentId}`"
+                >
+                  {{ attachmentLabel(attachment) }}
+                </li>
+              </ul>
+            </section>
           </div>
         </section>
         <section class="knowledge-document-compare__body" aria-labelledby="body-diff-heading">
@@ -308,7 +384,8 @@ onBeforeUnmount(() => {
                 :class="['knowledge-document-compare__line', `is-${segment.kind}`]"
                 :aria-label="`${diffLabels[segment.kind]}：${line}`"
               >
-                <span aria-hidden="true">{{ diffPrefixes[segment.kind] }}</span><code>{{ line }}</code>
+                <span aria-hidden="true">{{ diffPrefixes[segment.kind] }}</span
+                ><code>{{ line }}</code>
               </div>
             </template>
           </div>

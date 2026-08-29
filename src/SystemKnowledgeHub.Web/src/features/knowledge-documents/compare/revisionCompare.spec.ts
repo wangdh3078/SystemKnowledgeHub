@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { KnowledgeDocumentRevisionDetail } from '../api/knowledgeDocumentContracts'
+import type { AttachmentMetadata } from '../api/attachmentContracts'
 import {
   compareRevisionSnapshots,
   compareSummary,
@@ -31,6 +32,21 @@ function revision(
     bodyMarkdown: '',
     attachmentReferences: [],
     ...overrides,
+  }
+}
+
+function file(attachmentId: number, name: string, sha256 = 'a'.repeat(64)): AttachmentMetadata {
+  return {
+    attachmentId,
+    kind: 'File',
+    originalFileName: name,
+    extension: '.pdf',
+    contentType: 'application/pdf',
+    sizeBytes: 1024,
+    sha256,
+    previewMode: 'Pdf',
+    canPreview: true,
+    canDownload: true,
   }
 }
 
@@ -106,5 +122,25 @@ describe('revision raw Markdown comparison', () => {
       result.body.some((segment) => segment.kind === 'removed' && segment.lines.includes('<br />')),
     ).toBe(true)
     expect(from.bodyMarkdown).toBe(legacyBody)
+  })
+})
+
+describe('revision attachment set comparison', () => {
+  it('reports added, removed, and unchanged by ID + Kind without merging identical hashes', () => {
+    const sameHash = 'f'.repeat(64)
+    const result = compareRevisionSnapshots(
+      revision({ attachmentReferences: [file(9, 'unchanged.pdf'), file(20, 'old.pdf', sameHash)] }),
+      revision({
+        revisionNumber: 2,
+        attachmentReferences: [file(9, 'unchanged.pdf'), file(11, 'new.pdf', sameHash)],
+      }),
+    )
+
+    expect(result.kind).toBe('ready')
+    if (result.kind !== 'ready') return
+    expect(result.attachments.added.map((item) => item.attachmentId)).toEqual([11])
+    expect(result.attachments.removed.map((item) => item.attachmentId)).toEqual([20])
+    expect(result.attachments.unchanged.map((item) => item.attachmentId)).toEqual([9])
+    expect(result.identical).toBe(false)
   })
 })

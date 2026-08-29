@@ -137,6 +137,7 @@ export interface UpdateKnowledgeDocumentContentRequest {
   readonly bodyMarkdown: string
   readonly changeSummary?: string | null
   readonly concurrencyToken: string
+  readonly fileAttachmentIds: readonly number[]
 }
 
 export interface RestoreKnowledgeDocumentRevisionRequest {

@@ -5,6 +5,7 @@ export interface DocumentEditSnapshot {
   readonly title: string
   readonly summary: string
   readonly bodyMarkdown: string
+  readonly fileAttachmentIds: readonly number[]
 }
 
 const activeDirtyDocumentEdit = ref(false)
@@ -36,6 +37,8 @@ export function isDocumentEditDirty(
   return (
     current.title !== initial.title ||
     current.summary !== initial.summary ||
-    current.bodyMarkdown !== initial.bodyMarkdown
+    current.bodyMarkdown !== initial.bodyMarkdown ||
+    current.fileAttachmentIds.length !== initial.fileAttachmentIds.length ||
+    current.fileAttachmentIds.some((id, index) => id !== initial.fileAttachmentIds[index])
   )
 }

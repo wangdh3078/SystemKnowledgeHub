@@ -5,13 +5,20 @@ import {
   setActiveDocumentEditDirty,
 } from './documentEditState'
 
-const initial = { title: '标题', summary: '摘要', bodyMarkdown: '正文' }
+const initial = {
+  title: '标题',
+  summary: '摘要',
+  bodyMarkdown: '正文',
+  fileAttachmentIds: [11, 12],
+}
 
 describe('isDocumentEditDirty', () => {
   it('uses values rather than editor change counts', () => {
     expect(isDocumentEditDirty(initial, initial)).toBe(false)
     expect(isDocumentEditDirty({ ...initial, title: '修改后' }, initial)).toBe(true)
     expect(isDocumentEditDirty({ ...initial, bodyMarkdown: '修改后正文' }, initial)).toBe(true)
+    expect(isDocumentEditDirty({ ...initial, fileAttachmentIds: [11, 13] }, initial)).toBe(true)
+    expect(isDocumentEditDirty({ ...initial, fileAttachmentIds: [11] }, initial)).toBe(true)
     expect(isDocumentEditDirty({ ...initial, title: '标题' }, initial)).toBe(false)
   })
 

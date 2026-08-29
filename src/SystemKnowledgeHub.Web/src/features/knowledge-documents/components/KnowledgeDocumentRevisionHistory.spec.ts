@@ -222,6 +222,18 @@ describe('KnowledgeDocumentRevisionHistory', () => {
       canPreview: true,
       canDownload: true,
     }
+    const historicalFile = {
+      attachmentId: 124,
+      kind: 'File' as const,
+      originalFileName: '历史规范.pdf',
+      extension: '.pdf',
+      contentType: 'application/pdf',
+      sizeBytes: 2048,
+      sha256: 'b'.repeat(64),
+      previewMode: 'Pdf' as const,
+      canPreview: true,
+      canDownload: true,
+    }
     vi.mocked(getKnowledgeDocumentRevision).mockImplementation((_id, revisionNumber) =>
       Promise.resolve(
         revisionNumber === 2
@@ -229,7 +241,7 @@ describe('KnowledgeDocumentRevisionHistory', () => {
               ...details[revisionNumber],
               owner,
               bodyMarkdown: '![历史图](attachment:123)',
-              attachmentReferences: [historicalImage],
+              attachmentReferences: [historicalImage, historicalFile],
             }
           : { ...details[revisionNumber], owner },
       ),
@@ -248,7 +260,12 @@ describe('KnowledgeDocumentRevisionHistory', () => {
     expect(wrapper.get('[data-knowledge-document-attachment-image]').attributes('src')).toBe(
       '/api/knowledge-documents/7/revisions/2/attachments/123/content',
     )
-    expect(wrapper.find('a').exists()).toBe(false)
+    expect(wrapper.get('[aria-label="下载附件 历史规范.pdf"]').attributes('href')).toBe(
+      '/api/knowledge-documents/7/revisions/2/attachments/124/download',
+    )
+    expect(wrapper.text()).toContain('支持PDF预览（预览功能将在下一阶段提供）')
+    expect(wrapper.find('input[type="file"]').exists()).toBe(false)
+    expect(wrapper.findAll('button').some((item) => item.text() === '移除')).toBe(false)
     expect(wrapper.text()).not.toContain('恢复此修订')
   })
 

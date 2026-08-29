@@ -185,6 +185,38 @@ describe('RevisionCompareView', () => {
     expect(toSnapshot.bodyMarkdown).toBe(rawTo)
   })
 
+  it('renders deterministic attachment set changes beside the raw Markdown diff', async () => {
+    const file = (attachmentId: number, originalFileName: string) => ({
+      attachmentId,
+      kind: 'File' as const,
+      originalFileName,
+      extension: '.pdf',
+      contentType: 'application/pdf',
+      sizeBytes: 1024,
+      sha256: 'e'.repeat(64),
+      previewMode: 'Pdf' as const,
+      canPreview: true,
+      canDownload: true,
+    })
+    const from = revision(4, {
+      attachmentReferences: [file(20, '旧规范.pdf'), file(9, '保留.pdf')],
+    })
+    const to = revision(5, { attachmentReferences: [file(11, '新规范.pdf'), file(9, '保留.pdf')] })
+    vi.mocked(getKnowledgeDocumentRevision).mockResolvedValue(from)
+
+    const wrapper = mountCompare(5, to)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('附件集合变化')
+    expect(wrapper.text()).toContain('按 Attachment ID + Kind 比较，不比较二进制内容')
+    expect(wrapper.text()).toContain('新增（1）')
+    expect(wrapper.text()).toContain('普通附件 #11 · 新规范.pdf')
+    expect(wrapper.text()).toContain('移除（1）')
+    expect(wrapper.text()).toContain('普通附件 #20 · 旧规范.pdf')
+    expect(wrapper.text()).toContain('未变化（1）')
+    expect(wrapper.text()).toContain('普通附件 #9 · 保留.pdf')
+  })
+
   it('handles Revision 1 without fetching or comparing itself', async () => {
     const wrapper = mountCompare(1, details[1])
     await flushPromises()
