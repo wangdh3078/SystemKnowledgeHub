@@ -248,6 +248,15 @@ function addRelation(): void {
     },
   })
 }
+function openAttachmentPreview(attachment: AttachmentMetadata): void {
+  if (!data.value || !attachment.canPreview || !attachment.canDownload) return
+  overlayStore.openDialog({
+    kind: 'attachment-preview',
+    id: attachment.attachmentId,
+    mode: 'read',
+    payload: { documentId: data.value.id, attachment },
+  })
+}
 function relatedRoute(item: RelatedKnowledge): { name: string; params: { id: string } } | null {
   const routes: Readonly<Partial<Record<KnowledgeTargetType, string>>> = {
     System: 'system-detail',
@@ -801,6 +810,7 @@ onBeforeUnmount(() => {
           editable
           @update:attachments="editFileAttachments = $event"
           @uploading-change="fileUploading = $event"
+          @preview="openAttachmentPreview"
         />
         <p v-if="fieldError('fileAttachmentIds')" class="knowledge-document-error">
           {{ fieldError('fileAttachmentIds') }}
@@ -828,6 +838,7 @@ onBeforeUnmount(() => {
         v-if="!historyMode && !editing"
         :document-id="data.id"
         :attachments="currentFileAttachments"
+        @preview="openAttachmentPreview"
       />
       <TraceabilitySection
         v-if="!historyMode && supportsTraceability"

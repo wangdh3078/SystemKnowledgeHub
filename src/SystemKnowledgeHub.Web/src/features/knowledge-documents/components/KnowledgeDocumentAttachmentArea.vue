@@ -20,6 +20,7 @@ const props = withDefaults(
 const emit = defineEmits<{
   'update:attachments': [attachments: readonly AttachmentMetadata[]]
   'uploading-change': [uploading: boolean]
+  preview: [attachment: AttachmentMetadata]
 }>()
 
 const acceptedExtensions = new Set([
@@ -201,9 +202,12 @@ function formatNumber(value: number): string {
 }
 
 function previewCapability(attachment: AttachmentMetadata): string {
-  return attachment.canPreview
-    ? `支持${previewLabels[attachment.previewMode]}预览（预览功能将在下一阶段提供）`
-    : '仅支持下载'
+  return attachment.canPreview ? `支持${previewLabels[attachment.previewMode]}预览` : '仅支持下载'
+}
+
+function openPreview(attachment: AttachmentMetadata): void {
+  if (!attachment.canPreview || !attachment.canDownload || attachment.previewMode === 'None') return
+  emit('preview', attachment)
 }
 
 function downloadUrl(attachment: AttachmentMetadata): string {
@@ -283,6 +287,15 @@ function downloadUrl(attachment: AttachmentMetadata): string {
           <small>{{ previewCapability(attachment) }}</small>
         </div>
         <div class="knowledge-document-attachments__actions">
+          <el-button
+            v-if="attachment.canPreview && attachment.previewMode !== 'None'"
+            text
+            type="primary"
+            :disabled="!attachment.canDownload"
+            :aria-label="`预览附件 ${attachment.originalFileName}`"
+            @click="openPreview(attachment)"
+            >{{ attachment.canDownload ? '预览' : '保存后可预览' }}</el-button
+          >
           <a
             v-if="attachment.canDownload"
             class="knowledge-document-attachments__download"

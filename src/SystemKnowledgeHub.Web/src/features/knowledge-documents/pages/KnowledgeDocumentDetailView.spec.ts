@@ -447,6 +447,13 @@ describe('KnowledgeDocumentDetailView editing', () => {
     expect(wrapper.text()).toContain('MES接口规范.pdf')
     expect(wrapper.text()).toContain('Source.zip')
     expect(wrapper.text()).not.toContain('设备状态.png')
+    await wrapper.get('[aria-label="预览附件 MES接口规范.pdf"]').trigger('click')
+    expect(overlayState.openDialog).toHaveBeenCalledWith({
+      kind: 'attachment-preview',
+      id: 201,
+      mode: 'read',
+      payload: { documentId: 1, attachment: firstFile },
+    })
     await button(wrapper, '编辑')?.trigger('click')
     await flushPromises()
     expect(wrapper.findAll('[data-attachment-id]')).toHaveLength(2)

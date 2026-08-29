@@ -263,7 +263,20 @@ describe('KnowledgeDocumentRevisionHistory', () => {
     expect(wrapper.get('[aria-label="下载附件 历史规范.pdf"]').attributes('href')).toBe(
       '/api/knowledge-documents/7/revisions/2/attachments/124/download',
     )
-    expect(wrapper.text()).toContain('支持PDF预览（预览功能将在下一阶段提供）')
+    expect(wrapper.text()).toContain('支持PDF预览')
+    expect(wrapper.text()).not.toContain('下一阶段')
+    await wrapper.get('[aria-label="预览附件 历史规范.pdf"]').trigger('click')
+    expect(useOverlayStore().currentDialog).toEqual({
+      surface: 'dialog',
+      kind: 'attachment-preview',
+      id: 124,
+      mode: 'read',
+      payload: {
+        documentId: 7,
+        revisionNumber: 2,
+        attachment: historicalFile,
+      },
+    })
     expect(wrapper.find('input[type="file"]').exists()).toBe(false)
     expect(wrapper.findAll('button').some((item) => item.text() === '移除')).toBe(false)
     expect(wrapper.text()).not.toContain('恢复此修订')

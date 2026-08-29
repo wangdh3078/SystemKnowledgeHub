@@ -176,26 +176,67 @@ describe('KnowledgeDocumentAttachmentArea', () => {
     expect(wrapper.emitted('update:attachments')?.at(-1)?.[0]).toEqual([attachment(41, 'one.pdf')])
   })
 
-  it('shows preview capability metadata and exact current/historical secure download routes', () => {
+  it('uses backend preview metadata for entry buttons and exact current/historical routes', async () => {
     const pdf = attachment(51, '超长名称-MES-接口-规范-2026-最终确认版本.pdf', {
       canDownload: true,
     })
     const zip = attachment(52, 'Source.zip', { canDownload: true })
-    const current = mountArea([pdf, zip])
+    const text = attachment(53, 'runtime.log', {
+      extension: '.log',
+      previewMode: 'Text',
+      canDownload: true,
+      canPreview: true,
+    })
+    const markdown = attachment(54, 'readme.md', {
+      extension: '.md',
+      previewMode: 'Markdown',
+      canDownload: true,
+      canPreview: true,
+    })
+    const csv = attachment(55, 'equipment.csv', {
+      extension: '.csv',
+      previewMode: 'Csv',
+      canDownload: true,
+      canPreview: true,
+    })
+    const xlsx = attachment(56, 'equipment.xlsx', {
+      extension: '.xlsx',
+      previewMode: 'Spreadsheet',
+      canDownload: true,
+      canPreview: true,
+    })
+    const current = mountArea([pdf, text, markdown, csv, xlsx, zip])
 
     expect(current.text()).toContain('PDF · 2.5 MB')
-    expect(current.text()).toContain('支持PDF预览（预览功能将在下一阶段提供）')
+    expect(current.text()).toContain('支持PDF预览')
+    expect(current.text()).not.toContain('下一阶段')
     expect(current.text()).toContain('仅支持下载')
+    expect(current.findAll('[aria-label^="预览附件"]')).toHaveLength(5)
+    expect(current.find('[aria-label="预览附件 Source.zip"]').exists()).toBe(false)
     expect(current.get('[aria-label^="下载附件 超长名称"]').attributes('href')).toBe(
       '/api/knowledge-documents/7/attachments/51/download',
     )
     expect(current.find('input[type="file"]').exists()).toBe(false)
     expect(current.findAll('button').some((button) => button.text() === '移除')).toBe(false)
 
+    await current.get('[aria-label="预览附件 equipment.csv"]').trigger('click')
+    expect(current.emitted('preview')?.at(-1)?.[0]).toEqual(csv)
+
     const historical = mountArea([pdf], { revisionNumber: 4 })
     expect(historical.get('a').attributes('href')).toBe(
       '/api/knowledge-documents/7/revisions/4/attachments/51/download',
     )
+  })
+
+  it('does not open exact preview routes for an uploaded orphan before semantic save', async () => {
+    const orphan = attachment(57, 'new.pdf', { canPreview: true, canDownload: false })
+    const wrapper = mountArea([orphan], { editable: true })
+    const previewButton = wrapper.get('[aria-label="预览附件 new.pdf"]')
+
+    expect(previewButton.text()).toBe('保存后可预览')
+    expect(previewButton.attributes('disabled')).toBeDefined()
+    await previewButton.trigger('click')
+    expect(wrapper.emitted('preview')).toBeUndefined()
   })
 
   it('confirms reference-only removal and renders an accessible empty state', async () => {

@@ -22,6 +22,7 @@ import RevisionCompareView from './RevisionCompareView.vue'
 import { useOverlayStore } from '../../../app/stores/overlays'
 import { formatDateTime } from '../../../app/formatters/dateTime'
 import KnowledgeDocumentAttachmentArea from './KnowledgeDocumentAttachmentArea.vue'
+import type { AttachmentMetadata } from '../api/attachmentContracts'
 
 const props = defineProps<{
   documentId: number
@@ -202,6 +203,19 @@ function openRestore(): void {
     },
   })
 }
+function openAttachmentPreview(attachment: AttachmentMetadata): void {
+  if (!detail.value || !attachment.canPreview || !attachment.canDownload) return
+  overlayStore.openDialog({
+    kind: 'attachment-preview',
+    id: attachment.attachmentId,
+    mode: 'read',
+    payload: {
+      documentId: props.documentId,
+      revisionNumber: detail.value.revisionNumber,
+      attachment,
+    },
+  })
+}
 function handleHistoryRefresh(event: Event): void {
   if (!(event instanceof CustomEvent)) return
   const detailValue: unknown = event.detail
@@ -378,6 +392,7 @@ onBeforeUnmount(() => {
               :document-id="documentId"
               :revision-number="detail.revisionNumber"
               :attachments="detail.attachmentReferences"
+              @preview="openAttachmentPreview"
             />
             <footer
               v-if="restoreAvailable || restoreRequiresDraft"

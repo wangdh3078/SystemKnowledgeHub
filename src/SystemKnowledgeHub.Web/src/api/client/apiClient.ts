@@ -13,6 +13,11 @@ interface RequestWithBodyOptions<TResponse> extends RequestOptions<TResponse> {
   readonly headers?: Readonly<Record<string, string>>
 }
 
+interface BlobRequestOptions {
+  readonly signal?: AbortSignal
+  readonly headers?: Readonly<Record<string, string>>
+}
+
 export type AntiforgeryTokenProvider = () => string | null
 export type SecurityErrorHandler = (error: ApiError, path: string) => void
 
@@ -118,9 +123,39 @@ export function createApiClient(
     }
   }
 
+  async function requestBlob(path: string, options: BlobRequestOptions): Promise<Blob> {
+    let response: Response
+
+    try {
+      response = await fetchImplementation(
+        joinUrl(baseUrl, path),
+        createRequestInit('GET', options.signal, undefined, options.headers),
+      )
+    } catch (error: unknown) {
+      if (error instanceof DOMException && error.name === 'AbortError') throw error
+      throw new NetworkRequestError()
+    }
+
+    if (!response.ok) {
+      const error = await normalizeApiError(response)
+      securityErrorHandler?.(error, path)
+      throw error
+    }
+
+    try {
+      return await response.blob()
+    } catch {
+      throw new UnexpectedResponseError()
+    }
+  }
+
   return {
     get<TResponse>(path: string, options: RequestOptions<TResponse>): Promise<TResponse> {
       return request(path, 'GET', options)
+    },
+
+    getBlob(path: string, options: BlobRequestOptions = {}): Promise<Blob> {
+      return requestBlob(path, options)
     },
 
     post<TRequest, TResponse>(

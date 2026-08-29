@@ -80,6 +80,31 @@ describe('apiClient', () => {
     )
   })
 
+  it('reads protected binary content with credentials and an explicit Accept header', async () => {
+    const fetchImplementation = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response('pdf', {
+        status: 200,
+        headers: { 'Content-Type': 'application/pdf' },
+      }),
+    )
+    const client = createApiClient('/api', fetchImplementation)
+
+    const result = await client.getBlob('/knowledge-documents/7/attachments/9/preview', {
+      headers: { Accept: 'application/pdf' },
+    })
+
+    expect(fetchImplementation).toHaveBeenCalledWith(
+      '/api/knowledge-documents/7/attachments/9/preview',
+      expect.objectContaining({
+        method: 'GET',
+        credentials: 'include',
+        headers: expect.objectContaining({ Accept: 'application/pdf' }),
+      }),
+    )
+    expect(result.type).toBe('application/pdf')
+    expect(await result.text()).toBe('pdf')
+  })
+
   it('sends body and antiforgery token for root POST endpoints that return no content', async () => {
     const fetchImplementation = vi
       .fn<typeof fetch>()

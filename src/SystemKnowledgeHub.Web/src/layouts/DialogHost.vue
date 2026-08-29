@@ -5,36 +5,46 @@ import { useOverlayStore } from '../app/stores/overlays'
 import KnowledgeStatusDialogContent from '../features/knowledge-status/components/KnowledgeStatusDialogContent.vue'
 import KnowledgeDocumentRestoreDialogContent from '../features/knowledge-documents/components/KnowledgeDocumentRestoreDialogContent.vue'
 import DeleteConfirmationDialogContent from '../features/soft-delete/components/DeleteConfirmationDialogContent.vue'
+import AttachmentPreviewHost from '../features/knowledge-documents/components/AttachmentPreviewHost.vue'
 import { overlayScrollPreserver as scrollPreserver } from './overlayScrollPreservation'
 
 const overlayStore = useOverlayStore()
-const hasFeatureDialog = computed(() =>
-  overlayStore.currentDialog?.kind === 'create-knowledge-object'
-  || overlayStore.currentDialog?.kind === 'create-system'
-  || overlayStore.currentDialog?.kind === 'create-business-function'
-  || overlayStore.currentDialog?.kind === 'create-business-rule'
-  || overlayStore.currentDialog?.kind === 'create-integration'
-  || overlayStore.currentDialog?.kind === 'create-database-knowledge'
-  || overlayStore.currentDialog?.kind === 'create-database-source'
-  || overlayStore.currentDialog?.kind === 'register-database-object'
-  || overlayStore.currentDialog?.kind === 'register-database-column'
-  || overlayStore.currentDialog?.kind === 'change-knowledge-status'
-  || overlayStore.currentDialog?.kind === 'global-search'
-  || overlayStore.currentDialog?.kind === 'create-unknown-item'
-  || overlayStore.currentDialog?.kind === 'knowledge-role-management'
-  || overlayStore.currentDialog?.kind === 'restore-knowledge-document-revision'
-  || overlayStore.currentDialog?.kind === 'delete-root'
+const hasFeatureDialog = computed(
+  () =>
+    overlayStore.currentDialog?.kind === 'create-knowledge-object' ||
+    overlayStore.currentDialog?.kind === 'create-system' ||
+    overlayStore.currentDialog?.kind === 'create-business-function' ||
+    overlayStore.currentDialog?.kind === 'create-business-rule' ||
+    overlayStore.currentDialog?.kind === 'create-integration' ||
+    overlayStore.currentDialog?.kind === 'create-database-knowledge' ||
+    overlayStore.currentDialog?.kind === 'create-database-source' ||
+    overlayStore.currentDialog?.kind === 'register-database-object' ||
+    overlayStore.currentDialog?.kind === 'register-database-column' ||
+    overlayStore.currentDialog?.kind === 'change-knowledge-status' ||
+    overlayStore.currentDialog?.kind === 'global-search' ||
+    overlayStore.currentDialog?.kind === 'create-unknown-item' ||
+    overlayStore.currentDialog?.kind === 'knowledge-role-management' ||
+    overlayStore.currentDialog?.kind === 'restore-knowledge-document-revision' ||
+    overlayStore.currentDialog?.kind === 'delete-root' ||
+    overlayStore.currentDialog?.kind === 'attachment-preview',
 )
 const dialogWidth = computed(() =>
   overlayStore.currentDialog?.kind === 'global-search'
     ? '980px'
-    : overlayStore.currentDialog?.kind === 'change-knowledge-status'
-    ? '620px'
-    : overlayStore.currentDialog?.kind === 'restore-knowledge-document-revision'
-    ? '680px'
-    : overlayStore.currentDialog?.kind === 'delete-root'
-    ? '520px'
-    : hasFeatureDialog.value ? '780px' : '460px',
+    : overlayStore.currentDialog?.kind === 'attachment-preview'
+      ? '92vw'
+      : overlayStore.currentDialog?.kind === 'change-knowledge-status'
+        ? '620px'
+        : overlayStore.currentDialog?.kind === 'restore-knowledge-document-revision'
+          ? '680px'
+          : overlayStore.currentDialog?.kind === 'delete-root'
+            ? '520px'
+            : hasFeatureDialog.value
+              ? '780px'
+              : '460px',
+)
+const dialogTitle = computed(() =>
+  overlayStore.currentDialog?.kind === 'attachment-preview' ? '附件只读预览' : undefined,
 )
 
 watch(
@@ -63,6 +73,7 @@ function handleAutoFocus(): void {
   <el-dialog
     :model-value="overlayStore.isDialogOpen"
     :width="dialogWidth"
+    :title="dialogTitle"
     append-to-body
     destroy-on-close
     :show-close="false"
@@ -72,6 +83,7 @@ function handleAutoFocus(): void {
         'global-search-dialog': overlayStore.currentDialog?.kind === 'global-search',
         'knowledge-document-restore-host':
           overlayStore.currentDialog?.kind === 'restore-knowledge-document-revision',
+        'attachment-preview-host': overlayStore.currentDialog?.kind === 'attachment-preview',
       },
     ]"
     @opened="handleOpened"
@@ -84,6 +96,7 @@ function handleAutoFocus(): void {
     <KnowledgeStatusDialogContent />
     <KnowledgeDocumentRestoreDialogContent />
     <DeleteConfirmationDialogContent />
+    <AttachmentPreviewHost />
     <div v-if="overlayStore.isDialogOpen && !hasFeatureDialog" class="dialog-host__foundation">
       <el-icon :size="24"><DocumentAdd /></el-icon>
       <div>
