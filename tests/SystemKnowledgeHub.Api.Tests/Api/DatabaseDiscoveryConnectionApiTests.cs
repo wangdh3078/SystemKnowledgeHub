@@ -188,6 +188,8 @@ public sealed class DatabaseDiscoveryConnectionApiTests
         Assert.NotNull(success);
         Assert.True(success.Succeeded);
         Assert.Equal("19.0.0.0.0", success.ProviderVersion);
+        Assert.Null(success.DatabaseName);
+        Assert.Equal("APP_PDB", success.ServiceName);
 
         factory.Tester.Handler = (connection, _) =>
             throw new InvalidOperationException($"provider raw: {connection.Password}; (DESCRIPTION=raw); SELECT secret");
@@ -228,16 +230,16 @@ public sealed class DatabaseDiscoveryConnectionApiTests
         Assert.Equal(HttpStatusCode.UnprocessableEntity, missingSecret.StatusCode);
         Assert.Contains("SecretMissing", await missingSecret.Content.ReadAsStringAsync(), StringComparison.Ordinal);
 
-        var pgSource = await CreateSource(factory, "PostgreSQL");
-        using var pgCreate = await client.PostAsJsonAsync(
+        var sqlServerSource = await CreateSource(factory, "SQL Server");
+        using var sqlServerCreate = await client.PostAsJsonAsync(
             "/api/admin/database-connection-profiles",
             new
             {
-                databaseSourceId = pgSource,
-                name = $"PG-{Guid.NewGuid():N}",
-                providerType = "PostgreSql",
-                host = "pg.example.test",
-                port = 5432,
+                databaseSourceId = sqlServerSource,
+                name = $"SQLSERVER-{Guid.NewGuid():N}",
+                providerType = "SqlServer",
+                host = "sqlserver.example.test",
+                port = 1433,
                 databaseName = "appdb",
                 serviceName = (string?)null,
                 authenticationMode = "UsernamePassword",
@@ -246,11 +248,11 @@ public sealed class DatabaseDiscoveryConnectionApiTests
                 includedSchemas = new[] { "public" },
                 isEnabled = true,
             });
-        var pg = await ReadProfile(pgCreate);
-        pg = await SetSecret(client, pg, "pg-secret");
+        var sqlServer = await ReadProfile(sqlServerCreate);
+        sqlServer = await SetSecret(client, sqlServer, "sqlserver-secret");
         using var unavailable = await client.PostAsJsonAsync(
-            $"/api/admin/database-connection-profiles/{pg.Id}/test-connection",
-            new { concurrencyToken = pg.ConcurrencyToken });
+            $"/api/admin/database-connection-profiles/{sqlServer.Id}/test-connection",
+            new { concurrencyToken = sqlServer.ConcurrencyToken });
         Assert.Equal(HttpStatusCode.UnprocessableEntity, unavailable.StatusCode);
         Assert.Contains("ProviderUnavailable", await unavailable.Content.ReadAsStringAsync(), StringComparison.Ordinal);
 

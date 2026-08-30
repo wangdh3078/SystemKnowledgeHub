@@ -204,7 +204,7 @@ public sealed class DatabaseDiscoveryRunApiTests
             var run = await WaitForTerminal(administrator, (await Trigger(administrator, profile)).Id);
             Assert.Equal(DatabaseDiscoveryRunStatus.Failed, run.Status);
             Assert.Equal("AuthenticationFailed", run.ErrorCode);
-            Assert.Equal("Oracle 用户名或密码验证失败。", run.ErrorSummary);
+            Assert.Equal("数据库用户名或密码验证失败。", run.ErrorSummary);
             Assert.Null(run.SnapshotId);
             Assert.Null(run.DifferenceId);
             await using var scope = factory.Services.CreateAsyncScope();

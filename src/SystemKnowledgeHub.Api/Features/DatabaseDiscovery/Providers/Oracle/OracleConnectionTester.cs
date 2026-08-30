@@ -51,6 +51,7 @@ internal sealed class OracleConnectionTester(IOracleConnectionProbe probe) : IDa
             return DatabaseConnectionTestResult.Success(
                 "Oracle 19c 连接、目标上下文与基础目录可见性验证成功。",
                 result.ServerVersion,
+                null,
                 result.ServiceName,
                 result.ContainerName);
         }

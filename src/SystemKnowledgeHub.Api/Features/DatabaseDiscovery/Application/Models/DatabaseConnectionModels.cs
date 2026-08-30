@@ -67,6 +67,7 @@ public sealed record DatabaseConnectionTestResponse(
     string? VendorCode,
     string Summary,
     string? ProviderVersion,
+    string? DatabaseName,
     string? ServiceName,
     string? ContainerName,
     string ConcurrencyToken);

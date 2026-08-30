@@ -248,6 +248,7 @@ public sealed class ControlledDatabaseConnectionTester : IDatabaseConnectionTest
     public static DatabaseConnectionTestResult Success() => DatabaseConnectionTestResult.Success(
         "Oracle 19c 连接、目标上下文与基础目录可见性验证成功。",
         "19.0.0.0.0",
+        null,
         "APP_PDB",
         "APP_PDB");
 }

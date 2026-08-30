@@ -61,15 +61,25 @@ public sealed record DatabaseConnectionTestResult(
     string Summary,
     string? VendorCode = null,
     string? ProviderVersion = null,
+    string? DatabaseName = null,
     string? ServiceName = null,
     string? ContainerName = null)
 {
     public static DatabaseConnectionTestResult Success(
         string summary,
         string providerVersion,
-        string serviceName,
+        string? databaseName,
+        string? serviceName,
         string? containerName) =>
-        new(true, DatabaseConnectionFailure.None, summary, null, providerVersion, serviceName, containerName);
+        new(
+            true,
+            DatabaseConnectionFailure.None,
+            summary,
+            null,
+            providerVersion,
+            databaseName,
+            serviceName,
+            containerName);
 
     public static DatabaseConnectionTestResult Fail(
         DatabaseConnectionFailure failure,

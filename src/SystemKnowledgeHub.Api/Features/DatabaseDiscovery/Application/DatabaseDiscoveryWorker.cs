@@ -431,10 +431,13 @@ public sealed class DatabaseDiscoveryRunProcessor(
             || run.LeaseToken != claim.LeaseToken || run.LeaseExpiresAt <= now)
             return;
         var cancelled = run.CancellationRequestedAt is not null || errorCode == "Cancelled";
+        var safeErrorCode = DatabaseDiscoveryFailureSafety.SafeCode(errorCode);
         run.Status = cancelled ? DatabaseDiscoveryRunStatus.Cancelled : DatabaseDiscoveryRunStatus.Failed;
         run.CompletedAt = now;
-        run.ErrorCode = cancelled ? "Cancelled" : SafeCode(errorCode);
-        run.ErrorSummary = cancelled ? "发现运行已取消。" : SafeSummary(summary);
+        run.ErrorCode = cancelled ? "Cancelled" : safeErrorCode;
+        run.ErrorSummary = cancelled
+            ? "发现运行已取消。"
+            : DatabaseDiscoveryFailureSafety.SummaryFor(safeErrorCode);
         run.SafeErrorMetadataJson = null;
         ClearLease(run);
         run.Version++;
@@ -487,33 +490,6 @@ public sealed class DatabaseDiscoveryRunProcessor(
         run.LeaseExpiresAt = null;
     }
 
-    private static string SafeCode(string value) => value switch
-    {
-        "ConnectionFailed" or "AuthenticationFailed" or "InsufficientPrivilege"
-            or "UnsupportedDatabaseVersion" or "MetadataQueryFailed" or "Timeout"
-            or "Cancelled" or "ProviderUnavailable" or "SnapshotPersistenceFailed"
-            or "SecretMissing" or "SecretUnavailable" or "LimitExceeded"
-            or "BaselineIncompatible" or "UnresolvedForeignKeyReference"
-            or "ConcurrencyConflict" or "RunInterrupted" => value,
-        _ => "MetadataQueryFailed",
-    };
-
-    private static string SafeSummary(string value) => value switch
-    {
-        "当前 Provider 尚未提供发现实现。" or "发现快照超过允许的大小限制。"
-            or "发现结果超过配置的对象数量限制。" or "差异条目超过允许的持久化大小限制。"
-            or "连接配置或数据库来源已变化。" or "连接配置或密码版本已变化。"
-            or "尚未设置数据库连接密码。" or "数据库连接密码无法解密，请重新设置。"
-            or "发现运行超时。" or "读取数据库结构元数据失败。" or "发现快照持久化失败。"
-            or "发现运行因执行实例中断而失败，请重新触发。"
-            or "无法建立 Oracle 连接。" or "Oracle 用户名或密码验证失败。"
-            or "Oracle 账号缺少必要的目录元数据权限。" or "仅支持 Oracle Database 19c。"
-            or "连接到的 Oracle Service 与配置目标不一致。" or "Oracle 连接不能使用 CDB Root。"
-            or "读取 Oracle 目录元数据失败。" or "Oracle 目录读取超时。"
-            or "发现结果超过配置的安全限制。" or "无法完整解析 Oracle 外键引用。" => value,
-        _ => "Provider 返回的发现结果无效或不完整。",
-    };
-
     private static DatabaseDiscoveryOptions Validate(DatabaseDiscoveryOptions options)
     {
         options.Validate();
@@ -540,6 +516,54 @@ public sealed class DatabaseDiscoveryRunProcessor(
     }
 }
 
+internal static class DatabaseDiscoveryFailureSafety
+{
+    public static string SafeCode(string value) => value switch
+    {
+        "ConnectionFailed" or "AuthenticationFailed" or "InsufficientPrivilege"
+            or "UnsupportedDatabaseVersion" or "MetadataQueryFailed" or "Timeout"
+            or "Cancelled" or "ProviderUnavailable" or "SnapshotPersistenceFailed"
+            or "SecretMissing" or "SecretUnavailable" or "LimitExceeded"
+            or "BaselineIncompatible" or "UnresolvedForeignKeyReference"
+            or "ConcurrencyConflict" or "RunInterrupted" => value,
+        _ => "MetadataQueryFailed",
+    };
+
+    public static string SummaryFor(string safeCode) => safeCode switch
+    {
+        "ConnectionFailed" => "无法连接到数据库。",
+        "AuthenticationFailed" => "数据库用户名或密码验证失败。",
+        "InsufficientPrivilege" => "数据库账号缺少发现所需的目录元数据权限。",
+        "UnsupportedDatabaseVersion" => "当前数据库版本不受支持。",
+        "Timeout" => "发现运行超时。",
+        "Cancelled" => "发现运行已取消。",
+        "ProviderUnavailable" => "当前 Provider 尚未提供发现实现。",
+        "SnapshotPersistenceFailed" => "发现快照持久化失败。",
+        "SecretMissing" => "尚未设置数据库连接密码。",
+        "SecretUnavailable" => "数据库连接密码无法解密，请重新设置。",
+        "LimitExceeded" => "发现结果超过配置的安全限制。",
+        "BaselineIncompatible" => "连接配置或兼容基线已变化。",
+        "UnresolvedForeignKeyReference" => "无法完整解析外键引用。",
+        "ConcurrencyConflict" => "连接配置、租约或兼容基线已变化。",
+        "RunInterrupted" => "发现运行因执行实例中断而失败，请重新触发。",
+        _ => "读取数据库结构元数据失败。",
+    };
+
+    public static string? SafeVendorCode(string? value)
+    {
+        if (value is { Length: 9 }
+            && value[3] == '-'
+            && value.AsSpan(0, 3).IndexOfAnyExceptInRange('A', 'Z') < 0
+            && value.AsSpan(4).IndexOfAnyExceptInRange('0', '9') < 0)
+            return value;
+        if (value is { Length: 14 }
+            && value.StartsWith("SQLSTATE-", StringComparison.Ordinal)
+            && value.AsSpan(9).IndexOfAnyExcept("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789") < 0)
+            return value;
+        return null;
+    }
+}
+
 public sealed class DatabaseDiscoveryTerminalWriter(
     KnowledgeHubDbContext dbContext,
     ILogger<DatabaseDiscoveryTerminalWriter> logger)
@@ -559,11 +583,14 @@ public sealed class DatabaseDiscoveryTerminalWriter(
             || run.LeaseToken != claim.LeaseToken || run.LeaseExpiresAt <= now)
             return;
         var cancelled = run.CancellationRequestedAt is not null || errorCode == "Cancelled";
+        var safeErrorCode = DatabaseDiscoveryFailureSafety.SafeCode(errorCode);
         run.Status = cancelled ? DatabaseDiscoveryRunStatus.Cancelled : DatabaseDiscoveryRunStatus.Failed;
         run.CompletedAt = now;
-        run.ErrorCode = cancelled ? "Cancelled" : SafeCode(errorCode);
-        run.ErrorSummary = cancelled ? "发现运行已取消。" : SafeSummary(summary);
-        var safeVendorCode = SafeVendorCode(vendorCode);
+        run.ErrorCode = cancelled ? "Cancelled" : safeErrorCode;
+        run.ErrorSummary = cancelled
+            ? "发现运行已取消。"
+            : DatabaseDiscoveryFailureSafety.SummaryFor(safeErrorCode);
+        var safeVendorCode = DatabaseDiscoveryFailureSafety.SafeVendorCode(vendorCode);
         run.SafeErrorMetadataJson = cancelled || safeVendorCode is null
             ? null
             : JsonSerializer.Serialize(new { vendorCode = safeVendorCode });
@@ -590,36 +617,4 @@ public sealed class DatabaseDiscoveryTerminalWriter(
         logger.LogWarning("Database Discovery Run {RunId} ended with {ErrorCode}.", run.Id, run.ErrorCode);
     }
 
-    private static string SafeCode(string value) => value switch
-    {
-        "ConnectionFailed" or "AuthenticationFailed" or "InsufficientPrivilege"
-            or "UnsupportedDatabaseVersion" or "MetadataQueryFailed" or "Timeout" or "Cancelled" or "ProviderUnavailable"
-            or "SnapshotPersistenceFailed" or "SecretMissing" or "SecretUnavailable"
-            or "LimitExceeded" or "UnresolvedForeignKeyReference"
-            or "ConcurrencyConflict" or "RunInterrupted" => value,
-        _ => "MetadataQueryFailed",
-    };
-
-    private static string? SafeVendorCode(string? value) =>
-        value is { Length: 9 }
-            && value.StartsWith("ORA-", StringComparison.Ordinal)
-            && value.AsSpan(4).IndexOfAnyExceptInRange('0', '9') < 0
-                ? value
-                : null;
-
-    private static string SafeSummary(string value) => value switch
-    {
-        "当前 Provider 尚未提供发现实现。" or "发现快照超过允许的大小限制。"
-            or "发现结果超过配置的对象数量限制。" or "差异条目超过允许的持久化大小限制。"
-            or "连接配置或数据库来源已变化。" or "连接配置或密码版本已变化。"
-            or "尚未设置数据库连接密码。" or "数据库连接密码无法解密，请重新设置。"
-            or "发现运行超时。" or "读取数据库结构元数据失败。" or "发现快照持久化失败。"
-            or "发现运行因执行实例中断而失败，请重新触发。"
-            or "无法建立 Oracle 连接。" or "Oracle 用户名或密码验证失败。"
-            or "Oracle 账号缺少必要的目录元数据权限。" or "仅支持 Oracle Database 19c。"
-            or "连接到的 Oracle Service 与配置目标不一致。" or "Oracle 连接不能使用 CDB Root。"
-            or "读取 Oracle 目录元数据失败。" or "Oracle 目录读取超时。"
-            or "发现结果超过配置的安全限制。" or "无法完整解析 Oracle 外键引用。" => value,
-        _ => "Provider 返回的发现结果无效或不完整。",
-    };
 }

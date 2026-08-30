@@ -186,6 +186,7 @@ public sealed class DatabaseConnectionTestService(
             testResult.VendorCode,
             testResult.Summary,
             testResult.ProviderVersion,
+            testResult.DatabaseName,
             testResult.ServiceName,
             testResult.ContainerName,
             tokenCodec.Encode(profile.Version));

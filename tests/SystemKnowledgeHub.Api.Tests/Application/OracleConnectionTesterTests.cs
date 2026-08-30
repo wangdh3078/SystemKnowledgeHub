@@ -34,6 +34,8 @@ public sealed class OracleConnectionTesterTests
         Assert.True(result.Succeeded);
         Assert.Equal(DatabaseConnectionFailure.None, result.Failure);
         Assert.Equal("19.0.0.0.0", result.ProviderVersion);
+        Assert.Null(result.DatabaseName);
+        Assert.Equal("APP_PDB", result.ServiceName);
         Assert.DoesNotContain("secret-password", Context().ToString(), StringComparison.Ordinal);
     }
 
