@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Serilog;
 using System.Threading.RateLimiting;
 using SystemKnowledgeHub.Api.Features.Attachments.Application;
 using SystemKnowledgeHub.Api.Features.BusinessFunctions.Application;
@@ -36,22 +37,66 @@ using SystemKnowledgeHub.Api.Features.Users.Application;
 using SystemKnowledgeHub.Api.Features.Users.Domain;
 using SystemKnowledgeHub.Api.Persistence;
 using SystemKnowledgeHub.Api.Shared.Api.Contracts;
+using SystemKnowledgeHub.Api.Shared.Configuration;
 using SystemKnowledgeHub.Api.Shared.Security;
 
 var builder = WebApplication.CreateBuilder(args);
-
-var oidc = builder.Configuration.GetSection("Authentication:Oidc").Get<OidcAuthenticationOptions>()
-    ?? new OidcAuthenticationOptions();
-var local = builder.Configuration.GetSection("Authentication:Local").Get<LocalAuthenticationOptions>()
-    ?? new LocalAuthenticationOptions();
-if (builder.Configuration["Authentication:Local:Enabled"] is null && builder.Environment.IsDevelopment())
-{
-    local = new LocalAuthenticationOptions
+builder.Host.UseSerilog(
+    (context, services, configuration) =>
     {
-        Enabled = true,
-        Lockout = local.Lockout,
-        RateLimit = local.RateLimit,
-    };
+        configuration
+            .ReadFrom.Configuration(context.Configuration)
+            .ReadFrom.Services(services);
+    },
+    preserveStaticLogger: false,
+    writeToProviders: false);
+
+string? runtimeBindingError;
+if (!TryBindRuntimeOptions(
+        builder.Configuration,
+        "Authentication:Oidc",
+        new OidcAuthenticationOptions(),
+        out OidcAuthenticationOptions oidc,
+        out runtimeBindingError)
+    || !TryBindRuntimeOptions(
+        builder.Configuration,
+        "Authentication:Local",
+        new LocalAuthenticationOptions(),
+        out LocalAuthenticationOptions local,
+        out runtimeBindingError)
+    || !TryBindRuntimeOptions(
+        builder.Configuration,
+        AuthenticationCookieOptions.SectionName,
+        new AuthenticationCookieOptions(),
+        out AuthenticationCookieOptions cookie,
+        out runtimeBindingError)
+    || !TryBindRuntimeOptions(
+        builder.Configuration,
+        PasswordHashingOptions.SectionName,
+        new PasswordHashingOptions(),
+        out PasswordHashingOptions passwordHashing,
+        out runtimeBindingError)
+    || !TryBindRuntimeOptions(
+        builder.Configuration,
+        SqlitePersistenceOptions.SectionName,
+        new SqlitePersistenceOptions(),
+        out SqlitePersistenceOptions sqlite,
+        out runtimeBindingError)
+    || !TryBindRuntimeOptions(
+        builder.Configuration,
+        CorsRuntimeOptions.SectionName,
+        new CorsRuntimeOptions(),
+        out CorsRuntimeOptions cors,
+        out runtimeBindingError)
+    || !TryBindRuntimeOptions(
+        builder.Configuration,
+        DatabaseDiscoveryOptions.SectionName,
+        new DatabaseDiscoveryOptions(),
+        out DatabaseDiscoveryOptions databaseDiscovery,
+        out runtimeBindingError))
+{
+    ReportStartupConfigurationFailure(builder.Environment, runtimeBindingError!);
+    return;
 }
 var requiresProductionConfiguration = !builder.Environment.IsDevelopment()
     && !builder.Environment.IsEnvironment("Testing");
@@ -78,6 +123,28 @@ if (local.Lockout.MaxFailedAttempts <= 0 || local.Lockout.WindowMinutes <= 0 || 
     ReportStartupConfigurationFailure(
         builder.Environment,
         "Authentication:Local 的 lockout 和 rate limit 配置必须为正数。");
+    return;
+}
+foreach (var runtimeConfigurationError in new[]
+{
+    cookie.GetValidationError(),
+    passwordHashing.GetValidationError(),
+    sqlite.GetValidationError(),
+    cors.GetValidationError(builder.Environment.IsDevelopment()),
+    SerilogConfigurationValidator.GetValidationError(builder.Configuration),
+})
+{
+    if (runtimeConfigurationError is null) continue;
+    ReportStartupConfigurationFailure(builder.Environment, runtimeConfigurationError);
+    return;
+}
+try
+{
+    databaseDiscovery.Validate();
+}
+catch (InvalidOperationException exception)
+{
+    ReportStartupConfigurationFailure(builder.Environment, exception.Message);
     return;
 }
 
@@ -127,9 +194,7 @@ if (!AttachmentOptions.TryCreate(builder.Configuration, builder.Environment, out
 }
 builder.WebHost.ConfigureKestrel(options =>
 {
-    options.Limits.MaxRequestBodySize = Math.Max(
-        attachmentOptions!.MaxImageBytes,
-        attachmentOptions.MaxFileBytes) + 2L * 1024 * 1024;
+    options.Limits.MaxRequestBodySize = attachmentOptions!.MaximumRequestBodyBytes;
 });
 
 var dataProtection = builder.Services.AddDataProtection()
@@ -138,9 +203,6 @@ if (!string.IsNullOrWhiteSpace(dataProtectionKeyPath))
 {
     dataProtection.PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeyPath));
 }
-
-builder.Logging.ClearProviders();
-builder.Logging.AddConsole();
 
 builder.Services
     .AddControllers()
@@ -151,13 +213,11 @@ builder.Services
     });
 builder.Services.Configure<FormOptions>(options =>
 {
-    options.MemoryBufferThreshold = 64 * 1024;
-    options.MultipartBodyLengthLimit = Math.Max(
-        attachmentOptions!.MaxImageBytes,
-        attachmentOptions.MaxFileBytes) + 2L * 1024 * 1024;
+    options.MemoryBufferThreshold = attachmentOptions!.MemoryBufferThresholdBytes;
+    options.MultipartBodyLengthLimit = attachmentOptions.MaximumRequestBodyBytes;
 });
 
-builder.Services.AddKnowledgeHubPersistence(builder.Configuration, builder.Environment);
+builder.Services.AddKnowledgeHubPersistence(builder.Configuration, builder.Environment, sqlite);
 builder.Services.AddSingleton(attachmentOptions!);
 builder.Services.AddSingleton<AttachmentFilePolicy>();
 builder.Services.AddSingleton<AttachmentStorage>();
@@ -226,10 +286,14 @@ builder.Services.AddScoped<UserService>();
 builder.Services.AddScoped<LocalCredentialManagementService>();
 builder.Services.AddSingleton<IOptions<LocalAuthenticationOptions>>(Options.Create(local));
 builder.Services.AddSingleton<IOptions<OidcAuthenticationOptions>>(Options.Create(oidc));
+builder.Services.AddSingleton<IOptions<AuthenticationCookieOptions>>(Options.Create(cookie));
+builder.Services.AddSingleton<IOptions<PasswordHashingOptions>>(Options.Create(passwordHashing));
+builder.Services.AddSingleton<IOptions<SqlitePersistenceOptions>>(Options.Create(sqlite));
+builder.Services.AddSingleton<IOptions<CorsRuntimeOptions>>(Options.Create(cors));
 builder.Services.Configure<PasswordHasherOptions>(options =>
 {
     options.CompatibilityMode = PasswordHasherCompatibilityMode.IdentityV3;
-    options.IterationCount = 220_000;
+    options.IterationCount = passwordHashing.IterationCount;
 });
 builder.Services.AddSingleton<LocalPasswordService>();
 builder.Services.AddSingleton<AuthenticationPrincipalBuilder>();
@@ -278,8 +342,8 @@ builder.Services
         options.Cookie.SecurePolicy = builder.Environment.IsDevelopment()
             ? CookieSecurePolicy.SameAsRequest
             : CookieSecurePolicy.Always;
-        options.ExpireTimeSpan = TimeSpan.FromHours(8);
-        options.SlidingExpiration = true;
+        options.ExpireTimeSpan = TimeSpan.FromHours(cookie.ExpireHours);
+        options.SlidingExpiration = cookie.SlidingExpiration;
         options.Events.OnRedirectToLogin = context => WriteApiAuthenticationErrorAsync(
             context.Request,
             context.Response,
@@ -412,7 +476,7 @@ builder.Services.AddCors(options =>
     options.AddPolicy("ViteDevelopment", policy =>
     {
         policy
-            .WithOrigins("http://localhost:5173", "http://127.0.0.1:5173")
+            .WithOrigins(cors.AllowedOrigins)
             .AllowAnyHeader()
             .AllowAnyMethod()
             .AllowCredentials();
@@ -436,6 +500,10 @@ if (KnowledgeDocumentSearchMaintenanceCommand.IsRequested(args))
     Environment.ExitCode = await KnowledgeDocumentSearchMaintenanceCommand.RunAsync(args, app.Services);
     return;
 }
+
+app.Logger.LogInformation(
+    "System Knowledge Hub host is starting in {EnvironmentName}.",
+    app.Environment.EnvironmentName);
 
 if (app.Environment.IsDevelopment())
 {
@@ -505,6 +573,28 @@ static void ReportStartupConfigurationFailure(
         $"请通过 appsettings.{environment.EnvironmentName}.json、环境变量或命令行显式修正配置；" +
         "直接启动 SystemKnowledgeHub.Api.exe 不会应用 Properties/launchSettings.json。");
     Environment.ExitCode = 1;
+}
+
+static bool TryBindRuntimeOptions<TOptions>(
+    IConfiguration configuration,
+    string sectionName,
+    TOptions fallback,
+    out TOptions options,
+    out string? error)
+    where TOptions : class
+{
+    try
+    {
+        options = configuration.GetSection(sectionName).Get<TOptions>() ?? fallback;
+        error = null;
+        return true;
+    }
+    catch (InvalidOperationException)
+    {
+        options = fallback;
+        error = $"{sectionName} contains a value with an invalid type.";
+        return false;
+    }
 }
 
 static bool IsPathWithinDirectory(string path, string directory)

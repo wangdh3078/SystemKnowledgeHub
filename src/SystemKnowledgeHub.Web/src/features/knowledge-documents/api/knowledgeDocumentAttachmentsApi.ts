@@ -18,12 +18,19 @@ export function uploadKnowledgeDocumentAttachment(
     return Promise.reject(new RangeError('知识内容 ID 无效。'))
   }
   const form = new FormData()
-  form.append('file', file, file.name)
+  form.append('file', createGenericMultipartFile(file), file.name)
   return apiClient.postForm(
     `/knowledge-documents/${encodeURIComponent(String(knowledgeDocumentId))}/attachments`,
     form,
     { signal, decode: decodeAttachmentMetadata },
   )
+}
+
+function createGenericMultipartFile(file: File): File {
+  return new File([file], file.name, {
+    type: 'application/octet-stream',
+    lastModified: file.lastModified,
+  })
 }
 
 export function uploadKnowledgeDocumentImage(

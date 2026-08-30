@@ -1,7 +1,11 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { ElMessageBox } from 'element-plus'
 import { ApiError } from '../../../api/errors/ApiError'
+import {
+  getAttachmentRuntimeCapabilities,
+  type AttachmentRuntimeCapabilities,
+} from '../../runtime-capabilities/api/attachmentRuntimeCapabilities'
 import type { AttachmentMetadata, AttachmentPreviewMode } from '../api/attachmentContracts'
 import {
   knowledgeDocumentAttachmentDownloadUrl,
@@ -23,35 +27,6 @@ const emit = defineEmits<{
   preview: [attachment: AttachmentMetadata]
 }>()
 
-const acceptedExtensions = new Set([
-  '.pdf',
-  '.docx',
-  '.xlsx',
-  '.pptx',
-  '.txt',
-  '.log',
-  '.sql',
-  '.md',
-  '.csv',
-  '.json',
-  '.xml',
-  '.zip',
-])
-const canonicalContentTypes: Readonly<Record<string, string>> = {
-  '.pdf': 'application/pdf',
-  '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-  '.txt': 'text/plain',
-  '.log': 'text/plain',
-  '.sql': 'text/plain',
-  '.md': 'text/markdown',
-  '.csv': 'text/csv',
-  '.json': 'application/json',
-  '.xml': 'application/xml',
-  '.zip': 'application/zip',
-}
-const accept = [...acceptedExtensions].join(',')
 const previewLabels: Readonly<Record<AttachmentPreviewMode, string>> = {
   Image: '图片',
   Pdf: 'PDF',
@@ -68,8 +43,53 @@ const activeFileName = ref<string | null>(null)
 const uploadProgress = ref({ current: 0, total: 0 })
 const uploadSummary = ref<string | null>(null)
 const uploadErrors = ref<readonly string[]>([])
+const runtimeCapabilities = ref<AttachmentRuntimeCapabilities | null>(null)
+const runtimeCapabilitiesLoading = ref(false)
+const runtimeCapabilitiesError = ref<string | null>(null)
 const fileAttachments = computed(() =>
   props.attachments.filter((attachment) => attachment.kind === 'File'),
+)
+const acceptedExtensions = computed(
+  () => new Set(runtimeCapabilities.value?.allowedFileExtensions ?? []),
+)
+const accept = computed(() => runtimeCapabilities.value?.allowedFileExtensions.join(',') ?? '')
+const canChooseFiles = computed(
+  () =>
+    runtimeCapabilities.value !== null &&
+    runtimeCapabilities.value.allowedFileExtensions.length > 0,
+)
+const uploadCapabilityHint = computed(() => {
+  if (runtimeCapabilitiesLoading.value) return '正在读取当前部署的附件上传能力…'
+  if (runtimeCapabilitiesError.value) return runtimeCapabilitiesError.value
+  const capabilities = runtimeCapabilities.value
+  if (!capabilities) return '附件上传能力尚未就绪。'
+  if (capabilities.allowedFileExtensions.length === 0) return '当前部署未启用普通附件上传。'
+  const types = capabilities.allowedFileExtensions
+    .map((extension) => extension.slice(1).toUpperCase())
+    .join('、')
+  return `允许类型：${types}；单个文件不超过 ${formatFileSize(capabilities.maxFileBytes)}。`
+})
+
+async function loadRuntimeCapabilities(): Promise<void> {
+  if (runtimeCapabilities.value || runtimeCapabilitiesLoading.value) return
+  runtimeCapabilitiesLoading.value = true
+  runtimeCapabilitiesError.value = null
+  try {
+    runtimeCapabilities.value = await getAttachmentRuntimeCapabilities()
+  } catch {
+    runtimeCapabilitiesError.value =
+      '无法读取当前部署的附件上传能力，上传已禁用。请刷新页面后重试。'
+  } finally {
+    runtimeCapabilitiesLoading.value = false
+  }
+}
+
+watch(
+  () => props.editable,
+  (editable) => {
+    if (editable) void loadRuntimeCapabilities()
+  },
+  { immediate: true },
 )
 
 function finalExtension(fileName: string): string {
@@ -96,15 +116,9 @@ function uploadErrorMessage(fileName: string, reason: unknown): string {
   return `${prefix}${reason.message || '上传失败，请稍后重试。'}`
 }
 
-function normalizeOrdinaryFile(file: File, extension: string): File {
-  const contentType = canonicalContentTypes[extension]
-  return file.type.toLowerCase() === contentType
-    ? file
-    : new File([file], file.name, { type: contentType, lastModified: file.lastModified })
-}
-
 async function uploadFiles(files: readonly File[]): Promise<void> {
-  if (!props.editable || uploading.value || files.length === 0) return
+  const capabilities = runtimeCapabilities.value
+  if (!props.editable || uploading.value || files.length === 0 || !capabilities) return
   uploading.value = true
   emit('uploading-change', true)
   uploadErrors.value = []
@@ -118,15 +132,18 @@ async function uploadFiles(files: readonly File[]): Promise<void> {
       uploadProgress.value = { current: index + 1, total: files.length }
       activeFileName.value = file.name
       const extension = finalExtension(file.name)
-      if (!acceptedExtensions.has(extension)) {
+      if (!acceptedExtensions.value.has(extension)) {
         errors.push(`${file.name || '未命名文件'}：文件扩展名不在普通附件允许列表中。`)
         continue
       }
-      try {
-        const metadata = await uploadKnowledgeDocumentAttachment(
-          props.documentId,
-          normalizeOrdinaryFile(file, extension),
+      if (file.size > capabilities.maxFileBytes) {
+        errors.push(
+          `${file.name || '未命名文件'}：文件超过当前部署的单文件大小限制（${formatFileSize(capabilities.maxFileBytes)}）。`,
         )
+        continue
+      }
+      try {
+        const metadata = await uploadKnowledgeDocumentAttachment(props.documentId, file)
         if (metadata.kind !== 'File') {
           errors.push(`${file.name}：该文件属于图片，请使用正文中的“插入图片”。`)
           continue
@@ -154,7 +171,7 @@ async function uploadFiles(files: readonly File[]): Promise<void> {
 }
 
 function chooseFiles(): void {
-  if (!props.editable || uploading.value) return
+  if (!props.editable || uploading.value || !canChooseFiles.value) return
   fileInput.value?.click()
 }
 
@@ -228,12 +245,19 @@ function downloadUrl(attachment: AttachmentMetadata): string {
       <div>
         <h2 id="knowledge-document-attachments-heading">附件</h2>
         <p v-if="editable">上传成功后先进入待保存集合；保存文档时统一创建新修订。</p>
+        <p
+          v-if="editable"
+          :class="{ 'is-error': runtimeCapabilitiesError }"
+          :role="runtimeCapabilitiesError ? 'alert' : undefined"
+        >
+          {{ uploadCapabilityHint }}
+        </p>
       </div>
       <el-button
         v-if="editable"
         type="primary"
         plain
-        :disabled="uploading"
+        :disabled="uploading || !canChooseFiles"
         :loading="uploading"
         aria-label="添加普通附件"
         @click="chooseFiles"
@@ -246,6 +270,7 @@ function downloadUrl(attachment: AttachmentMetadata): string {
         type="file"
         multiple
         :accept="accept"
+        :disabled="uploading || !canChooseFiles"
         aria-label="选择普通附件文件"
         @change="handleFileChange"
       />

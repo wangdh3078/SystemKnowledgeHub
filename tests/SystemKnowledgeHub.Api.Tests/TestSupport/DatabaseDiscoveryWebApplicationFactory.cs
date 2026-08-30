@@ -5,8 +5,9 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Serilog.Core;
+using Serilog.Events;
 using SystemKnowledgeHub.Api.Features.DatabaseDiscovery.Application;
 using SystemKnowledgeHub.Api.Features.DatabaseDiscovery.Application.Models;
 using SystemKnowledgeHub.Api.Features.DatabaseDiscovery.Domain;
@@ -64,7 +65,7 @@ public sealed class DatabaseDiscoveryWebApplicationFactory : BootstrapWebApplica
                 options.HeartbeatIntervalSeconds = WorkerHeartbeatIntervalSeconds;
                 options.QueuePollIntervalMilliseconds = WorkerPollIntervalMilliseconds;
             });
-            services.AddSingleton<ILoggerProvider>(new TestLoggerProvider(LogSink));
+            services.UseIsolatedTestSerilog(LogFilePath, LogSink);
             services.AddHostedService<DatabaseDiscoveryWorker>();
         });
     }
@@ -258,27 +259,14 @@ public sealed class PendingDatabaseConnectionTest(DatabaseDiscoveryConnectionCon
         new(TaskCreationOptions.RunContinuationsAsynchronously);
 }
 
-public sealed class TestLogSink
+public sealed class TestLogSink : ILogEventSink
 {
     private readonly ConcurrentQueue<string> entries = new();
     public IReadOnlyCollection<string> Entries => entries.ToArray();
-    internal void Add(string message) => entries.Enqueue(message);
-}
-
-internal sealed class TestLoggerProvider(TestLogSink sink) : ILoggerProvider
-{
-    public ILogger CreateLogger(string categoryName) => new TestLogger(sink);
-    public void Dispose() { }
-
-    private sealed class TestLogger(TestLogSink sink) : ILogger
+    public void Emit(LogEvent logEvent)
     {
-        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
-        public bool IsEnabled(LogLevel logLevel) => true;
-        public void Log<TState>(
-            LogLevel logLevel,
-            EventId eventId,
-            TState state,
-            Exception? exception,
-            Func<TState, Exception?, string> formatter) => sink.Add(formatter(state, exception));
+        var message = logEvent.RenderMessage().Replace("\"", string.Empty, StringComparison.Ordinal);
+        if (logEvent.Exception is not null) message = $"{message}{Environment.NewLine}{logEvent.Exception}";
+        entries.Enqueue(message);
     }
 }

@@ -106,6 +106,9 @@ These rules apply to every task:
 -   Known configuration failures may be handled with actionable
     diagnostics, but unexpected runtime failures must not be silently
     swallowed.
+-   Runtime/deployment tuning belongs in typed configuration with startup
+    validation; security, protocol, and business invariants remain in code,
+    and secrets never enter tracked configuration.
 
 ## 6. Database and Persistent Data Safety
 

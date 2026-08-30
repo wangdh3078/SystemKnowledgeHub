@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 
 namespace SystemKnowledgeHub.Api.Tests.TestSupport;
 
@@ -33,7 +32,7 @@ public sealed class AuditedLocalLoginWebApplicationFactory : BootstrapWebApplica
     {
         base.ConfigureWebHost(builder);
         builder.ConfigureServices(services =>
-            services.AddSingleton<ILoggerProvider>(new TestLoggerProvider(LogSink)));
+            services.UseIsolatedTestSerilog(LogFilePath, LogSink));
     }
 }
 

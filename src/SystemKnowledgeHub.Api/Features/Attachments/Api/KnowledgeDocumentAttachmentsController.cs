@@ -21,7 +21,6 @@ public sealed class KnowledgeDocumentAttachmentsController(
 {
     [Authorize(Policy = AccessPolicies.Editor)]
     [HttpPost("attachments")]
-    [DisableRequestSizeLimit]
     public async Task<ActionResult<AttachmentMetadataResponse>> Upload(
         long knowledgeDocumentId,
         CancellationToken cancellationToken)

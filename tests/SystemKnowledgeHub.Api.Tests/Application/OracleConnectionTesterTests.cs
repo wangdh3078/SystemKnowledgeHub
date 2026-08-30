@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Options;
 using SystemKnowledgeHub.Api.Features.DatabaseDiscovery.Application;
 using SystemKnowledgeHub.Api.Features.DatabaseDiscovery.Application.Models;
 using SystemKnowledgeHub.Api.Features.DatabaseDiscovery.Domain;
@@ -7,6 +8,24 @@ namespace SystemKnowledgeHub.Api.Tests.Application;
 
 public sealed class OracleConnectionTesterTests
 {
+    [Fact]
+    public void Managed_probe_and_discovery_reader_wire_their_distinct_timeout_semantics()
+    {
+        var options = Options.Create(new DatabaseDiscoveryOptions
+        {
+            ConnectionTimeoutSeconds = 19,
+            CatalogCommandTimeoutSeconds = 83,
+        });
+
+        var testConnectionProbe = new OracleManagedConnectionProbe(options);
+        var discoveryCatalogReader = new OracleManagedDiscoveryCatalogReader(options);
+
+        Assert.Equal(19, testConnectionProbe.ConfiguredConnectionTimeoutSeconds);
+        Assert.Equal(19, testConnectionProbe.ConfiguredCommandTimeoutSeconds);
+        Assert.Equal(19, discoveryCatalogReader.ConfiguredConnectionTimeoutSeconds);
+        Assert.Equal(83, discoveryCatalogReader.ConfiguredCatalogCommandTimeoutSeconds);
+    }
+
     [Fact]
     public async Task Oracle_19c_matching_service_non_root_and_visible_schemas_succeeds()
     {

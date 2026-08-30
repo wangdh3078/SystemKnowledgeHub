@@ -2,11 +2,16 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ElMessageBox } from 'element-plus'
 import { ApiError } from '../../../api/errors/ApiError'
+import type { AttachmentRuntimeCapabilities } from '../../runtime-capabilities/api/attachmentRuntimeCapabilities'
 import type { AttachmentMetadata } from '../api/attachmentContracts'
 import { uploadKnowledgeDocumentAttachment } from '../api/knowledgeDocumentAttachmentsApi'
 import KnowledgeDocumentAttachmentArea from './KnowledgeDocumentAttachmentArea.vue'
 
 vi.mock('element-plus', () => ({ ElMessageBox: { confirm: vi.fn() } }))
+const runtimeCapabilitiesMock = vi.hoisted(() => vi.fn())
+vi.mock('../../runtime-capabilities/api/attachmentRuntimeCapabilities', () => ({
+  getAttachmentRuntimeCapabilities: runtimeCapabilitiesMock,
+}))
 vi.mock('../api/knowledgeDocumentAttachmentsApi', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../api/knowledgeDocumentAttachmentsApi')>()
   return { ...actual, uploadKnowledgeDocumentAttachment: vi.fn() }
@@ -42,6 +47,27 @@ const components = {
   },
 }
 
+const defaultRuntimeCapabilities: AttachmentRuntimeCapabilities = {
+  allowedImageExtensions: ['.png', '.jpg', '.jpeg', '.gif', '.webp'],
+  allowedFileExtensions: [
+    '.pdf',
+    '.docx',
+    '.xlsx',
+    '.pptx',
+    '.txt',
+    '.log',
+    '.sql',
+    '.md',
+    '.csv',
+    '.json',
+    '.xml',
+    '.zip',
+  ],
+  maxImageBytes: 10 * 1024 * 1024,
+  maxFileBytes: 50 * 1024 * 1024,
+  maxStoredAttachmentsPerDocument: 100,
+}
+
 function mountArea(
   attachments: readonly AttachmentMetadata[] = [],
   options: { editable?: boolean; revisionNumber?: number } = {},
@@ -53,6 +79,7 @@ function mountArea(
 }
 
 async function selectFiles(wrapper: ReturnType<typeof mountArea>, files: readonly File[]) {
+  await flushPromises()
   const input = wrapper.get('input[type="file"]')
   Object.defineProperty(input.element, 'files', { configurable: true, value: files })
   await input.trigger('change')
@@ -70,6 +97,8 @@ function apiError(status: number, message: string) {
 
 describe('KnowledgeDocumentAttachmentArea', () => {
   beforeEach(() => {
+    runtimeCapabilitiesMock.mockReset()
+    runtimeCapabilitiesMock.mockResolvedValue(defaultRuntimeCapabilities)
     vi.mocked(uploadKnowledgeDocumentAttachment).mockReset()
     vi.mocked(ElMessageBox.confirm).mockReset()
   })
@@ -121,7 +150,7 @@ describe('KnowledgeDocumentAttachmentArea', () => {
       vi.mocked(uploadKnowledgeDocumentAttachment).mock.calls.map((call) => call[1].name),
     ).toEqual(['MES接口规范.pdf', 'Equipment.xlsx', 'Source.zip'])
     expect(vi.mocked(uploadKnowledgeDocumentAttachment).mock.calls[2][1].type).toBe(
-      'application/zip',
+      'application/x-zip-compressed',
     )
     expect(
       Array.from(
@@ -147,6 +176,39 @@ describe('KnowledgeDocumentAttachmentArea', () => {
     expect(wrapper.text()).toContain('保留.zip')
   })
 
+  it('derives accept and size prechecks from runtime capabilities', async () => {
+    runtimeCapabilitiesMock.mockResolvedValueOnce({
+      ...defaultRuntimeCapabilities,
+      allowedFileExtensions: ['.txt'],
+      maxFileBytes: 3,
+    })
+    const wrapper = mountArea([], { editable: true })
+    await flushPromises()
+
+    expect(wrapper.get('input[type="file"]').attributes('accept')).toBe('.txt')
+    expect(wrapper.text()).toContain('允许类型：TXT；单个文件不超过 3 B')
+
+    await selectFiles(wrapper, [
+      new File(['pdf'], 'disabled.pdf', { type: 'application/pdf' }),
+      new File(['four'], 'oversize.txt', { type: 'text/plain' }),
+    ])
+
+    expect(uploadKnowledgeDocumentAttachment).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('disabled.pdf：文件扩展名不在普通附件允许列表中')
+    expect(wrapper.text()).toContain('oversize.txt：文件超过当前部署的单文件大小限制（3 B）')
+  })
+
+  it('fails closed when runtime capabilities cannot be loaded', async () => {
+    runtimeCapabilitiesMock.mockRejectedValueOnce(new Error('offline'))
+    const wrapper = mountArea([], { editable: true })
+    await flushPromises()
+
+    expect(wrapper.get('[aria-label="添加普通附件"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('input[type="file"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.text()).toContain('无法读取当前部署的附件上传能力，上传已禁用')
+    expect(uploadKnowledgeDocumentAttachment).not.toHaveBeenCalled()
+  })
+
   it('prevents a second batch and duplicate IDs while an upload is pending', async () => {
     let resolveUpload!: (value: AttachmentMetadata) => void
     vi.mocked(uploadKnowledgeDocumentAttachment).mockReturnValue(
@@ -155,6 +217,7 @@ describe('KnowledgeDocumentAttachmentArea', () => {
       }),
     )
     const wrapper = mountArea([], { editable: true })
+    await flushPromises()
     const first = new File(['one'], 'one.pdf', { type: 'application/pdf' })
     const second = new File(['two'], 'two.pdf', { type: 'application/pdf' })
 

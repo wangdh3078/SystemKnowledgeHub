@@ -43,6 +43,8 @@ public sealed class StartupConfigurationProcessTests
             $"Data Source={Path.Combine(temporaryRoot, "knowledge-hub.db")}";
         process.StartInfo.Environment["DataProtection__KeyPath"] = Path.Combine(temporaryRoot, "keys");
         process.StartInfo.Environment["Attachments__StorageRoot"] = Path.Combine(temporaryRoot, "attachments");
+        process.StartInfo.Environment["Serilog__WriteTo__1__Args__path"] =
+            Path.Combine(temporaryRoot, "logs", "system-knowledge-hub-test-.log");
         process.StartInfo.Environment["DOTNET_DISABLE_GUI_ERRORS"] = "1";
 
         try
@@ -71,7 +73,7 @@ public sealed class StartupConfigurationProcessTests
                 await process.WaitForExitAsync();
             }
 
-            Directory.Delete(temporaryRoot, recursive: true);
+            await DeleteTemporaryRootAsync(temporaryRoot);
         }
     }
 
@@ -83,6 +85,14 @@ public sealed class StartupConfigurationProcessTests
     [InlineData("sqlite-relative", "Production ConnectionStrings:KnowledgeHub must use an absolute persistent SQLite Data Source path.")]
     [InlineData("attachment-storage-missing", "Attachments:StorageRoot is required outside Development and must identify isolated persistent storage.")]
     [InlineData("attachment-storage-relative", "Attachments:StorageRoot must be an absolute persistent path outside the application deployment directory.")]
+    [InlineData("attachment-extension", "Attachments:AllowedImageExtensions contains an unsupported or non-image extension.")]
+    [InlineData("cookie-expiration", "Authentication:Cookie:ExpireHours must be between 1 and 720.")]
+    [InlineData("password-floor", "Authentication:Local:PasswordHasher:IterationCount must be between 220000 and 2000000.")]
+    [InlineData("sqlite-busy-timeout", "Persistence:Sqlite:BusyTimeoutMilliseconds must be between 1 and 300000.")]
+    [InlineData("discovery-connection-timeout", "DatabaseDiscovery:ConnectionTimeoutSeconds must be between 1 and 300.")]
+    [InlineData("cors-wildcard", "Cors:AllowedOrigins entries must be explicit HTTP(S) origins")]
+    [InlineData("serilog-file-path", "Serilog File sink requires a non-empty path.")]
+    [InlineData("serilog-framework-level", "Serilog:MinimumLevel:Override:Microsoft.AspNetCore must be Warning or higher")]
     public async Task DirectExecutable_WithOtherInvalidProductionConfiguration_ExitsWithActionableDiagnostic(
         string scenario,
         string expectedDiagnostic)
@@ -125,6 +135,30 @@ public sealed class StartupConfigurationProcessTests
             case "attachment-storage-relative":
                 process.StartInfo.Environment["Attachments__StorageRoot"] = "App_Data/attachments";
                 break;
+            case "attachment-extension":
+                process.StartInfo.Environment["Attachments__AllowedImageExtensions"] = ".png,.exe";
+                break;
+            case "cookie-expiration":
+                process.StartInfo.Environment["Authentication__Cookie__ExpireHours"] = "0";
+                break;
+            case "password-floor":
+                process.StartInfo.Environment["Authentication__Local__PasswordHasher__IterationCount"] = "219999";
+                break;
+            case "sqlite-busy-timeout":
+                process.StartInfo.Environment["Persistence__Sqlite__BusyTimeoutMilliseconds"] = "0";
+                break;
+            case "discovery-connection-timeout":
+                process.StartInfo.Environment["DatabaseDiscovery__ConnectionTimeoutSeconds"] = "0";
+                break;
+            case "cors-wildcard":
+                process.StartInfo.Environment["Cors__AllowedOrigins__0"] = "https://*.example.test";
+                break;
+            case "serilog-file-path":
+                process.StartInfo.Environment["Serilog__WriteTo__1__Args__path"] = string.Empty;
+                break;
+            case "serilog-framework-level":
+                process.StartInfo.Environment["Serilog__MinimumLevel__Override__Microsoft.AspNetCore"] = "Debug";
+                break;
             default:
                 throw new InvalidOperationException($"Unknown test scenario '{scenario}'.");
         }
@@ -143,7 +177,7 @@ public sealed class StartupConfigurationProcessTests
         finally
         {
             await StopProcessAsync(process);
-            Directory.Delete(temporaryRoot, recursive: true);
+            await DeleteTemporaryRootAsync(temporaryRoot);
         }
     }
 
@@ -184,7 +218,10 @@ public sealed class StartupConfigurationProcessTests
             Assert.True(process.Start());
             var standardOutputTask = process.StandardOutput.ReadToEndAsync();
             var standardErrorTask = process.StandardError.ReadToEndAsync();
-            using var client = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{port}") };
+            using var client = new HttpClient(new HttpClientHandler { UseProxy = false })
+            {
+                BaseAddress = new Uri($"http://127.0.0.1:{port}"),
+            };
 
             HttpResponseMessage? optionsResponse = null;
             for (var attempt = 0; attempt < 60; attempt++)
@@ -221,7 +258,7 @@ public sealed class StartupConfigurationProcessTests
         finally
         {
             await StopProcessAsync(process);
-            Directory.Delete(temporaryRoot, recursive: true);
+            await DeleteTemporaryRootAsync(temporaryRoot);
         }
     }
 
@@ -260,6 +297,8 @@ public sealed class StartupConfigurationProcessTests
             $"Data Source={Path.Combine(temporaryRoot, "knowledge-hub.db")}";
         process.StartInfo.Environment["DataProtection__KeyPath"] = Path.Combine(temporaryRoot, "keys");
         process.StartInfo.Environment["Attachments__StorageRoot"] = Path.Combine(temporaryRoot, "attachments");
+        process.StartInfo.Environment["Serilog__WriteTo__1__Args__path"] =
+            Path.Combine(temporaryRoot, "logs", "system-knowledge-hub-test-.log");
         process.StartInfo.Environment["DOTNET_DISABLE_GUI_ERRORS"] = "1";
         return process;
     }
@@ -281,6 +320,29 @@ public sealed class StartupConfigurationProcessTests
         {
             process.Kill(entireProcessTree: true);
             await process.WaitForExitAsync();
+        }
+    }
+
+    private static async Task DeleteTemporaryRootAsync(string temporaryRoot)
+    {
+        for (var attempt = 0; attempt < 20; attempt++)
+        {
+            try
+            {
+                if (Directory.Exists(temporaryRoot))
+                {
+                    Directory.Delete(temporaryRoot, recursive: true);
+                }
+                return;
+            }
+            catch (IOException) when (attempt < 19)
+            {
+                await Task.Delay(50);
+            }
+            catch (UnauthorizedAccessException) when (attempt < 19)
+            {
+                await Task.Delay(50);
+            }
         }
     }
 }

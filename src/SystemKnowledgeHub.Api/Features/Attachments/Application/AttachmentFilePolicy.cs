@@ -35,6 +35,21 @@ public sealed class AttachmentFilePolicy
             [".zip"] = new(AttachmentKind.File, "application/zip", PreviewMode.None, Recognition.Zip),
         };
 
+    public static IReadOnlyList<string> SupportedImageExtensions { get; } =
+        Types.Where(item => item.Value.Kind == AttachmentKind.Image).Select(item => item.Key).ToArray();
+
+    public static IReadOnlyList<string> SupportedFileExtensions { get; } =
+        Types.Where(item => item.Value.Kind == AttachmentKind.File).Select(item => item.Key).ToArray();
+
+    private readonly IReadOnlySet<string> allowedExtensions;
+
+    public AttachmentFilePolicy(AttachmentOptions options)
+    {
+        allowedExtensions = options.AllowedImageExtensions
+            .Concat(options.AllowedFileExtensions)
+            .ToHashSet(StringComparer.Ordinal);
+    }
+
     public AttachmentUploadDescriptor ValidateRequest(string? suppliedFileName, string? declaredContentType)
     {
         string normalizedName;
@@ -51,6 +66,10 @@ public sealed class AttachmentFilePolicy
         if (!Types.TryGetValue(extension, out var descriptor))
         {
             throw new AttachmentTypeRejectedException("文件扩展名不在允许列表中。");
+        }
+        if (!allowedExtensions.Contains(extension))
+        {
+            throw new AttachmentTypeRejectedException("当前部署未启用该文件扩展名。");
         }
 
         var declared = declaredContentType?.Split(';', 2)[0].Trim().ToLowerInvariant();
@@ -132,6 +151,48 @@ public sealed class AttachmentFilePolicy
             && string.Equals(descriptor.ContentType, attachment.ContentType, StringComparison.Ordinal)
                 ? descriptor.PreviewMode
                 : PreviewMode.None;
+
+    public static bool TryNormalizeConfiguredExtensions(
+        string? configured,
+        AttachmentKind expectedKind,
+        out string[] extensions,
+        out string? error)
+    {
+        error = null;
+        var normalized = configured?.Trim() ?? string.Empty;
+        if (normalized.Length == 0)
+        {
+            extensions = [];
+            return true;
+        }
+        extensions = normalized.Split(',', StringSplitOptions.TrimEntries);
+        if (extensions.Any(string.IsNullOrEmpty))
+        {
+            error = "Attachment allowed-extension configuration must be a comma-delimited list without empty entries.";
+            extensions = [];
+            return false;
+        }
+        if (extensions.Length != extensions.Distinct(StringComparer.Ordinal).Count())
+        {
+            error = "Attachment allowed-extension configuration cannot contain duplicates.";
+            return false;
+        }
+        foreach (var extension in extensions)
+        {
+            if (!extension.StartsWith(".", StringComparison.Ordinal)
+                || !string.Equals(extension, extension.ToLowerInvariant(), StringComparison.Ordinal)
+                || !Types.TryGetValue(extension, out var descriptor)
+                || descriptor.Kind != expectedKind)
+            {
+                error = expectedKind == AttachmentKind.Image
+                    ? "Attachments:AllowedImageExtensions contains an unsupported or non-image extension."
+                    : "Attachments:AllowedFileExtensions contains an unsupported or non-file extension.";
+                extensions = [];
+                return false;
+            }
+        }
+        return true;
+    }
 
     private static void ValidateFileName(string fileName)
     {

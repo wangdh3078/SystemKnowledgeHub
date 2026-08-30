@@ -46,6 +46,8 @@ public sealed class DatabaseDiscoveryOptions
 {
     public const string SectionName = "DatabaseDiscovery";
 
+    public int ConnectionTimeoutSeconds { get; set; } = 15;
+    public int CatalogCommandTimeoutSeconds { get; set; } = 60;
     public int OverallTimeoutSeconds { get; set; } = 900;
     public int MaximumIncludedSchemas { get; set; } = 128;
     public int MaximumObjects { get; set; } = 25_000;
@@ -55,7 +57,7 @@ public sealed class DatabaseDiscoveryOptions
     public int MaximumCanonicalSnapshotBytes { get; set; } = 128 * 1024 * 1024;
     public int LeaseDurationSeconds { get; set; } = 30;
     public int HeartbeatIntervalSeconds { get; set; } = 5;
-    public int QueuePollIntervalMilliseconds { get; set; } = 500;
+    public int QueuePollIntervalMilliseconds { get; set; } = 2_000;
 
     public DatabaseDiscoveryLimits Limits => new(
         MaximumIncludedSchemas,
@@ -67,20 +69,34 @@ public sealed class DatabaseDiscoveryOptions
 
     public void Validate()
     {
-        if (OverallTimeoutSeconds is < 1 or > 86_400
-            || MaximumIncludedSchemas is < 1 or > 1024
-            || MaximumObjects < 1
-            || MaximumColumns < 1
-            || MaximumConstraintsAndIndexes < 1
-            || MaximumSequences < 1
-            || MaximumCanonicalSnapshotBytes is < 1024 or > 536_870_912
-            || LeaseDurationSeconds is < 2 or > 3600
-            || HeartbeatIntervalSeconds < 1
-            || HeartbeatIntervalSeconds >= LeaseDurationSeconds
-            || QueuePollIntervalMilliseconds is < 25 or > 60_000)
-        {
-            throw new InvalidOperationException("DatabaseDiscovery configuration is invalid.");
-        }
+        Require(ConnectionTimeoutSeconds is >= 1 and <= 300,
+            "DatabaseDiscovery:ConnectionTimeoutSeconds must be between 1 and 300.");
+        Require(CatalogCommandTimeoutSeconds is >= 1 and <= 3_600,
+            "DatabaseDiscovery:CatalogCommandTimeoutSeconds must be between 1 and 3600.");
+        Require(OverallTimeoutSeconds is >= 1 and <= 86_400,
+            "DatabaseDiscovery:OverallTimeoutSeconds must be between 1 and 86400.");
+        Require(MaximumIncludedSchemas is >= 1 and <= 1_024,
+            "DatabaseDiscovery:MaximumIncludedSchemas must be between 1 and 1024.");
+        Require(MaximumObjects >= 1, "DatabaseDiscovery:MaximumObjects must be positive.");
+        Require(MaximumColumns >= 1, "DatabaseDiscovery:MaximumColumns must be positive.");
+        Require(MaximumConstraintsAndIndexes >= 1,
+            "DatabaseDiscovery:MaximumConstraintsAndIndexes must be positive.");
+        Require(MaximumSequences >= 1, "DatabaseDiscovery:MaximumSequences must be positive.");
+        Require(MaximumCanonicalSnapshotBytes is >= 1_024 and <= 536_870_912,
+            "DatabaseDiscovery:MaximumCanonicalSnapshotBytes must be between 1024 and 536870912.");
+        Require(LeaseDurationSeconds is >= 2 and <= 3_600,
+            "DatabaseDiscovery:LeaseDurationSeconds must be between 2 and 3600.");
+        Require(HeartbeatIntervalSeconds >= 1 && HeartbeatIntervalSeconds < LeaseDurationSeconds,
+            "DatabaseDiscovery:HeartbeatIntervalSeconds must be positive and shorter than the lease duration.");
+        Require(QueuePollIntervalMilliseconds is >= 25 and <= 60_000,
+            "DatabaseDiscovery:QueuePollIntervalMilliseconds must be between 25 and 60000.");
+        Require(QueuePollIntervalMilliseconds != HeartbeatIntervalSeconds * 1_000,
+            "DatabaseDiscovery queue polling and heartbeat intervals must differ.");
+    }
+
+    private static void Require(bool condition, string error)
+    {
+        if (!condition) throw new InvalidOperationException(error);
     }
 }
 

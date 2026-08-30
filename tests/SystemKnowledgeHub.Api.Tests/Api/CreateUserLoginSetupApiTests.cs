@@ -5,7 +5,6 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using SystemKnowledgeHub.Api.Features.Users.Application;
 using SystemKnowledgeHub.Api.Features.Users.Domain;
 using SystemKnowledgeHub.Api.Persistence;
@@ -516,7 +515,7 @@ public sealed class CreateUserLoginSetupApiTests : IClassFixture<BootstrapWebApp
         {
             base.ConfigureWebHost(builder);
             builder.ConfigureServices(services =>
-                services.AddSingleton<ILoggerProvider>(new TestLoggerProvider(LogSink)));
+                services.UseIsolatedTestSerilog(LogFilePath, LogSink));
         }
     }
 

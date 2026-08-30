@@ -1,17 +1,20 @@
 using System.Data;
 using System.Data.Common;
 using System.Globalization;
+using Microsoft.Extensions.Options;
 using Oracle.ManagedDataAccess.Client;
 using SystemKnowledgeHub.Api.Features.DatabaseDiscovery.Application;
 using SystemKnowledgeHub.Api.Features.DatabaseDiscovery.Domain;
 
 namespace SystemKnowledgeHub.Api.Features.DatabaseDiscovery.Providers.Oracle;
 
-internal sealed class OracleManagedDiscoveryCatalogReader : IOracleDiscoveryCatalogReader
+internal sealed class OracleManagedDiscoveryCatalogReader(IOptions<DatabaseDiscoveryOptions> options) : IOracleDiscoveryCatalogReader
 {
-    private const int ConnectionTimeoutSeconds = 15;
-    private const int CommandTimeoutSeconds = 60;
     private const int ReferenceBatchSize = 250;
+    private readonly DatabaseDiscoveryOptions settings = Validate(options.Value);
+
+    internal int ConfiguredConnectionTimeoutSeconds => settings.ConnectionTimeoutSeconds;
+    internal int ConfiguredCatalogCommandTimeoutSeconds => settings.CatalogCommandTimeoutSeconds;
 
     public async Task<OracleCapabilityProbe> ReadCapabilitiesAsync(
         DatabaseDiscoveryConnectionContext connection,
@@ -174,7 +177,7 @@ internal sealed class OracleManagedDiscoveryCatalogReader : IOracleDiscoveryCata
         }
     }
 
-    private static OracleConnection CreateConnection(DatabaseDiscoveryConnectionContext connection)
+    private OracleConnection CreateConnection(DatabaseDiscoveryConnectionContext connection)
     {
         var host = connection.Host.Contains(':', StringComparison.Ordinal)
             ? $"[{connection.Host.Trim('[', ']')}]"
@@ -185,12 +188,12 @@ internal sealed class OracleManagedDiscoveryCatalogReader : IOracleDiscoveryCata
             UserID = connection.Username,
             Password = connection.Password,
             Pooling = false,
-            ConnectionTimeout = ConnectionTimeoutSeconds,
+            ConnectionTimeout = settings.ConnectionTimeoutSeconds,
         };
         return new OracleConnection(builder.ConnectionString);
     }
 
-    private static async Task<OracleTargetContext> ReadTarget(
+    private async Task<OracleTargetContext> ReadTarget(
         OracleConnection connection,
         CancellationToken cancellationToken)
     {
@@ -206,7 +209,7 @@ internal sealed class OracleManagedDiscoveryCatalogReader : IOracleDiscoveryCata
             NullableText(reader, 2));
     }
 
-    private static async Task<string> ReadConnectedPrincipal(
+    private async Task<string> ReadConnectedPrincipal(
         OracleConnection connection,
         CancellationToken cancellationToken)
     {
@@ -215,7 +218,7 @@ internal sealed class OracleManagedDiscoveryCatalogReader : IOracleDiscoveryCata
             ?? throw new DatabaseDiscoveryProviderException("MetadataQueryFailed", "读取 Oracle 目录元数据失败。");
     }
 
-    private static async Task<CanonicalCapability> Probe(
+    private async Task<CanonicalCapability> Probe(
         OracleConnection connection,
         string name,
         string sql,
@@ -238,7 +241,7 @@ internal sealed class OracleManagedDiscoveryCatalogReader : IOracleDiscoveryCata
         }
     }
 
-    private static async Task<List<string>> ReadSchemas(
+    private async Task<List<string>> ReadSchemas(
         OracleConnection connection,
         IReadOnlyList<string> schemas,
         CancellationToken cancellationToken)
@@ -249,7 +252,7 @@ internal sealed class OracleManagedDiscoveryCatalogReader : IOracleDiscoveryCata
         return result;
     }
 
-    private static async Task<List<OracleObjectRow>> ReadObjects(
+    private async Task<List<OracleObjectRow>> ReadObjects(
         OracleConnection connection,
         string sql,
         IReadOnlyList<string> schemas,
@@ -266,7 +269,7 @@ internal sealed class OracleManagedDiscoveryCatalogReader : IOracleDiscoveryCata
         return result;
     }
 
-    private static async Task<List<OracleColumnRow>> ReadColumns(
+    private async Task<List<OracleColumnRow>> ReadColumns(
         OracleConnection connection,
         IReadOnlyList<string> schemas,
         int limit,
@@ -286,7 +289,7 @@ internal sealed class OracleManagedDiscoveryCatalogReader : IOracleDiscoveryCata
         return result;
     }
 
-    private static async Task<List<OracleObjectCommentRow>> ReadObjectComments(
+    private async Task<List<OracleObjectCommentRow>> ReadObjectComments(
         OracleConnection connection,
         IReadOnlyList<string> schemas,
         int limit,
@@ -302,7 +305,7 @@ internal sealed class OracleManagedDiscoveryCatalogReader : IOracleDiscoveryCata
         return result;
     }
 
-    private static async Task<List<OracleColumnCommentRow>> ReadColumnComments(
+    private async Task<List<OracleColumnCommentRow>> ReadColumnComments(
         OracleConnection connection,
         IReadOnlyList<string> schemas,
         int limit,
@@ -318,7 +321,7 @@ internal sealed class OracleManagedDiscoveryCatalogReader : IOracleDiscoveryCata
         return result;
     }
 
-    private static async Task<List<OracleConstraintRow>> ReadConstraints(
+    private async Task<List<OracleConstraintRow>> ReadConstraints(
         OracleConnection connection,
         string sql,
         IReadOnlyList<string> schemas,
@@ -329,7 +332,7 @@ internal sealed class OracleManagedDiscoveryCatalogReader : IOracleDiscoveryCata
         return await ReadConstraintRows(command, limit, cancellationToken);
     }
 
-    private static async Task<List<OracleConstraintColumnRow>> ReadConstraintColumns(
+    private async Task<List<OracleConstraintColumnRow>> ReadConstraintColumns(
         OracleConnection connection,
         string sql,
         IReadOnlyList<string> schemas,
@@ -340,7 +343,7 @@ internal sealed class OracleManagedDiscoveryCatalogReader : IOracleDiscoveryCata
         return await ReadConstraintColumnRows(command, limit, cancellationToken);
     }
 
-    private static async Task<List<OracleConstraintRow>> ReadReferencedConstraints(
+    private async Task<List<OracleConstraintRow>> ReadReferencedConstraints(
         OracleConnection connection,
         IReadOnlyList<(string Owner, string Name)> references,
         int limit,
@@ -350,7 +353,7 @@ internal sealed class OracleManagedDiscoveryCatalogReader : IOracleDiscoveryCata
         return await ReadConstraintRows(command, limit, cancellationToken);
     }
 
-    private static async Task<List<OracleConstraintColumnRow>> ReadReferencedConstraintColumns(
+    private async Task<List<OracleConstraintColumnRow>> ReadReferencedConstraintColumns(
         OracleConnection connection,
         IReadOnlyList<(string Owner, string Name)> references,
         int limit,
@@ -360,7 +363,7 @@ internal sealed class OracleManagedDiscoveryCatalogReader : IOracleDiscoveryCata
         return await ReadConstraintColumnRows(command, limit, cancellationToken);
     }
 
-    private static async Task<List<OracleConstraintRow>> ReadConstraintRows(
+    private async Task<List<OracleConstraintRow>> ReadConstraintRows(
         OracleCommand command,
         int limit,
         CancellationToken cancellationToken)
@@ -376,7 +379,7 @@ internal sealed class OracleManagedDiscoveryCatalogReader : IOracleDiscoveryCata
         return result;
     }
 
-    private static async Task<List<OracleConstraintColumnRow>> ReadConstraintColumnRows(
+    private async Task<List<OracleConstraintColumnRow>> ReadConstraintColumnRows(
         OracleCommand command,
         int limit,
         CancellationToken cancellationToken)
@@ -391,7 +394,7 @@ internal sealed class OracleManagedDiscoveryCatalogReader : IOracleDiscoveryCata
         return result;
     }
 
-    private static async Task<List<OracleIndexRow>> ReadIndexes(
+    private async Task<List<OracleIndexRow>> ReadIndexes(
         OracleConnection connection,
         IReadOnlyList<string> schemas,
         int limit,
@@ -409,7 +412,7 @@ internal sealed class OracleManagedDiscoveryCatalogReader : IOracleDiscoveryCata
         return result;
     }
 
-    private static async Task<List<OracleIndexColumnRow>> ReadIndexColumns(
+    private async Task<List<OracleIndexColumnRow>> ReadIndexColumns(
         OracleConnection connection,
         IReadOnlyList<string> schemas,
         int limit,
@@ -427,7 +430,7 @@ internal sealed class OracleManagedDiscoveryCatalogReader : IOracleDiscoveryCata
         return result;
     }
 
-    private static async Task<List<OracleIndexExpressionRow>> ReadIndexExpressions(
+    private async Task<List<OracleIndexExpressionRow>> ReadIndexExpressions(
         OracleConnection connection,
         IReadOnlyList<string> schemas,
         int limit,
@@ -445,7 +448,7 @@ internal sealed class OracleManagedDiscoveryCatalogReader : IOracleDiscoveryCata
         return result;
     }
 
-    private static async Task<List<OracleSequenceRow>> ReadSequences(
+    private async Task<List<OracleSequenceRow>> ReadSequences(
         OracleConnection connection,
         IReadOnlyList<string> schemas,
         int limit,
@@ -463,7 +466,7 @@ internal sealed class OracleManagedDiscoveryCatalogReader : IOracleDiscoveryCata
         return result;
     }
 
-    private static async Task ReadRows(
+    private async Task ReadRows(
         OracleCommand command,
         CancellationToken cancellationToken,
         Action<DbDataReader> map)
@@ -472,7 +475,7 @@ internal sealed class OracleManagedDiscoveryCatalogReader : IOracleDiscoveryCata
         while (await reader.ReadAsync(cancellationToken)) map(reader);
     }
 
-    private static OracleCommand ScopedCommand(
+    private OracleCommand ScopedCommand(
         OracleConnection connection,
         string sql,
         IReadOnlyList<string> schemas)
@@ -483,7 +486,7 @@ internal sealed class OracleManagedDiscoveryCatalogReader : IOracleDiscoveryCata
         return command;
     }
 
-    private static OracleCommand ReferencedCommand(
+    private OracleCommand ReferencedCommand(
         OracleConnection connection,
         string sql,
         IReadOnlyList<(string Owner, string Name)> references)
@@ -498,10 +501,10 @@ internal sealed class OracleManagedDiscoveryCatalogReader : IOracleDiscoveryCata
         return command;
     }
 
-    private static OracleCommand Command(OracleConnection connection, string sql) => new(sql, connection)
+    private OracleCommand Command(OracleConnection connection, string sql) => new(sql, connection)
     {
         BindByName = true,
-        CommandTimeout = CommandTimeoutSeconds,
+        CommandTimeout = settings.CatalogCommandTimeoutSeconds,
     };
 
     private static string BindList(int count, string prefix) =>
@@ -539,6 +542,12 @@ internal sealed class OracleManagedDiscoveryCatalogReader : IOracleDiscoveryCata
 
     private static void LimitExceeded() => throw new DatabaseDiscoveryProviderException(
         "LimitExceeded", "发现结果超过配置的安全限制。");
+
+    private static DatabaseDiscoveryOptions Validate(DatabaseDiscoveryOptions value)
+    {
+        value.Validate();
+        return value;
+    }
 }
 
 internal static class OracleDiscoveryErrorMapper

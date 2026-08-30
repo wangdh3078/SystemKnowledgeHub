@@ -13,13 +13,18 @@ import {
 } from 'element-plus'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../../api/errors/ApiError'
+import type { AttachmentRuntimeCapabilities } from '../../runtime-capabilities/api/attachmentRuntimeCapabilities'
 import KnowledgeDocumentEditor from './KnowledgeDocumentEditor.vue'
 
 const uploadMock = vi.hoisted(() => vi.fn())
+const runtimeCapabilitiesMock = vi.hoisted(() => vi.fn())
 vi.mock('../api/knowledgeDocumentAttachmentsApi', async (importOriginal) => {
   const original = await importOriginal<typeof import('../api/knowledgeDocumentAttachmentsApi')>()
   return { ...original, uploadKnowledgeDocumentImage: uploadMock }
 })
+vi.mock('../../runtime-capabilities/api/attachmentRuntimeCapabilities', () => ({
+  getAttachmentRuntimeCapabilities: runtimeCapabilitiesMock,
+}))
 
 const wrappers: VueWrapper[] = []
 const components = {
@@ -35,8 +40,18 @@ const components = {
   ElTooltip,
 }
 
+const defaultRuntimeCapabilities: AttachmentRuntimeCapabilities = {
+  allowedImageExtensions: ['.png', '.jpg', '.jpeg', '.gif', '.webp'],
+  allowedFileExtensions: ['.pdf', '.txt'],
+  maxImageBytes: 10 * 1024 * 1024,
+  maxFileBytes: 50 * 1024 * 1024,
+  maxStoredAttachmentsPerDocument: 100,
+}
+
 beforeEach(() => {
   uploadMock.mockReset()
+  runtimeCapabilitiesMock.mockReset()
+  runtimeCapabilitiesMock.mockResolvedValue(defaultRuntimeCapabilities)
   Object.defineProperty(URL, 'createObjectURL', {
     configurable: true,
     value: vi.fn((file: File) => `blob:https://local.test/${encodeURIComponent(file.name)}`),
@@ -322,7 +337,7 @@ describe('KnowledgeDocumentEditor', () => {
     expect(uploadMock).toHaveBeenCalledTimes(3)
     const source = (wrapper.emitted('update:modelValue') ?? []).at(-1)?.[0]
     expect(source).toBe('![第一张](attachment:201)![第三张](attachment:203)正文')
-    expect(wrapper.text()).toContain('第二张.png 不是受支持的')
+    expect(wrapper.text()).toContain('第二张.png 不是当前部署支持的')
   })
 
   it('does not intercept ordinary text drag or paste', async () => {
@@ -427,7 +442,7 @@ describe('KnowledgeDocumentEditor', () => {
     await selectFiles(wrapper, [new File(['<svg/>'], 'unsafe.svg', { type: 'image/svg+xml' })])
 
     expect(uploadMock).not.toHaveBeenCalled()
-    expect(wrapper.text()).toContain('不是受支持的 PNG、JPEG、GIF 或 WEBP')
+    expect(wrapper.text()).toContain('不是当前部署支持的 PNG、JPG、JPEG、GIF、WEBP 类型')
     expect(wrapper.emitted('update:modelValue')).toBeUndefined()
 
     uploadMock.mockRejectedValueOnce(
@@ -443,6 +458,39 @@ describe('KnowledgeDocumentEditor', () => {
     expect(wrapper.text()).toContain('large.png 超过图片大小限制')
     expect(wrapper.get('.cm-content').text()).toContain('保留正文')
     expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+  })
+
+  it('derives image accept and local extension/size prechecks from runtime capabilities', async () => {
+    runtimeCapabilitiesMock.mockResolvedValueOnce({
+      ...defaultRuntimeCapabilities,
+      allowedImageExtensions: ['.png'],
+      maxImageBytes: 3,
+    })
+    const wrapper = mountEditor('正文')
+    await waitForSourceEditor(wrapper)
+
+    expect(wrapper.get('input[type="file"]').attributes('accept')).toBe('.png')
+    await selectFiles(wrapper, [
+      new File(['jpg'], 'disabled.jpg', { type: 'image/jpeg' }),
+      new File(['four'], 'oversize.png', { type: 'image/png' }),
+    ])
+
+    expect(uploadMock).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('1 个文件不是当前部署支持的 PNG 类型')
+    expect(wrapper.text()).toContain('1 个文件超过图片大小限制（3 B）')
+    expect(wrapper.get('.cm-content').text()).toContain('正文')
+  })
+
+  it('fails closed when runtime image capabilities cannot be loaded', async () => {
+    runtimeCapabilitiesMock.mockRejectedValueOnce(new Error('offline'))
+    const wrapper = mountEditor('正文')
+    await waitForSourceEditor(wrapper)
+
+    expect(wrapper.get('[aria-label="插入图片"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('input[type="file"]').attributes('accept')).toBe('')
+    expect(wrapper.get('input[type="file"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.text()).toContain('无法读取当前部署的图片上传能力，上传已禁用')
+    expect(uploadMock).not.toHaveBeenCalled()
   })
 
   it('blocks a duplicate upload start while pending and revokes transient preview URLs on unmount', async () => {

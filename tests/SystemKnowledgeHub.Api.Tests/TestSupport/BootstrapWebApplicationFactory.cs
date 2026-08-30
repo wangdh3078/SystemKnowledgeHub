@@ -21,6 +21,8 @@ public class BootstrapWebApplicationFactory : WebApplicationFactory<Program>
 {
     private readonly SqliteConnection _connection;
     private readonly string _attachmentStorageRoot;
+    private readonly string _logStorageRoot;
+    private readonly string _logFilePath;
     private long _defaultLoginIdentityId;
     private long _defaultUserId;
 
@@ -32,6 +34,13 @@ public class BootstrapWebApplicationFactory : WebApplicationFactory<Program>
             "attachments",
             Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_attachmentStorageRoot);
+        _logStorageRoot = Path.Combine(
+            Path.GetTempPath(),
+            "SystemKnowledgeHub.Api.Tests",
+            "logs",
+            Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(_logStorageRoot);
+        _logFilePath = Path.Combine(_logStorageRoot, "system-knowledge-hub-test-.log");
         _connection = new SqliteConnection(
             "Data Source=:memory:;Foreign Keys=True;Default Timeout=5");
         _connection.Open();
@@ -58,6 +67,9 @@ public class BootstrapWebApplicationFactory : WebApplicationFactory<Program>
         ConfigureAuthenticationMode(builder);
         builder.UseEnvironment(TestEnvironmentName);
         builder.UseSetting("Attachments:StorageRoot", _attachmentStorageRoot);
+        builder.UseSetting(
+            "Serilog:WriteTo:1:Args:path",
+            _logFilePath);
         builder.ConfigureServices(services =>
         {
             services.AddDataProtection().UseEphemeralDataProtectionProvider();
@@ -81,6 +93,7 @@ public class BootstrapWebApplicationFactory : WebApplicationFactory<Program>
                         TestAuthenticationHandler.TestScheme,
                         _ => { });
             }
+            services.UseIsolatedTestSerilog(_logFilePath);
         });
     }
 
@@ -133,6 +146,8 @@ public class BootstrapWebApplicationFactory : WebApplicationFactory<Program>
     }
 
     public string AttachmentStorageRoot => _attachmentStorageRoot;
+    public string LogStorageRoot => _logStorageRoot;
+    public string LogFilePath => _logFilePath;
 
     public HttpClient CreateAuthenticatedClientWithoutAntiforgery()
     {
@@ -221,6 +236,10 @@ public class BootstrapWebApplicationFactory : WebApplicationFactory<Program>
             if (Directory.Exists(_attachmentStorageRoot))
             {
                 Directory.Delete(_attachmentStorageRoot, recursive: true);
+            }
+            if (Directory.Exists(_logStorageRoot))
+            {
+                Directory.Delete(_logStorageRoot, recursive: true);
             }
         }
     }

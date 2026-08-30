@@ -4,6 +4,7 @@ import { UnexpectedResponseError } from '../../../api/errors/ApiError'
 import {
   getKnowledgeDocumentAttachmentPreview,
   getKnowledgeDocumentPdfPreview,
+  uploadKnowledgeDocumentAttachment,
 } from './knowledgeDocumentAttachmentsApi'
 
 vi.mock('../../../api/client/apiClient', () => ({
@@ -18,6 +19,33 @@ describe('knowledge document attachment preview API', () => {
   beforeEach(() => {
     vi.mocked(apiClient.get).mockReset()
     vi.mocked(apiClient.getBlob).mockReset()
+    vi.mocked(apiClient.postForm).mockReset()
+  })
+
+  it('uploads a byte-identical generic multipart file without trusting browser MIME labels', async () => {
+    vi.mocked(apiClient.postForm).mockResolvedValue({ attachmentId: 9 } as never)
+    const originalBytes = new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0xff])
+    const file = new File([originalBytes], 'Source.zip', {
+      type: 'application/x-zip-compressed',
+      lastModified: 1234,
+    })
+
+    await uploadKnowledgeDocumentAttachment(7, file)
+
+    const form = vi.mocked(apiClient.postForm).mock.calls[0]?.[1]
+    const uploaded = form?.get('file')
+    expect(uploaded).toBeInstanceOf(File)
+    expect((uploaded as File).name).toBe('Source.zip')
+    expect((uploaded as File).type).toBe('application/octet-stream')
+    expect((uploaded as File).lastModified).toBe(1234)
+    expect(Array.from(new Uint8Array(await (uploaded as File).arrayBuffer()))).toEqual(
+      Array.from(originalBytes),
+    )
+    expect(apiClient.postForm).toHaveBeenCalledWith(
+      '/knowledge-documents/7/attachments',
+      expect.any(FormData),
+      expect.objectContaining({ decode: expect.any(Function) }),
+    )
   })
 
   it('requests current JSON preview through the typed decoder boundary', async () => {

@@ -1,3 +1,5 @@
+using SystemKnowledgeHub.Api.Features.Attachments.Domain;
+
 namespace SystemKnowledgeHub.Api.Features.Attachments.Application;
 
 public sealed class AttachmentOptions
@@ -5,6 +7,8 @@ public sealed class AttachmentOptions
     public const long DefaultMaxImageBytes = 10L * 1024 * 1024;
     public const long DefaultMaxFileBytes = 50L * 1024 * 1024;
     public const int DefaultMaxStoredAttachmentsPerDocument = 100;
+    public const int DefaultMemoryBufferThresholdBytes = 64 * 1024;
+    public const long DefaultUploadRequestOverheadBytes = 2L * 1024 * 1024;
     public const int DefaultPreviewTextMaxBytes = 256 * 1024;
     public const int DefaultPreviewCsvMaxRows = 200;
     public const int DefaultPreviewCsvMaxColumns = 50;
@@ -21,11 +25,17 @@ public sealed class AttachmentOptions
     private const int AbsoluteMaximumPreviewColumns = 200;
     private const int AbsoluteMaximumPreviewCharacters = 4 * 1024 * 1024;
     private const int AbsoluteMaximumAttachmentsPerDocument = 1_000;
+    private const int AbsoluteMaximumMemoryBufferThresholdBytes = 4 * 1024 * 1024;
+    private const long AbsoluteMaximumUploadRequestOverheadBytes = 16L * 1024 * 1024;
 
     public required string StorageRoot { get; init; }
+    public IReadOnlyList<string> AllowedImageExtensions { get; init; } = AttachmentFilePolicy.SupportedImageExtensions;
+    public IReadOnlyList<string> AllowedFileExtensions { get; init; } = AttachmentFilePolicy.SupportedFileExtensions;
     public long MaxImageBytes { get; init; } = DefaultMaxImageBytes;
     public long MaxFileBytes { get; init; } = DefaultMaxFileBytes;
     public int MaxStoredAttachmentsPerDocument { get; init; } = DefaultMaxStoredAttachmentsPerDocument;
+    public int MemoryBufferThresholdBytes { get; init; } = DefaultMemoryBufferThresholdBytes;
+    public long UploadRequestOverheadBytes { get; init; } = DefaultUploadRequestOverheadBytes;
     public int PreviewTextMaxBytes { get; init; } = DefaultPreviewTextMaxBytes;
     public int PreviewCsvMaxRows { get; init; } = DefaultPreviewCsvMaxRows;
     public int PreviewCsvMaxColumns { get; init; } = DefaultPreviewCsvMaxColumns;
@@ -35,6 +45,9 @@ public sealed class AttachmentOptions
     public int PreviewSpreadsheetMaxRows { get; init; } = DefaultPreviewSpreadsheetMaxRows;
     public int PreviewSpreadsheetMaxColumns { get; init; } = DefaultPreviewSpreadsheetMaxColumns;
     public int PreviewSpreadsheetMaxSharedStringCharacters { get; init; } = DefaultPreviewSpreadsheetMaxSharedStringCharacters;
+
+    public long MaximumRequestBodyBytes => checked(
+        Math.Max(MaxImageBytes, MaxFileBytes) + UploadRequestOverheadBytes);
 
     public static bool TryCreate(
         IConfiguration configuration,
@@ -92,9 +105,27 @@ public sealed class AttachmentOptions
             return false;
         }
 
+        if (!AttachmentFilePolicy.TryNormalizeConfiguredExtensions(
+                configuration["Attachments:AllowedImageExtensions"]
+                    ?? string.Join(',', AttachmentFilePolicy.SupportedImageExtensions),
+                AttachmentKind.Image,
+                out var allowedImageExtensions,
+                out error)
+            || !AttachmentFilePolicy.TryNormalizeConfiguredExtensions(
+                configuration["Attachments:AllowedFileExtensions"]
+                    ?? string.Join(',', AttachmentFilePolicy.SupportedFileExtensions),
+                AttachmentKind.File,
+                out var allowedFileExtensions,
+                out error))
+        {
+            return false;
+        }
+
         if (!TryReadLong(configuration, "Attachments:MaxImageBytes", DefaultMaxImageBytes, out var maxImageBytes)
             || !TryReadLong(configuration, "Attachments:MaxFileBytes", DefaultMaxFileBytes, out var maxFileBytes)
             || !TryReadInt(configuration, "Attachments:MaxStoredAttachmentsPerDocument", DefaultMaxStoredAttachmentsPerDocument, out var maxStored)
+            || !TryReadInt(configuration, "Attachments:MemoryBufferThresholdBytes", DefaultMemoryBufferThresholdBytes, out var memoryBufferThreshold)
+            || !TryReadLong(configuration, "Attachments:UploadRequestOverheadBytes", DefaultUploadRequestOverheadBytes, out var uploadRequestOverhead)
             || !TryReadInt(configuration, "Attachments:PreviewTextMaxBytes", DefaultPreviewTextMaxBytes, out var textBytes)
             || !TryReadInt(configuration, "Attachments:PreviewCsvMaxRows", DefaultPreviewCsvMaxRows, out var csvRows)
             || !TryReadInt(configuration, "Attachments:PreviewCsvMaxColumns", DefaultPreviewCsvMaxColumns, out var csvColumns)
@@ -112,6 +143,8 @@ public sealed class AttachmentOptions
         if (maxImageBytes is <= 0 or > AbsoluteMaximumUploadBytes
             || maxFileBytes is <= 0 or > AbsoluteMaximumUploadBytes
             || maxStored is <= 0 or > AbsoluteMaximumAttachmentsPerDocument
+            || memoryBufferThreshold is <= 0 or > AbsoluteMaximumMemoryBufferThresholdBytes
+            || uploadRequestOverhead is <= 0 or > AbsoluteMaximumUploadRequestOverheadBytes
             || textBytes is <= 0 or > AbsoluteMaximumTextPreviewBytes
             || csvRows is <= 0 or > AbsoluteMaximumPreviewRows
             || csvColumns is <= 0 or > AbsoluteMaximumPreviewColumns
@@ -129,9 +162,13 @@ public sealed class AttachmentOptions
         options = new AttachmentOptions
         {
             StorageRoot = resolvedRoot,
+            AllowedImageExtensions = allowedImageExtensions,
+            AllowedFileExtensions = allowedFileExtensions,
             MaxImageBytes = maxImageBytes,
             MaxFileBytes = maxFileBytes,
             MaxStoredAttachmentsPerDocument = maxStored,
+            MemoryBufferThresholdBytes = memoryBufferThreshold,
+            UploadRequestOverheadBytes = uploadRequestOverhead,
             PreviewTextMaxBytes = textBytes,
             PreviewCsvMaxRows = csvRows,
             PreviewCsvMaxColumns = csvColumns,

@@ -25,6 +25,10 @@ import { EditorState } from '@codemirror/state'
 import { EditorView, keymap } from '@codemirror/view'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ApiError, NetworkRequestError } from '../../../api/errors/ApiError'
+import {
+  getAttachmentRuntimeCapabilities,
+  type AttachmentRuntimeCapabilities,
+} from '../../runtime-capabilities/api/attachmentRuntimeCapabilities'
 import type { AttachmentMetadata } from '../api/attachmentContracts'
 import { uploadKnowledgeDocumentImage } from '../api/knowledgeDocumentAttachmentsApi'
 import KnowledgeDocumentMarkdown from '../markdown/KnowledgeDocumentMarkdown.vue'
@@ -190,18 +194,44 @@ const uploadingImages = ref(false)
 const dragActive = ref(false)
 const uploadMessage = ref<string | null>(null)
 const uploadError = ref<string | null>(null)
+const runtimeCapabilities = ref<AttachmentRuntimeCapabilities | null>(null)
+const runtimeCapabilitiesLoading = ref(false)
+const runtimeCapabilitiesError = ref<string | null>(null)
 const transientImageUrls = ref<ReadonlyMap<number, string>>(new Map())
 const fullscreenLabel = computed(() => (props.fullscreen ? '退出全屏' : '全屏'))
 const formattingDisabled = computed(() => !sourceReady.value || props.previewing)
+const allowedImageExtensions = computed(
+  () => new Set(runtimeCapabilities.value?.allowedImageExtensions ?? []),
+)
+const imageAccept = computed(
+  () => runtimeCapabilities.value?.allowedImageExtensions.join(',') ?? '',
+)
+const allowedImageTypesLabel = computed(
+  () =>
+    runtimeCapabilities.value?.allowedImageExtensions
+      .map((extension) => extension.slice(1).toUpperCase())
+      .join('、') ?? '',
+)
+const imageCapabilityReady = computed(
+  () =>
+    runtimeCapabilities.value !== null &&
+    runtimeCapabilities.value.allowedImageExtensions.length > 0,
+)
 const imageUploadDisabled = computed(
-  () => formattingDisabled.value || uploadingImages.value || props.documentId === undefined,
+  () =>
+    formattingDisabled.value ||
+    uploadingImages.value ||
+    props.documentId === undefined ||
+    !imageCapabilityReady.value,
 )
 const imageUploadTooltip = computed(() => {
   if (props.documentId === undefined) return '创建草稿后可插入图片'
   if (uploadingImages.value) return '图片上传中'
-  return '插入图片'
+  if (runtimeCapabilitiesLoading.value) return '正在读取当前部署的图片上传能力'
+  if (runtimeCapabilitiesError.value) return runtimeCapabilitiesError.value
+  if (!imageCapabilityReady.value) return '当前部署未启用图片上传'
+  return `插入图片（支持 ${allowedImageTypesLabel.value}，单张不超过 ${formatFileSize(runtimeCapabilities.value!.maxImageBytes)}）`
 })
-const imageAccept = '.png,.jpg,.jpeg,.gif,.webp,image/png,image/jpeg,image/gif,image/webp'
 const previewImageContext = computed<MarkdownAttachmentImageContext | undefined>(() => {
   if (props.documentId === undefined) return undefined
   const savedIds = props.attachmentReferences
@@ -231,12 +261,44 @@ interface PendingImage {
   readonly altOverride?: string
 }
 
-const approvedExtensions = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp'])
-const extensionByMimeType: Readonly<Record<string, string>> = {
-  'image/png': '.png',
-  'image/jpeg': '.jpg',
-  'image/gif': '.gif',
-  'image/webp': '.webp',
+const extensionsByMimeType: Readonly<Record<string, readonly string[]>> = {
+  'image/png': ['.png'],
+  'image/jpeg': ['.jpg', '.jpeg'],
+  'image/jpg': ['.jpg', '.jpeg'],
+  'image/gif': ['.gif'],
+  'image/webp': ['.webp'],
+}
+
+async function loadRuntimeCapabilities(): Promise<void> {
+  if (runtimeCapabilities.value || runtimeCapabilitiesLoading.value) return
+  runtimeCapabilitiesLoading.value = true
+  runtimeCapabilitiesError.value = null
+  try {
+    runtimeCapabilities.value = await getAttachmentRuntimeCapabilities()
+  } catch {
+    runtimeCapabilitiesError.value =
+      '无法读取当前部署的图片上传能力，上传已禁用。请刷新页面后重试。'
+  } finally {
+    runtimeCapabilitiesLoading.value = false
+  }
+}
+
+watch(
+  () => props.documentId,
+  (documentId) => {
+    if (documentId !== undefined) void loadRuntimeCapabilities()
+  },
+  { immediate: true },
+)
+
+function formatFileSize(sizeBytes: number): string {
+  if (sizeBytes < 1024) return `${sizeBytes} B`
+  if (sizeBytes < 1024 * 1024) return `${formatNumber(sizeBytes / 1024)} KB`
+  return `${formatNumber(sizeBytes / (1024 * 1024))} MB`
+}
+
+function formatNumber(value: number): string {
+  return new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 1 }).format(value)
 }
 
 function refreshHistoryState(): void {
@@ -383,34 +445,54 @@ function clipboardImageName(extension: string, index: number): string {
   return `截图-${timestamp}${sequence}${extension}`
 }
 
+function allowedExtensionForMime(mimeType: string): string | undefined {
+  return extensionsByMimeType[mimeType]?.find((extension) =>
+    allowedImageExtensions.value.has(extension),
+  )
+}
+
 function normalizeImageCandidates(
   images: readonly IncomingImage[],
   source: ImageInputSource,
-): { readonly candidates: readonly PendingImage[]; readonly rejected: number } {
+): {
+  readonly candidates: readonly PendingImage[]
+  readonly rejectedTypes: number
+  readonly rejectedSizes: number
+} {
   const candidates: PendingImage[] = []
-  let rejected = 0
+  let rejectedTypes = 0
+  let rejectedSizes = 0
+  const capabilities = runtimeCapabilities.value
+  if (!capabilities) {
+    return { candidates, rejectedTypes: images.length, rejectedSizes }
+  }
 
   images.forEach((item, index) => {
     const extension = fileExtension(item.file.name)
     const fileMime = normalizedMimeType(item.file.type)
     const declaredMime = normalizedMimeType(item.declaredMimeType)
-    const approvedMime = extensionByMimeType[fileMime]
+    const approvedMime = allowedExtensionForMime(fileMime)
       ? fileMime
-      : extensionByMimeType[declaredMime]
+      : allowedExtensionForMime(declaredMime)
         ? declaredMime
         : ''
+    const hasAllowedExtension = allowedImageExtensions.value.has(extension)
 
-    if (!approvedExtensions.has(extension) && !approvedMime) {
-      rejected += 1
+    if (!hasAllowedExtension && (source !== 'clipboard' || !approvedMime)) {
+      rejectedTypes += 1
+      return
+    }
+    if (item.file.size > capabilities.maxImageBytes) {
+      rejectedSizes += 1
       return
     }
 
     let normalizedFile = item.file
     if (source === 'clipboard' && approvedMime) {
-      const normalizedExtension = approvedExtensions.has(extension)
+      const normalizedExtension = hasAllowedExtension
         ? extension
-        : extensionByMimeType[approvedMime]!
-      const normalizedName = approvedExtensions.has(extension)
+        : allowedExtensionForMime(approvedMime)!
+      const normalizedName = hasAllowedExtension
         ? item.file.name
         : clipboardImageName(normalizedExtension, index)
       if (normalizedName !== item.file.name || fileMime !== approvedMime) {
@@ -427,7 +509,7 @@ function normalizeImageCandidates(
     })
   })
 
-  return { candidates, rejected }
+  return { candidates, rejectedTypes, rejectedSizes }
 }
 
 function normalizedAlt(value: string): string {
@@ -453,8 +535,15 @@ function altFromMetadata(metadata: AttachmentMetadata): string {
 
 function uploadFailureMessage(reason: unknown, fileName: string): string {
   if (reason instanceof ApiError) {
-    if (reason.status === 413) return `${fileName} 超过图片大小限制，未插入正文。`
-    if (reason.status === 415) return `${fileName} 不是受支持的 PNG、JPEG、GIF 或 WEBP 图片。`
+    if (reason.status === 413) {
+      const maximum = runtimeCapabilities.value?.maxImageBytes
+      return maximum
+        ? `${fileName} 超过图片大小限制（${formatFileSize(maximum)}），未插入正文。`
+        : `${fileName} 超过图片大小限制，未插入正文。`
+    }
+    if (reason.status === 415) {
+      return `${fileName} 不是当前部署支持的 ${allowedImageTypesLabel.value || '附件'} 图片。`
+    }
     if (reason.status === 401) return '登录状态已失效，图片未上传。'
     if (reason.status === 403) return '当前身份无权向此文档上传图片。'
     if (reason.status === 404) return '当前知识内容不存在或已删除，图片未上传。'
@@ -465,6 +554,21 @@ function uploadFailureMessage(reason: unknown, fileName: string): string {
   }
   if (reason instanceof NetworkRequestError) return '网络连接失败，图片未上传；正文保持不变。'
   return reason instanceof Error ? reason.message : `${fileName} 上传失败，未插入正文。`
+}
+
+function imagePrecheckMessage(rejectedTypes: number, rejectedSizes: number): string | null {
+  const messages: string[] = []
+  if (rejectedTypes > 0) {
+    messages.push(
+      `${rejectedTypes} 个文件不是当前部署支持的 ${allowedImageTypesLabel.value || '图片'} 类型，未上传。`,
+    )
+  }
+  if (rejectedSizes > 0 && runtimeCapabilities.value) {
+    messages.push(
+      `${rejectedSizes} 个文件超过图片大小限制（${formatFileSize(runtimeCapabilities.value.maxImageBytes)}），未上传。`,
+    )
+  }
+  return messages.length > 0 ? messages.join(' ') : null
 }
 
 function setTransientImageUrl(attachmentId: number, file: File): void {
@@ -492,12 +596,12 @@ function insertImageToken(
 
 async function uploadImages(
   candidates: readonly PendingImage[],
-  rejected: number,
+  rejectedTypes: number,
+  rejectedSizes: number,
   insertionPosition?: number,
 ): Promise<void> {
   if (!view || props.documentId === undefined || candidates.length === 0) return
-  uploadError.value =
-    rejected > 0 ? `${rejected} 个文件不是受支持的 PNG、JPEG、GIF 或 WEBP 图片，未上传。` : null
+  uploadError.value = imagePrecheckMessage(rejectedTypes, rejectedSizes)
 
   const anchor = {
     position:
@@ -561,20 +665,35 @@ function beginImageUpload(
   insertionPosition?: number,
 ): boolean {
   if (!view || props.documentId === undefined || images.length === 0) return false
+  if (!runtimeCapabilities.value) {
+    uploadError.value = runtimeCapabilitiesError.value
+      ? null
+      : '当前部署的图片上传能力尚未就绪，图片未上传。'
+    if (fileInput.value) fileInput.value.value = ''
+    return true
+  }
+  if (runtimeCapabilities.value.allowedImageExtensions.length === 0) {
+    uploadError.value = '当前部署未启用图片上传。'
+    if (fileInput.value) fileInput.value.value = ''
+    return true
+  }
   const normalized = normalizeImageCandidates(images, source)
   if (normalized.candidates.length === 0) {
-    if (normalized.rejected > 0) {
-      uploadError.value = `${normalized.rejected} 个文件不是受支持的 PNG、JPEG、GIF 或 WEBP 图片，未上传。`
-    }
+    uploadError.value = imagePrecheckMessage(normalized.rejectedTypes, normalized.rejectedSizes)
     if (fileInput.value) fileInput.value.value = ''
-    return false
+    return normalized.rejectedTypes > 0 || normalized.rejectedSizes > 0
   }
   if (uploadingImages.value) {
     uploadError.value = '已有图片正在上传，请等待完成后再试。'
     if (fileInput.value) fileInput.value.value = ''
     return true
   }
-  void uploadImages(normalized.candidates, normalized.rejected, insertionPosition)
+  void uploadImages(
+    normalized.candidates,
+    normalized.rejectedTypes,
+    normalized.rejectedSizes,
+    insertionPosition,
+  )
   return true
 }
 
@@ -923,6 +1042,7 @@ onBeforeUnmount(() => {
           class="knowledge-document-editor__file-input"
           type="file"
           :accept="imageAccept"
+          :disabled="imageUploadDisabled"
           multiple
           tabindex="-1"
           aria-hidden="true"
@@ -988,11 +1108,14 @@ onBeforeUnmount(() => {
     </div>
 
     <div
-      v-if="uploadingImages || uploadMessage || uploadError"
+      v-if="uploadingImages || uploadMessage || uploadError || runtimeCapabilitiesError"
       class="knowledge-document-editor__upload-feedback"
       aria-live="polite"
     >
       <p v-if="uploadingImages || uploadMessage" role="status">{{ uploadMessage }}</p>
+      <p v-if="runtimeCapabilitiesError" class="is-error" role="alert">
+        {{ runtimeCapabilitiesError }}
+      </p>
       <p v-if="uploadError" class="is-error" role="alert">{{ uploadError }}</p>
     </div>
 

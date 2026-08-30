@@ -1,5 +1,6 @@
 using System.Data;
 using System.Globalization;
+using Microsoft.Extensions.Options;
 using Oracle.ManagedDataAccess.Client;
 using SystemKnowledgeHub.Api.Features.DatabaseDiscovery.Application;
 using SystemKnowledgeHub.Api.Features.DatabaseDiscovery.Application.Models;
@@ -109,9 +110,9 @@ internal sealed class OracleProbeException(
     public string? VendorCode { get; } = vendorCode;
 }
 
-internal sealed class OracleManagedConnectionProbe : IOracleConnectionProbe
+internal sealed class OracleManagedConnectionProbe(IOptions<DatabaseDiscoveryOptions> options) : IOracleConnectionProbe
 {
-    private const int TimeoutSeconds = 15;
+    private readonly DatabaseDiscoveryOptions settings = Validate(options.Value);
     private static readonly string[] RequiredCatalogProbes =
     [
         "SELECT 1 FROM ALL_TABLES WHERE 1 = 0",
@@ -127,12 +128,15 @@ internal sealed class OracleManagedConnectionProbe : IOracleConnectionProbe
         "SELECT 1 FROM ALL_SEQUENCES WHERE 1 = 0",
     ];
 
+    internal int ConfiguredConnectionTimeoutSeconds => settings.ConnectionTimeoutSeconds;
+    internal int ConfiguredCommandTimeoutSeconds => settings.ConnectionTimeoutSeconds;
+
     public async Task<OracleConnectionProbeResult> ProbeAsync(
         DatabaseDiscoveryConnectionContext connection,
         CancellationToken cancellationToken)
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(TimeSpan.FromSeconds(TimeoutSeconds));
+        timeout.CancelAfter(TimeSpan.FromSeconds(settings.ConnectionTimeoutSeconds));
         var token = timeout.Token;
         try
         {
@@ -145,7 +149,7 @@ internal sealed class OracleManagedConnectionProbe : IOracleConnectionProbe
                 UserID = connection.Username,
                 Password = connection.Password,
                 Pooling = false,
-                ConnectionTimeout = TimeoutSeconds,
+                ConnectionTimeout = settings.ConnectionTimeoutSeconds,
             };
             await using var oracleConnection = new OracleConnection(builder.ConnectionString);
             await oracleConnection.OpenAsync(token);
@@ -191,13 +195,13 @@ internal sealed class OracleManagedConnectionProbe : IOracleConnectionProbe
         }
     }
 
-    private static async Task<(string ServiceName, string? ContainerName)> ReadContext(
+    private async Task<(string ServiceName, string? ContainerName)> ReadContext(
         OracleConnection connection,
         CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();
         command.BindByName = true;
-        command.CommandTimeout = TimeoutSeconds;
+        command.CommandTimeout = settings.ConnectionTimeoutSeconds;
         command.CommandText = "SELECT SYS_CONTEXT('USERENV','SERVICE_NAME'), SYS_CONTEXT('USERENV','CON_NAME') FROM DUAL";
         await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleRow, cancellationToken);
         if (!await reader.ReadAsync(cancellationToken))
@@ -209,14 +213,14 @@ internal sealed class OracleManagedConnectionProbe : IOracleConnectionProbe
         return (serviceName, containerName);
     }
 
-    private static async Task<IReadOnlySet<string>> ReadVisibleSchemas(
+    private async Task<IReadOnlySet<string>> ReadVisibleSchemas(
         OracleConnection connection,
         IReadOnlyList<string> schemas,
         CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();
         command.BindByName = true;
-        command.CommandTimeout = TimeoutSeconds;
+        command.CommandTimeout = settings.ConnectionTimeoutSeconds;
         var parameterNames = new string[schemas.Count];
         for (var index = 0; index < schemas.Count; index++)
         {
@@ -233,14 +237,14 @@ internal sealed class OracleManagedConnectionProbe : IOracleConnectionProbe
         return visible;
     }
 
-    private static async Task ExecuteCatalogProbe(
+    private async Task ExecuteCatalogProbe(
         OracleConnection connection,
         string sql,
         CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();
         command.BindByName = true;
-        command.CommandTimeout = TimeoutSeconds;
+        command.CommandTimeout = settings.ConnectionTimeoutSeconds;
         command.CommandText = sql;
         await command.ExecuteScalarAsync(cancellationToken);
     }
@@ -258,4 +262,10 @@ internal sealed class OracleManagedConnectionProbe : IOracleConnectionProbe
         number is >= 1 and <= 99999
             ? $"ORA-{number.ToString("D5", CultureInfo.InvariantCulture)}"
             : null;
+
+    private static DatabaseDiscoveryOptions Validate(DatabaseDiscoveryOptions value)
+    {
+        value.Validate();
+        return value;
+    }
 }

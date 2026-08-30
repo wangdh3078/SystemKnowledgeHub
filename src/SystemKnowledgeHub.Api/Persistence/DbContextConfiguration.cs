@@ -3,6 +3,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using SystemKnowledgeHub.Api.Persistence.Concurrency;
+using SystemKnowledgeHub.Api.Shared.Configuration;
 
 namespace SystemKnowledgeHub.Api.Persistence;
 
@@ -44,7 +45,8 @@ public static class DbContextConfiguration
     public static IServiceCollection AddKnowledgeHubPersistence(
         this IServiceCollection services,
         IConfiguration configuration,
-        IWebHostEnvironment environment)
+        IWebHostEnvironment environment,
+        SqlitePersistenceOptions sqliteOptions)
     {
         var configuredConnectionString = configuration.GetConnectionString("KnowledgeHub")
             ?? throw new InvalidOperationException(
@@ -52,12 +54,14 @@ public static class DbContextConfiguration
 
         var connectionString = ResolveConnectionString(
             configuredConnectionString,
-            environment.ContentRootPath);
+            environment.ContentRootPath,
+            sqliteOptions.DefaultTimeoutSeconds);
+        var pragmaInterceptor = new SqlitePragmaInterceptor(sqliteOptions.BusyTimeoutMilliseconds);
 
         services.AddDbContext<KnowledgeHubDbContext>(options =>
         {
             options.UseSqlite(connectionString);
-            options.AddInterceptors(SqlitePragmaInterceptor.Instance);
+            options.AddInterceptors(pragmaInterceptor);
         });
         services.AddSingleton<ConcurrencyTokenCodec>();
 
@@ -66,12 +70,13 @@ public static class DbContextConfiguration
 
     private static string ResolveConnectionString(
         string configuredConnectionString,
-        string contentRootPath)
+        string contentRootPath,
+        int defaultTimeoutSeconds)
     {
         var builder = new SqliteConnectionStringBuilder(configuredConnectionString)
         {
             ForeignKeys = true,
-            DefaultTimeout = 5,
+            DefaultTimeout = defaultTimeoutSeconds,
         };
 
         if (string.IsNullOrWhiteSpace(builder.DataSource))
@@ -97,10 +102,8 @@ public static class DbContextConfiguration
         return builder.ToString();
     }
 
-    private sealed class SqlitePragmaInterceptor : DbConnectionInterceptor
+    private sealed class SqlitePragmaInterceptor(int busyTimeoutMilliseconds) : DbConnectionInterceptor
     {
-        public static readonly SqlitePragmaInterceptor Instance = new();
-
         public override void ConnectionOpened(
             DbConnection connection,
             ConnectionEndEventData eventData)
@@ -116,19 +119,19 @@ public static class DbContextConfiguration
             await ApplyPragmasAsync(connection, cancellationToken);
         }
 
-        private static void ApplyPragmas(DbConnection connection)
+        private void ApplyPragmas(DbConnection connection)
         {
             using var command = connection.CreateCommand();
-            command.CommandText = "PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000; PRAGMA journal_mode = WAL;";
+            command.CommandText = $"PRAGMA foreign_keys = ON; PRAGMA busy_timeout = {busyTimeoutMilliseconds}; PRAGMA journal_mode = WAL;";
             command.ExecuteNonQuery();
         }
 
-        private static async Task ApplyPragmasAsync(
+        private async Task ApplyPragmasAsync(
             DbConnection connection,
             CancellationToken cancellationToken)
         {
             await using var command = connection.CreateCommand();
-            command.CommandText = "PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000; PRAGMA journal_mode = WAL;";
+            command.CommandText = $"PRAGMA foreign_keys = ON; PRAGMA busy_timeout = {busyTimeoutMilliseconds}; PRAGMA journal_mode = WAL;";
             await command.ExecuteNonQueryAsync(cancellationToken);
         }
     }

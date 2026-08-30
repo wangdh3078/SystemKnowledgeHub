@@ -7,7 +7,6 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Logging;
 using SystemKnowledgeHub.Api.Features.Users.Application;
 using SystemKnowledgeHub.Api.Features.Users.Domain;
 using SystemKnowledgeHub.Api.Persistence;
@@ -451,7 +450,7 @@ public sealed class ExistingUserLoginMethodManagementApiTests
         {
             base.ConfigureWebHost(builder);
             builder.ConfigureServices(services =>
-                services.AddSingleton<ILoggerProvider>(new TestLoggerProvider(LogSink)));
+                services.UseIsolatedTestSerilog(LogFilePath, LogSink));
         }
     }
 

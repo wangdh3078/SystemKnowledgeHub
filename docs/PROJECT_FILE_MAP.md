@@ -1,6 +1,6 @@
 # System Knowledge Hub — Project File Map
 
-本文件描述当前仓库中主要目录和文件的职责。范围为 Bootstrap 基础设施、**VS-01～VS-15**、UX 稳定化以及 Post-MVP **U01～U04**；不把 `bin/`、`obj/`、`node_modules/`、`dist/`、lock 文件、运行时 SQLite 数据、普通 Migration 生成文件逐项列入。
+本文件描述当前仓库中主要目录和文件的职责。范围为 Bootstrap 基础设施、**VS-01～VS-15**、UX 稳定化、Post-MVP **U01～U04** 以及 **INFRA-CONFIG-R01** 运行时配置基础；不把 `bin/`、`obj/`、`node_modules/`、`dist/`、lock 文件、运行时 SQLite 数据、普通 Migration 生成文件逐项列入。
 
 ## Documentation placement
 
@@ -18,15 +18,17 @@
 
 | 路径 | 一句话职责 | Feature / Vertical Slice | 为什么需要 |
 | --- | --- | --- | --- |
-| `src/SystemKnowledgeHub.Api/Program.cs` | 配置 Controllers、JSON、Persistence、CORS 和应用管线。 | Backend foundation | ASP.NET Core 的组合根与运行入口。 |
-| `src/SystemKnowledgeHub.Api/SystemKnowledgeHub.Api.csproj` | 定义 .NET 8 Web 项目及 EF Core SQLite 依赖。 | Backend foundation | 让后端可还原、构建和运行。 |
+| `src/SystemKnowledgeHub.Api/Program.cs` | 组合 Controllers、Serilog、typed runtime options、Persistence、认证、Development CORS、统一派生的上传限制和应用管线，并在 Host 启动前 fail-fast 校验配置。 | Backend foundation / INFRA-CONFIG-R01 | ASP.NET Core 的唯一组合根与运行入口，避免业务代码把 `IConfiguration` 当作 service locator。 |
+| `src/SystemKnowledgeHub.Api/SystemKnowledgeHub.Api.csproj` | 定义 .NET 8 Web 项目、Development `UserSecretsId` 及 EF Core SQLite、Oracle Provider、认证和 Serilog 依赖。 | Backend foundation / INFRA-CONFIG-R01 | 让后端可还原、构建，以配置驱动 logging，并让本机开发 Secret 留在 tracked config 之外。 |
 | `src/SystemKnowledgeHub.Api/Persistence/KnowledgeHubDbContext.cs` | 提供当前已落地实体的唯一 EF Core DbContext。 | Persistence foundation / VS-01～VS-15 + U01 | 连接应用查询、写入、映射和 SQLite。 |
-| `src/SystemKnowledgeHub.Api/Persistence/DbContextConfiguration.cs` | 解析 SQLite 路径，注册 DbContext，并集中设置 SQLite PRAGMA。 | Persistence foundation | 保证开发和运行环境使用一致的连接规则。 |
+| `src/SystemKnowledgeHub.Api/Persistence/DbContextConfiguration.cs` | 解析 SQLite 路径，以 typed options 设置 DefaultTimeout/busy_timeout，注册 DbContext，并保留 `foreign_keys=ON` 与 WAL 代码不变量。 | Persistence foundation / INFRA-CONFIG-R01 | 允许运维调整等待参数，同时不允许普通配置关闭关系完整性或 WAL。 |
 | `src/SystemKnowledgeHub.Api/Persistence/KnowledgeHubDesignTimeDbContextFactory.cs` | 为 EF CLI 创建设计时 DbContext。 | Persistence tooling / VS-01 | 生成和检查 Migration 时不依赖启动 Web Host。 |
 | `src/SystemKnowledgeHub.Api/Persistence/Concurrency/ConcurrencyTokenCodec.cs` | 在整数版本与 opaque `concurrencyToken` 之间安全编解码。 | Concurrency foundation / VS-01 + VS-03 + U01 | 支撑具体对象条件更新，同时避免客户端理解物理版本。 |
 | `src/SystemKnowledgeHub.Api/Shared/Api/ApiIdParser.cs` | 统一校验 API 路由中的正整数 ID。 | Shared API foundation | 防止各 Controller 重复实现 ID 边界规则。 |
 | `src/SystemKnowledgeHub.Api/Shared/Api/Contracts/ApiErrorResponse.cs` | 定义冻结的 API 错误响应形状。 | Shared API foundation | 让 Controller 以一致结构返回 400/404/422。 |
 | `src/SystemKnowledgeHub.Api/Shared/Domain/KnowledgeStatus.cs` | 定义跨 Feature 共用的封闭 KnowledgeStatus 枚举。 | Shared domain vocabulary / VS-01 + VS-02 | 让 System 与 Database Knowledge 使用同一稳定英文持久化值。 |
+| `src/SystemKnowledgeHub.Api/Shared/Configuration/RuntimeOptions.cs` | 定义并校验 Cookie、password hashing、SQLite、CORS 和 Serilog 的集中运行时配置边界。 | Runtime configuration / INFRA-CONFIG-R01 | 让可部署调参拥有 typed/fail-fast 边界，并为 password hashing、CORS 与日志输出保留安全下限。 |
+| `src/SystemKnowledgeHub.Api/Features/RuntimeCapabilities/Api/RuntimeCapabilitiesController.cs` | 通过授权的 `GET /api/runtime-capabilities/attachments` 仅公开附件允许扩展名和客户端所需大小/数量限制。 | Runtime capabilities / INFRA-CONFIG-R01 | 消除前端部署策略硬编码，同时不暴露 StorageRoot、识别规则或其他服务器内部配置。 |
 
 `src/SystemKnowledgeHub.Api/Persistence/Migrations/` 保存 EF Core Migration 和 Model Snapshot；它们是已实现 Slice 物理 Schema 的演进记录，但普通生成文件不在本地图中逐项说明。
 
@@ -220,6 +222,7 @@ Search 第一版采用 SQLite 受限 `LIKE` 投影；未创建 FTS5 virtual tabl
 | `.../src/api/errors/ApiError.ts` | 定义业务、网络和非预期响应错误类。 | Shared HTTP foundation | 区分可解释 API 错误与连接/格式失败。 |
 | `.../src/api/errors/normalizeApiError.ts` | 把非 2xx Response 收敛成类型化错误。 | Shared HTTP foundation | 页面和 Drawer 可展示一致错误状态。 |
 | `.../src/api/contracts/knowledge.ts` | 定义前端共享的 KnowledgeStatus wire type。 | Shared contract / VS-01 + VS-02 | 避免各 Feature 重复声明核心状态。 |
+| `.../src/features/runtime-capabilities/api/attachmentRuntimeCapabilities.ts` | 读取、严格解码并缓存后端附件 capability。 | Runtime capabilities / INFRA-CONFIG-R01 | 让附件 input accept、客户端预检查和提示复用同一部署策略；后端内容识别仍是最终 authority。 |
 | `.../src/components/feedback/LoadingState.vue` | 提供统一加载视觉。 | Shared UI foundation | 页面和 Drawer 不使用裸 `Loading...`。 |
 | `.../src/components/feedback/EmptyState.vue` | 提供统一空状态。 | Shared UI foundation | 将“没有数据”与错误区分。 |
 | `.../src/components/feedback/ErrorState.vue` | 提供局部错误和重试入口。 | Shared UI foundation | 支撑 Page/Drawer 各自处理失败。 |
@@ -437,9 +440,9 @@ Search 第一版采用 SQLite 受限 `LIKE` 投影；未创建 FTS5 virtual tabl
 | 路径 | 一句话职责 | Feature / Vertical Slice | 为什么需要 |
 | --- | --- | --- | --- |
 | `tests/SystemKnowledgeHub.Api.Tests/SystemKnowledgeHub.Api.Tests.csproj` | 定义 xUnit、WebApplicationFactory 和真实 SQLite 测试项目。 | Test foundation | 让 API/Persistence 集成测试引用正式后端。 |
-| `.../TestSupport/BootstrapWebApplicationFactory.cs` | 创建共享打开的 SQLite in-memory Host，执行 Migration 与有限 seed。 | Test foundation / VS-01 | 多 HTTP/DbContext 请求可共享同一真实关系数据库。 |
+| `.../TestSupport/BootstrapWebApplicationFactory.cs` | 创建共享打开的 SQLite in-memory Host，执行 Migration/有限 seed，并隔离附件与 Serilog File 路径。 | Test foundation / VS-01 + INFRA-CONFIG-R01 | 多 HTTP/DbContext 请求共享真实关系数据库，同时不向仓库运行目录写附件或日志。 |
 | `.../Api/BootstrapApiTests.cs` | 验证临时 Bootstrap status endpoint。 | Implementation Bootstrap | 防止基础诊断链路失效。 |
-| `.../Persistence/KnowledgeHubDbContextTests.cs` | 验证 SQLite provider 与关键 PRAGMA。 | Persistence foundation | 证明测试和运行配置不是 EF InMemory。 |
+| `.../Persistence/KnowledgeHubDbContextTests.cs` | 验证 SQLite provider、可配置 DefaultTimeout/busy_timeout 与代码强制的 foreign key/WAL PRAGMA。 | Persistence foundation / INFRA-CONFIG-R01 | 证明测试和运行配置不是 EF InMemory，且 operational tuning 不会关闭持久化不变量。 |
 | `.../Persistence/DatabaseKnowledgeMappingTests.cs` | 验证 VS-01 表名、FK、nullability、并发和唯一约束。 | DatabaseKnowledge / VS-01 | 捕获 SQLite 物理映射偏差。 |
 | `.../Application/DatabaseKnowledgeQueriesTests.cs` | 验证 Q09/Q10 projection、状态、选择校验和 token。 | DatabaseKnowledge / VS-01 | 证明核心读取 Use Case。 |
 | `.../Api/DatabaseKnowledgeApiTests.cs` | 验证 canonical routes、成功 shape 与 400/404/422。 | DatabaseKnowledge / VS-01 | 证明冻结 HTTP contract 的外部行为。 |
@@ -461,6 +464,15 @@ Search 第一版采用 SQLite 受限 `LIKE` 投影；未创建 FTS5 virtual tabl
 | `.../Api/CurrentUserApiTests.cs` | 验证 Header 解析、Active Profile、缺失/无效/不存在/停用错误与无 Header Admin API 兼容。 | Users / U03 | 用 2 个真实 SQLite/HTTP 测试覆盖 Current User Context 的关键边界。 |
 | `.../Api/TraceabilityApiTests.cs` | 以真实 SQLite/HTTP 覆盖三种 root、coverage 边界、生命周期、trust、Supersedes、cycle、limits、排序、授权、fail-closed、只读不变量、query plan 与 fan-out payload。 | Traceability / TRACE-B01 | 保护派生 trace 的语义正确性、bounded-query safety 与 canonical write isolation。 |
 | `.../Api/ImpactApiTests.cs` | 以真实 SQLite/HTTP 覆盖七种 allowed path、forbidden path、五类 target、分页排序、distinct meaning、授权、fail-closed、只读、mutation refresh 与 query plan。 | Traceability / TRACE-B03 | 保护 bounded Impact semantics、API safety、canonical truth 与现有索引策略。 |
+| `.../Application/RuntimeConfigurationOptionsTests.cs` | 覆盖 Cookie、password hasher、SQLite、CORS、Serilog 配置的有效/无效边界与 Host wiring。 | Runtime configuration / INFRA-CONFIG-R01 | 证明部署调参有 typed/fail-fast validation，且 password hashing 不能降到安全下限以下。 |
+| `.../Application/DatabaseDiscoveryOptionsTests.cs` | 覆盖 Discovery 默认 timeout/2000ms polling/lease/heartbeat/limits 与无效组合。 | Database Discovery configuration / INFRA-CONFIG-R01 | 防止集中配置改变 worker 恢复语义或接受不安全运行参数。 |
+| `.../Application/OracleConnectionTesterTests.cs` | 覆盖 Oracle Test Connection 与 catalog reader 的 typed connection/catalog timeout wiring。 | Oracle runtime configuration / INFRA-CONFIG-R01 | 防止 Oracle 组件退回各自的 15/60 秒局部硬编码。 |
+| `.../Application/AttachmentOptionsTests.cs` | 覆盖附件 allowlist 子集、unsupported/wrong-kind/duplicate fail-fast、multipart 参数及请求上限派生。 | Attachment configuration / INFRA-CONFIG-R01 | 证明部署只能选择代码安全 catalog，且上传大小保持单一来源。 |
+| `.../Api/RuntimeCapabilitiesApiTests.cs` | 覆盖授权附件 capability 的 exact safe projection、匿名拒绝及配置子集反映。 | Runtime capabilities / INFRA-CONFIG-R01 | 防止 capability 暴露 StorageRoot/内部识别信息或偏离后端有效策略。 |
+| `.../Runtime/SerilogRuntimeTests.cs` | 使用测试 sink 与 task-owned File sink 覆盖 Serilog Host logging。 | Serilog / INFRA-CONFIG-R01 | 证明应用事件通过 Serilog 写入受控 sink，不依赖旧 Console provider。 |
+| `.../Runtime/StartupConfigurationProcessTests.cs` | 以隔离进程覆盖已知无效/有效 Production 启动配置，并承接 runtime options、Serilog 与配置 fail-fast 回归。 | Runtime startup / INFRA-CONFIG-R01 | 验证配置错误提供可操作诊断且不会退回不安全默认值；所有持久路径由测试拥有。 |
+| `.../TestSupport/ConfiguredBootstrapWebApplicationFactory.cs` | 在隔离 Bootstrap Host 中覆盖 runtime configuration，用于验证 framework options 与 capability wiring。 | Test support / INFRA-CONFIG-R01 | 用真实 DI/HTTP 边界证明配置被消费，而不修改仓库 appsettings 或持久数据。 |
+| `.../TestSupport/TestSerilogRegistration.cs` | 为每个 test Host 配置独立 task-owned Serilog File 和可选测试 sink。 | Test support / INFRA-CONFIG-R01 | 避免并行 WebApplicationFactory 共享 logger、串日志或写入仓库日志目录。 |
 
 以上 `...` 均指 `tests/SystemKnowledgeHub.Api.Tests/`。
 
@@ -480,6 +492,8 @@ Search 第一版采用 SQLite 受限 `LIKE` 投影；未创建 FTS5 virtual tabl
 | `.../src/features/knowledge-documents/api/traceabilityContracts.spec.ts` | 覆盖三个 discriminated root、coverage/trust/lineage/truncation 及非法 enum / malformed payload fail-closed。 | Traceability / TRACE-B01 | 在 TRACE UI 之前冻结并验证严格前端读取边界。 |
 | `.../src/features/knowledge-documents/api/impactContracts.spec.ts` | 覆盖全部 Impact pathKind/meaning/target、path consistency、pagination 与 malformed payload fail-closed。 | Traceability / TRACE-B03 | 保护 strict runtime decoder 与闭集 contract。 |
 | `.../src/features/knowledge-documents/components/ImpactContextSection.spec.ts`、`pages/KnowledgeDocumentDetailView.spec.ts` | 覆盖三类 root 文案、空/错/重试、分页、导航、竞态、关系 mutation refresh 与详情层级。 | Traceability / TRACE-B03 | 证明独立状态、authoritative refresh 和 UI placement 不回归 B02/R06。 |
+| `.../src/features/runtime-capabilities/api/attachmentRuntimeCapabilities.spec.ts` | 覆盖 safe capability 严格 decoder、去重校验、request cache 与失败后重试。 | Runtime capabilities / INFRA-CONFIG-R01 | 防止客户端静默接受 malformed runtime policy 或缓存永久失败。 |
+| `.../src/features/knowledge-documents/components/KnowledgeDocumentAttachmentArea.spec.ts`、`editor/KnowledgeDocumentEditor.spec.ts` | 覆盖普通附件/图片 capability 加载、动态 accept/提示/预检查、失败状态与既有上传行为。 | Attachment frontend / INFRA-CONFIG-R01 | 证明前端不再维护第二份部署 allowlist，且后端仍是最终 authority。 |
 | `.../src/test/setup.ts` | 提供 Vitest/Vue Test Utils 的公共测试初始化。 | Frontend test foundation | 保持测试环境最小一致。 |
 
 以上前端 `...` 均指 `src/SystemKnowledgeHub.Web/`。
@@ -492,8 +506,9 @@ Search 第一版采用 SQLite 受限 `LIKE` 投影；未创建 FTS5 virtual tabl
 | `global.json` | 固定 .NET SDK 8.0.404 并允许最新 patch。 | Repository foundation | 降低开发机 SDK 漂移。 |
 | `NuGet.Config` | 仅声明官方 nuget.org 源。 | Repository foundation | 让受控环境无需读取用户级配置。 |
 | `.gitignore` | 排除构建、依赖、SQLite、日志和 QA artifacts。 | Repository foundation | 防止生成物进入版本控制。 |
-| `src/SystemKnowledgeHub.Api/appsettings.json` | 配置 SQLite connection string、日志和 hosts。 | Backend foundation | 提供默认运行配置。 |
-| `src/SystemKnowledgeHub.Api/appsettings.Development.json` | 覆盖开发日志级别。 | Backend foundation | 分离开发环境设置。 |
+| `src/SystemKnowledgeHub.Api/appsettings.json` | 保存安全通用默认值：认证运行参数、附件/预览/multipart、Database Discovery、SQLite operational 参数、CORS 空列表与 Serilog Console/rolling File 配置。 | Backend foundation / INFRA-CONFIG-R01 | 集中部署可调参数且不重复环境差异，也不保存真实 Secret。 |
+| `src/SystemKnowledgeHub.Api/appsettings.Development.json` | 仅启用 Development Local authentication，并配置两个显式 Vite CORS origins。 | Backend foundation / INFRA-CONFIG-R01 | 分离开发差异，不复制通用 runtime defaults。 |
+| `src/SystemKnowledgeHub.Api/appsettings.Production.json` | 仅保存 Production fail-closed authentication、SQLite、Data Protection 与 attachment path 空占位。 | Production configuration / INFRA-CONFIG-R01 | 强制部署注入持久路径与认证选择，同时不提交 Secret 或机器路径。 |
 | `src/SystemKnowledgeHub.Api/Properties/launchSettings.json` | 定义 Development profile 与 5090 端口。 | Backend tooling | 支持一致的本地 `dotnet run`。 |
 | `src/SystemKnowledgeHub.Web/package.json` | 定义 Vue 依赖和 dev/build/type-check/lint/test 命令。 | Frontend foundation | Node 项目的 canonical 入口。 |
 | `src/SystemKnowledgeHub.Web/vite.config.ts` | 配置 Vue、开发端口和可由 `VITE_API_PROXY_TARGET` 覆盖的 `/api` 代理。 | Frontend tooling / VS-06 | 默认仍使用 5090，同时允许在本地端口被系统保留时进行受控验证。 |
@@ -509,6 +524,8 @@ Search 第一版采用 SQLite 受限 `LIKE` 投影；未创建 FTS5 virtual tabl
 | `AGENTS.md` | 定义 Coding Agent 的强制架构、范围和验证规则。 | Repository governance | 防止后续 Slice 破坏冻结规格或过度设计。 |
 | `README.md` | 提供产品目标、技术栈和当前开发方式概览。 | Repository documentation | 新参与者的入口说明。 |
 | `docs/PROJECT_FILE_MAP.md` | 说明主要仓库文件职责与文档归档位置。 | Repository documentation | 让后续任务能定位设计、规格、标准和验证历史。 |
+| `docs/PRODUCTION_DEPLOYMENT_GUIDE.md` | 说明配置归属、环境覆盖、typed validation、Serilog、持久路径、Secret、runtime capability 与 Production 运维边界。 | Deployment / INFRA-CONFIG-R01 | 让部署方安全覆盖可调参数且不会把通用默认、生产占位或代码不变量混为一谈。 |
+| `docs/reports/INFRA_CONFIG_R01_RUNTIME_CONFIGURATION_SERILOG_VERIFICATION_REPORT.md` | 记录 INFRA-CONFIG-R01 configuration inventory、PASS 验证矩阵、隔离运行证据、数据保护对比和最终结论。 | Verification / INFRA-CONFIG-R01 | 承载已完成 gate、清理和可审计验证证据。 |
 | `docs/specifications/System_Knowledge_Hub_MVP_Final_UI_Inventory.md` | 指定正式 UI、状态及唯一 Golden Reference。 | Frozen product specification | 防止引用 SUPERSEDED/DEPRECATED 原型。 |
 | `docs/specifications/System_Knowledge_Hub_MVP_Design_Baseline.md` | 冻结 UI 语言、布局和交互原则。 | Frozen product specification | 后续页面/实现共用视觉规则。 |
 | `docs/specifications/System_Knowledge_Hub_MVP_Domain_Model.md` | 冻结 MVP 核心领域对象和边界。 | Frozen domain specification | 防止实现发明通用知识框架。 |
