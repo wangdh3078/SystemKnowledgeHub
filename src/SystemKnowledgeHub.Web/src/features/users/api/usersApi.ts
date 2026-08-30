@@ -14,6 +14,7 @@ import {
   type CreateUserRequest,
   type KnowledgeRole,
   type LoginIdentity,
+  type LocalLoginMethod,
   type KnowledgeRoleWriteRequest,
   type SetActiveStateRequest,
   type UpdateKnowledgeRoleRequest,
@@ -69,6 +70,38 @@ export function getUserLoginSetupOptions(signal?: AbortSignal): Promise<UserLogi
 
 export function getUserLoginMethods(userId: number, signal?: AbortSignal): Promise<UserLoginMethods> {
   return apiClient.get(`/users/${userId}/login-methods`, { signal, decode: decodeUserLoginMethods })
+}
+
+export function createUserLocalCredential(
+  userId: number,
+  username: string,
+  initialPassword: string,
+): Promise<LocalLoginMethod> {
+  return apiClient.post(`/users/${userId}/local-credential`, { username, initialPassword }, {
+    decode: (value) => decodeUserLoginMethods({
+      userId,
+      local: value,
+      oidc: [],
+    }).local,
+  })
+}
+
+export function setLocalCredentialActiveState(
+  userId: number,
+  local: LocalLoginMethod,
+  isActive: boolean,
+): Promise<LocalLoginMethod> {
+  if (!local.concurrencyToken) throw new Error('本地账号并发标记缺失，请重新加载。')
+  return apiClient.put(`/users/${userId}/local-credential/active-state`, {
+    isActive,
+    concurrencyToken: local.concurrencyToken,
+  }, {
+    decode: (value) => decodeUserLoginMethods({
+      userId,
+      local: value,
+      oidc: [],
+    }).local,
+  })
 }
 
 export function updateUser(userId: number, request: UpdateUserRequest): Promise<UserDetail> {

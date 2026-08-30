@@ -358,11 +358,47 @@
   background: var(--color-surface-subtle);
 }
 
-.user-login-methods article > div {
+.user-login-methods__heading,
+.login-identities__heading {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+
+.user-login-methods__heading > div { min-width: 0; }
+.user-login-methods__heading small { display: block; }
+
+.user-login-methods__details,
+.login-identities__item dl {
+  display: grid;
+  margin: 12px 0;
+  gap: 7px;
+}
+
+.user-login-methods__details > div,
+.login-identities__item dl > div {
+  display: grid;
+  grid-template-columns: minmax(118px, 0.7fr) minmax(0, 1.3fr);
+  gap: 12px;
+}
+
+.user-login-methods__details dt,
+.login-identities__item dt { color: var(--color-muted); }
+.user-login-methods__details dd,
+.login-identities__item dd { min-width: 0; overflow-wrap: anywhere; }
+
+.user-login-methods__actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+  gap: 8px;
+}
+
+.local-credential-create {
+  display: grid;
+  margin-top: 12px;
+  gap: 10px;
 }
 
 .user-login-methods p,
@@ -374,8 +410,10 @@
 }
 
 .login-identities {
-  padding-top: 18px;
-  border-top: 1px solid var(--color-border);
+  padding: 11px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-subtle);
 }
 
 .login-identities__heading {
@@ -396,23 +434,19 @@
 
 .login-identities__item,
 .login-identities__create {
-  display: flex;
-  align-items: center;
+  display: grid;
   gap: 10px;
 }
 
 .login-identities__item {
-  justify-content: space-between;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
   padding: 9px 10px;
   border-bottom: 1px solid var(--color-border);
 }
 
 .login-identities__item:last-child { border-bottom: 0; }
-.login-identities__item strong,
-.login-identities__item span { display: block; }
-.login-identities__item span { margin-top: 3px; color: var(--color-muted); font-size: 10px; }
-.login-identities__create { align-items: flex-start; }
-.login-identities__create .el-input { flex: 1; }
+.login-identities__create { margin-top: 12px; }
 
 .user-drawer__actions {
   display: flex;
@@ -573,9 +607,19 @@
     grid-template-columns: 1fr;
   }
 
-  .login-identities__create,
   .user-drawer__actions {
     align-items: stretch;
+    flex-direction: column;
+  }
+
+  .user-login-methods__details > div,
+  .login-identities__item dl > div,
+  .login-identities__item {
+    grid-template-columns: 1fr;
+  }
+
+  .login-identities__heading {
+    align-items: flex-start;
     flex-direction: column;
   }
 

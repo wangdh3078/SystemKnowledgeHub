@@ -13,7 +13,10 @@ namespace SystemKnowledgeHub.Api.Features.Users.Api;
 [Microsoft.AspNetCore.Authorization.Authorize(Policy = SystemKnowledgeHub.Api.Shared.Security.AccessPolicies.Administrator)]
 [ApiController]
 [Route("api/users")]
-public sealed class UsersController(UserQueries queries, UserService service) : ControllerBase
+public sealed class UsersController(
+    UserQueries queries,
+    UserService service,
+    LocalCredentialManagementService localCredentials) : ControllerBase
 {
     /// <summary>
     /// 返回受控筛选、排序和分页的 User 管理列表。
@@ -89,6 +92,87 @@ public sealed class UsersController(UserQueries queries, UserService service) : 
 
         var response = await queries.GetUserLoginMethods(id, cancellationToken);
         return response is null ? NotFound(NotFoundError(id)) : Ok(response);
+    }
+
+    /// <summary>为已有且尚无本地凭据的 User 创建完整 Local credential。</summary>
+    [HttpPost("{id:long}/local-credential")]
+    [ProducesResponseType<LocalLoginMethodResponse>(StatusCodes.Status201Created)]
+    [ProducesResponseType<ApiErrorResponse>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ApiErrorResponse>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ApiErrorResponse>(StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<LocalLoginMethodResponse>> CreateLocalCredential(
+        long id,
+        [FromBody] CreateUserLocalCredentialRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!ApiIdParser.IsSafePositive(id)) return BadRequest(InvalidId());
+        var result = await localCredentials.CreateAsync(
+            new CreateUserLocalCredentialCommand(id, request.Username, request.InitialPassword),
+            cancellationToken);
+        return result.Failure switch
+        {
+            LocalCredentialWriteFailure.None => StatusCode(StatusCodes.Status201Created, result.Response),
+            LocalCredentialWriteFailure.Validation => BadRequest(new ApiErrorResponse(
+                "validation_error",
+                "请检查本地账号信息。",
+                result.FieldErrors,
+                new { reason = result.Reason })),
+            LocalCredentialWriteFailure.NotFound => NotFound(NotFoundError(id)),
+            LocalCredentialWriteFailure.Conflict => Conflict(new ApiErrorResponse(
+                "conflict",
+                "该用户已配置本地账号，或登录用户名已存在。",
+                result.FieldErrors,
+                new { reason = result.Reason, resourceType = "LocalLoginCredential", targetUserId = id })),
+            _ => throw new InvalidOperationException("Unsupported Local credential create result."),
+        };
+    }
+
+    /// <summary>使用 Local credential 自己的并发标记启用或停用该登录方式。</summary>
+    [HttpPut("{id:long}/local-credential/active-state")]
+    [ProducesResponseType<LocalLoginMethodResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ApiErrorResponse>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ApiErrorResponse>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ApiErrorResponse>(StatusCodes.Status409Conflict)]
+    [ProducesResponseType<ApiErrorResponse>(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<ActionResult<LocalLoginMethodResponse>> SetLocalCredentialActiveState(
+        long id,
+        [FromBody] SetLocalCredentialActiveStateRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!ApiIdParser.IsSafePositive(id)) return BadRequest(InvalidId());
+        var result = await localCredentials.SetActiveStateAsync(
+            new SetLocalCredentialActiveStateCommand(id, request.IsActive, request.ConcurrencyToken),
+            cancellationToken);
+        return result.Failure switch
+        {
+            LocalCredentialWriteFailure.None => Ok(result.Response),
+            LocalCredentialWriteFailure.Validation => BadRequest(new ApiErrorResponse(
+                "validation_error",
+                "请求内容无效。",
+                result.FieldErrors,
+                new { reason = result.Reason })),
+            LocalCredentialWriteFailure.NotFound => NotFound(new ApiErrorResponse(
+                "not_found",
+                "未找到指定用户的本地账号。",
+                null,
+                new { reason = "credential_not_found", resourceType = "LocalLoginCredential", targetUserId = id })),
+            LocalCredentialWriteFailure.Conflict => Conflict(new ApiErrorResponse(
+                "conflict",
+                "本地账号已被其他操作修改，请刷新后重试。",
+                null,
+                new { reason = "concurrency_conflict", resourceType = "LocalLoginCredential", targetUserId = id })),
+            LocalCredentialWriteFailure.NoChange => UnprocessableEntity(new ApiErrorResponse(
+                "business_rule_violation",
+                "目标登录方式状态与当前值相同。",
+                null,
+                new { reason = "state_unchanged", resourceType = "LocalLoginCredential", targetUserId = id })),
+            LocalCredentialWriteFailure.LastUsableAdministrator => UnprocessableEntity(new ApiErrorResponse(
+                "business_rule_violation",
+                "系统必须保留至少一个可登录的启用 Administrator。",
+                null,
+                new { reason = "last_usable_administrator", resourceType = "LocalLoginCredential", targetUserId = id })),
+            _ => throw new InvalidOperationException("Unsupported Local credential active-state result."),
+        };
     }
 
     /// <summary>

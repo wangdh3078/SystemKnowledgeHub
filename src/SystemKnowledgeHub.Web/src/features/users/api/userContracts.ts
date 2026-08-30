@@ -87,6 +87,7 @@ export interface LocalLoginMethod {
   readonly lastPasswordChangedAt: string | null
   readonly lockedUntil: string | null
   readonly globallyEnabled: boolean
+  readonly concurrencyToken: string | null
 }
 
 export interface OidcLoginMethod {
@@ -335,6 +336,7 @@ export function decodeUserLoginMethods(value: unknown): UserLoginMethods {
       lastPasswordChangedAt: readNullableString(local.lastPasswordChangedAt, 'userLoginMethods.local.lastPasswordChangedAt'),
       lockedUntil: readNullableString(local.lockedUntil, 'userLoginMethods.local.lockedUntil'),
       globallyEnabled: readBoolean(local.globallyEnabled, 'userLoginMethods.local.globallyEnabled'),
+      concurrencyToken: readNullableString(local.concurrencyToken, 'userLoginMethods.local.concurrencyToken'),
     },
     oidc: root.oidc.map((value, index) => {
       const field = `userLoginMethods.oidc[${index}]`

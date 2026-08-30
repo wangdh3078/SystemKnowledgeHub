@@ -438,36 +438,93 @@ public sealed class UserService(
     {
         var errors = new Dictionary<string, string[]>();
         if (!ApiIdParser.IsSafePositive(request.UserId)) errors["userId"] = ["用户 ID 必须是 JavaScript 安全范围内的正整数。"];
-        if (string.IsNullOrWhiteSpace(request.Provider)) errors["provider"] = ["Provider 不能为空。"];
-        if (string.IsNullOrEmpty(request.Subject)) errors["subject"] = ["Subject 不能为空。"];
-        if (errors.Count > 0) return new LoginIdentityWriteResult(null, errors, LoginIdentityWriteFailure.Validation);
-        if (!await dbContext.Users.AnyAsync(item => item.Id == request.UserId, cancellationToken)) return new LoginIdentityWriteResult(null, null, LoginIdentityWriteFailure.NotFound);
-        var identity = new LoginIdentity { UserId = request.UserId, Provider = request.Provider, Subject = request.Subject, IsActive = true, CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow, Version = 1 };
+        var approvedProvider = oidcOptions.Value.Provider;
+        if (string.IsNullOrWhiteSpace(approvedProvider))
+        {
+            errors["provider"] = ["当前服务器未配置可用的身份提供方。"];
+        }
+        else if (!string.Equals(request.Provider, approvedProvider, StringComparison.Ordinal))
+        {
+            errors["provider"] = ["身份提供方不在当前服务器允许范围内。"];
+        }
+        if (string.IsNullOrWhiteSpace(request.Subject) || request.Subject.Length > 240)
+        {
+            errors["subject"] = ["Subject / sub 必须为 1～240 个字符。"];
+        }
+        if (errors.Count > 0)
+        {
+            LogSecurityEvent("LoginIdentityCreated", request.UserId, null, null, "rejected", "validation_failed", DateTimeOffset.UtcNow);
+            return new LoginIdentityWriteResult(null, errors, LoginIdentityWriteFailure.Validation);
+        }
+        if (!await dbContext.Users.AnyAsync(item => item.Id == request.UserId, cancellationToken))
+        {
+            LogSecurityEvent("LoginIdentityCreated", request.UserId, null, null, "rejected", "user_not_found", DateTimeOffset.UtcNow);
+            return new LoginIdentityWriteResult(null, null, LoginIdentityWriteFailure.NotFound);
+        }
+        var timestamp = DateTimeOffset.UtcNow;
+        var identity = new LoginIdentity
+        {
+            UserId = request.UserId,
+            Provider = request.Provider,
+            Subject = request.Subject,
+            IsActive = true,
+            CreatedAt = timestamp,
+            UpdatedAt = timestamp,
+            Version = 1,
+        };
         dbContext.LoginIdentities.Add(identity);
         try { await dbContext.SaveChangesAsync(cancellationToken); }
-        catch (DbUpdateException) { return new LoginIdentityWriteResult(null, new Dictionary<string, string[]> { ["identity"] = ["Provider 和 Subject 映射已存在。"] }, LoginIdentityWriteFailure.Duplicate); }
+        catch (DbUpdateException)
+        {
+            LogSecurityEvent("LoginIdentityCreated", request.UserId, null, null, "rejected", "mapping_duplicate", DateTimeOffset.UtcNow);
+            return new LoginIdentityWriteResult(null, new Dictionary<string, string[]> { ["subject"] = ["Provider 和 Subject / sub 映射已存在。"] }, LoginIdentityWriteFailure.Duplicate);
+        }
+        LogSecurityEvent("LoginIdentityCreated", request.UserId, null, identity.Id, "success", "created", timestamp);
         return new LoginIdentityWriteResult(ToLoginIdentityResponse(identity), null, LoginIdentityWriteFailure.None);
     }
 
     public async Task<LoginIdentityWriteResult> SetLoginIdentityActiveState(SetLoginIdentityActiveStateCommand request, CancellationToken cancellationToken)
     {
+        var eventType = request.IsActive ? "LoginIdentityEnabled" : "LoginIdentityDisabled";
         var errors = new Dictionary<string, string[]>();
         ValidateToken(request.ConcurrencyToken, errors, out var expectedVersion);
-        if (errors.Count > 0) return new LoginIdentityWriteResult(null, errors, LoginIdentityWriteFailure.Validation);
+        if (errors.Count > 0)
+        {
+            LogSecurityEvent(eventType, request.UserId, null, request.LoginIdentityId, "rejected", "invalid_concurrency_token", DateTimeOffset.UtcNow);
+            return new LoginIdentityWriteResult(null, errors, LoginIdentityWriteFailure.Validation);
+        }
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
         var identity = await dbContext.LoginIdentities.SingleOrDefaultAsync(item => item.Id == request.LoginIdentityId && item.UserId == request.UserId, cancellationToken);
-        if (identity is null) return new LoginIdentityWriteResult(null, null, LoginIdentityWriteFailure.NotFound);
-        if (identity.Version != expectedVersion) return new LoginIdentityWriteResult(null, null, LoginIdentityWriteFailure.Conflict);
-        if (identity.IsActive == request.IsActive) return new LoginIdentityWriteResult(null, null, LoginIdentityWriteFailure.NoChange);
+        if (identity is null)
+        {
+            LogSecurityEvent(eventType, request.UserId, null, request.LoginIdentityId, "rejected", "identity_not_found", DateTimeOffset.UtcNow);
+            return new LoginIdentityWriteResult(null, null, LoginIdentityWriteFailure.NotFound);
+        }
+        if (identity.Version != expectedVersion)
+        {
+            LogSecurityEvent(eventType, request.UserId, null, identity.Id, "rejected", "concurrency_conflict", DateTimeOffset.UtcNow);
+            return new LoginIdentityWriteResult(null, null, LoginIdentityWriteFailure.Conflict);
+        }
+        if (identity.IsActive == request.IsActive)
+        {
+            LogSecurityEvent(eventType, request.UserId, null, identity.Id, "rejected", "state_unchanged", DateTimeOffset.UtcNow);
+            return new LoginIdentityWriteResult(null, null, LoginIdentityWriteFailure.NoChange);
+        }
         if (!request.IsActive
             && await usableAdministrators.IsLoginIdentityUsableAdministratorAccessAsync(identity.Id, cancellationToken)
             && !await usableAdministrators.HasAnyAsync(excludedLoginIdentityId: identity.Id, cancellationToken: cancellationToken))
         {
+            LogSecurityEvent(eventType, request.UserId, null, identity.Id, "rejected", "last_usable_administrator", DateTimeOffset.UtcNow);
             return new LoginIdentityWriteResult(null, null, LoginIdentityWriteFailure.LastUsableAdministrator);
         }
         identity.IsActive = request.IsActive; identity.UpdatedAt = DateTimeOffset.UtcNow; identity.Version = expectedVersion + 1;
         try { await dbContext.SaveChangesAsync(cancellationToken); await transaction.CommitAsync(cancellationToken); }
-        catch (DbUpdateConcurrencyException) { return new LoginIdentityWriteResult(null, null, LoginIdentityWriteFailure.Conflict); }
+        catch (DbUpdateConcurrencyException)
+        {
+            LogSecurityEvent(eventType, request.UserId, null, identity.Id, "rejected", "concurrency_conflict", DateTimeOffset.UtcNow);
+            return new LoginIdentityWriteResult(null, null, LoginIdentityWriteFailure.Conflict);
+        }
+        LogSecurityEvent(eventType, request.UserId, null, identity.Id, "success", request.IsActive ? "enabled" : "disabled", identity.UpdatedAt);
         return new LoginIdentityWriteResult(ToLoginIdentityResponse(identity), null, LoginIdentityWriteFailure.None);
     }
 

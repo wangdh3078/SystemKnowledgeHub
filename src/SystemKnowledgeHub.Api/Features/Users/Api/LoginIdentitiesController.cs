@@ -58,8 +58,8 @@ public sealed class LoginIdentitiesController(UserService service) : ControllerB
             LoginIdentityWriteFailure.None => Ok(result.Response),
             LoginIdentityWriteFailure.Validation => BadRequest(ValidationError(result.FieldErrors!)),
             LoginIdentityWriteFailure.NotFound => NotFound(NotFoundUser(userId)),
-            LoginIdentityWriteFailure.Conflict => Conflict(ConflictError(null)),
-            LoginIdentityWriteFailure.NoChange => UnprocessableEntity(BusinessRule(userId)),
+            LoginIdentityWriteFailure.Conflict => Conflict(ConcurrencyConflict(userId, id)),
+            LoginIdentityWriteFailure.NoChange => UnprocessableEntity(BusinessRule(userId, id)),
             LoginIdentityWriteFailure.LastUsableAdministrator => UnprocessableEntity(LastAdministrator(userId)),
             _ => throw new InvalidOperationException("Unsupported LoginIdentity active-state result."),
         };
@@ -69,6 +69,7 @@ public sealed class LoginIdentitiesController(UserService service) : ControllerB
     private static ApiErrorResponse NotFoundUser(long userId) => new("not_found", "未找到指定用户或登录映射。", null, new { resourceType = "User", resourceId = userId });
     private static ApiErrorResponse ValidationError(IReadOnlyDictionary<string, string[]> errors) => new("validation_error", "请求内容无效。", errors, null);
     private static ApiErrorResponse ConflictError(IReadOnlyDictionary<string, string[]>? errors) => new("conflict", "登录映射已被其他操作修改或已存在。", errors, null);
-    private static ApiErrorResponse BusinessRule(long userId) => new("business_rule_violation", "目标启用状态与当前值相同。", null, new { resourceType = "User", resourceId = userId });
-    private static ApiErrorResponse LastAdministrator(long userId) => new("business_rule_violation", "系统必须保留至少一个可登录的启用 Administrator。", null, new { resourceType = "User", resourceId = userId });
+    private static ApiErrorResponse ConcurrencyConflict(long userId, long identityId) => new("conflict", "登录映射已被其他操作修改，请刷新后重试。", null, new { reason = "concurrency_conflict", resourceType = "LoginIdentity", resourceId = identityId, targetUserId = userId });
+    private static ApiErrorResponse BusinessRule(long userId, long identityId) => new("business_rule_violation", "目标启用状态与当前值相同。", null, new { reason = "state_unchanged", resourceType = "LoginIdentity", resourceId = identityId, targetUserId = userId });
+    private static ApiErrorResponse LastAdministrator(long userId) => new("business_rule_violation", "系统必须保留至少一个可登录的启用 Administrator。", null, new { reason = "last_usable_administrator", resourceType = "User", resourceId = userId });
 }

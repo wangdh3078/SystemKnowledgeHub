@@ -3,10 +3,11 @@ import source from './LoginIdentityManagementPanel.vue?raw'
 
 describe('LoginIdentityManagementPanel copy', () => {
   it('explains the identity-provider mapping without conflating roles', () => {
-    expect(source).toContain('<h4>企业统一登录映射（OIDC / SSO）</h4>')
-    expect(source).toContain('不是知识身份或权限角色')
+    expect(source).toContain('<h4>企业统一登录（OIDC / SSO）</h4>')
+    expect(source).toContain('不根据姓名、邮箱、工号或用户名自动绑定')
     expect(source).not.toContain('技术对象名：LoginIdentity')
-    expect(source).toContain('稳定 Subject / sub（由身份提供方提供）')
-    expect(source).toContain('不能用姓名或邮箱代替')
+    expect(source).toContain(':model-value="approvedProvider" readonly')
+    expect(source).not.toContain('v-model="form.provider"')
+    expect(source).toContain('由身份提供方提供的稳定标识')
   })
 })

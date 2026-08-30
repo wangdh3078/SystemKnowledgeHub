@@ -174,10 +174,11 @@ public sealed class UserQueries(
                 item.MustChangePassword,
                 item.LastPasswordChangedAt,
                 item.LockedUntil,
+                item.Version,
             })
             .SingleOrDefaultAsync(cancellationToken);
         var local = credential is null
-            ? new LocalLoginMethodResponse(false, null, null, null, null, null, localOptions.Value.Enabled)
+            ? new LocalLoginMethodResponse(false, null, null, null, null, null, localOptions.Value.Enabled, null)
             : new LocalLoginMethodResponse(
                 true,
                 credential.Username,
@@ -185,7 +186,8 @@ public sealed class UserQueries(
                 credential.MustChangePassword,
                 credential.LastPasswordChangedAt,
                 credential.LockedUntil,
-                localOptions.Value.Enabled);
+                localOptions.Value.Enabled,
+                concurrencyTokenCodec.Encode(credential.Version));
 
         var approvedProvider = oidcOptions.Value.Provider;
         var identities = await dbContext.LoginIdentities

@@ -5,10 +5,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { UserDetail } from '../api/userContracts'
 import {
   createUser,
+  createUserLocalCredential,
   getKnowledgeRoles,
   getUser,
   getUserLoginMethods,
   getUserLoginSetupOptions,
+  setLocalCredentialActiveState,
 } from '../api/usersApi'
 import UserManagementDrawer from './UserManagementDrawer.vue'
 
@@ -20,10 +22,12 @@ vi.mock('../../../app/stores/overlays', () => ({ useOverlayStore: () => overlayS
 vi.mock('element-plus', () => ({ ElMessage: { success: vi.fn() } }))
 vi.mock('../api/usersApi', () => ({
   createUser: vi.fn(),
+  createUserLocalCredential: vi.fn(),
   getKnowledgeRoles: vi.fn(),
   getUser: vi.fn(),
   getUserLoginMethods: vi.fn(),
   getUserLoginSetupOptions: vi.fn(),
+  setLocalCredentialActiveState: vi.fn(),
   updateUser: vi.fn(),
 }))
 
@@ -165,10 +169,21 @@ describe('UserManagementDrawer login setup', () => {
         lastPasswordChangedAt: null,
         lockedUntil: null,
         globallyEnabled: true,
+        concurrencyToken: null,
       },
       oidc: [],
     })
     vi.mocked(createUser).mockResolvedValue(user)
+    vi.mocked(createUserLocalCredential).mockResolvedValue({
+      exists: true,
+      username: 'existing-local',
+      isActive: true,
+      mustChangePassword: true,
+      lastPasswordChangedAt: '2026-08-30T01:00:00Z',
+      lockedUntil: null,
+      globallyEnabled: true,
+      concurrencyToken: 'credential-token',
+    })
   })
 
   it('switches among three explicit modes and keeps Local and OIDC fields mutually exclusive', async () => {
@@ -228,6 +243,45 @@ describe('UserManagementDrawer login setup', () => {
     const wrapper = mountDrawer(42)
     await flushPromises()
     expect(wrapper.text()).toContain('该用户当前无法登录系统。')
+    expect(wrapper.text()).toContain('添加本地账号')
     expect(getUserLoginMethods).toHaveBeenCalledWith(42)
+  })
+
+  it('adds Local to an existing user and never sends confirmation password', async () => {
+    const wrapper = mountDrawer(42)
+    await flushPromises()
+    await wrapper.findAll('button').find((button) => button.text() === '添加本地账号')?.trigger('click')
+    const username = wrapper.find('input[autocomplete="username"]')
+    const passwords = wrapper.findAll('input[autocomplete="new-password"]')
+    await username.setValue('existing-local')
+    await passwords[0].setValue('exact existing password 空格')
+    await passwords[1].setValue('exact existing password 空格')
+    await wrapper.findAll('button').find((button) => button.text() === '确认添加')?.trigger('click')
+    await flushPromises()
+
+    expect(createUserLocalCredential).toHaveBeenCalledWith(42, 'existing-local', 'exact existing password 空格')
+    expect(JSON.stringify(vi.mocked(createUserLocalCredential).mock.calls[0])).not.toContain('confirmPassword')
+  })
+
+  it('uses the credential projection and its own token for Local active state', async () => {
+    const local = {
+      exists: true,
+      username: 'managed-local',
+      isActive: true,
+      mustChangePassword: false,
+      lastPasswordChangedAt: '2026-08-30T01:00:00Z',
+      lockedUntil: null,
+      globallyEnabled: true,
+      concurrencyToken: 'credential-token',
+    } as const
+    vi.mocked(getUserLoginMethods).mockResolvedValue({ userId: 42, local, oidc: [] })
+    vi.mocked(setLocalCredentialActiveState).mockResolvedValue({ ...local, isActive: false, concurrencyToken: 'next-token' })
+    const wrapper = mountDrawer(42)
+    await flushPromises()
+    expect(wrapper.text()).toContain('managed-local')
+    expect(wrapper.text()).toContain('最近密码变更时间')
+    await wrapper.findAll('button').find((button) => button.text() === '停用')?.trigger('click')
+    await flushPromises()
+    expect(setLocalCredentialActiveState).toHaveBeenCalledWith(42, local, false)
   })
 })

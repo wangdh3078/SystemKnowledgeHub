@@ -69,6 +69,12 @@ public sealed record SetUserActiveStateRequest(
 /// <remarks><c>ConcurrencyToken</c> 是必须原样回传、不得解析或生成的 opaque token。</remarks>
 public sealed record SetUserAccessLevelRequest(AccessLevel? AccessLevel, string? ConcurrencyToken);
 
+/// <summary>为已有 User 创建完整本地登录凭据；确认密码只存在于前端，不进入此 contract。</summary>
+public sealed record CreateUserLocalCredentialRequest(string? Username, string? InitialPassword);
+
+/// <summary>使用 Local credential 自己的 opaque token 切换其 Active 状态。</summary>
+public sealed record SetLocalCredentialActiveStateRequest(bool IsActive, string? ConcurrencyToken);
+
 /// <summary>为 canonical User 建立外部 LoginIdentity 显式映射的管理员 API request。</summary>
 public sealed record CreateLoginIdentityRequest(string? Provider, string? Subject);
 

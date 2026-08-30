@@ -3,14 +3,17 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import { ElMessage } from 'element-plus'
 import { ApiError } from '../../../api/errors/ApiError'
+import { formatDateTime } from '../../../app/formatters/dateTime'
 import { useActorStore } from '../../../app/stores/actor'
 import { useOverlayStore } from '../../../app/stores/overlays'
 import {
   createUser,
+  createUserLocalCredential,
   getKnowledgeRoles,
   getUser,
   getUserLoginMethods,
   getUserLoginSetupOptions,
+  setLocalCredentialActiveState,
   updateUser,
 } from '../api/usersApi'
 import LoginIdentityManagementPanel from './LoginIdentityManagementPanel.vue'
@@ -35,6 +38,11 @@ const conflict = ref(false)
 const roles = ref<readonly KnowledgeRole[]>([])
 const loginSetupOptions = ref<UserLoginSetupOptions | null>(null)
 const loginMethods = ref<UserLoginMethods | null>(null)
+const localCredentialFormVisible = ref(false)
+const localCredentialSubmitting = ref(false)
+const localCredentialError = ref<string | null>(null)
+const localCredentialFieldErrors = reactive<Record<string, string>>({})
+const localCredentialForm = reactive({ username: '', initialPassword: '', confirmPassword: '' })
 const originalRoleIds = ref<ReadonlySet<number>>(new Set())
 const concurrencyToken = ref('')
 const form = reactive({
@@ -64,6 +72,10 @@ const passwordMismatch = computed(() =>
   && form.confirmPassword.length > 0
   && form.initialPassword !== form.confirmPassword,
 )
+const localCredentialPasswordMismatch = computed(() =>
+  localCredentialForm.confirmPassword.length > 0
+  && localCredentialForm.initialPassword !== localCredentialForm.confirmPassword,
+)
 
 function assignUser(user: UserDetail): void {
   form.displayName = user.displayName
@@ -84,7 +96,7 @@ async function load(): Promise<void> {
     const [availableRoles, user, setupOptions, methods] = await Promise.all([
       getKnowledgeRoles(),
       props.userId === null ? Promise.resolve(null) : getUser(props.userId),
-      props.userId === null ? getUserLoginSetupOptions() : Promise.resolve(null),
+      getUserLoginSetupOptions(),
       props.userId === null ? Promise.resolve(null) : getUserLoginMethods(props.userId),
     ])
     roles.value = availableRoles
@@ -96,6 +108,78 @@ async function load(): Promise<void> {
     loadError.value = error instanceof Error ? error.message : '用户资料加载失败。'
   } finally {
     loading.value = false
+  }
+}
+
+async function reloadLoginMethods(): Promise<void> {
+  if (props.userId === null) return
+  loginMethods.value = await getUserLoginMethods(props.userId)
+}
+
+function clearLocalCredentialErrors(): void {
+  localCredentialError.value = null
+  for (const key of Object.keys(localCredentialFieldErrors)) delete localCredentialFieldErrors[key]
+}
+
+function openLocalCredentialForm(): void {
+  clearLocalCredentialErrors()
+  localCredentialForm.username = form.employeeNo.trim()
+  localCredentialForm.initialPassword = ''
+  localCredentialForm.confirmPassword = ''
+  localCredentialFormVisible.value = true
+}
+
+async function createLocalCredential(): Promise<void> {
+  clearLocalCredentialErrors()
+  if (!localCredentialForm.username.trim()) localCredentialFieldErrors.username = '请输入登录用户名。'
+  if (localCredentialForm.initialPassword.length < 8 || localCredentialForm.initialPassword.length > 128) {
+    localCredentialFieldErrors.initialPassword = '初始密码长度必须为 8～128 个字符。'
+  }
+  if (!localCredentialForm.confirmPassword) localCredentialFieldErrors.confirmPassword = '请再次输入初始密码。'
+  else if (localCredentialPasswordMismatch.value) localCredentialFieldErrors.confirmPassword = '两次输入的密码不一致。'
+  if (Object.keys(localCredentialFieldErrors).length > 0 || localCredentialSubmitting.value || props.userId === null) return
+
+  localCredentialSubmitting.value = true
+  try {
+    await createUserLocalCredential(
+      props.userId,
+      localCredentialForm.username,
+      localCredentialForm.initialPassword,
+    )
+    localCredentialForm.initialPassword = ''
+    localCredentialForm.confirmPassword = ''
+    localCredentialFormVisible.value = false
+    await reloadLoginMethods()
+    ElMessage.success('本地账号已添加；首次登录必须修改密码。')
+  } catch (error: unknown) {
+    if (error instanceof ApiError) {
+      localCredentialError.value = error.message
+      for (const [field, messages] of Object.entries(error.response.fieldErrors ?? {})) {
+        const message = messages[0]
+        if (message) localCredentialFieldErrors[field] = message
+      }
+    } else {
+      localCredentialError.value = error instanceof Error ? error.message : '本地账号添加失败。'
+    }
+  } finally {
+    localCredentialSubmitting.value = false
+  }
+}
+
+async function toggleLocalCredential(): Promise<void> {
+  if (props.userId === null || !loginMethods.value?.local.exists || loginMethods.value.local.isActive === null) return
+  localCredentialSubmitting.value = true
+  localCredentialError.value = null
+  const wasActive = loginMethods.value.local.isActive
+  try {
+    await setLocalCredentialActiveState(props.userId, loginMethods.value.local, !wasActive)
+    await reloadLoginMethods()
+    ElMessage.success(wasActive ? '本地账号已停用。' : '本地账号已启用。')
+  } catch (error: unknown) {
+    localCredentialError.value = error instanceof Error ? error.message : '本地账号状态更新失败。'
+    if (error instanceof ApiError && error.status === 409) await reloadLoginMethods()
+  } finally {
+    localCredentialSubmitting.value = false
   }
 }
 
@@ -328,26 +412,74 @@ onMounted(() => void load())
               :closable="false"
               show-icon
             />
-            <div v-else class="user-login-methods">
-              <article v-if="loginMethods.local.exists">
-                <div><strong>本地账号</strong><el-tag size="small" :type="loginMethods.local.isActive ? 'success' : 'info'">{{ loginMethods.local.isActive ? '已启用' : '已停用' }}</el-tag></div>
-                <p class="technical-text">{{ loginMethods.local.username }}</p>
-                <small v-if="!loginMethods.local.globallyEnabled">当前部署未启用本地登录</small>
-                <small v-else-if="loginMethods.local.mustChangePassword">首次登录后必须修改密码</small>
-              </article>
-              <article v-for="identity in loginMethods.oidc" :key="`${identity.provider}:${identity.subject}`">
-                <div><strong>企业统一登录（OIDC / SSO）</strong><el-tag size="small" :type="identity.isActive ? 'success' : 'info'">{{ identity.isActive ? '已启用' : '已停用' }}</el-tag></div>
-                <p><span class="technical-text">{{ identity.provider }}</span> · <span class="technical-text">{{ identity.subject }}</span></p>
-                <small v-if="!identity.globallyEnabled">当前部署未启用此身份提供方</small>
+            <div class="user-login-methods">
+              <article>
+                <div class="user-login-methods__heading">
+                  <div><strong>本地账号</strong><small>用户名与密码登录</small></div>
+                  <el-tag v-if="loginMethods.local.exists" size="small" :type="loginMethods.local.isActive ? 'success' : 'info'">{{ loginMethods.local.isActive ? '已启用' : '已停用' }}</el-tag>
+                  <el-tag v-else size="small" type="info">未配置</el-tag>
+                </div>
+
+                <template v-if="loginMethods.local.exists">
+                  <dl class="user-login-methods__details">
+                    <div><dt>用户名</dt><dd class="technical-text">{{ loginMethods.local.username }}</dd></div>
+                    <div><dt>登录方式状态</dt><dd>{{ loginMethods.local.isActive ? '启用' : '停用' }}</dd></div>
+                    <div><dt>首次登录需修改密码</dt><dd>{{ loginMethods.local.mustChangePassword ? '是' : '否' }}</dd></div>
+                    <div><dt>最近密码变更时间</dt><dd>{{ formatDateTime(loginMethods.local.lastPasswordChangedAt) }}</dd></div>
+                    <div><dt>全局本地登录</dt><dd>{{ loginMethods.local.globallyEnabled ? '已启用' : '未启用' }}</dd></div>
+                    <div v-if="loginMethods.local.lockedUntil"><dt>临时锁定至</dt><dd>{{ formatDateTime(loginMethods.local.lockedUntil) }}</dd></div>
+                  </dl>
+                  <el-alert v-if="!loginMethods.local.globallyEnabled" type="warning" title="当前部署未启用本地登录" :closable="false" show-icon />
+                  <div class="user-login-methods__actions">
+                    <el-button
+                      :type="loginMethods.local.isActive ? 'danger' : 'success'"
+                      plain
+                      :loading="localCredentialSubmitting"
+                      @click="toggleLocalCredential"
+                    >{{ loginMethods.local.isActive ? '停用' : '启用' }}</el-button>
+                  </div>
+                </template>
+
+                <template v-else>
+                  <p class="user-drawer__help">尚未配置本地账号；添加后将要求用户首次登录修改初始密码。</p>
+                  <el-button v-if="!localCredentialFormVisible" type="primary" plain @click="openLocalCredentialForm">添加本地账号</el-button>
+                  <div v-else class="local-credential-create">
+                    <el-alert v-if="localCredentialError" type="error" :title="localCredentialError" :closable="false" show-icon />
+                    <el-alert v-if="!loginMethods.local.globallyEnabled" type="warning" title="当前部署未启用本地登录；可以预先配置账号" :closable="false" show-icon />
+                    <el-form-item label="登录用户名" :error="localCredentialFieldErrors.username" required>
+                      <el-input v-model="localCredentialForm.username" maxlength="64" autocomplete="username" class="technical-input" />
+                    </el-form-item>
+                    <div class="user-drawer__row">
+                      <el-form-item label="初始密码" :error="localCredentialFieldErrors.initialPassword" required>
+                        <el-input v-model="localCredentialForm.initialPassword" type="password" show-password maxlength="128" autocomplete="new-password" />
+                      </el-form-item>
+                      <el-form-item label="确认密码" :error="localCredentialFieldErrors.confirmPassword || (localCredentialPasswordMismatch ? '两次输入的密码不一致。' : '')" required>
+                        <el-input v-model="localCredentialForm.confirmPassword" type="password" show-password maxlength="128" autocomplete="new-password" />
+                      </el-form-item>
+                    </div>
+                    <el-checkbox :model-value="true" disabled>首次登录必须修改密码</el-checkbox>
+                    <p class="user-drawer__help">确认密码只在当前页面校验，不会发送到服务器。</p>
+                    <div class="user-login-methods__actions">
+                      <el-button @click="localCredentialFormVisible = false">取消</el-button>
+                      <el-button type="primary" :loading="localCredentialSubmitting" :disabled="localCredentialPasswordMismatch" @click="createLocalCredential">确认添加</el-button>
+                    </div>
+                  </div>
+                </template>
               </article>
             </div>
-            <LoginIdentityManagementPanel :user-id="userId!" />
+            <LoginIdentityManagementPanel
+              :user-id="userId!"
+              :setup-available="loginSetupOptions?.oidcSetupAvailable ?? false"
+              :approved-provider="loginSetupOptions?.approvedOidcProvider ?? null"
+              :globally-enabled="loginSetupOptions?.oidcGloballyEnabled ?? false"
+              @changed="reloadLoginMethods"
+            />
           </template>
         </section>
       </el-form>
 
       <footer class="user-drawer__actions">
-        <span>{{ isEdit ? '启用 / 停用请使用列表中的独立操作。' : '新用户创建后默认为启用。' }}</span>
+        <span>{{ isEdit ? '用户状态与各登录方式状态相互独立。' : '新用户创建后默认为启用。' }}</span>
         <div><el-button @click="overlayStore.requestDrawerClose">取消</el-button><el-button type="primary" :loading="submitting" :disabled="passwordMismatch" @click="submit">{{ isEdit ? '保存修改' : '创建用户' }}</el-button></div>
       </footer>
     </template>

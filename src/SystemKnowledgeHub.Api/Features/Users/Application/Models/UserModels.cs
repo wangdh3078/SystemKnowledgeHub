@@ -213,7 +213,8 @@ public sealed record LocalLoginMethodResponse(
     bool? MustChangePassword,
     DateTimeOffset? LastPasswordChangedAt,
     DateTimeOffset? LockedUntil,
-    bool GloballyEnabled);
+    bool GloballyEnabled,
+    string? ConcurrencyToken);
 
 /// <summary>管理员读取的 OIDC 映射投影。</summary>
 public sealed record OidcLoginMethodResponse(
@@ -227,6 +228,36 @@ public sealed record UserLoginMethodsResponse(
     long UserId,
     LocalLoginMethodResponse Local,
     IReadOnlyList<OidcLoginMethodResponse> Oidc);
+
+/// <summary>为已有 User 创建完整 Local credential；没有旧 credential token。</summary>
+public sealed record CreateUserLocalCredentialCommand(
+    long UserId,
+    string? Username,
+    string? InitialPassword);
+
+/// <summary>使用 Local credential 自己的 opaque token 切换其 Active 状态。</summary>
+public sealed record SetLocalCredentialActiveStateCommand(
+    long UserId,
+    bool IsActive,
+    string? ConcurrencyToken);
+
+/// <summary>Existing User Local credential 管理的显式业务结果类别。</summary>
+public enum LocalCredentialWriteFailure
+{
+    None,
+    Validation,
+    NotFound,
+    Conflict,
+    NoChange,
+    LastUsableAdministrator,
+}
+
+/// <summary>Local credential 管理的安全投影或可映射失败；绝不包含 password/hash/SessionVersion。</summary>
+public sealed record LocalCredentialWriteResult(
+    LocalLoginMethodResponse? Response,
+    IReadOnlyDictionary<string, string[]>? FieldErrors,
+    LocalCredentialWriteFailure Failure,
+    string? Reason = null);
 
 /// <summary>
 /// 更新 canonical User Profile 并替换其当前 KnowledgeRole assignment 的 Application command。

@@ -52,9 +52,28 @@ public sealed class UsableAdministratorResolver(
             cancellationToken);
     }
 
+    public Task<bool> IsLocalCredentialUsableAdministratorAccessAsync(
+        long localCredentialId,
+        CancellationToken cancellationToken = default)
+    {
+        if (!localOptions.Value.Enabled)
+        {
+            return Task.FromResult(false);
+        }
+        return dbContext.LocalLoginCredentials.AsNoTracking().AnyAsync(credential =>
+            credential.Id == localCredentialId
+            && credential.IsActive
+            && dbContext.Users.Any(user =>
+                user.Id == credential.UserId
+                && user.IsActive
+                && user.AccessLevel == AccessLevel.Administrator),
+            cancellationToken);
+    }
+
     public Task<bool> HasAnyAsync(
         long? excludedUserId = null,
         long? excludedLoginIdentityId = null,
+        long? excludedLocalCredentialId = null,
         CancellationToken cancellationToken = default)
     {
         var localEnabled = localOptions.Value.Enabled;
@@ -66,7 +85,9 @@ public sealed class UsableAdministratorResolver(
             && user.IsActive
             && user.AccessLevel == AccessLevel.Administrator
             && ((localEnabled && dbContext.LocalLoginCredentials.Any(credential =>
-                    credential.UserId == user.Id && credential.IsActive))
+                    credential.UserId == user.Id
+                    && credential.IsActive
+                    && (!excludedLocalCredentialId.HasValue || credential.Id != excludedLocalCredentialId.Value)))
                 || (oidcEnabled && dbContext.LoginIdentities.Any(identity =>
                     identity.UserId == user.Id
                     && identity.IsActive

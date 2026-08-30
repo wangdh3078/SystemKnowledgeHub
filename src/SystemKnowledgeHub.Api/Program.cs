@@ -220,6 +220,7 @@ builder.Services.AddScoped<KnowledgeResolutionService>();
 builder.Services.AddScoped<UserQueries>();
 builder.Services.AddScoped<UsableAdministratorResolver>();
 builder.Services.AddScoped<UserService>();
+builder.Services.AddScoped<LocalCredentialManagementService>();
 builder.Services.AddSingleton<IOptions<LocalAuthenticationOptions>>(Options.Create(local));
 builder.Services.AddSingleton<IOptions<OidcAuthenticationOptions>>(Options.Create(oidc));
 builder.Services.Configure<PasswordHasherOptions>(options =>
