@@ -181,7 +181,7 @@ public sealed class DatabaseDiscoveryRunProcessor(
 
         using var operation = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
         operation.CancelAfter(TimeSpan.FromSeconds(settings.OverallTimeoutSeconds));
-        using var monitorStop = new CancellationTokenSource();
+        using var monitorStop = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
         var monitor = MonitorLease(claim, operation, monitorStop.Token);
         try
         {
@@ -293,7 +293,7 @@ public sealed class DatabaseDiscoveryRunProcessor(
         CancellationTokenSource operation,
         CancellationToken stop)
     {
-        while (!stop.IsCancellationRequested && !operation.IsCancellationRequested)
+        while (!stop.IsCancellationRequested)
         {
             await Task.Delay(TimeSpan.FromSeconds(settings.HeartbeatIntervalSeconds), stop);
             await using var scope = scopeFactory.CreateAsyncScope();

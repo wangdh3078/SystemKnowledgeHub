@@ -248,6 +248,73 @@ public sealed class DatabaseDiscoveryRunApiTests
     }
 
     [Fact]
+    public async Task Overall_timeout_keeps_lease_alive_until_non_cooperative_provider_returns()
+    {
+        using var factory = new DatabaseDiscoveryWebApplicationFactory
+        {
+            WorkerOverallTimeoutSeconds = 1,
+            WorkerLeaseDurationSeconds = 2,
+            WorkerHeartbeatIntervalSeconds = 1,
+        };
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        factory.DiscoveryProvider.Handler = async (_, _, cancellationToken) =>
+        {
+            entered.TrySetResult();
+            await release.Task;
+            cancellationToken.ThrowIfCancellationRequested();
+            throw new InvalidOperationException("unreachable");
+        };
+
+        using var administrator = factory.CreateAuthenticatedClient();
+        var profile = await SetSecret(
+            administrator, await CreateProfile(factory, administrator), "timeout-lease-secret");
+        var trigger = await Trigger(administrator, profile);
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        DateTimeOffset? firstHeartbeat;
+        DateTimeOffset? secondHeartbeat;
+        DateTimeOffset? secondExpiry;
+        DatabaseDiscoveryRunStatus secondStatus;
+        try
+        {
+            await Task.Delay(1600);
+            await using (var scope = factory.Services.CreateAsyncScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<KnowledgeHubDbContext>();
+                firstHeartbeat = (await db.DatabaseDiscoveryRuns.AsNoTracking()
+                    .SingleAsync(item => item.Id == trigger.Id)).LeaseHeartbeatAt;
+            }
+
+            await Task.Delay(1300);
+            await using (var scope = factory.Services.CreateAsyncScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<KnowledgeHubDbContext>();
+                var stored = await db.DatabaseDiscoveryRuns.AsNoTracking()
+                    .SingleAsync(item => item.Id == trigger.Id);
+                secondHeartbeat = stored.LeaseHeartbeatAt;
+                secondExpiry = stored.LeaseExpiresAt;
+                secondStatus = stored.Status;
+            }
+        }
+        finally
+        {
+            release.TrySetResult();
+        }
+
+        Assert.NotNull(firstHeartbeat);
+        Assert.True(secondHeartbeat > firstHeartbeat);
+        Assert.True(secondExpiry > DateTimeOffset.UtcNow);
+        Assert.Equal(DatabaseDiscoveryRunStatus.Running, secondStatus);
+
+        var terminal = await WaitForTerminal(administrator, trigger.Id, TimeSpan.FromSeconds(6));
+        Assert.Equal(DatabaseDiscoveryRunStatus.Failed, terminal.Status);
+        Assert.Equal("Timeout", terminal.ErrorCode);
+        Assert.Null(terminal.SnapshotId);
+        Assert.Null(terminal.DifferenceId);
+    }
+
+    [Fact]
     public async Task Queued_and_running_cancel_are_durable_and_running_heartbeat_blocks_profile_mutation()
     {
         using (var queuedFactory = new DatabaseDiscoveryWebApplicationFactory { WorkerPollIntervalMilliseconds = 60_000 })
