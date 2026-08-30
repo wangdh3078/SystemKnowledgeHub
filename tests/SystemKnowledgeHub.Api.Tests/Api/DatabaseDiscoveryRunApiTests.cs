@@ -193,6 +193,28 @@ public sealed class DatabaseDiscoveryRunApiTests
             Assert.DoesNotContain(canary, string.Join('|', stored.ErrorCode, stored.ErrorSummary, stored.SafeErrorMetadataJson), StringComparison.Ordinal);
         }
 
+        using (var factory = new DatabaseDiscoveryWebApplicationFactory())
+        {
+            factory.DiscoveryProvider.Handler = (_, _, _) =>
+                throw new DatabaseDiscoveryProviderException(
+                    "AuthenticationFailed", "Oracle 用户名或密码验证失败。", "ORA-01017");
+            using var administrator = factory.CreateAuthenticatedClient();
+            var profile = await SetSecret(
+                administrator, await CreateProfile(factory, administrator), "oracle-provider-secret");
+            var run = await WaitForTerminal(administrator, (await Trigger(administrator, profile)).Id);
+            Assert.Equal(DatabaseDiscoveryRunStatus.Failed, run.Status);
+            Assert.Equal("AuthenticationFailed", run.ErrorCode);
+            Assert.Equal("Oracle 用户名或密码验证失败。", run.ErrorSummary);
+            Assert.Null(run.SnapshotId);
+            Assert.Null(run.DifferenceId);
+            await using var scope = factory.Services.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<KnowledgeHubDbContext>();
+            var stored = await db.DatabaseDiscoveryRuns.SingleAsync();
+            Assert.Equal("{\"vendorCode\":\"ORA-01017\"}", stored.SafeErrorMetadataJson);
+            Assert.Equal(0, await db.DatabaseDiscoverySnapshots.CountAsync());
+            Assert.Equal(0, await db.DatabaseDiscoveryDifferences.CountAsync());
+        }
+
         using (var factory = new DatabaseDiscoveryWebApplicationFactory { WorkerOverallTimeoutSeconds = 1 })
         {
             factory.DiscoveryProvider.Handler = async (_, _, cancellationToken) =>

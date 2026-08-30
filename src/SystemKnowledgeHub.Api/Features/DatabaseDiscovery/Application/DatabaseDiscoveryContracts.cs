@@ -17,6 +17,16 @@ public interface IDatabaseDiscoveryProvider
         CancellationToken cancellationToken);
 }
 
+public sealed class DatabaseDiscoveryProviderException(
+    string errorCode,
+    string safeSummary,
+    string? vendorCode = null) : Exception
+{
+    public string ErrorCode { get; } = errorCode;
+    public string SafeSummary { get; } = safeSummary;
+    public string? VendorCode { get; } = vendorCode;
+}
+
 public sealed record DatabaseProviderCapabilities(
     IReadOnlyList<CanonicalCapability> Capabilities);
 

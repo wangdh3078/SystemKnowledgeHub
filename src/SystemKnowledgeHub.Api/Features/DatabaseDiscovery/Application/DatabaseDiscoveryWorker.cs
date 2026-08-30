@@ -239,6 +239,15 @@ public sealed class DatabaseDiscoveryRunProcessor(
                 cancellationRequested ? "发现运行已取消。" : "发现运行超时。",
                 CancellationToken.None);
         }
+        catch (DatabaseDiscoveryProviderException exception)
+        {
+            await FailInNewScope(
+                claim,
+                exception.ErrorCode,
+                exception.SafeSummary,
+                stoppingToken,
+                exception.VendorCode);
+        }
         catch
         {
             await FailInNewScope(claim, "MetadataQueryFailed", "读取数据库结构元数据失败。", stoppingToken);
@@ -442,11 +451,12 @@ public sealed class DatabaseDiscoveryRunProcessor(
         ClaimedDatabaseDiscoveryRun claim,
         string errorCode,
         string summary,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? vendorCode = null)
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var terminal = scope.ServiceProvider.GetRequiredService<DatabaseDiscoveryTerminalWriter>();
-        await terminal.Fail(claim, errorCode, summary, cancellationToken);
+        await terminal.Fail(claim, errorCode, summary, cancellationToken, vendorCode);
     }
 
     private async Task<bool> IsCancellationRequested(ClaimedDatabaseDiscoveryRun claim, CancellationToken cancellationToken)
@@ -495,7 +505,12 @@ public sealed class DatabaseDiscoveryRunProcessor(
             or "连接配置或数据库来源已变化。" or "连接配置或密码版本已变化。"
             or "尚未设置数据库连接密码。" or "数据库连接密码无法解密，请重新设置。"
             or "发现运行超时。" or "读取数据库结构元数据失败。" or "发现快照持久化失败。"
-            or "发现运行因执行实例中断而失败，请重新触发。" => value,
+            or "发现运行因执行实例中断而失败，请重新触发。"
+            or "无法建立 Oracle 连接。" or "Oracle 用户名或密码验证失败。"
+            or "Oracle 账号缺少必要的目录元数据权限。" or "仅支持 Oracle Database 19c。"
+            or "连接到的 Oracle Service 与配置目标不一致。" or "Oracle 连接不能使用 CDB Root。"
+            or "读取 Oracle 目录元数据失败。" or "Oracle 目录读取超时。"
+            or "发现结果超过配置的安全限制。" or "无法完整解析 Oracle 外键引用。" => value,
         _ => "Provider 返回的发现结果无效或不完整。",
     };
 
@@ -533,7 +548,8 @@ public sealed class DatabaseDiscoveryTerminalWriter(
         ClaimedDatabaseDiscoveryRun claim,
         string errorCode,
         string summary,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? vendorCode = null)
     {
         var now = DateTimeOffset.UtcNow;
         await using var transaction = await SqliteImmediateTransaction.BeginAsync(dbContext, cancellationToken);
@@ -547,7 +563,10 @@ public sealed class DatabaseDiscoveryTerminalWriter(
         run.CompletedAt = now;
         run.ErrorCode = cancelled ? "Cancelled" : SafeCode(errorCode);
         run.ErrorSummary = cancelled ? "发现运行已取消。" : SafeSummary(summary);
-        run.SafeErrorMetadataJson = null;
+        var safeVendorCode = SafeVendorCode(vendorCode);
+        run.SafeErrorMetadataJson = cancelled || safeVendorCode is null
+            ? null
+            : JsonSerializer.Serialize(new { vendorCode = safeVendorCode });
         run.LeaseOwnerId = null;
         run.LeaseToken = null;
         run.LeaseHeartbeatAt = null;
@@ -573,11 +592,20 @@ public sealed class DatabaseDiscoveryTerminalWriter(
 
     private static string SafeCode(string value) => value switch
     {
-        "MetadataQueryFailed" or "Timeout" or "Cancelled" or "ProviderUnavailable"
+        "ConnectionFailed" or "AuthenticationFailed" or "InsufficientPrivilege"
+            or "UnsupportedDatabaseVersion" or "MetadataQueryFailed" or "Timeout" or "Cancelled" or "ProviderUnavailable"
             or "SnapshotPersistenceFailed" or "SecretMissing" or "SecretUnavailable"
-            or "LimitExceeded" or "ConcurrencyConflict" or "RunInterrupted" => value,
+            or "LimitExceeded" or "UnresolvedForeignKeyReference"
+            or "ConcurrencyConflict" or "RunInterrupted" => value,
         _ => "MetadataQueryFailed",
     };
+
+    private static string? SafeVendorCode(string? value) =>
+        value is { Length: 9 }
+            && value.StartsWith("ORA-", StringComparison.Ordinal)
+            && value.AsSpan(4).IndexOfAnyExceptInRange('0', '9') < 0
+                ? value
+                : null;
 
     private static string SafeSummary(string value) => value switch
     {
@@ -586,7 +614,12 @@ public sealed class DatabaseDiscoveryTerminalWriter(
             or "连接配置或数据库来源已变化。" or "连接配置或密码版本已变化。"
             or "尚未设置数据库连接密码。" or "数据库连接密码无法解密，请重新设置。"
             or "发现运行超时。" or "读取数据库结构元数据失败。" or "发现快照持久化失败。"
-            or "发现运行因执行实例中断而失败，请重新触发。" => value,
+            or "发现运行因执行实例中断而失败，请重新触发。"
+            or "无法建立 Oracle 连接。" or "Oracle 用户名或密码验证失败。"
+            or "Oracle 账号缺少必要的目录元数据权限。" or "仅支持 Oracle Database 19c。"
+            or "连接到的 Oracle Service 与配置目标不一致。" or "Oracle 连接不能使用 CDB Root。"
+            or "读取 Oracle 目录元数据失败。" or "Oracle 目录读取超时。"
+            or "发现结果超过配置的安全限制。" or "无法完整解析 Oracle 外键引用。" => value,
         _ => "Provider 返回的发现结果无效或不完整。",
     };
 }

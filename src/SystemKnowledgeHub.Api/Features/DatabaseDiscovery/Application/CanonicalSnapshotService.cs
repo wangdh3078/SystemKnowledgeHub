@@ -377,13 +377,14 @@ public sealed class CanonicalSnapshotService
             if (type.Length.Value is null or < 0 || type.Length.Unit is null) return false;
         }
         else if (type.Length.Value is not null || type.Length.Unit is not null) return false;
-        if (!ValidNumeric(type.NumericPrecision) || !ValidNumeric(type.NumericScale)) return false;
+        if (!ValidNumeric(type.NumericPrecision, allowNegative: false)
+            || !ValidNumeric(type.NumericScale, allowNegative: true)) return false;
         return true;
     }
 
-    private static bool ValidNumeric(CanonicalNumericMeasure measure) =>
+    private static bool ValidNumeric(CanonicalNumericMeasure measure, bool allowNegative) =>
         measure.Kind == DatabaseDiscoveryMeasureKind.Exact
-            ? measure.Value is >= 0
+            ? measure.Value is not null && (allowNegative || measure.Value >= 0)
             : measure.Value is null;
 
     private static bool Required(string? value, int maximum) =>
