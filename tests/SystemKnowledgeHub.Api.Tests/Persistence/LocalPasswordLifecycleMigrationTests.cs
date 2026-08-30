@@ -9,6 +9,7 @@ namespace SystemKnowledgeHub.Api.Tests.Persistence;
 public sealed class LocalPasswordLifecycleMigrationTests
 {
     private const string PreviousMigration = "20260829150313_AddDatabaseDiscoveryConnectionFoundation";
+    private const string TargetMigration = "20260829233658_AddLocalPasswordLifecycleSafety";
 
     [Fact]
     public async Task Migration_preserves_existing_credentials_with_must_change_password_false()
@@ -31,7 +32,7 @@ public sealed class LocalPasswordLifecycleMigrationTests
                  1, '2026-08-30T00:00:00+00:00', '2026-08-30T00:00:00+00:00', '2026-08-30T00:00:00+00:00', 1);
             """);
 
-        await migrator.MigrateAsync();
+        await migrator.MigrateAsync(TargetMigration);
 
         Assert.Equal(0L, await Scalar(connection,
             "SELECT must_change_password FROM local_login_credentials WHERE username='migration-local';"));

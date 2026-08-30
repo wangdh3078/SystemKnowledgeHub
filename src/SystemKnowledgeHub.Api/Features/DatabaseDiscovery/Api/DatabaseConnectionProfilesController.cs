@@ -16,6 +16,7 @@ namespace SystemKnowledgeHub.Api.Features.DatabaseDiscovery.Api;
 public sealed class DatabaseConnectionProfilesController(
     DatabaseConnectionProfileService profileService,
     DatabaseConnectionTestService testService,
+    DatabaseDiscoveryRunService runService,
     ICurrentUserContext currentUserContext) : ControllerBase
 {
     [HttpGet]
@@ -154,6 +155,8 @@ public sealed class DatabaseConnectionProfilesController(
         if (result.Failure == DatabaseConnectionFailure.NotFound) return NotFound(Error("not_found", "未找到指定连接配置。"));
         if (result.Failure == DatabaseConnectionFailure.ConcurrencyConflict)
             return Conflict(Error("concurrency_conflict", "连接配置、密钥或测试尝试已变化，请重新加载后重试。"));
+        if (result.Failure == DatabaseConnectionFailure.ActiveDiscoveryRun)
+            return Conflict(Error("DiscoveryAlreadyRunning", "发现运行期间不能测试或修改连接配置。"));
 
         var status = result.Failure switch
         {
@@ -175,6 +178,29 @@ public sealed class DatabaseConnectionProfilesController(
             safeDetails));
     }
 
+    [HttpPost("{id:long}/discovery-runs")]
+    public async Task<ActionResult<DatabaseDiscoveryRunResponse>> TriggerDiscoveryRun(
+        long id,
+        [FromBody] TriggerDatabaseDiscoveryRunRequest request,
+        CancellationToken cancellationToken)
+    {
+        var actor = await ResolveActor(cancellationToken);
+        if (actor.Error is not null) return StatusCode(actor.StatusCode!.Value, actor.Error);
+        var result = await runService.Trigger(id, request.ConcurrencyToken, actor.Actor!, cancellationToken);
+        return result.Failure switch
+        {
+            DatabaseDiscoveryFailure.None => Accepted(result.Response),
+            DatabaseDiscoveryFailure.Validation => BadRequest(Validation(result.FieldErrors!)),
+            DatabaseDiscoveryFailure.NotFound => NotFound(Error("not_found", "未找到指定连接配置。")),
+            DatabaseDiscoveryFailure.ReferenceInvalid => UnprocessableEntity(Error("reference_invalid", "关联数据库来源不存在或已不可用。")),
+            DatabaseDiscoveryFailure.Disabled => UnprocessableEntity(Error("Disabled", "连接配置已停用。")),
+            DatabaseDiscoveryFailure.SecretMissing => UnprocessableEntity(Error("SecretMissing", "尚未设置数据库连接密码。")),
+            DatabaseDiscoveryFailure.ConcurrencyConflict => Conflict(Error("ConcurrencyConflict", "连接配置已变化，请重新加载后重试。")),
+            DatabaseDiscoveryFailure.DiscoveryAlreadyRunning => Conflict(Error("DiscoveryAlreadyRunning", "该连接配置已有排队中或运行中的发现任务。")),
+            _ => throw new InvalidOperationException("Unsupported Discovery trigger failure."),
+        };
+    }
+
     private async Task<ActorResolution> ResolveActor(CancellationToken cancellationToken)
     {
         var creator = await CurrentUserApiResolution.ResolveCreator(currentUserContext, cancellationToken);
@@ -192,6 +218,9 @@ public sealed class DatabaseConnectionProfilesController(
         DatabaseConnectionFailure.DuplicateSource => Conflict(Error("conflict", "该数据库来源已绑定连接配置。")),
         DatabaseConnectionFailure.DuplicateName => Conflict(Error("conflict", "连接配置名称已存在。")),
         DatabaseConnectionFailure.ConcurrencyConflict => Conflict(Error("concurrency_conflict", "连接配置已被其他操作修改，请重新加载后重试。")),
+        DatabaseConnectionFailure.ActiveDiscoveryRun => Conflict(Error("DiscoveryAlreadyRunning", "发现运行期间不能修改连接配置或密码。")),
+        DatabaseConnectionFailure.DiscoveryTargetImmutable => Conflict(Error(
+            "DiscoveryTargetImmutable", "已有成功发现快照后不能修改 Provider 或数据库目标；请创建新的连接配置。")),
         DatabaseConnectionFailure.SecretAlreadySet => UnprocessableEntity(Error("secret_already_set", "连接密码已设置；请使用 Replace Secret。")),
         DatabaseConnectionFailure.SecretMissing => UnprocessableEntity(Error("SecretMissing", "尚未设置连接密码。")),
         _ => throw new InvalidOperationException("Unsupported database connection profile failure."),

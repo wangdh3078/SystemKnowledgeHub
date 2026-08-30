@@ -34,6 +34,9 @@ public sealed class DatabaseConnectionTestService(
                 .Include(item => item.Secret)
                 .SingleOrDefaultAsync(item => item.Id == profileId, cancellationToken);
             if (profile is null) return Failure(DatabaseConnectionFailure.NotFound);
+            if (await dbContext.DatabaseDiscoveryRuns.AnyAsync(item => item.ProfileId == profile.Id
+                    && (item.Status == DatabaseDiscoveryRunStatus.Queued || item.Status == DatabaseDiscoveryRunStatus.Running), cancellationToken))
+                return Failure(DatabaseConnectionFailure.ActiveDiscoveryRun);
             if (profile.Version != expectedVersion) return Failure(DatabaseConnectionFailure.ConcurrencyConflict);
             if (!profile.IsEnabled) return Failure(DatabaseConnectionFailure.Disabled);
             if (!await dbContext.DatabaseSources.AnyAsync(item => item.Id == profile.DatabaseSourceId, cancellationToken))

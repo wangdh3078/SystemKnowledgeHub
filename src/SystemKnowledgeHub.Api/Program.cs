@@ -176,6 +176,15 @@ builder.Services.AddScoped<DatabaseKnowledgeService>();
 builder.Services.AddScoped<DatabaseKnowledgeDeleteService>();
 builder.Services.AddScoped<DatabaseConnectionProfileService>();
 builder.Services.AddScoped<DatabaseConnectionTestService>();
+builder.Services.Configure<DatabaseDiscoveryOptions>(
+    builder.Configuration.GetSection(DatabaseDiscoveryOptions.SectionName));
+builder.Services.AddSingleton<CanonicalSnapshotService>();
+builder.Services.AddSingleton<DatabaseDiscoveryDiffService>();
+builder.Services.AddScoped<DatabaseDiscoveryRunService>();
+builder.Services.AddScoped<DatabaseDiscoveryRunProcessor>();
+builder.Services.AddScoped<DatabaseDiscoveryTerminalWriter>();
+builder.Services.AddSingleton<DatabaseDiscoveryWorkerReadiness>();
+builder.Services.AddHostedService<DatabaseDiscoveryWorker>();
 builder.Services.AddSingleton<IDatabaseConnectionSecretStore, DataProtectionDatabaseConnectionSecretStore>();
 builder.Services.AddSingleton<IOracleConnectionProbe, OracleManagedConnectionProbe>();
 builder.Services.AddSingleton<IDatabaseConnectionTester, OracleConnectionTester>();

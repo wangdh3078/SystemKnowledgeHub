@@ -9,6 +9,7 @@ namespace SystemKnowledgeHub.Api.Tests.Persistence;
 public sealed class DatabaseDiscoveryConnectionMigrationTests
 {
     private const string PreviousMigration = "20260829012501_AddAttachmentFoundation";
+    private const string TargetMigration = "20260829150313_AddDatabaseDiscoveryConnectionFoundation";
 
     [Fact]
     public async Task B01_migration_adds_only_profile_secret_and_audit_with_restrictive_constraints()
@@ -21,7 +22,7 @@ public sealed class DatabaseDiscoveryConnectionMigrationTests
         await migrator.MigrateAsync(PreviousMigration);
         var before = await Tables(connection);
 
-        await migrator.MigrateAsync();
+        await migrator.MigrateAsync(TargetMigration);
 
         var after = await Tables(connection);
         var added = after.Except(before, StringComparer.Ordinal).OrderBy(item => item).ToArray();

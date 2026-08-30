@@ -30,6 +30,11 @@ public sealed class KnowledgeHubDbContext(DbContextOptions<KnowledgeHubDbContext
     public DbSet<DatabaseConnectionProfile> DatabaseConnectionProfiles => Set<DatabaseConnectionProfile>();
     public DbSet<DatabaseConnectionSecret> DatabaseConnectionSecrets => Set<DatabaseConnectionSecret>();
     public DbSet<DatabaseConnectionAuditEvent> DatabaseConnectionAuditEvents => Set<DatabaseConnectionAuditEvent>();
+    public DbSet<DatabaseDiscoveryRun> DatabaseDiscoveryRuns => Set<DatabaseDiscoveryRun>();
+    public DbSet<DatabaseDiscoveryScopeGeneration> DatabaseDiscoveryScopeGenerations => Set<DatabaseDiscoveryScopeGeneration>();
+    public DbSet<DatabaseDiscoverySnapshot> DatabaseDiscoverySnapshots => Set<DatabaseDiscoverySnapshot>();
+    public DbSet<DatabaseDiscoveryDifference> DatabaseDiscoveryDifferences => Set<DatabaseDiscoveryDifference>();
+    public DbSet<DatabaseDiscoveryDifferenceEntry> DatabaseDiscoveryDifferenceEntries => Set<DatabaseDiscoveryDifferenceEntry>();
     public DbSet<Evidence> Evidence => Set<Evidence>();
     public DbSet<Integration> Integrations => Set<Integration>();
     public DbSet<IntegrationContractField> IntegrationContractFields => Set<IntegrationContractField>();
@@ -53,6 +58,7 @@ public sealed class KnowledgeHubDbContext(DbContextOptions<KnowledgeHubDbContext
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
         EnforceImmutableAttachmentReferences();
+        EnforceImmutableDiscoveryHistory();
         return base.SaveChanges(acceptAllChangesOnSuccess);
     }
 
@@ -61,6 +67,7 @@ public sealed class KnowledgeHubDbContext(DbContextOptions<KnowledgeHubDbContext
         CancellationToken cancellationToken = default)
     {
         EnforceImmutableAttachmentReferences();
+        EnforceImmutableDiscoveryHistory();
         return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
     }
 
@@ -75,6 +82,20 @@ public sealed class KnowledgeHubDbContext(DbContextOptions<KnowledgeHubDbContext
             .Any(entry => entry.State is EntityState.Modified or EntityState.Deleted))
         {
             throw new InvalidOperationException("Attachment references are immutable revision snapshots.");
+        }
+    }
+
+    private void EnforceImmutableDiscoveryHistory()
+    {
+        var immutableChanged = ChangeTracker.Entries()
+            .Any(entry => entry.Entity is DatabaseDiscoveryScopeGeneration
+                    or DatabaseDiscoverySnapshot
+                    or DatabaseDiscoveryDifference
+                    or DatabaseDiscoveryDifferenceEntry
+                && entry.State is EntityState.Modified or EntityState.Deleted);
+        if (immutableChanged)
+        {
+            throw new InvalidOperationException("Discovery scope, snapshot and difference history is immutable.");
         }
     }
 }

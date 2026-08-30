@@ -80,6 +80,8 @@ public enum DatabaseConnectionFailure
     DuplicateSource,
     DuplicateName,
     ConcurrencyConflict,
+    ActiveDiscoveryRun,
+    DiscoveryTargetImmutable,
     SecretAlreadySet,
     SecretMissing,
     SecretUnavailable,

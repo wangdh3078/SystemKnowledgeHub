@@ -39,3 +39,5 @@ public sealed record SetDatabaseConnectionSecretRequest(
 
 public sealed record ClearDatabaseConnectionSecretRequest(string? ConcurrencyToken);
 public sealed record TestDatabaseConnectionRequest(string? ConcurrencyToken);
+public sealed record TriggerDatabaseDiscoveryRunRequest(string? ConcurrencyToken);
+public sealed record CancelDatabaseDiscoveryRunRequest(string? ConcurrencyToken);

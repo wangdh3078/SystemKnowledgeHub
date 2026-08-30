@@ -11,6 +11,7 @@ using System.Text.Json;
 using SystemKnowledgeHub.Api.Features.Users.Domain;
 using SystemKnowledgeHub.Api.Features.Users.Application;
 using SystemKnowledgeHub.Api.Features.BusinessFunctions.Persistence;
+using SystemKnowledgeHub.Api.Features.DatabaseDiscovery.Application;
 using SystemKnowledgeHub.Api.Features.DatabaseKnowledge.Persistence;
 using SystemKnowledgeHub.Api.Persistence;
 
@@ -60,6 +61,9 @@ public class BootstrapWebApplicationFactory : WebApplicationFactory<Program>
         builder.ConfigureServices(services =>
         {
             services.AddDataProtection().UseEphemeralDataProtectionProvider();
+            services.RemoveAll<IHostedService>();
+            services.RemoveAll<DatabaseDiscoveryWorkerReadiness>();
+            services.AddSingleton(new DatabaseDiscoveryWorkerReadiness(initiallyReady: false));
             services.AddSingleton<MultipartUploadCapture>();
             services.AddTransient<IStartupFilter, MultipartUploadCaptureStartupFilter>();
             services.RemoveAll<DbContextOptions<KnowledgeHubDbContext>>();
@@ -116,6 +120,7 @@ public class BootstrapWebApplicationFactory : WebApplicationFactory<Program>
         dbContext.SaveChanges();
         _defaultUserId = user.Id;
         _defaultLoginIdentityId = identity.Id;
+        host.Services.GetRequiredService<DatabaseDiscoveryWorkerReadiness>().SignalReady();
         return host;
     }
 

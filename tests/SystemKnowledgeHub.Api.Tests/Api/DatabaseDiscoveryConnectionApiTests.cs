@@ -256,10 +256,10 @@ public sealed class DatabaseDiscoveryConnectionApiTests
 
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<KnowledgeHubDbContext>();
-        var tables = await db.Database.SqlQueryRaw<string>("SELECT name AS Value FROM sqlite_master WHERE type='table'").ToArrayAsync();
-        Assert.DoesNotContain(tables, name => name.Contains("discovery_run", StringComparison.OrdinalIgnoreCase));
-        Assert.DoesNotContain(tables, name => name.Contains("snapshot", StringComparison.OrdinalIgnoreCase));
-        Assert.DoesNotContain(tables, name => name.Contains("difference", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(0, await db.DatabaseDiscoveryRuns.CountAsync());
+        Assert.Equal(0, await db.DatabaseDiscoverySnapshots.CountAsync());
+        Assert.Equal(0, await db.DatabaseDiscoveryDifferences.CountAsync());
+        Assert.Equal(0, await db.DatabaseDiscoveryDifferenceEntries.CountAsync());
     }
 
     [Fact]

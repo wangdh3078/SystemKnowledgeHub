@@ -129,6 +129,7 @@ public sealed class DatabaseConnectionProfileService(
             .Include(item => item.Secret)
             .SingleOrDefaultAsync(item => item.Id == input.Id, cancellationToken);
         if (profile is null) return Failure(DatabaseConnectionFailure.NotFound);
+        if (await HasActiveRun(profile.Id, cancellationToken)) return Failure(DatabaseConnectionFailure.ActiveDiscoveryRun);
         if (profile.Version != expectedVersion) return Failure(DatabaseConnectionFailure.ConcurrencyConflict);
         var source = await dbContext.DatabaseSources.IgnoreQueryFilters()
             .SingleOrDefaultAsync(item => item.Id == profile.DatabaseSourceId, cancellationToken);
@@ -137,6 +138,17 @@ public sealed class DatabaseConnectionProfileService(
         if (await dbContext.DatabaseConnectionProfiles.AnyAsync(
                 item => item.Id != profile.Id && item.Name == normalized.Name, cancellationToken))
             return Failure(DatabaseConnectionFailure.DuplicateName);
+
+        var discoveryTargetChanged = profile.ProviderType != normalized.ProviderType
+            || profile.Host != normalized.Host
+            || profile.Port != normalized.Port
+            || profile.DatabaseName != normalized.DatabaseName
+            || profile.ServiceName != normalized.ServiceName;
+        if (discoveryTargetChanged
+            && await dbContext.DatabaseDiscoverySnapshots.AnyAsync(item => item.ProfileId == profile.Id, cancellationToken))
+        {
+            return Failure(DatabaseConnectionFailure.DiscoveryTargetImmutable);
+        }
 
         var includedJson = JsonSerializer.Serialize(normalized.IncludedSchemas);
         var connectionConfigurationChanged = profile.ProviderType != normalized.ProviderType
@@ -200,6 +212,7 @@ public sealed class DatabaseConnectionProfileService(
         var profile = await dbContext.DatabaseConnectionProfiles.Include(item => item.Secret)
             .SingleOrDefaultAsync(item => item.Id == id, cancellationToken);
         if (profile is null) return Failure(DatabaseConnectionFailure.NotFound);
+        if (await HasActiveRun(profile.Id, cancellationToken)) return Failure(DatabaseConnectionFailure.ActiveDiscoveryRun);
         if (profile.Version != expectedVersion) return Failure(DatabaseConnectionFailure.ConcurrencyConflict);
         if (profile.IsEnabled == enabled) return Success(ToResponse(profile));
         if (enabled)
@@ -253,6 +266,7 @@ public sealed class DatabaseConnectionProfileService(
         var profile = await dbContext.DatabaseConnectionProfiles.Include(item => item.Secret)
             .SingleOrDefaultAsync(item => item.Id == id, cancellationToken);
         if (profile is null) return Failure(DatabaseConnectionFailure.NotFound);
+        if (await HasActiveRun(profile.Id, cancellationToken)) return Failure(DatabaseConnectionFailure.ActiveDiscoveryRun);
         if (profile.Version != expectedVersion) return Failure(DatabaseConnectionFailure.ConcurrencyConflict);
         if (profile.Secret?.ProtectedPayload is null) return Failure(DatabaseConnectionFailure.SecretMissing);
 
@@ -291,6 +305,7 @@ public sealed class DatabaseConnectionProfileService(
         var profile = await dbContext.DatabaseConnectionProfiles.Include(item => item.Secret)
             .SingleOrDefaultAsync(item => item.Id == id, cancellationToken);
         if (profile is null) return Failure(DatabaseConnectionFailure.NotFound);
+        if (await HasActiveRun(profile.Id, cancellationToken)) return Failure(DatabaseConnectionFailure.ActiveDiscoveryRun);
         if (profile.Version != expectedVersion) return Failure(DatabaseConnectionFailure.ConcurrencyConflict);
         var currentlySet = profile.Secret?.ProtectedPayload is not null;
         if (replace && !currentlySet) return Failure(DatabaseConnectionFailure.SecretMissing);
@@ -524,6 +539,10 @@ public sealed class DatabaseConnectionProfileService(
     private static DatabaseConnectionOperationResult<DatabaseConnectionProfileResponse> Validation(
         IReadOnlyDictionary<string, string[]> errors) =>
         new(null, errors, DatabaseConnectionFailure.Validation);
+
+    private Task<bool> HasActiveRun(long profileId, CancellationToken cancellationToken) =>
+        dbContext.DatabaseDiscoveryRuns.AnyAsync(item => item.ProfileId == profileId
+            && (item.Status == DatabaseDiscoveryRunStatus.Queued || item.Status == DatabaseDiscoveryRunStatus.Running), cancellationToken);
 
     private sealed record NormalizedProfileInput(
         string Name,
