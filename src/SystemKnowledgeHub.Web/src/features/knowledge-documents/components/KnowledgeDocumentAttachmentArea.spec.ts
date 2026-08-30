@@ -126,7 +126,11 @@ describe('KnowledgeDocumentAttachmentArea', () => {
 
     await selectFiles(wrapper, [new File(['log'], '新增日志.txt', { type: 'text/plain' })])
 
-    expect(uploadKnowledgeDocumentAttachment).toHaveBeenCalledWith(7, expect.any(File))
+    expect(uploadKnowledgeDocumentAttachment).toHaveBeenCalledWith(
+      7,
+      expect.any(File),
+      expect.any(AbortSignal),
+    )
     expect(wrapper.emitted('update:attachments')?.at(-1)?.[0]).toEqual([existing, uploaded])
     expect(wrapper.text()).toContain('已添加 1 个附件到待保存集合')
   })
@@ -149,6 +153,12 @@ describe('KnowledgeDocumentAttachmentArea', () => {
     expect(
       vi.mocked(uploadKnowledgeDocumentAttachment).mock.calls.map((call) => call[1].name),
     ).toEqual(['MES接口规范.pdf', 'Equipment.xlsx', 'Source.zip'])
+    const uploadSignals = vi
+      .mocked(uploadKnowledgeDocumentAttachment)
+      .mock.calls.map((call) => call[2])
+      .filter((signal): signal is AbortSignal => signal instanceof AbortSignal)
+    expect(uploadSignals[0]).toBeInstanceOf(AbortSignal)
+    expect(new Set(uploadSignals).size).toBe(1)
     expect(vi.mocked(uploadKnowledgeDocumentAttachment).mock.calls[2][1].type).toBe(
       'application/x-zip-compressed',
     )
@@ -162,6 +172,57 @@ describe('KnowledgeDocumentAttachmentArea', () => {
     expect(wrapper.emitted('update:attachments')?.at(-1)?.[0]).toEqual([pdf, zip])
     expect(wrapper.text()).toContain('Equipment.xlsx：文件超过服务器允许的大小限制。')
     expect(wrapper.text()).toContain('已添加 2 个附件到待保存集合')
+  })
+
+  it('uses one shared batch signal across sequential uploads and creates a new signal for the next batch', async () => {
+    const one = attachment(21, 'MES接口规范.pdf')
+    const two = attachment(22, 'Source.zip')
+    vi.mocked(uploadKnowledgeDocumentAttachment).mockResolvedValueOnce(one).mockResolvedValueOnce(two)
+    const wrapper = mountArea([], { editable: true })
+
+    await selectFiles(wrapper, [new File(['pdf'], 'MES接口规范.pdf', { type: 'application/pdf' })])
+    const firstSignal = vi.mocked(uploadKnowledgeDocumentAttachment).mock.calls[0]?.[2]
+    expect(firstSignal).toBeInstanceOf(AbortSignal)
+
+    await selectFiles(wrapper, [new File(['zip'], 'Source.zip', { type: 'application/x-zip-compressed' })])
+    const secondSignal = vi.mocked(uploadKnowledgeDocumentAttachment).mock.calls[1]?.[2]
+    expect(secondSignal).toBeInstanceOf(AbortSignal)
+    expect(secondSignal).not.toBe(firstSignal)
+  })
+
+  it('aborts the active ordinary attachment batch on unmount and does not continue remaining files', async () => {
+    const uploadSignals: AbortSignal[] = []
+    let resolveUpload: ((value: AttachmentMetadata) => void) | undefined
+    vi.mocked(uploadKnowledgeDocumentAttachment).mockImplementation((_id, _file, signal) => {
+      if (signal) uploadSignals.push(signal)
+      return new Promise<AttachmentMetadata>((resolve, reject) => {
+        resolveUpload = resolve
+        signal?.addEventListener('abort', () => {
+          reject(new DOMException('upload canceled', 'AbortError'))
+        })
+      })
+    })
+    const wrapper = mountArea([], { editable: true })
+
+    await selectFiles(wrapper, [
+      new File(['one'], 'one.pdf', { type: 'application/pdf' }),
+      new File(['two'], 'two.pdf', { type: 'application/pdf' }),
+    ])
+    await flushPromises()
+
+    const signal = uploadSignals.at(0)
+    expect(signal).toBeInstanceOf(AbortSignal)
+    expect(uploadSignals).toHaveLength(1)
+    expect(wrapper.emitted('uploading-change')).toEqual([[true]])
+    wrapper.unmount()
+    expect(signal?.aborted).toBe(true)
+    await flushPromises()
+
+    resolveUpload?.(attachment(31, 'unused.pdf'))
+    await flushPromises()
+    expect(uploadKnowledgeDocumentAttachment).toHaveBeenCalledTimes(1)
+    expect(wrapper.emitted('uploading-change')?.slice(-1)).toEqual([[false]])
+    expect(wrapper.emitted('update:attachments')).toBeUndefined()
   })
 
   it('rejects an unsupported final extension before upload and keeps the existing set', async () => {

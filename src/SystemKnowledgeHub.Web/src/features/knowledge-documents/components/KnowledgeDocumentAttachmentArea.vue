@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { ElMessageBox } from 'element-plus'
 import { ApiError } from '../../../api/errors/ApiError'
 import {
@@ -46,6 +46,8 @@ const uploadErrors = ref<readonly string[]>([])
 const runtimeCapabilities = ref<AttachmentRuntimeCapabilities | null>(null)
 const runtimeCapabilitiesLoading = ref(false)
 const runtimeCapabilitiesError = ref<string | null>(null)
+let uploadBatchController: AbortController | null = null
+let componentUnmounting = false
 const fileAttachments = computed(() =>
   props.attachments.filter((attachment) => attachment.kind === 'File'),
 )
@@ -97,6 +99,10 @@ function finalExtension(fileName: string): string {
   return dot > -1 ? fileName.slice(dot).toLowerCase() : ''
 }
 
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === 'AbortError'
+}
+
 function uploadErrorMessage(fileName: string, reason: unknown): string {
   const prefix = `${fileName}：`
   if (!(reason instanceof ApiError)) {
@@ -119,6 +125,8 @@ function uploadErrorMessage(fileName: string, reason: unknown): string {
 async function uploadFiles(files: readonly File[]): Promise<void> {
   const capabilities = runtimeCapabilities.value
   if (!props.editable || uploading.value || files.length === 0 || !capabilities) return
+  const batchController = new AbortController()
+  uploadBatchController = batchController
   uploading.value = true
   emit('uploading-change', true)
   uploadErrors.value = []
@@ -129,6 +137,7 @@ async function uploadFiles(files: readonly File[]): Promise<void> {
   let succeeded = 0
   try {
     for (const [index, file] of files.entries()) {
+      if (componentUnmounting) break
       uploadProgress.value = { current: index + 1, total: files.length }
       activeFileName.value = file.name
       const extension = finalExtension(file.name)
@@ -143,19 +152,26 @@ async function uploadFiles(files: readonly File[]): Promise<void> {
         continue
       }
       try {
-        const metadata = await uploadKnowledgeDocumentAttachment(props.documentId, file)
+        const metadata = await uploadKnowledgeDocumentAttachment(
+          props.documentId,
+          file,
+          batchController.signal,
+        )
         if (metadata.kind !== 'File') {
           errors.push(`${file.name}：该文件属于图片，请使用正文中的“插入图片”。`)
           continue
         }
+        if (componentUnmounting) break
         if (!desired.some((attachment) => attachment.attachmentId === metadata.attachmentId)) {
           desired.push(metadata)
           emit('update:attachments', [...desired])
           succeeded += 1
         }
       } catch (reason: unknown) {
+        if (isAbortError(reason)) continue
         errors.push(uploadErrorMessage(file.name || '未命名文件', reason))
       }
+      if (componentUnmounting) break
     }
     uploadErrors.value = errors
     if (succeeded > 0) {
@@ -166,9 +182,19 @@ async function uploadFiles(files: readonly File[]): Promise<void> {
   } finally {
     activeFileName.value = null
     uploading.value = false
+    uploadBatchController = null
     emit('uploading-change', false)
   }
+  if (componentUnmounting) return
 }
+
+onBeforeUnmount(() => {
+  componentUnmounting = true
+  uploadBatchController?.abort()
+  uploadBatchController = null
+  if (uploading.value) emit('uploading-change', false)
+  activeFileName.value = null
+})
 
 function chooseFiles(): void {
   if (!props.editable || uploading.value || !canChooseFiles.value) return
