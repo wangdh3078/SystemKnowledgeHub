@@ -13,7 +13,7 @@ EXISTING UPLOAD REGRESSION: PASS
 
 **完成时间（UTC+8）**：2026-08-30
 
-本次修复仅针对知识文档普通附件上传生命周期，确保“离开页面会停止上传”的提示与真实行为一致。  
+本次修复仅针对知识文档普通附件上传生命周期，确保“离开页面会停止上传”的提示与真实行为一致。
 目标是只对当前普通附件上传批次建立并管理 `AbortController`，组件销毁时取消未完成上传、停止后续批次请求，并让 UI 及 `uploading-change` 状态正确回退。
 
 ## 范围与不做项
@@ -73,7 +73,7 @@ EXISTING UPLOAD REGRESSION: PASS
 
 ## 备注
 
-- 页面离开提示文案：在 `KnowledgeDocumentDetailView.vue` 保持为  
+- 页面离开提示文案：在 `KnowledgeDocumentDetailView.vue` 保持为
   “附件仍在上传。离开编辑会中止本次请求；服务端若已完成上传，文件会保留为未引用附件。未保存内容也会丢失。”
   与本次实现一致，无需最小文案调整。
 
