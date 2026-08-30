@@ -11,6 +11,7 @@ public sealed class LocalLoginCredentialConfiguration : IEntityTypeConfiguration
         builder.ToTable("local_login_credentials", table =>
         {
             table.HasCheckConstraint("ck_local_login_credentials_is_active", "is_active IN (0,1)");
+            table.HasCheckConstraint("ck_local_login_credentials_must_change_password", "must_change_password IN (0,1)");
             table.HasCheckConstraint("ck_local_login_credentials_failed_login_attempts", "failed_login_attempts >= 0");
             table.HasCheckConstraint("ck_local_login_credentials_session_version", "session_version >= 1");
             table.HasCheckConstraint("ck_local_login_credentials_version", "version >= 1");
@@ -23,6 +24,7 @@ public sealed class LocalLoginCredentialConfiguration : IEntityTypeConfiguration
         builder.Property(entity => entity.NormalizedUsername).HasColumnName("normalized_username").IsRequired();
         builder.Property(entity => entity.PasswordHash).HasColumnName("password_hash").IsRequired();
         builder.Property(entity => entity.IsActive).HasColumnName("is_active").HasDefaultValue(true).IsRequired();
+        builder.Property(entity => entity.MustChangePassword).HasColumnName("must_change_password").HasDefaultValue(false).IsRequired();
         builder.Property(entity => entity.FailedLoginAttempts).HasColumnName("failed_login_attempts").HasDefaultValue(0).IsRequired();
         builder.Property(entity => entity.FailedLoginWindowStartedAt).HasColumnName("failed_login_window_started_at");
         builder.Property(entity => entity.LockedUntil).HasColumnName("locked_until");

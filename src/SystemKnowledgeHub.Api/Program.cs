@@ -209,6 +209,7 @@ builder.Services.AddScoped<UnknownItemQueries>();
 builder.Services.AddScoped<UnknownItemService>();
 builder.Services.AddScoped<KnowledgeResolutionService>();
 builder.Services.AddScoped<UserQueries>();
+builder.Services.AddScoped<UsableAdministratorResolver>();
 builder.Services.AddScoped<UserService>();
 builder.Services.AddSingleton<IOptions<LocalAuthenticationOptions>>(Options.Create(local));
 builder.Services.AddSingleton<IOptions<OidcAuthenticationOptions>>(Options.Create(oidc));
@@ -220,6 +221,7 @@ builder.Services.Configure<PasswordHasherOptions>(options =>
 builder.Services.AddSingleton<LocalPasswordService>();
 builder.Services.AddSingleton<AuthenticationPrincipalBuilder>();
 builder.Services.AddScoped<LocalLoginService>();
+builder.Services.AddScoped<LocalPasswordLifecycleService>();
 builder.Services.AddScoped<LocalAdminBootstrapService>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUserContext, CurrentUserContext>();
@@ -376,14 +378,19 @@ builder.Services
     });
 builder.Services.AddAuthorization(options =>
 {
-    options.FallbackPolicy = new AuthorizationPolicyBuilder()
+    var viewerPolicy = new AuthorizationPolicyBuilder()
         .AddRequirements(new AccessLevelRequirement(AccessLevel.Viewer))
         .Build();
+    options.DefaultPolicy = viewerPolicy;
+    options.FallbackPolicy = viewerPolicy;
+    options.AddPolicy(AccessPolicies.PasswordLifecycle, policy => policy
+        .AddRequirements(new CurrentSessionRequirement()));
     options.AddPolicy(AccessPolicies.Editor, policy => policy
         .AddRequirements(new AccessLevelRequirement(AccessLevel.Editor)));
     options.AddPolicy(AccessPolicies.Administrator, policy => policy
         .AddRequirements(new AccessLevelRequirement(AccessLevel.Administrator)));
 });
+builder.Services.AddScoped<IAuthorizationHandler, CurrentSessionAuthorizationHandler>();
 builder.Services.AddScoped<IAuthorizationHandler, AccessLevelAuthorizationHandler>();
 builder.Services.AddSingleton<IAuthorizationMiddlewareResultHandler, ApiAuthorizationMiddlewareResultHandler>();
 

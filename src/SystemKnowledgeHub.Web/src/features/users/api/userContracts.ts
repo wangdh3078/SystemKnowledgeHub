@@ -44,9 +44,12 @@ export interface CurrentUserProfile {
   readonly isActive: boolean
   readonly knowledgeRoles: readonly KnowledgeRoleSummary[]
   readonly accessLevel: AccessLevel
+  readonly authenticationMethod: AuthenticationMethod
+  readonly mustChangePassword: boolean
 }
 
 export type AccessLevel = 'Viewer' | 'Editor' | 'Administrator'
+export type AuthenticationMethod = 'local' | 'oidc'
 
 export interface KnowledgeRole extends KnowledgeRoleSummary {
   readonly updatedAt: string
@@ -127,6 +130,11 @@ function readAccessLevel(value: unknown, field: string): AccessLevel {
   throw new Error(`${field} must be a supported access level`)
 }
 
+function readAuthenticationMethod(value: unknown, field: string): AuthenticationMethod {
+  if (value === 'local' || value === 'oidc') return value
+  throw new Error(`${field} must be a supported authentication method`)
+}
+
 function readInteger(value: unknown, field: string, minimum = 0): number {
   if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < minimum) {
     throw new Error(`${field} must be a safe integer`)
@@ -204,6 +212,8 @@ export function decodeCurrentUser(value: unknown): CurrentUserProfile {
       decodeRoleSummary(role, `currentUser.knowledgeRoles[${index}]`),
     ),
     accessLevel: readAccessLevel(root.accessLevel, 'currentUser.accessLevel'),
+    authenticationMethod: readAuthenticationMethod(root.authenticationMethod, 'currentUser.authenticationMethod'),
+    mustChangePassword: readBoolean(root.mustChangePassword, 'currentUser.mustChangePassword'),
   }
 }
 

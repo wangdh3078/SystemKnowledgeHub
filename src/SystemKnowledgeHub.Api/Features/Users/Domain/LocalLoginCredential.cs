@@ -12,6 +12,7 @@ public sealed class LocalLoginCredential
     public string NormalizedUsername { get; set; } = string.Empty;
     public string PasswordHash { get; set; } = string.Empty;
     public bool IsActive { get; set; } = true;
+    public bool MustChangePassword { get; set; }
     public int FailedLoginAttempts { get; set; }
     public DateTimeOffset? FailedLoginWindowStartedAt { get; set; }
     public DateTimeOffset? LockedUntil { get; set; }

@@ -38,6 +38,8 @@ public sealed class CurrentUserApiTests : IClassFixture<BootstrapWebApplicationF
         Assert.Equal(role.GetProperty("id").GetInt64(), currentUser.GetProperty("knowledgeRoles")[0].GetProperty("id").GetInt64());
         Assert.False(currentUser.TryGetProperty("concurrencyToken", out _));
         Assert.Equal("Viewer", currentUser.GetProperty("accessLevel").GetString());
+        Assert.Equal("oidc", currentUser.GetProperty("authenticationMethod").GetString());
+        Assert.False(currentUser.GetProperty("mustChangePassword").GetBoolean());
     }
 
     [Fact]

@@ -9,9 +9,29 @@ namespace SystemKnowledgeHub.Api.Shared.Security;
 
 internal static class AccessPolicies
 {
+    public const string PasswordLifecycle = "PasswordLifecycle";
     public const string Viewer = "Viewer";
     public const string Editor = "Editor";
     public const string Administrator = "Administrator";
+}
+
+internal sealed class CurrentSessionRequirement : IAuthorizationRequirement;
+
+internal sealed class CurrentSessionAuthorizationHandler(
+    ICurrentUserContext currentUserContext) : AuthorizationHandler<CurrentSessionRequirement>
+{
+    protected override async Task HandleRequirementAsync(
+        AuthorizationHandlerContext context,
+        CurrentSessionRequirement requirement)
+    {
+        var cancellationToken = (context.Resource as HttpContext)?.RequestAborted ?? CancellationToken.None;
+        var resolution = await currentUserContext.ResolveAsync(cancellationToken);
+        if (resolution.Status is CurrentUserResolutionStatus.Available
+            or CurrentUserResolutionStatus.PasswordChangeRequired)
+        {
+            context.Succeed(requirement);
+        }
+    }
 }
 
 internal sealed class AccessLevelRequirement(AccessLevel minimumAccessLevel) : IAuthorizationRequirement
@@ -56,7 +76,8 @@ internal sealed class ApiAuthorizationMiddlewareResultHandler : IAuthorizationMi
             return;
         }
 
-        if (!context.Request.Path.StartsWithSegments("/api", StringComparison.OrdinalIgnoreCase))
+        if (!context.Request.Path.StartsWithSegments("/api", StringComparison.OrdinalIgnoreCase)
+            && !context.Request.Path.StartsWithSegments("/auth/logout", StringComparison.OrdinalIgnoreCase))
         {
             await DefaultHandler.HandleAsync(next, context, policy, authorizeResult);
             return;
@@ -71,7 +92,7 @@ internal sealed class ApiAuthorizationMiddlewareResultHandler : IAuthorizationMi
                 Error("unauthenticated", "尚未登录。", "missing")),
             CurrentUserResolutionStatus.SessionExpired => (
                 StatusCodes.Status401Unauthorized,
-                Error("session_expired", "登录会话已失效，请重新认证。", "expired")),
+                Error("session_expired", "登录会话已失效，请重新认证。", "expired", resolution.Reason)),
             CurrentUserResolutionStatus.IdentityUnmapped => (
                 StatusCodes.Status403Forbidden,
                 Error("identity_unmapped", "当前登录身份尚未绑定系统用户。", "unmapped")),
@@ -81,6 +102,9 @@ internal sealed class ApiAuthorizationMiddlewareResultHandler : IAuthorizationMi
             CurrentUserResolutionStatus.AccountInactive => (
                 StatusCodes.Status403Forbidden,
                 Error("account_inactive", "当前用户已停用。", "inactive")),
+            CurrentUserResolutionStatus.PasswordChangeRequired => (
+                StatusCodes.Status403Forbidden,
+                Error("must_change_password", "必须先修改密码才能继续访问。", "must_change_password", "must_change_password")),
             _ => (
                 StatusCodes.Status403Forbidden,
                 new ApiErrorResponse(
@@ -94,9 +118,9 @@ internal sealed class ApiAuthorizationMiddlewareResultHandler : IAuthorizationMi
         await context.Response.WriteAsJsonAsync(error, context.RequestAborted);
     }
 
-    private static ApiErrorResponse Error(string code, string message, string authStatus) => new(
+    private static ApiErrorResponse Error(string code, string message, string authStatus, string? reason = null) => new(
         code,
         message,
         null,
-        new { authStatus });
+        new { authStatus, reason });
 }

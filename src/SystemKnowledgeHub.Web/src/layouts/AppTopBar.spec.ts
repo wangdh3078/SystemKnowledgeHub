@@ -21,13 +21,18 @@ const currentUser = {
   isActive: true,
   knowledgeRoles: [],
   accessLevel: 'Administrator' as const,
+  authenticationMethod: 'local' as const,
+  mustChangePassword: false,
 }
 
-async function mountTopBar(accessLevel: 'Administrator' | 'Editor' | 'Viewer' = 'Administrator') {
+async function mountTopBar(
+  accessLevel: 'Administrator' | 'Editor' | 'Viewer' = 'Administrator',
+  authenticationMethod: 'local' | 'oidc' = 'local',
+) {
   const pinia = createPinia()
   setActivePinia(pinia)
   const actorStore = useActorStore()
-  actorStore.currentUser = { ...currentUser, accessLevel }
+  actorStore.currentUser = { ...currentUser, accessLevel, authenticationMethod }
   actorStore.authStatus = 'authenticated'
   actorStore.initialized = true
   const router = createRouter({
@@ -69,6 +74,19 @@ describe('AppTopBar logout confirmation', () => {
     const wrapper = await mountTopBar('Viewer')
 
     expect(wrapper.findAll('button').some((button) => button.text() === '新增')).toBe(false)
+  })
+
+  it('shows password change only for Local authentication', async () => {
+    const local = await mountTopBar('Administrator', 'local')
+    await local.get('.app-topbar__profile').trigger('click')
+    expect(local.find('.app-topbar__change-password').exists()).toBe(true)
+    local.unmount()
+
+    const oidc = await mountTopBar('Administrator', 'oidc')
+    await oidc.get('.app-topbar__profile').trigger('click')
+    expect(oidc.find('.app-topbar__change-password').exists()).toBe(false)
+    expect(oidc.text()).toContain('密码由企业身份提供方管理')
+    oidc.unmount()
   })
 
   it('requires the existing dirty-document confirmation after logout confirmation', async () => {

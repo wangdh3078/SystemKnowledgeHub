@@ -32,6 +32,8 @@ public sealed class LocalLoginApiTests : IClassFixture<LocalLoginWebApplicationF
         var profile = await currentUser.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal(userId, profile.GetProperty("id").GetInt64());
         Assert.Equal("Administrator", profile.GetProperty("accessLevel").GetString());
+        Assert.Equal("local", profile.GetProperty("authenticationMethod").GetString());
+        Assert.False(profile.GetProperty("mustChangePassword").GetBoolean());
     }
 
     [Fact]

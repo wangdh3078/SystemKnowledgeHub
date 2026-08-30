@@ -27,6 +27,8 @@ const currentUser: CurrentUserProfile = {
   isActive: true,
   knowledgeRoles: [],
   accessLevel: 'Administrator',
+  authenticationMethod: 'local',
+  mustChangePassword: false,
 }
 
 let pinia: Pinia

@@ -15,6 +15,8 @@ const currentUser = {
   isActive: true,
   knowledgeRoles: [],
   accessLevel: 'Administrator' as const,
+  authenticationMethod: 'local' as const,
+  mustChangePassword: false,
 }
 
 async function mountSidebar(accessLevel: 'Administrator' | 'Editor' | 'Viewer') {

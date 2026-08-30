@@ -54,6 +54,8 @@ export const useActorStore = defineStore('actor', () => {
   const accessLevel = computed<AccessLevel | null>(() => currentUser.value?.accessLevel ?? null)
   const canEdit = computed(() => accessLevel.value !== null && accessRanks[accessLevel.value] >= accessRanks.Editor)
   const isAdministrator = computed(() => accessLevel.value === 'Administrator')
+  const mustChangePassword = computed(() => currentUser.value?.mustChangePassword === true)
+  const authenticationMethod = computed(() => currentUser.value?.authenticationMethod ?? null)
   const actor = computed<ActorContext>(() => {
     const user = currentUser.value
     const activeRole = user?.knowledgeRoles.find((role) => role.isActive)
@@ -118,6 +120,10 @@ export const useActorStore = defineStore('actor', () => {
   }
 
   function handleSecurityError(error: unknown): void {
+    if (error instanceof ApiError && error.response.code === 'must_change_password' && isAuthenticated.value) {
+      void loadCurrentUser()
+      return
+    }
     const status = resolveAuthStatus(error)
     if (status !== 'error') {
       clearCurrentUser(status, error instanceof Error ? error.message : null)
@@ -140,6 +146,8 @@ export const useActorStore = defineStore('actor', () => {
     accessLevel,
     canEdit,
     isAdministrator,
+    mustChangePassword,
+    authenticationMethod,
     actor,
     displayName,
     role,

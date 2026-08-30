@@ -7,7 +7,10 @@ namespace SystemKnowledgeHub.Api.Features.Users.Application;
 
 public sealed record LocalAdminBootstrapRequest(string Username, string DisplayName, long? UserId, string Password);
 
-public sealed class LocalAdminBootstrapService(KnowledgeHubDbContext dbContext, LocalPasswordService passwords)
+public sealed class LocalAdminBootstrapService(
+    KnowledgeHubDbContext dbContext,
+    LocalPasswordService passwords,
+    UsableAdministratorResolver usableAdministrators)
 {
     public async Task<(bool Succeeded, string? Error)> BootstrapAsync(LocalAdminBootstrapRequest request, CancellationToken cancellationToken)
     {
@@ -22,12 +25,7 @@ public sealed class LocalAdminBootstrapService(KnowledgeHubDbContext dbContext, 
 
         await dbContext.Database.MigrateAsync(cancellationToken);
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
-        var hasUsableAdministrator = await dbContext.Users.AnyAsync(user =>
-            user.IsActive
-            && user.AccessLevel == AccessLevel.Administrator
-            && (dbContext.LoginIdentities.Any(identity => identity.UserId == user.Id && identity.IsActive)
-                || dbContext.LocalLoginCredentials.Any(credential => credential.UserId == user.Id && credential.IsActive)), cancellationToken);
-        if (hasUsableAdministrator)
+        if (await usableAdministrators.HasAnyAsync(cancellationToken: cancellationToken))
         {
             return (false, "已存在可用的 Administrator，拒绝再次 bootstrap。");
         }

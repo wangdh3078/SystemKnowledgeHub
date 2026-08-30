@@ -366,7 +366,16 @@ button {
 .app-topbar__profile-details div { display: grid; grid-template-columns: 82px minmax(0, 1fr); gap: 8px; }
 .app-topbar__profile-details dt { color: var(--text-muted); }
 .app-topbar__profile-details dd { margin: 0; overflow-wrap: anywhere; }
-.app-topbar__logout { width: 100%; }
+.app-topbar__logout, .app-topbar__change-password { width: 100%; }
+.app-topbar__change-password { margin-bottom: 8px; }
+.app-topbar__authentication-hint { margin: 12px 0; padding: 9px 10px; border-radius: var(--radius-md); background: var(--color-surface-subtle); color: var(--color-subtle); font-size: 11px; }
+.local-password-form { display: grid; gap: 8px; }
+.local-password-form label { margin-top: 7px; color: var(--color-text); font-size: 13px; font-weight: 650; }
+.local-password-form__hint { margin: 0 0 3px; color: var(--color-subtle); font-size: 12px; line-height: 1.6; }
+.local-password-form__field-error { color: var(--el-color-danger); font-size: 12px; }
+.local-password-form > .el-button { width: 100%; min-height: 42px; margin-top: 10px; }
+.forced-password-gate__logout { width: 100%; margin-top: 12px; }
+.forced-password-gate__card .local-password-form { margin-top: 4px; }
 .security-gate { position: relative; display: grid; min-height: 100vh; place-items: center; padding: 32px; overflow: auto; background: radial-gradient(circle at 13% 22%, rgb(106 92 210 / 13%), transparent 29%), radial-gradient(circle at 88% 84%, rgb(91 151 214 / 10%), transparent 30%), linear-gradient(135deg, #f8f9fd 0%, #f4f5fa 52%, #f8f9fc 100%); }
 .security-gate::before { position: absolute; inset: 0; z-index: 0; background-image: linear-gradient(rgb(93 101 139 / 4%) 1px, transparent 1px), linear-gradient(90deg, rgb(93 101 139 / 4%) 1px, transparent 1px); background-size: 32px 32px; content: ''; mask-image: linear-gradient(to bottom, rgb(0 0 0 / 65%), transparent 88%); pointer-events: none; }
 .security-gate::after { position: absolute; width: min(52vw, 720px); height: min(52vw, 720px); border: 1px solid rgb(99 102 241 / 7%); border-radius: 50%; transform: translate(-31%, 18%); content: ''; pointer-events: none; }

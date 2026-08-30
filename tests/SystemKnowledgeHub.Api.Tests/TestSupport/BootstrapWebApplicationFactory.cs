@@ -45,6 +45,11 @@ public class BootstrapWebApplicationFactory : WebApplicationFactory<Program>
 
     protected virtual void ConfigureAuthenticationMode(IWebHostBuilder builder)
     {
+        builder.UseSetting("Authentication:Local:Enabled", "false");
+        builder.UseSetting("Authentication:Oidc:Enabled", "true");
+        builder.UseSetting("Authentication:Oidc:Provider", "TestOidc");
+        builder.UseSetting("Authentication:Oidc:Authority", "https://invalid.local");
+        builder.UseSetting("Authentication:Oidc:ClientId", "system-knowledge-hub-tests");
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)

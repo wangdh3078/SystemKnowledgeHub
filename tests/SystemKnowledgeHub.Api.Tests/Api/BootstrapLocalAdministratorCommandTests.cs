@@ -95,6 +95,11 @@ public sealed class BootstrapLocalAdministratorCommandTests
                 options.IterationCount = 220_000;
             });
             services.AddSingleton<LocalPasswordService>();
+            services.AddSingleton<Microsoft.Extensions.Options.IOptions<LocalAuthenticationOptions>>(
+                Microsoft.Extensions.Options.Options.Create(new LocalAuthenticationOptions { Enabled = true }));
+            services.AddSingleton<Microsoft.Extensions.Options.IOptions<OidcAuthenticationOptions>>(
+                Microsoft.Extensions.Options.Options.Create(new OidcAuthenticationOptions()));
+            services.AddScoped<UsableAdministratorResolver>();
             services.AddScoped<LocalAdminBootstrapService>();
             return services.BuildServiceProvider();
         }

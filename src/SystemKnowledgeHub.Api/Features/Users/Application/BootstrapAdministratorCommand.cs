@@ -20,7 +20,8 @@ public static class BootstrapAdministratorCommand
             Console.Error.WriteLine(error);
             return 1;
         }
-        if (string.IsNullOrWhiteSpace(oidcOptions.Provider)
+        if (!oidcOptions.Enabled
+            || string.IsNullOrWhiteSpace(oidcOptions.Provider)
             || !string.Equals(request.Provider, oidcOptions.Provider, StringComparison.Ordinal))
         {
             Console.Error.WriteLine("Provider 不在已配置的 OIDC allowlist 中。");
@@ -29,12 +30,13 @@ public static class BootstrapAdministratorCommand
 
         await using var scope = services.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<KnowledgeHubDbContext>();
+        var usableAdministrators = scope.ServiceProvider.GetRequiredService<UsableAdministratorResolver>();
         await dbContext.Database.MigrateAsync();
         await using var transaction = await dbContext.Database.BeginTransactionAsync();
 
-        if (await dbContext.Users.AnyAsync(user => user.IsActive && user.AccessLevel == AccessLevel.Administrator))
+        if (await usableAdministrators.HasAnyAsync())
         {
-            Console.Error.WriteLine("已存在启用的 Administrator，拒绝再次 bootstrap。");
+            Console.Error.WriteLine("已存在可用的 Administrator，拒绝再次 bootstrap。");
             return 1;
         }
         if (await dbContext.LoginIdentities.AnyAsync(identity =>

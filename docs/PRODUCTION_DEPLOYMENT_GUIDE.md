@@ -89,6 +89,13 @@ $env:Authentication__Oidc__CallbackPath = '/signin-oidc'
 
 Both methods are supported when both `Enabled` values are explicitly `true`. No method creates a default credential. For Local mode, use the existing interactive `bootstrap-local-admin` command or a deployment-controlled stdin secret channel; never put a password in command arguments, JSON, logs, or this guide.
 
+## Authentication session and local password lifecycle
+
+- Every authenticated request revalidates the session against the currently enabled authentication method, the current approved OIDC Provider when applicable, the active identity/credential mapping, the active canonical User, and the method-scoped session version. Disabling Local or OIDC therefore rejects existing cookies for that method on their next request; the API returns `401 session_expired` and clears the cookie.
+- A Local credential marked `MustChangePassword` may access only the current-user projection, antiforgery token retrieval, current-user password change, and logout. Other business and administration APIs return `403 must_change_password`; the frontend renders the password gate without the application shell.
+- `PUT /api/current-user/password` is available only to the current Local session. A successful change atomically replaces the hash, clears the forced-change/failure/lock state, increments the Local credential session version, and clears the current cookie. All previously issued Local cookies for that credential become invalid; OIDC sessions are unaffected.
+- OIDC passwords remain owned by the enterprise identity provider. The application does not expose a Local password-change action for an OIDC-authenticated session.
+
 ## Starting the application
 
 Development:

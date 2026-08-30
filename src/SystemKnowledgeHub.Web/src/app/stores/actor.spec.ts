@@ -13,6 +13,7 @@ const currentUser: CurrentUserProfile = {
   id: 42, employeeNo: 'EMP-042', displayName: '王敏', email: 'wang.min@example.com',
   departmentOrTeam: '制造系统组', jobTitle: '知识工程师', isActive: true,
   knowledgeRoles: [{ id: 7, name: 'MES 业务专家', description: null, isActive: true }], accessLevel: 'Editor',
+  authenticationMethod: 'local', mustChangePassword: false,
 }
 
 describe('actor Current User store', () => {

@@ -86,7 +86,7 @@ public sealed class BootstrapAdministratorCommandTests
         Assert.Equal(1, existingIdentity);
     }
 
-    private static OidcAuthenticationOptions Options() => new() { Provider = "TestOidc" };
+    private static OidcAuthenticationOptions Options() => new() { Enabled = true, Provider = "TestOidc" };
 
     private sealed class TemporaryDatabase : IAsyncDisposable
     {
@@ -96,6 +96,11 @@ public sealed class BootstrapAdministratorCommandTests
         {
             var services = new ServiceCollection();
             services.AddDbContext<KnowledgeHubDbContext>(options => options.UseSqlite($"Data Source={_path};Foreign Keys=True;Pooling=False"));
+            services.AddSingleton<Microsoft.Extensions.Options.IOptions<LocalAuthenticationOptions>>(
+                Microsoft.Extensions.Options.Options.Create(new LocalAuthenticationOptions()));
+            services.AddSingleton<Microsoft.Extensions.Options.IOptions<OidcAuthenticationOptions>>(
+                Microsoft.Extensions.Options.Options.Create(Options()));
+            services.AddScoped<UsableAdministratorResolver>();
             return services.BuildServiceProvider();
         }
 

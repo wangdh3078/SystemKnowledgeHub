@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace SystemKnowledgeHub.Api.Tests.TestSupport;
 
@@ -11,6 +13,27 @@ public sealed class LocalLoginWebApplicationFactory : BootstrapWebApplicationFac
     {
         builder.UseSetting("Authentication:Local:Enabled", "true");
         builder.UseSetting("Authentication:Oidc:Enabled", "false");
+    }
+}
+
+public sealed class AuditedLocalLoginWebApplicationFactory : BootstrapWebApplicationFactory
+{
+    public TestLogSink LogSink { get; } = new();
+
+    protected override bool UsesTestAuthentication => false;
+    protected override string TestEnvironmentName => "Development";
+
+    protected override void ConfigureAuthenticationMode(IWebHostBuilder builder)
+    {
+        builder.UseSetting("Authentication:Local:Enabled", "true");
+        builder.UseSetting("Authentication:Oidc:Enabled", "false");
+    }
+
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
+    {
+        base.ConfigureWebHost(builder);
+        builder.ConfigureServices(services =>
+            services.AddSingleton<ILoggerProvider>(new TestLoggerProvider(LogSink)));
     }
 }
 

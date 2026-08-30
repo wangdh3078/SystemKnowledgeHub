@@ -26,6 +26,12 @@ export function getCurrentUser(signal?: AbortSignal): Promise<CurrentUserProfile
   return apiClient.get('/current-user', { signal, decode: decodeCurrentUser })
 }
 
+export function changeMyLocalPassword(currentPassword: string, newPassword: string): Promise<void> {
+  return apiClient.put('/current-user/password', { currentPassword, newPassword }, {
+    decode: () => undefined,
+  })
+}
+
 export interface UsersListParameters {
   readonly keyword?: string
   readonly isActive?: boolean

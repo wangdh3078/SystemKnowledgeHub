@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { Plus, Search, SwitchButton } from '@element-plus/icons-vue'
+import { Lock, Plus, Search, SwitchButton } from '@element-plus/icons-vue'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRoute } from 'vue-router'
 import { logout } from '../app/security/authenticationApi'
 import { useActorStore } from '../app/stores/actor'
 import { useOverlayStore } from '../app/stores/overlays'
 import { confirmDocumentEditDiscard, hasActiveDirtyDocumentEdit } from '../features/knowledge-documents/editor/documentEditState'
+import LocalPasswordChangeForm from '../app/security/LocalPasswordChangeForm.vue'
 
 const route = useRoute()
 const actorStore = useActorStore()
@@ -15,6 +16,7 @@ const profileOpen = ref(false)
 const profileButtonRef = ref<HTMLElement | null>(null)
 const profilePanelRef = ref<HTMLElement | null>(null)
 const loggingOut = ref(false)
+const passwordDialogOpen = ref(false)
 const createEnabled = computed(() =>
   actorStore.canEdit && route.name !== 'foundation' && route.name !== 'not-found',
 )
@@ -70,6 +72,13 @@ async function signOut(): Promise<void> {
   }
 }
 
+function passwordChanged(): void {
+  passwordDialogOpen.value = false
+  profileOpen.value = false
+  actorStore.clearCurrentUser('unauthenticated')
+  ElMessage.success('密码已修改，请使用新密码重新登录。')
+}
+
 onMounted(() => {
   window.addEventListener('keydown', handleGlobalSearchShortcut)
   document.addEventListener('pointerdown', handleProfileOutsidePointer, true)
@@ -100,8 +109,13 @@ onBeforeUnmount(() => {
         <div class="app-topbar__current-user-heading"><div><strong>当前用户</strong><p>身份由服务器认证并映射，不能在浏览器中切换。</p></div><el-tooltip content="关闭当前用户资料" placement="bottom"><button class="skh-icon-action" type="button" aria-label="关闭当前用户资料" @click="profileOpen = false">×</button></el-tooltip></div>
         <div class="app-topbar__current-user-summary"><span class="app-topbar__avatar">{{ actorStore.currentUser.displayName.slice(0, 1) }}</span><div><strong>{{ actorStore.currentUser.displayName }}</strong><span>{{ actorStore.accessLevel }}</span></div></div>
         <dl class="app-topbar__profile-details"><div><dt>工号</dt><dd>{{ actorStore.currentUser.employeeNo ?? '—' }}</dd></div><div><dt>邮箱</dt><dd>{{ actorStore.currentUser.email ?? '—' }}</dd></div><div><dt>部门 / 团队</dt><dd>{{ actorStore.currentUser.departmentOrTeam ?? '—' }}</dd></div><div><dt>职位</dt><dd>{{ actorStore.currentUser.jobTitle ?? '—' }}</dd></div><div><dt>知识身份</dt><dd>{{ actorStore.currentUser.knowledgeRoles.map((role) => role.name).join('、') || '未配置' }}</dd></div></dl>
+        <p v-if="actorStore.authenticationMethod === 'oidc'" class="app-topbar__authentication-hint">密码由企业身份提供方管理。</p>
+        <el-button v-if="actorStore.authenticationMethod === 'local'" class="app-topbar__change-password" :icon="Lock" @click="passwordDialogOpen = true; profileOpen = false">修改密码</el-button>
         <el-button class="app-topbar__logout" :icon="SwitchButton" :loading="loggingOut" @click="signOut">退出登录</el-button>
       </section>
     </div>
   </header>
+  <el-dialog v-model="passwordDialogOpen" title="修改密码" width="min(460px, calc(100vw - 32px))" :close-on-click-modal="false">
+    <LocalPasswordChangeForm @changed="passwordChanged" />
+  </el-dialog>
 </template>

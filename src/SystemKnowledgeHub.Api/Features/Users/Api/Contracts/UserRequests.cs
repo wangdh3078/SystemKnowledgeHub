@@ -67,6 +67,9 @@ public sealed record CreateLoginIdentityRequest(string? Provider, string? Subjec
 /// <remarks><c>ConcurrencyToken</c> 是必须原样回传、不得解析或生成的 opaque token。</remarks>
 public sealed record SetLoginIdentityActiveStateRequest(bool IsActive, string? ConcurrencyToken);
 
+/// <summary>当前 Local 用户修改自己的密码。密码值不会被修剪、规范化或记录。</summary>
+public sealed record ChangeMyLocalPasswordRequest(string? CurrentPassword, string? NewPassword);
+
 /// <summary>
 /// 创建可供新 User assignment 使用的 KnowledgeRole 的 API request。
 /// </summary>

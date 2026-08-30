@@ -14,7 +14,8 @@ namespace SystemKnowledgeHub.Api.Features.Users.Application;
 public sealed class UserService(
     KnowledgeHubDbContext dbContext,
     UserQueries queries,
-    ConcurrencyTokenCodec concurrencyTokenCodec)
+    ConcurrencyTokenCodec concurrencyTokenCodec,
+    UsableAdministratorResolver usableAdministrators)
 {
     /// <summary>
     /// 创建 canonical User，并建立请求中的初始 KnowledgeRole assignment。
@@ -217,7 +218,9 @@ public sealed class UserService(
         {
             return new UserWriteResult(null, null, UserWriteFailure.NoChange);
         }
-        if (!request.IsActive && !await HasAnotherUsableAdministrator(user.Id, cancellationToken))
+        if (!request.IsActive
+            && await usableAdministrators.IsUserUsableAsync(user.Id, cancellationToken)
+            && !await usableAdministrators.HasAnyAsync(excludedUserId: user.Id, cancellationToken: cancellationToken))
         {
             return new UserWriteResult(null, null, UserWriteFailure.LastUsableAdministrator);
         }
@@ -252,7 +255,8 @@ public sealed class UserService(
         if (user.Version != expectedVersion) return new UserWriteResult(null, null, UserWriteFailure.Conflict);
         if (user.AccessLevel == request.AccessLevel) return new UserWriteResult(null, null, UserWriteFailure.NoChange);
         if (user.AccessLevel == AccessLevel.Administrator && request.AccessLevel != AccessLevel.Administrator
-            && !await HasAnotherUsableAdministrator(user.Id, cancellationToken))
+            && await usableAdministrators.IsUserUsableAsync(user.Id, cancellationToken)
+            && !await usableAdministrators.HasAnyAsync(excludedUserId: user.Id, cancellationToken: cancellationToken))
         {
             return new UserWriteResult(null, null, UserWriteFailure.LastUsableAdministrator);
         }
@@ -305,7 +309,12 @@ public sealed class UserService(
         if (identity is null) return new LoginIdentityWriteResult(null, null, LoginIdentityWriteFailure.NotFound);
         if (identity.Version != expectedVersion) return new LoginIdentityWriteResult(null, null, LoginIdentityWriteFailure.Conflict);
         if (identity.IsActive == request.IsActive) return new LoginIdentityWriteResult(null, null, LoginIdentityWriteFailure.NoChange);
-        if (!request.IsActive && await IsOnlyUsableAdministratorIdentity(identity, cancellationToken)) return new LoginIdentityWriteResult(null, null, LoginIdentityWriteFailure.LastUsableAdministrator);
+        if (!request.IsActive
+            && await usableAdministrators.IsLoginIdentityUsableAdministratorAccessAsync(identity.Id, cancellationToken)
+            && !await usableAdministrators.HasAnyAsync(excludedLoginIdentityId: identity.Id, cancellationToken: cancellationToken))
+        {
+            return new LoginIdentityWriteResult(null, null, LoginIdentityWriteFailure.LastUsableAdministrator);
+        }
         identity.IsActive = request.IsActive; identity.UpdatedAt = DateTimeOffset.UtcNow; identity.Version = expectedVersion + 1;
         try { await dbContext.SaveChangesAsync(cancellationToken); await transaction.CommitAsync(cancellationToken); }
         catch (DbUpdateConcurrencyException) { return new LoginIdentityWriteResult(null, null, LoginIdentityWriteFailure.Conflict); }
@@ -574,22 +583,6 @@ public sealed class UserService(
         null,
         new Dictionary<string, string[]> { ["name"] = ["知识身份名称已存在。"] },
         KnowledgeRoleWriteFailure.Duplicate);
-
-    private Task<bool> HasAnotherUsableAdministrator(long excludedUserId, CancellationToken cancellationToken) =>
-        dbContext.Users.AnyAsync(user => user.Id != excludedUserId
-            && user.IsActive
-            && user.AccessLevel == AccessLevel.Administrator
-            && (dbContext.LoginIdentities.Any(identity => identity.UserId == user.Id && identity.IsActive)
-                || dbContext.LocalLoginCredentials.Any(credential => credential.UserId == user.Id && credential.IsActive)), cancellationToken);
-
-    private async Task<bool> IsOnlyUsableAdministratorIdentity(LoginIdentity identity, CancellationToken cancellationToken)
-    {
-        var user = await dbContext.Users.AsNoTracking().SingleAsync(item => item.Id == identity.UserId, cancellationToken);
-        if (!user.IsActive || user.AccessLevel != AccessLevel.Administrator) return false;
-        var hasOtherIdentity = await dbContext.LoginIdentities.AnyAsync(item => item.UserId == identity.UserId && item.IsActive && item.Id != identity.Id, cancellationToken);
-        var hasActiveLocalCredential = await dbContext.LocalLoginCredentials.AnyAsync(item => item.UserId == identity.UserId && item.IsActive, cancellationToken);
-        return !hasOtherIdentity && !hasActiveLocalCredential && !await HasAnotherUsableAdministrator(identity.UserId, cancellationToken);
-    }
 
     private LoginIdentityResponse ToLoginIdentityResponse(LoginIdentity identity) => new(
         identity.Id, identity.UserId, identity.Provider, identity.Subject, identity.IsActive,

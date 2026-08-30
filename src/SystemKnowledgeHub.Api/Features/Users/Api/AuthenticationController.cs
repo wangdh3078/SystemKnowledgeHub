@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
 using SystemKnowledgeHub.Api.Features.Users.Application;
 using SystemKnowledgeHub.Api.Shared.Api.Contracts;
+using SystemKnowledgeHub.Api.Shared.Security;
 
 namespace SystemKnowledgeHub.Api.Features.Users.Api;
 
@@ -74,6 +75,7 @@ public sealed class AuthenticationController(
     }
 
     [HttpPost("logout")]
+    [Authorize(Policy = AccessPolicies.PasswordLifecycle)]
     public async Task<IActionResult> Logout(CancellationToken cancellationToken)
     {
         await HttpContext.SignOutAsync(CurrentUserContext.CookieScheme);

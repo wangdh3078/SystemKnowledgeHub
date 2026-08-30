@@ -208,7 +208,7 @@ describe('RevisionCompareView', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('附件集合变化')
-    expect(wrapper.text()).toContain('按 Attachment ID + Kind 比较，不比较二进制内容')
+    expect(wrapper.text()).toContain('按附件编号与类型比较，不比较二进制内容')
     expect(wrapper.text()).toContain('新增（1）')
     expect(wrapper.text()).toContain('普通附件 #11 · 新规范.pdf')
     expect(wrapper.text()).toContain('移除（1）')

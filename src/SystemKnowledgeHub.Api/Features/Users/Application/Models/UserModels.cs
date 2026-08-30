@@ -108,7 +108,9 @@ public sealed record CurrentUserResponse(
     string? JobTitle,
     bool IsActive,
     IReadOnlyList<KnowledgeRoleSummaryResponse> KnowledgeRoles,
-    string AccessLevel);
+    string AccessLevel,
+    string AuthenticationMethod,
+    bool MustChangePassword);
 
 /// <summary>
 /// 解析当前 authenticated Principal 到 Current User context 的结果状态。
@@ -116,6 +118,10 @@ public sealed record CurrentUserResponse(
 public enum CurrentUserResolutionStatus
 {
     Available,
+    /// <summary>
+    /// 当前 Local 会话有效，但在修改密码前不得进入普通业务或管理功能。
+    /// </summary>
+    PasswordChangeRequired,
     /// <summary>
     /// 当前请求没有可用的 authenticated Principal，而不是缺少客户端提供的 User 标识。
     /// </summary>
@@ -142,12 +148,30 @@ public enum CurrentUserResolutionStatus
 /// Current User 解析的显式业务结果，而不是异常列表。
 /// </summary>
 /// <remarks>
-/// 当 <see cref="Status"/> 为 <see cref="CurrentUserResolutionStatus.Available"/> 时，<see cref="CurrentUser"/>
-/// 包含已解析的 canonical User profile；其他状态下该值为 null，并保留具体失败边界。
+/// 当 <see cref="Status"/> 为 <see cref="CurrentUserResolutionStatus.Available"/> 或
+/// <see cref="CurrentUserResolutionStatus.PasswordChangeRequired"/> 时，<see cref="CurrentUser"/> 包含已解析的
+/// canonical User profile；其他状态下该值为 null，并保留具体失败边界。
 /// </remarks>
 public sealed record CurrentUserResolution(
     CurrentUserResolutionStatus Status,
-    CurrentUserResponse? CurrentUser);
+    CurrentUserResponse? CurrentUser,
+    string? Reason = null);
+
+/// <summary>当前 Local 用户修改自己密码的显式业务结果。</summary>
+public enum LocalPasswordChangeFailure
+{
+    None,
+    Validation,
+    Forbidden,
+    SessionExpired,
+    Conflict,
+}
+
+/// <summary>当前 Local 用户修改自己密码的结果；字段错误不包含任何密码原文。</summary>
+public sealed record LocalPasswordChangeResult(
+    LocalPasswordChangeFailure Failure,
+    IReadOnlyDictionary<string, string[]>? FieldErrors = null,
+    string? Reason = null);
 
 /// <summary>
 /// 创建 canonical User 与初始 KnowledgeRole assignment 的 Application command。
