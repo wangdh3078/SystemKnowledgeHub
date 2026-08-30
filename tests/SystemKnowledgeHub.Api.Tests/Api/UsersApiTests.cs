@@ -47,6 +47,7 @@ public sealed class UsersApiTests : IClassFixture<BootstrapWebApplicationFactory
             departmentOrTeam = (string?)null,
             jobTitle = (string?)null,
             knowledgeRoleIds = Array.Empty<long>(),
+            loginSetup = new { type = "none" },
             actor = Actor(),
         });
         Assert.Equal(HttpStatusCode.Conflict, duplicateEmployee.StatusCode);
@@ -59,6 +60,7 @@ public sealed class UsersApiTests : IClassFixture<BootstrapWebApplicationFactory
             departmentOrTeam = (string?)null,
             jobTitle = (string?)null,
             knowledgeRoleIds = Array.Empty<long>(),
+            loginSetup = new { type = "none" },
             actor = Actor(),
         });
         Assert.Equal(HttpStatusCode.Conflict, duplicateEmail.StatusCode);
@@ -145,6 +147,7 @@ public sealed class UsersApiTests : IClassFixture<BootstrapWebApplicationFactory
             departmentOrTeam = (string?)null,
             jobTitle = (string?)null,
             knowledgeRoleIds = new[] { roleId },
+            loginSetup = new { type = "none" },
             actor = Actor(),
         });
         Assert.Equal(HttpStatusCode.UnprocessableEntity, inactiveAssignment.StatusCode);
@@ -216,6 +219,7 @@ public sealed class UsersApiTests : IClassFixture<BootstrapWebApplicationFactory
             departmentOrTeam = "制造系统组",
             jobTitle = "Senior Engineer",
             knowledgeRoleIds = roleIds,
+            loginSetup = new { type = "none" },
             actor = Actor(),
         });
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);

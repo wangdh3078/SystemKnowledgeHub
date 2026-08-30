@@ -187,7 +187,46 @@ public sealed record CreateUserCommand(
     string? DepartmentOrTeam,
     string? JobTitle,
     IReadOnlyList<long>? KnowledgeRoleIds,
+    CreateUserLoginSetupCommand? LoginSetup,
     UserActorContext Actor);
+
+/// <summary>创建 User 时的显式 discriminated 登录方式命令。</summary>
+public sealed record CreateUserLoginSetupCommand(
+    string? Type,
+    string? Username,
+    string? InitialPassword,
+    string? Provider,
+    string? Subject);
+
+/// <summary>新增用户 Drawer 可用的服务器登录方式配置。</summary>
+public sealed record UserLoginSetupOptionsResponse(
+    bool LocalGloballyEnabled,
+    bool OidcGloballyEnabled,
+    bool OidcSetupAvailable,
+    string? ApprovedOidcProvider);
+
+/// <summary>管理员读取的单个 User 本地登录方式投影；绝不包含密码哈希或 SessionVersion。</summary>
+public sealed record LocalLoginMethodResponse(
+    bool Exists,
+    string? Username,
+    bool? IsActive,
+    bool? MustChangePassword,
+    DateTimeOffset? LastPasswordChangedAt,
+    DateTimeOffset? LockedUntil,
+    bool GloballyEnabled);
+
+/// <summary>管理员读取的 OIDC 映射投影。</summary>
+public sealed record OidcLoginMethodResponse(
+    string Provider,
+    string Subject,
+    bool IsActive,
+    bool GloballyEnabled);
+
+/// <summary>管理员读取的 User 登录方式聚合投影。</summary>
+public sealed record UserLoginMethodsResponse(
+    long UserId,
+    LocalLoginMethodResponse Local,
+    IReadOnlyList<OidcLoginMethodResponse> Oidc);
 
 /// <summary>
 /// 更新 canonical User Profile 并替换其当前 KnowledgeRole assignment 的 Application command。

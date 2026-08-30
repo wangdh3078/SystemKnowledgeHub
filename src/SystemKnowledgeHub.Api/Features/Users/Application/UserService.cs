@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using SystemKnowledgeHub.Api.Features.Users.Application.Models;
 using SystemKnowledgeHub.Api.Features.Users.Domain;
 using SystemKnowledgeHub.Api.Persistence;
@@ -15,7 +16,11 @@ public sealed class UserService(
     KnowledgeHubDbContext dbContext,
     UserQueries queries,
     ConcurrencyTokenCodec concurrencyTokenCodec,
-    UsableAdministratorResolver usableAdministrators)
+    UsableAdministratorResolver usableAdministrators,
+    LocalPasswordService passwords,
+    IOptions<OidcAuthenticationOptions> oidcOptions,
+    IHttpContextAccessor httpContextAccessor,
+    ILogger<UserService> logger)
 {
     /// <summary>
     /// 创建 canonical User，并建立请求中的初始 KnowledgeRole assignment。
@@ -32,6 +37,63 @@ public sealed class UserService(
         CancellationToken cancellationToken)
     {
         var errors = ValidateUserInput(request.DisplayName, request.Actor, request.KnowledgeRoleIds, out var roleIds);
+        var setup = request.LoginSetup;
+        var setupType = setup?.Type;
+        var username = string.Empty;
+        var normalizedUsername = string.Empty;
+
+        if (setup is null)
+        {
+            errors["loginSetup.type"] = ["请选择登录方式。"];
+        }
+        else
+        {
+            switch (setupType)
+            {
+                case "local":
+                    if (!LocalCredentialSecurity.TryNormalizeUsername(setup.Username, out username, out normalizedUsername))
+                    {
+                        errors["loginSetup.username"] = ["登录用户名必须为 3～64 个字符，且只能包含字母、数字、点、下划线、连字符或 @。"];
+                    }
+                    if (!LocalCredentialSecurity.IsValidPassword(setup.InitialPassword))
+                    {
+                        errors["loginSetup.initialPassword"] = ["初始密码长度必须为 8～128 个字符。"];
+                    }
+                    if (setup.Provider is not null || setup.Subject is not null)
+                    {
+                        errors["loginSetup"] = ["本地账号不能携带企业统一登录字段。"];
+                    }
+                    break;
+                case "oidc":
+                    if (setup.Username is not null || setup.InitialPassword is not null)
+                    {
+                        errors["loginSetup"] = ["企业统一登录不能携带本地账号或密码字段。"];
+                    }
+                    if (string.IsNullOrWhiteSpace(oidcOptions.Value.Provider))
+                    {
+                        errors["loginSetup.provider"] = ["当前服务器未配置可用的身份提供方。"];
+                    }
+                    else if (!string.Equals(setup.Provider, oidcOptions.Value.Provider, StringComparison.Ordinal))
+                    {
+                        errors["loginSetup.provider"] = ["身份提供方不在当前服务器允许范围内。"];
+                    }
+                    if (string.IsNullOrWhiteSpace(setup.Subject))
+                    {
+                        errors["loginSetup.subject"] = ["请输入 Subject / sub。"];
+                    }
+                    break;
+                case "none":
+                    if (setup.Username is not null || setup.InitialPassword is not null
+                        || setup.Provider is not null || setup.Subject is not null)
+                    {
+                        errors["loginSetup"] = ["暂不配置登录时不能携带登录凭据字段。"];
+                    }
+                    break;
+                default:
+                    errors["loginSetup.type"] = ["登录方式无效。"];
+                    break;
+            }
+        }
         if (errors.Count > 0)
         {
             return new UserWriteResult(null, errors, UserWriteFailure.Validation);
@@ -50,6 +112,26 @@ public sealed class UserService(
         {
             return new UserWriteResult(null, duplicateErrors, UserWriteFailure.Duplicate);
         }
+        if (setupType == "local"
+            && await dbContext.LocalLoginCredentials.AnyAsync(
+                credential => credential.NormalizedUsername == normalizedUsername,
+                cancellationToken))
+        {
+            return new UserWriteResult(
+                null,
+                new Dictionary<string, string[]> { ["loginSetup.username"] = ["登录用户名已存在。"] },
+                UserWriteFailure.Duplicate);
+        }
+        if (setupType == "oidc"
+            && await dbContext.LoginIdentities.AnyAsync(
+                identity => identity.Provider == setup!.Provider && identity.Subject == setup.Subject,
+                cancellationToken))
+        {
+            return new UserWriteResult(
+                null,
+                new Dictionary<string, string[]> { ["loginSetup.subject"] = ["Provider 与 Subject / sub 映射已存在。"] },
+                UserWriteFailure.Duplicate);
+        }
 
         var timestamp = DateTimeOffset.UtcNow;
         var user = new UserEntity
@@ -59,16 +141,19 @@ public sealed class UserService(
             Email = email,
             DepartmentOrTeam = NormalizeOptional(request.DepartmentOrTeam),
             JobTitle = NormalizeOptional(request.JobTitle),
+            AccessLevel = AccessLevel.Viewer,
             IsActive = true,
             CreatedAt = timestamp,
             UpdatedAt = timestamp,
             Version = 1,
         };
-        dbContext.Users.Add(user);
+        LocalLoginCredential? createdCredential = null;
+        LoginIdentity? createdIdentity = null;
 
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
         try
         {
+            dbContext.Users.Add(user);
             await dbContext.SaveChangesAsync(cancellationToken);
             foreach (var roleId in roleIds)
             {
@@ -78,6 +163,43 @@ public sealed class UserService(
                     KnowledgeRoleId = roleId,
                 });
             }
+
+            if (setupType == "local")
+            {
+                createdCredential = new LocalLoginCredential
+                {
+                    UserId = user.Id,
+                    Username = username,
+                    NormalizedUsername = normalizedUsername,
+                    IsActive = true,
+                    MustChangePassword = true,
+                    FailedLoginAttempts = 0,
+                    FailedLoginWindowStartedAt = null,
+                    LockedUntil = null,
+                    SessionVersion = 1,
+                    CreatedAt = timestamp,
+                    UpdatedAt = timestamp,
+                    LastPasswordChangedAt = timestamp,
+                    Version = 1,
+                };
+                createdCredential.PasswordHash = passwords.Hash(createdCredential, setup!.InitialPassword!);
+                dbContext.LocalLoginCredentials.Add(createdCredential);
+            }
+            else if (setupType == "oidc")
+            {
+                createdIdentity = new LoginIdentity
+                {
+                    UserId = user.Id,
+                    Provider = setup!.Provider!,
+                    Subject = setup.Subject!,
+                    IsActive = true,
+                    CreatedAt = timestamp,
+                    UpdatedAt = timestamp,
+                    Version = 1,
+                };
+                dbContext.LoginIdentities.Add(createdIdentity);
+            }
+
             await dbContext.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
         }
@@ -86,8 +208,36 @@ public sealed class UserService(
             await transaction.RollbackAsync(cancellationToken);
             return new UserWriteResult(
                 null,
-                new Dictionary<string, string[]> { ["user"] = ["工号或邮箱已存在。"] },
+                setupType switch
+                {
+                    "local" => new Dictionary<string, string[]> { ["loginSetup.username"] = ["用户资料或登录用户名已存在。"] },
+                    "oidc" => new Dictionary<string, string[]> { ["loginSetup.subject"] = ["用户资料或 Provider 与 Subject / sub 映射已存在。"] },
+                    _ => new Dictionary<string, string[]> { ["user"] = ["工号或邮箱已存在。"] },
+                },
                 UserWriteFailure.Duplicate);
+        }
+
+        if (createdCredential is not null)
+        {
+            LogSecurityEvent(
+                "LocalCredentialCreated",
+                user.Id,
+                createdCredential.Id,
+                null,
+                "success",
+                "created",
+                timestamp);
+        }
+        else if (createdIdentity is not null)
+        {
+            LogSecurityEvent(
+                "LoginIdentityCreated",
+                user.Id,
+                null,
+                createdIdentity.Id,
+                "success",
+                "created",
+                timestamp);
         }
 
         var response = await queries.GetUser(user.Id, cancellationToken);
@@ -587,6 +737,36 @@ public sealed class UserService(
     private LoginIdentityResponse ToLoginIdentityResponse(LoginIdentity identity) => new(
         identity.Id, identity.UserId, identity.Provider, identity.Subject, identity.IsActive,
         identity.CreatedAt, identity.UpdatedAt, concurrencyTokenCodec.Encode(identity.Version));
+
+    private void LogSecurityEvent(
+        string eventType,
+        long targetUserId,
+        long? credentialId,
+        long? loginIdentityId,
+        string result,
+        string reasonCode,
+        DateTimeOffset occurredAt)
+    {
+        long? actorUserId = null;
+        var httpContext = httpContextAccessor.HttpContext;
+        if (httpContext?.User is not null
+            && AuthenticationSessionDescriptorReader.TryRead(httpContext.User, out var descriptor))
+        {
+            actorUserId = descriptor.UserId;
+        }
+
+        logger.LogInformation(
+            "SecurityEvent EventType={EventType} ActorUserId={ActorUserId} TargetUserId={TargetUserId} CredentialId={CredentialId} LoginIdentityId={LoginIdentityId} Result={Result} ReasonCode={ReasonCode} OccurredAt={OccurredAt} CorrelationId={CorrelationId}",
+            eventType,
+            actorUserId,
+            targetUserId,
+            credentialId,
+            loginIdentityId,
+            result,
+            reasonCode,
+            occurredAt,
+            httpContext?.TraceIdentifier);
+    }
 
     private static string? NormalizeOptional(string? value)
     {

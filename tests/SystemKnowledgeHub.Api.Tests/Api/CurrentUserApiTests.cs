@@ -119,6 +119,7 @@ public sealed class CurrentUserApiTests : IClassFixture<BootstrapWebApplicationF
             departmentOrTeam = "知识平台组",
             jobTitle = "知识工程师",
             knowledgeRoleIds = roleIds,
+            loginSetup = new { type = "none" },
             actor = Actor(),
         });
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);

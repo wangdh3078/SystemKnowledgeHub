@@ -402,6 +402,7 @@ public sealed class EvidenceApiTests : IClassFixture<BootstrapWebApplicationFact
             departmentOrTeam,
             jobTitle,
             knowledgeRoleIds = roleIds,
+            loginSetup = new { type = "none" },
             actor = Actor(),
         });
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);

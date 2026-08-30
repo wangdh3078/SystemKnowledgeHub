@@ -5,9 +5,22 @@ import { ElMessage } from 'element-plus'
 import { ApiError } from '../../../api/errors/ApiError'
 import { useActorStore } from '../../../app/stores/actor'
 import { useOverlayStore } from '../../../app/stores/overlays'
-import { createUser, getKnowledgeRoles, getUser, updateUser } from '../api/usersApi'
+import {
+  createUser,
+  getKnowledgeRoles,
+  getUser,
+  getUserLoginMethods,
+  getUserLoginSetupOptions,
+  updateUser,
+} from '../api/usersApi'
 import LoginIdentityManagementPanel from './LoginIdentityManagementPanel.vue'
-import type { KnowledgeRole, UserDetail } from '../api/userContracts'
+import type {
+  KnowledgeRole,
+  LoginSetup,
+  UserDetail,
+  UserLoginMethods,
+  UserLoginSetupOptions,
+} from '../api/userContracts'
 
 const props = defineProps<{ userId: number | null }>()
 const emit = defineEmits<{ saved: [user: UserDetail] }>()
@@ -20,6 +33,8 @@ const loadError = ref<string | null>(null)
 const submitError = ref<string | null>(null)
 const conflict = ref(false)
 const roles = ref<readonly KnowledgeRole[]>([])
+const loginSetupOptions = ref<UserLoginSetupOptions | null>(null)
+const loginMethods = ref<UserLoginMethods | null>(null)
 const originalRoleIds = ref<ReadonlySet<number>>(new Set())
 const concurrencyToken = ref('')
 const form = reactive({
@@ -29,6 +44,12 @@ const form = reactive({
   departmentOrTeam: '',
   jobTitle: '',
   knowledgeRoleIds: [] as number[],
+  loginSetupType: '' as '' | LoginSetup['type'],
+  loginUsername: '',
+  initialPassword: '',
+  confirmPassword: '',
+  oidcProvider: '',
+  oidcSubject: '',
 })
 const fieldErrors = reactive<Record<string, string>>({})
 const isEdit = computed(() => props.userId !== null)
@@ -37,6 +58,12 @@ const rules: FormRules<typeof form> = {
   displayName: [{ required: true, message: '请输入姓名', trigger: 'blur' }],
   email: [{ type: 'email', message: '请输入有效邮箱地址', trigger: 'blur' }],
 }
+const passwordMismatch = computed(() =>
+  !isEdit.value
+  && form.loginSetupType === 'local'
+  && form.confirmPassword.length > 0
+  && form.initialPassword !== form.confirmPassword,
+)
 
 function assignUser(user: UserDetail): void {
   form.displayName = user.displayName
@@ -54,11 +81,16 @@ async function load(): Promise<void> {
   loadError.value = null
   clearServerErrors()
   try {
-    const [availableRoles, user] = await Promise.all([
+    const [availableRoles, user, setupOptions, methods] = await Promise.all([
       getKnowledgeRoles(),
       props.userId === null ? Promise.resolve(null) : getUser(props.userId),
+      props.userId === null ? getUserLoginSetupOptions() : Promise.resolve(null),
+      props.userId === null ? Promise.resolve(null) : getUserLoginMethods(props.userId),
     ])
     roles.value = availableRoles
+    loginSetupOptions.value = setupOptions
+    loginMethods.value = methods
+    form.oidcProvider = setupOptions?.approvedOidcProvider ?? ''
     if (user) assignUser(user)
   } catch (error: unknown) {
     loadError.value = error instanceof Error ? error.message : '用户资料加载失败。'
@@ -77,10 +109,53 @@ function clearServerErrors(): void {
   for (const key of Object.keys(fieldErrors)) delete fieldErrors[key]
 }
 
+function selectLoginSetup(type: LoginSetup['type']): void {
+  clearServerErrors()
+  if (type === 'local' && !form.loginUsername && form.employeeNo.trim()) {
+    form.loginUsername = form.employeeNo.trim()
+  }
+  if (type === 'oidc') {
+    form.oidcProvider = loginSetupOptions.value?.approvedOidcProvider ?? ''
+  }
+}
+
+function validateLoginSetup(): boolean {
+  if (isEdit.value) return true
+  if (!form.loginSetupType) {
+    fieldErrors['loginSetup.type'] = '请选择登录方式。'
+    return false
+  }
+  if (form.loginSetupType === 'local') {
+    if (!form.loginUsername.trim()) fieldErrors['loginSetup.username'] = '请输入登录用户名。'
+    if (form.initialPassword.length < 8 || form.initialPassword.length > 128) {
+      fieldErrors['loginSetup.initialPassword'] = '初始密码长度必须为 8～128 个字符。'
+    }
+    if (!form.confirmPassword) fieldErrors.confirmPassword = '请再次输入初始密码。'
+    else if (form.initialPassword !== form.confirmPassword) fieldErrors.confirmPassword = '两次输入的密码不一致。'
+  }
+  if (form.loginSetupType === 'oidc') {
+    if (!loginSetupOptions.value?.oidcSetupAvailable || !form.oidcProvider) {
+      fieldErrors['loginSetup.provider'] = '当前服务器未配置可用的身份提供方。'
+    }
+    if (!form.oidcSubject.trim()) fieldErrors['loginSetup.subject'] = '请输入 Subject / sub。'
+  }
+  return Object.keys(fieldErrors).length === 0
+}
+
+function buildLoginSetup(): LoginSetup {
+  if (form.loginSetupType === 'local') {
+    return { type: 'local', username: form.loginUsername, initialPassword: form.initialPassword }
+  }
+  if (form.loginSetupType === 'oidc') {
+    return { type: 'oidc', provider: form.oidcProvider, subject: form.oidcSubject }
+  }
+  return { type: 'none' }
+}
+
 async function submit(): Promise<void> {
   clearServerErrors()
   const valid = await formRef.value?.validate().catch(() => false)
-  if (!valid || submitting.value) return
+  if (!valid || !validateLoginSetup() || submitting.value) return
 
   submitting.value = true
   const request = {
@@ -94,7 +169,7 @@ async function submit(): Promise<void> {
   }
   try {
     const saved = props.userId === null
-      ? await createUser(request)
+      ? await createUser({ ...request, loginSetup: buildLoginSetup() })
       : await updateUser(props.userId, { ...request, concurrencyToken: concurrencyToken.value })
     ElMessage.success(props.userId === null ? '用户已创建。' : '用户资料已保存。')
     emit('saved', saved)
@@ -192,12 +267,88 @@ onMounted(() => void load())
           </el-form-item>
         </section>
 
-        <LoginIdentityManagementPanel v-if="userId !== null" :user-id="userId" />
+        <section class="user-drawer__section user-login-setup">
+          <div class="user-drawer__section-title"><span>03</span><div><h3>登录方式</h3><p>{{ isEdit ? '查看当前可用的登录方式；具体维护操作按独立安全流程执行。' : '必须明确选择一种初始登录方式。' }}</p></div></div>
+
+          <template v-if="!isEdit">
+            <el-form-item prop="loginSetupType" :error="fieldErrors['loginSetup.type']" required>
+              <el-radio-group v-model="form.loginSetupType" class="user-login-setup__choices" @change="selectLoginSetup">
+                <el-radio value="local">本地账号</el-radio>
+                <el-radio value="oidc" :disabled="!loginSetupOptions?.oidcSetupAvailable">企业统一登录（OIDC / SSO）</el-radio>
+                <el-radio value="none">暂不配置登录</el-radio>
+              </el-radio-group>
+            </el-form-item>
+
+            <template v-if="form.loginSetupType === 'local'">
+              <el-alert v-if="loginSetupOptions && !loginSetupOptions.localGloballyEnabled" type="warning" title="当前部署未启用本地登录" :closable="false" show-icon />
+              <el-form-item label="登录用户名" prop="loginUsername" :error="fieldErrors['loginSetup.username']" required>
+                <el-input v-model="form.loginUsername" maxlength="64" autocomplete="username" class="technical-input" placeholder="例如 EMP-001" />
+                <span class="user-drawer__help">可从工号带出，但保存后与工号相互独立。</span>
+              </el-form-item>
+              <div class="user-drawer__row">
+                <el-form-item label="初始密码" prop="initialPassword" :error="fieldErrors['loginSetup.initialPassword']" required>
+                  <el-input v-model="form.initialPassword" type="password" show-password maxlength="128" autocomplete="new-password" />
+                </el-form-item>
+                <el-form-item label="确认密码" prop="confirmPassword" :error="fieldErrors.confirmPassword || (passwordMismatch ? '两次输入的密码不一致。' : '')" required>
+                  <el-input v-model="form.confirmPassword" type="password" show-password maxlength="128" autocomplete="new-password" />
+                  <span v-if="passwordMismatch" class="user-login-setup__field-error">两次输入的密码不一致。</span>
+                </el-form-item>
+              </div>
+              <el-checkbox :model-value="true" disabled>首次登录必须修改密码</el-checkbox>
+              <p class="user-drawer__help">密码必须为 8～128 个字符；空格与大小写均按原样保留。</p>
+            </template>
+
+            <template v-else-if="form.loginSetupType === 'oidc'">
+              <el-alert v-if="loginSetupOptions && !loginSetupOptions.oidcGloballyEnabled" type="warning" title="当前部署未启用企业统一登录" :closable="false" show-icon />
+              <el-form-item label="身份提供方" prop="oidcProvider" :error="fieldErrors['loginSetup.provider']" required>
+                <el-input v-model="form.oidcProvider" readonly class="technical-input" />
+              </el-form-item>
+              <el-form-item label="Subject / sub" prop="oidcSubject" :error="fieldErrors['loginSetup.subject']" required>
+                <el-input v-model="form.oidcSubject" maxlength="240" class="technical-input" placeholder="由身份提供方提供的稳定标识" />
+              </el-form-item>
+            </template>
+
+            <el-alert
+              v-else-if="form.loginSetupType === 'none'"
+              type="warning"
+              title="该用户当前无法登录系统。"
+              description="仍可作为知识提供者、负责人或历史业务人员使用。"
+              :closable="false"
+              show-icon
+            />
+
+            <p v-if="!loginSetupOptions?.oidcSetupAvailable" class="user-drawer__help">服务器未配置可用的身份提供方，因此不能选择企业统一登录。</p>
+          </template>
+
+          <template v-else-if="loginMethods">
+            <el-alert
+              v-if="!loginMethods.local.exists && loginMethods.oidc.length === 0"
+              type="warning"
+              title="该用户当前无法登录系统。"
+              :closable="false"
+              show-icon
+            />
+            <div v-else class="user-login-methods">
+              <article v-if="loginMethods.local.exists">
+                <div><strong>本地账号</strong><el-tag size="small" :type="loginMethods.local.isActive ? 'success' : 'info'">{{ loginMethods.local.isActive ? '已启用' : '已停用' }}</el-tag></div>
+                <p class="technical-text">{{ loginMethods.local.username }}</p>
+                <small v-if="!loginMethods.local.globallyEnabled">当前部署未启用本地登录</small>
+                <small v-else-if="loginMethods.local.mustChangePassword">首次登录后必须修改密码</small>
+              </article>
+              <article v-for="identity in loginMethods.oidc" :key="`${identity.provider}:${identity.subject}`">
+                <div><strong>企业统一登录（OIDC / SSO）</strong><el-tag size="small" :type="identity.isActive ? 'success' : 'info'">{{ identity.isActive ? '已启用' : '已停用' }}</el-tag></div>
+                <p><span class="technical-text">{{ identity.provider }}</span> · <span class="technical-text">{{ identity.subject }}</span></p>
+                <small v-if="!identity.globallyEnabled">当前部署未启用此身份提供方</small>
+              </article>
+            </div>
+            <LoginIdentityManagementPanel :user-id="userId!" />
+          </template>
+        </section>
       </el-form>
 
       <footer class="user-drawer__actions">
         <span>{{ isEdit ? '启用 / 停用请使用列表中的独立操作。' : '新用户创建后默认为启用。' }}</span>
-        <div><el-button @click="overlayStore.requestDrawerClose">取消</el-button><el-button type="primary" :loading="submitting" @click="submit">{{ isEdit ? '保存修改' : '创建用户' }}</el-button></div>
+        <div><el-button @click="overlayStore.requestDrawerClose">取消</el-button><el-button type="primary" :loading="submitting" :disabled="passwordMismatch" @click="submit">{{ isEdit ? '保存修改' : '创建用户' }}</el-button></div>
       </footer>
     </template>
   </section>

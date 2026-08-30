@@ -304,6 +304,89 @@
   font-size: 10px;
 }
 
+.user-login-setup__choices {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: stretch;
+  width: 100%;
+  gap: 8px;
+}
+
+.user-login-setup__choices .el-radio {
+  min-width: 0;
+  height: auto;
+  min-height: 42px;
+  box-sizing: border-box;
+  align-items: center;
+  margin: 0;
+  padding: 9px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  line-height: 1.4;
+  white-space: normal;
+}
+
+.user-login-setup__choices .el-radio__label {
+  min-width: 0;
+  padding-right: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.user-login-setup > .el-alert,
+.user-login-setup .el-form-item + .el-alert {
+  margin-bottom: 16px;
+}
+
+.user-login-setup__field-error {
+  width: 100%;
+  color: var(--el-color-danger);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.user-login-methods {
+  display: grid;
+  margin-bottom: 18px;
+  gap: 8px;
+}
+
+.user-login-methods article {
+  padding: 11px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-subtle);
+}
+
+.user-login-methods article > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.user-login-methods p,
+.user-login-methods small,
+.login-identities__heading p {
+  margin-top: 5px;
+  color: var(--color-muted);
+  font-size: 10px;
+}
+
+.login-identities {
+  padding-top: 18px;
+  border-top: 1px solid var(--color-border);
+}
+
+.login-identities__heading {
+  margin-bottom: 12px;
+}
+
+.login-identities__heading h4 {
+  color: var(--color-ink);
+  font-size: 12px;
+}
+
 .login-identities__list {
   display: grid;
   margin-bottom: 12px;
@@ -476,5 +559,28 @@
   .users-table .el-table__body-wrapper td.el-table__cell,
   .users-table .el-table__header-wrapper th.el-table__cell {
     font-size: 10px;
+  }
+}
+
+@media (max-width: 760px) {
+  .user-drawer {
+    padding-right: 18px;
+    padding-left: 18px;
+  }
+
+  .user-drawer__row,
+  .user-login-setup__choices {
+    grid-template-columns: 1fr;
+  }
+
+  .login-identities__create,
+  .user-drawer__actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .user-drawer__actions > div {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
   }
 }

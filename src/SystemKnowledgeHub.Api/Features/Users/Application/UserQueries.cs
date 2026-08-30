@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using SystemKnowledgeHub.Api.Features.Users.Application.Models;
 using SystemKnowledgeHub.Api.Persistence;
 using SystemKnowledgeHub.Api.Persistence.Concurrency;
@@ -10,7 +11,9 @@ namespace SystemKnowledgeHub.Api.Features.Users.Application;
 /// </summary>
 public sealed class UserQueries(
     KnowledgeHubDbContext dbContext,
-    ConcurrencyTokenCodec concurrencyTokenCodec)
+    ConcurrencyTokenCodec concurrencyTokenCodec,
+    IOptions<LocalAuthenticationOptions> localOptions,
+    IOptions<OidcAuthenticationOptions> oidcOptions)
 {
     private const int DefaultPageSize = 20;
     private const int MaximumPageSize = 100;
@@ -136,6 +139,68 @@ public sealed class UserQueries(
             user.CreatedAt,
             user.UpdatedAt,
             concurrencyTokenCodec.Encode(user.Version));
+    }
+
+    /// <summary>返回新增用户页面可使用的服务器登录方式配置。</summary>
+    public UserLoginSetupOptionsResponse GetLoginSetupOptions()
+    {
+        var approvedProvider = string.IsNullOrWhiteSpace(oidcOptions.Value.Provider)
+            ? null
+            : oidcOptions.Value.Provider;
+        return new UserLoginSetupOptionsResponse(
+            localOptions.Value.Enabled,
+            oidcOptions.Value.Enabled,
+            approvedProvider is not null,
+            approvedProvider);
+    }
+
+    /// <summary>返回管理员可见的 User 登录方式元数据，不投影任何密码哈希或 SessionVersion。</summary>
+    public async Task<UserLoginMethodsResponse?> GetUserLoginMethods(
+        long userId,
+        CancellationToken cancellationToken)
+    {
+        if (!await dbContext.Users.AsNoTracking().AnyAsync(user => user.Id == userId, cancellationToken))
+        {
+            return null;
+        }
+
+        var credential = await dbContext.LocalLoginCredentials
+            .AsNoTracking()
+            .Where(item => item.UserId == userId)
+            .Select(item => new
+            {
+                item.Username,
+                item.IsActive,
+                item.MustChangePassword,
+                item.LastPasswordChangedAt,
+                item.LockedUntil,
+            })
+            .SingleOrDefaultAsync(cancellationToken);
+        var local = credential is null
+            ? new LocalLoginMethodResponse(false, null, null, null, null, null, localOptions.Value.Enabled)
+            : new LocalLoginMethodResponse(
+                true,
+                credential.Username,
+                credential.IsActive,
+                credential.MustChangePassword,
+                credential.LastPasswordChangedAt,
+                credential.LockedUntil,
+                localOptions.Value.Enabled);
+
+        var approvedProvider = oidcOptions.Value.Provider;
+        var identities = await dbContext.LoginIdentities
+            .AsNoTracking()
+            .Where(item => item.UserId == userId)
+            .OrderBy(item => item.Provider)
+            .ThenBy(item => item.Subject)
+            .Select(item => new OidcLoginMethodResponse(
+                item.Provider,
+                item.Subject,
+                item.IsActive,
+                oidcOptions.Value.Enabled && item.Provider == approvedProvider))
+            .ToArrayAsync(cancellationToken);
+
+        return new UserLoginMethodsResponse(userId, local, identities);
     }
 
     /// <summary>

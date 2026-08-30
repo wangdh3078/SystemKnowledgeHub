@@ -67,6 +67,30 @@ public sealed class UsersController(UserQueries queries, UserService service) : 
         return response is null ? NotFound(NotFoundError(id)) : Ok(response);
     }
 
+    /// <summary>返回新增用户时可选择的登录方式及当前部署启用状态。</summary>
+    [HttpGet("login-setup-options")]
+    [ProducesResponseType<UserLoginSetupOptionsResponse>(StatusCodes.Status200OK)]
+    public ActionResult<UserLoginSetupOptionsResponse> GetLoginSetupOptions() =>
+        Ok(queries.GetLoginSetupOptions());
+
+    /// <summary>返回指定 User 的本地账号与 OIDC 映射元数据；绝不返回密码哈希或 SessionVersion。</summary>
+    [HttpGet("{id:long}/login-methods")]
+    [ProducesResponseType<UserLoginMethodsResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ApiErrorResponse>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ApiErrorResponse>(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<UserLoginMethodsResponse>> GetUserLoginMethods(
+        long id,
+        CancellationToken cancellationToken)
+    {
+        if (!ApiIdParser.IsSafePositive(id))
+        {
+            return BadRequest(InvalidId());
+        }
+
+        var response = await queries.GetUserLoginMethods(id, cancellationToken);
+        return response is null ? NotFound(NotFoundError(id)) : Ok(response);
+    }
+
     /// <summary>
     /// 创建 canonical User 及其初始 KnowledgeRole assignment。
     /// </summary>
@@ -93,6 +117,14 @@ public sealed class UsersController(UserQueries queries, UserService service) : 
                 request.DepartmentOrTeam,
                 request.JobTitle,
                 request.KnowledgeRoleIds,
+                request.LoginSetup is null
+                    ? null
+                    : new CreateUserLoginSetupCommand(
+                        request.LoginSetup.Type,
+                        request.LoginSetup.Username,
+                        request.LoginSetup.InitialPassword,
+                        request.LoginSetup.Provider,
+                        request.LoginSetup.Subject),
                 Actor(request.Actor)),
             cancellationToken);
         return MapCreateResult(result);
@@ -267,7 +299,7 @@ public sealed class UsersController(UserQueries queries, UserService service) : 
 
     private static ApiErrorResponse ConflictError(IReadOnlyDictionary<string, string[]> fieldErrors) => new(
         "conflict",
-        "用户工号或邮箱已存在。",
+        "用户资料或登录方式已存在。",
         fieldErrors,
         null);
 

@@ -11,6 +11,14 @@ namespace SystemKnowledgeHub.Api.Features.Users.Api.Contracts;
 /// </remarks>
 public sealed record UserActorRequest(string? DisplayName, string? Role);
 
+/// <summary>创建 User 时显式选择的登录方式；不同 Type 只允许携带对应字段。</summary>
+public sealed record CreateUserLoginSetupRequest(
+    string? Type,
+    string? Username,
+    string? InitialPassword,
+    string? Provider,
+    string? Subject);
+
 /// <summary>
 /// 创建 canonical User 并提交其初始 KnowledgeRole assignment 的 API request。
 /// </summary>
@@ -25,6 +33,7 @@ public sealed record CreateUserRequest(
     string? DepartmentOrTeam,
     string? JobTitle,
     IReadOnlyList<long>? KnowledgeRoleIds,
+    CreateUserLoginSetupRequest? LoginSetup,
     UserActorRequest? Actor);
 
 /// <summary>

@@ -67,6 +67,41 @@ export interface LoginIdentity {
   readonly concurrencyToken: string
 }
 
+export type LoginSetup =
+  | { readonly type: 'local'; readonly username: string; readonly initialPassword: string }
+  | { readonly type: 'oidc'; readonly provider: string; readonly subject: string }
+  | { readonly type: 'none' }
+
+export interface UserLoginSetupOptions {
+  readonly localGloballyEnabled: boolean
+  readonly oidcGloballyEnabled: boolean
+  readonly oidcSetupAvailable: boolean
+  readonly approvedOidcProvider: string | null
+}
+
+export interface LocalLoginMethod {
+  readonly exists: boolean
+  readonly username: string | null
+  readonly isActive: boolean | null
+  readonly mustChangePassword: boolean | null
+  readonly lastPasswordChangedAt: string | null
+  readonly lockedUntil: string | null
+  readonly globallyEnabled: boolean
+}
+
+export interface OidcLoginMethod {
+  readonly provider: string
+  readonly subject: string
+  readonly isActive: boolean
+  readonly globallyEnabled: boolean
+}
+
+export interface UserLoginMethods {
+  readonly userId: number
+  readonly local: LocalLoginMethod
+  readonly oidc: readonly OidcLoginMethod[]
+}
+
 export interface UserWriteRequest {
   readonly employeeNo: string | null
   readonly displayName: string
@@ -75,6 +110,10 @@ export interface UserWriteRequest {
   readonly jobTitle: string | null
   readonly knowledgeRoleIds: readonly number[]
   readonly actor: ActorContext
+}
+
+export interface CreateUserRequest extends UserWriteRequest {
+  readonly loginSetup: LoginSetup
 }
 
 export interface UpdateUserRequest extends UserWriteRequest {
@@ -123,6 +162,11 @@ function readNullableString(value: unknown, field: string): string | null {
 function readBoolean(value: unknown, field: string): boolean {
   if (typeof value !== 'boolean') throw new Error(`${field} must be a boolean`)
   return value
+}
+
+function readNullableBoolean(value: unknown, field: string): boolean | null {
+  if (value === null) return null
+  return readBoolean(value, field)
 }
 
 function readAccessLevel(value: unknown, field: string): AccessLevel {
@@ -264,5 +308,43 @@ export function decodeUserAccessLevel(value: unknown): UserAccessLevelResponse {
     userId: readId(root.userId, 'userAccessLevel.userId'),
     accessLevel: readAccessLevel(root.accessLevel, 'userAccessLevel.accessLevel'),
     concurrencyToken: readString(root.concurrencyToken, 'userAccessLevel.concurrencyToken'),
+  }
+}
+
+export function decodeUserLoginSetupOptions(value: unknown): UserLoginSetupOptions {
+  const root = readObject(value, 'userLoginSetupOptions')
+  return {
+    localGloballyEnabled: readBoolean(root.localGloballyEnabled, 'userLoginSetupOptions.localGloballyEnabled'),
+    oidcGloballyEnabled: readBoolean(root.oidcGloballyEnabled, 'userLoginSetupOptions.oidcGloballyEnabled'),
+    oidcSetupAvailable: readBoolean(root.oidcSetupAvailable, 'userLoginSetupOptions.oidcSetupAvailable'),
+    approvedOidcProvider: readNullableString(root.approvedOidcProvider, 'userLoginSetupOptions.approvedOidcProvider'),
+  }
+}
+
+export function decodeUserLoginMethods(value: unknown): UserLoginMethods {
+  const root = readObject(value, 'userLoginMethods')
+  const local = readObject(root.local, 'userLoginMethods.local')
+  if (!Array.isArray(root.oidc)) throw new Error('userLoginMethods.oidc must be an array')
+  return {
+    userId: readId(root.userId, 'userLoginMethods.userId'),
+    local: {
+      exists: readBoolean(local.exists, 'userLoginMethods.local.exists'),
+      username: readNullableString(local.username, 'userLoginMethods.local.username'),
+      isActive: readNullableBoolean(local.isActive, 'userLoginMethods.local.isActive'),
+      mustChangePassword: readNullableBoolean(local.mustChangePassword, 'userLoginMethods.local.mustChangePassword'),
+      lastPasswordChangedAt: readNullableString(local.lastPasswordChangedAt, 'userLoginMethods.local.lastPasswordChangedAt'),
+      lockedUntil: readNullableString(local.lockedUntil, 'userLoginMethods.local.lockedUntil'),
+      globallyEnabled: readBoolean(local.globallyEnabled, 'userLoginMethods.local.globallyEnabled'),
+    },
+    oidc: root.oidc.map((value, index) => {
+      const field = `userLoginMethods.oidc[${index}]`
+      const identity = readObject(value, field)
+      return {
+        provider: readString(identity.provider, `${field}.provider`),
+        subject: readString(identity.subject, `${field}.subject`),
+        isActive: readBoolean(identity.isActive, `${field}.isActive`),
+        globallyEnabled: readBoolean(identity.globallyEnabled, `${field}.globallyEnabled`),
+      }
+    }),
   }
 }

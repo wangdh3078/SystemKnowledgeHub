@@ -6,9 +6,12 @@ import {
   decodeKnowledgeRole,
   decodeKnowledgeRoles,
   decodeUserDetail,
+  decodeUserLoginMethods,
+  decodeUserLoginSetupOptions,
   decodeUserAccessLevel,
   decodeUsersList,
   type CurrentUserProfile,
+  type CreateUserRequest,
   type KnowledgeRole,
   type LoginIdentity,
   type KnowledgeRoleWriteRequest,
@@ -16,10 +19,11 @@ import {
   type UpdateKnowledgeRoleRequest,
   type UpdateUserRequest,
   type UserDetail,
+  type UserLoginMethods,
+  type UserLoginSetupOptions,
   type UserAccessLevelResponse,
   type UsersListResponse,
   type UsersSort,
-  type UserWriteRequest,
 } from './userContracts'
 
 export function getCurrentUser(signal?: AbortSignal): Promise<CurrentUserProfile> {
@@ -55,8 +59,16 @@ export function getUser(userId: number, signal?: AbortSignal): Promise<UserDetai
   return apiClient.get(`/users/${userId}`, { signal, decode: decodeUserDetail })
 }
 
-export function createUser(request: UserWriteRequest): Promise<UserDetail> {
+export function createUser(request: CreateUserRequest): Promise<UserDetail> {
   return apiClient.post('/users', request, { decode: decodeUserDetail })
+}
+
+export function getUserLoginSetupOptions(signal?: AbortSignal): Promise<UserLoginSetupOptions> {
+  return apiClient.get('/users/login-setup-options', { signal, decode: decodeUserLoginSetupOptions })
+}
+
+export function getUserLoginMethods(userId: number, signal?: AbortSignal): Promise<UserLoginMethods> {
+  return apiClient.get(`/users/${userId}/login-methods`, { signal, decode: decodeUserLoginMethods })
 }
 
 export function updateUser(userId: number, request: UpdateUserRequest): Promise<UserDetail> {
