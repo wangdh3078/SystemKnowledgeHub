@@ -6,7 +6,7 @@ using SystemKnowledgeHub.Api.Persistence.Concurrency;
 
 namespace SystemKnowledgeHub.Api.Features.Users.Application;
 
-/// <summary>为已有 User 创建、启用或停用其唯一 Local credential。</summary>
+/// <summary>为已有 User 创建、启用、停用或重置其唯一 Local credential。</summary>
 public sealed class LocalCredentialManagementService(
     KnowledgeHubDbContext dbContext,
     UserQueries queries,
@@ -170,6 +170,73 @@ public sealed class LocalCredentialManagementService(
         }
 
         Audit(eventType, command.UserId, credential.Id, "success", command.IsActive ? "enabled" : "disabled");
+        return new(
+            (await queries.GetUserLoginMethods(command.UserId, cancellationToken))!.Local,
+            null,
+            LocalCredentialWriteFailure.None);
+    }
+
+    public async Task<LocalCredentialWriteResult> ResetPasswordAsync(
+        ResetUserLocalPasswordCommand command,
+        CancellationToken cancellationToken)
+    {
+        const string eventType = "LocalPasswordResetByAdministrator";
+        var errors = new Dictionary<string, string[]>();
+        if (!LocalCredentialSecurity.IsValidPassword(command.NewPassword))
+        {
+            errors["newPassword"] = ["新临时密码长度必须为 8～128 个字符。"];
+        }
+        if (!concurrencyTokenCodec.TryDecode(command.ConcurrencyToken ?? string.Empty, out var expectedVersion))
+        {
+            errors["credentialConcurrencyToken"] = ["并发标记无效，请重新加载后重试。"];
+        }
+        if (errors.Count > 0)
+        {
+            Audit(eventType, command.UserId, null, "rejected", "validation_failed");
+            return new(null, errors, LocalCredentialWriteFailure.Validation, "password_or_concurrency_invalid");
+        }
+
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var credential = await dbContext.LocalLoginCredentials
+            .SingleOrDefaultAsync(item => item.UserId == command.UserId, cancellationToken);
+        if (credential is null)
+        {
+            Audit(eventType, command.UserId, null, "rejected", "credential_not_found");
+            return new(null, null, LocalCredentialWriteFailure.NotFound, "credential_not_found");
+        }
+        if (credential.Version != expectedVersion)
+        {
+            Audit(eventType, command.UserId, credential.Id, "rejected", "concurrency_conflict");
+            return new(null, null, LocalCredentialWriteFailure.Conflict, "concurrency_conflict");
+        }
+
+        var timestamp = DateTimeOffset.UtcNow;
+        credential.PasswordHash = passwords.Hash(credential, command.NewPassword!);
+        credential.MustChangePassword = true;
+        credential.FailedLoginAttempts = 0;
+        credential.FailedLoginWindowStartedAt = null;
+        credential.LockedUntil = null;
+        credential.SessionVersion += 1;
+        credential.Version = expectedVersion + 1;
+        credential.LastPasswordChangedAt = timestamp;
+        credential.UpdatedAt = timestamp;
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            Audit(eventType, command.UserId, credential.Id, "rejected", "concurrency_conflict");
+            return new(null, null, LocalCredentialWriteFailure.Conflict, "concurrency_conflict");
+        }
+        catch (DbUpdateException)
+        {
+            Audit(eventType, command.UserId, credential.Id, "rejected", "concurrency_conflict");
+            return new(null, null, LocalCredentialWriteFailure.Conflict, "concurrency_conflict");
+        }
+
+        Audit(eventType, command.UserId, credential.Id, "success", "password_reset");
         return new(
             (await queries.GetUserLoginMethods(command.UserId, cancellationToken))!.Local,
             null,

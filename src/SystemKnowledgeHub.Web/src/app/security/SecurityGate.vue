@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { Connection } from '@element-plus/icons-vue'
+import { useRouter } from 'vue-router'
 import { ApiError, NetworkRequestError } from '../../api/errors/ApiError'
 import {
   getAuthenticationOptions,
@@ -11,6 +12,7 @@ import {
 import { useActorStore } from '../stores/actor'
 
 const actorStore = useActorStore()
+const router = useRouter()
 const options = ref<AuthenticationOptions | null>(null)
 const optionsLoading = ref(false)
 const optionsError = ref<string | null>(null)
@@ -42,12 +44,16 @@ const content = computed(() => {
   }
 })
 
-function currentReturnUrl(): string {
-  return `${window.location.pathname}${window.location.search}${window.location.hash}`
+function enterpriseLogin(): void {
+  startEnterpriseLogin()
 }
 
-function enterpriseLogin(): void {
-  startEnterpriseLogin(currentReturnUrl())
+async function loadAuthenticatedUserAndEnterDashboard(): Promise<boolean> {
+  const loaded = await actorStore.loadCurrentUser()
+  if (loaded && !actorStore.mustChangePassword) {
+    await router.replace({ name: 'dashboard' })
+  }
+  return loaded
 }
 
 async function loadAuthenticationOptions(): Promise<void> {
@@ -84,7 +90,7 @@ async function submitLocalLogin(): Promise<void> {
     await localLogin(username.value, password.value)
     password.value = ''
     username.value = ''
-    const loaded = await actorStore.loadCurrentUser()
+    const loaded = await loadAuthenticatedUserAndEnterDashboard()
     if (!loaded) loginError.value = '登录成功，但无法加载当前用户，请重试。'
   } catch (error: unknown) {
     if (error instanceof ApiError) {
@@ -100,7 +106,7 @@ async function submitLocalLogin(): Promise<void> {
           loginError.value = '登录安全令牌已失效，请重新提交。'
           break
         case 'already_authenticated': {
-          const loaded = await actorStore.loadCurrentUser()
+          const loaded = await loadAuthenticatedUserAndEnterDashboard()
           if (!loaded) loginError.value = '无法恢复当前登录状态，请重试。'
           break
         }
@@ -137,8 +143,7 @@ watch(loginRequired, (required) => {
 }, { immediate: true })
 
 function login(): void {
-  const returnUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`
-  startEnterpriseLogin(returnUrl)
+  startEnterpriseLogin()
 }
 </script>
 

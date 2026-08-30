@@ -104,6 +104,24 @@ export function setLocalCredentialActiveState(
   })
 }
 
+export function resetUserLocalPassword(
+  userId: number,
+  local: LocalLoginMethod,
+  newPassword: string,
+): Promise<LocalLoginMethod> {
+  if (!local.concurrencyToken) throw new Error('本地账号并发标记缺失，请重新加载。')
+  return apiClient.post(`/users/${userId}/local-credential/reset-password`, {
+    newPassword,
+    credentialConcurrencyToken: local.concurrencyToken,
+  }, {
+    decode: (value) => decodeUserLoginMethods({
+      userId,
+      local: value,
+      oidc: [],
+    }).local,
+  })
+}
+
 export function updateUser(userId: number, request: UpdateUserRequest): Promise<UserDetail> {
   return apiClient.put(`/users/${userId}`, request, { decode: decodeUserDetail })
 }

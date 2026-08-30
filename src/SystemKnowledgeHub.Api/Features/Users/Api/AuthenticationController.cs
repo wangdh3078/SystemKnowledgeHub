@@ -18,12 +18,11 @@ public sealed class AuthenticationController(
 {
     [AllowAnonymous]
     [HttpGet("login")]
-    public IActionResult Login([FromQuery] string? returnUrl)
+    public IActionResult Login()
     {
         if (!oidcOptions.Value.Enabled) return NotFound();
-        var redirectUri = IsSafeLocalReturnUrl(returnUrl) ? returnUrl! : "/";
         return Challenge(
-            new AuthenticationProperties { RedirectUri = redirectUri },
+            new AuthenticationProperties { RedirectUri = "/dashboard" },
             "EnterpriseOidc");
     }
 
@@ -81,12 +80,6 @@ public sealed class AuthenticationController(
         await HttpContext.SignOutAsync(CurrentUserContext.CookieScheme);
         return NoContent();
     }
-
-    private static bool IsSafeLocalReturnUrl(string? returnUrl) =>
-        !string.IsNullOrWhiteSpace(returnUrl)
-        && returnUrl.StartsWith("/", StringComparison.Ordinal)
-        && !returnUrl.StartsWith("//", StringComparison.Ordinal)
-        && !returnUrl.StartsWith("/\\", StringComparison.Ordinal);
 
     public sealed record LocalLoginRequest(string? Username, string? Password);
 }

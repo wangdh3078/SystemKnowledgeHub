@@ -4,10 +4,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../api/errors/ApiError'
 import type { CurrentUserProfile } from '../../features/users/api/userContracts'
 import { getCurrentUser } from '../../features/users/api/usersApi'
-import { getAuthenticationOptions, localLogin } from './authenticationApi'
+import { getAuthenticationOptions, localLogin, startEnterpriseLogin } from './authenticationApi'
 import { getAntiforgeryToken } from './securityApi'
 import SecurityGate from './SecurityGate.vue'
 import { useActorStore } from '../stores/actor'
+
+const routerState = vi.hoisted(() => ({ replace: vi.fn() }))
 
 vi.mock('../../features/users/api/usersApi', () => ({ getCurrentUser: vi.fn() }))
 vi.mock('./authenticationApi', () => ({
@@ -16,6 +18,7 @@ vi.mock('./authenticationApi', () => ({
   startEnterpriseLogin: vi.fn(),
 }))
 vi.mock('./securityApi', () => ({ getAntiforgeryToken: vi.fn() }))
+vi.mock('vue-router', () => ({ useRouter: () => routerState }))
 
 const currentUser: CurrentUserProfile = {
   id: 7,
@@ -71,6 +74,8 @@ describe('SecurityGate', () => {
     vi.mocked(localLogin).mockReset()
     vi.mocked(getCurrentUser).mockReset()
     vi.mocked(getAntiforgeryToken).mockReset()
+    vi.mocked(startEnterpriseLogin).mockReset()
+    routerState.replace.mockReset()
     vi.mocked(getAntiforgeryToken).mockResolvedValue('anonymous-token')
   })
 
@@ -105,6 +110,8 @@ describe('SecurityGate', () => {
 
     expect(wrapper.find('form').exists()).toBe(false)
     expect(wrapper.text()).toContain('Microsoft Entra ID 登录')
+    await wrapper.get('.security-gate__enterprise-login').trigger('click')
+    expect(startEnterpriseLogin).toHaveBeenCalledWith()
   })
 
   it('renders Local Login and enterprise login together only in Both mode', async () => {
@@ -193,5 +200,25 @@ describe('SecurityGate', () => {
     expect(localLogin).toHaveBeenCalledWith('local-admin', 'correct password')
     expect(getCurrentUser).toHaveBeenCalledOnce()
     expect(useActorStore().currentUser).toEqual(currentUser)
+    expect(routerState.replace).toHaveBeenCalledWith({ name: 'dashboard' })
+  })
+
+  it('keeps the authoritative forced-password gate instead of navigating after temporary-password login', async () => {
+    useActorStore().authStatus = 'unauthenticated'
+    vi.mocked(getAuthenticationOptions).mockResolvedValue({
+      localLoginEnabled: true,
+      oidcLoginEnabled: false,
+      oidcDisplayName: null,
+    })
+    vi.mocked(localLogin).mockResolvedValue()
+    vi.mocked(getCurrentUser).mockResolvedValue({ ...currentUser, mustChangePassword: true })
+
+    const wrapper = mountGate()
+    await flushPromises()
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    expect(useActorStore().mustChangePassword).toBe(true)
+    expect(routerState.replace).not.toHaveBeenCalled()
   })
 })

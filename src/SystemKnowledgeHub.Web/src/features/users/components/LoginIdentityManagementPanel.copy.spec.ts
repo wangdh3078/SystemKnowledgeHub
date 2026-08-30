@@ -9,5 +9,8 @@ describe('LoginIdentityManagementPanel copy', () => {
     expect(source).toContain(':model-value="approvedProvider" readonly')
     expect(source).not.toContain('v-model="form.provider"')
     expect(source).toContain('由身份提供方提供的稳定标识')
+    expect(source).toContain('<dt>用户状态</dt>')
+    expect(source).toContain('<dt>企业统一登录状态</dt>')
+    expect(source).toContain('<dt>最终登录状态</dt>')
   })
 })

@@ -10,6 +10,7 @@ import {
   getUser,
   getUserLoginMethods,
   getUserLoginSetupOptions,
+  resetUserLocalPassword,
   setLocalCredentialActiveState,
 } from '../api/usersApi'
 import UserManagementDrawer from './UserManagementDrawer.vue'
@@ -27,6 +28,7 @@ vi.mock('../api/usersApi', () => ({
   getUser: vi.fn(),
   getUserLoginMethods: vi.fn(),
   getUserLoginSetupOptions: vi.fn(),
+  resetUserLocalPassword: vi.fn(),
   setLocalCredentialActiveState: vi.fn(),
   updateUser: vi.fn(),
 }))
@@ -184,6 +186,16 @@ describe('UserManagementDrawer login setup', () => {
       globallyEnabled: true,
       concurrencyToken: 'credential-token',
     })
+    vi.mocked(resetUserLocalPassword).mockResolvedValue({
+      exists: true,
+      username: 'existing-local',
+      isActive: true,
+      mustChangePassword: true,
+      lastPasswordChangedAt: '2026-08-30T02:00:00Z',
+      lockedUntil: null,
+      globallyEnabled: true,
+      concurrencyToken: 'reset-token',
+    })
   })
 
   it('switches among three explicit modes and keeps Local and OIDC fields mutually exclusive', async () => {
@@ -283,5 +295,79 @@ describe('UserManagementDrawer login setup', () => {
     await wrapper.findAll('button').find((button) => button.text() === '停用')?.trigger('click')
     await flushPromises()
     expect(setLocalCredentialActiveState).toHaveBeenCalledWith(42, local, false)
+  })
+
+  it('distinguishes an inactive User from an enabled Local login method', async () => {
+    const local = {
+      exists: true,
+      username: 'managed-local',
+      isActive: true,
+      mustChangePassword: false,
+      lastPasswordChangedAt: '2026-08-30T01:00:00Z',
+      lockedUntil: null,
+      globallyEnabled: true,
+      concurrencyToken: 'credential-token',
+    } as const
+    vi.mocked(getUser).mockResolvedValue({ ...user, isActive: false })
+    vi.mocked(getUserLoginMethods).mockResolvedValue({ userId: 42, local, oidc: [] })
+
+    const wrapper = mountDrawer(42)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('用户状态用户停用')
+    expect(wrapper.text()).toContain('本地登录状态启用')
+    expect(wrapper.text()).toContain('本地登录：启用')
+    expect(wrapper.text()).toContain('本地登录方式已启用，但用户当前已停用，因此无法登录系统。')
+  })
+
+  it('distinguishes an active User from a disabled Local login method', async () => {
+    const local = {
+      exists: true,
+      username: 'managed-local',
+      isActive: false,
+      mustChangePassword: false,
+      lastPasswordChangedAt: '2026-08-30T01:00:00Z',
+      lockedUntil: null,
+      globallyEnabled: true,
+      concurrencyToken: 'credential-token',
+    } as const
+    vi.mocked(getUserLoginMethods).mockResolvedValue({ userId: 42, local, oidc: [] })
+
+    const wrapper = mountDrawer(42)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('用户状态用户启用')
+    expect(wrapper.text()).toContain('本地登录状态停用')
+    expect(wrapper.text()).toContain('本地登录：停用')
+    expect(wrapper.text()).toContain('用户当前启用，但本地登录方式已停用，因此无法通过本地账号登录。')
+  })
+
+  it('resets a Local password with one client-confirmed value and does not toggle either state', async () => {
+    const local = {
+      exists: true,
+      username: 'managed-local',
+      isActive: false,
+      mustChangePassword: false,
+      lastPasswordChangedAt: '2026-08-30T01:00:00Z',
+      lockedUntil: '2026-08-30T01:30:00Z',
+      globallyEnabled: true,
+      concurrencyToken: 'credential-token',
+    } as const
+    vi.mocked(getUserLoginMethods).mockResolvedValue({ userId: 42, local, oidc: [] })
+    const wrapper = mountDrawer(42)
+    await flushPromises()
+
+    await wrapper.findAll('button').find((button) => button.text() === '重置密码')?.trigger('click')
+    expect(wrapper.text()).toContain('重置后，该用户现有本地登录会话将全部失效')
+    expect(wrapper.text()).toContain('重置密码不会自动启用该登录方式')
+    const passwordFields = wrapper.findAll('input[autocomplete="new-password"]')
+    await passwordFields[0].setValue('AUTH-B04 temporary password 空格')
+    await passwordFields[1].setValue('AUTH-B04 temporary password 空格')
+    await wrapper.findAll('button').find((button) => button.text() === '确认重置')?.trigger('click')
+    await flushPromises()
+
+    expect(resetUserLocalPassword).toHaveBeenCalledWith(42, local, 'AUTH-B04 temporary password 空格')
+    expect(JSON.stringify(vi.mocked(resetUserLocalPassword).mock.calls[0])).not.toContain('confirmPassword')
+    expect(setLocalCredentialActiveState).not.toHaveBeenCalled()
   })
 })

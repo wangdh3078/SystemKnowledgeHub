@@ -2,7 +2,7 @@
 import { Lock, Plus, Search, SwitchButton } from '@element-plus/icons-vue'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { logout } from '../app/security/authenticationApi'
 import { useActorStore } from '../app/stores/actor'
 import { useOverlayStore } from '../app/stores/overlays'
@@ -10,6 +10,7 @@ import { confirmDocumentEditDiscard, hasActiveDirtyDocumentEdit } from '../featu
 import LocalPasswordChangeForm from '../app/security/LocalPasswordChangeForm.vue'
 
 const route = useRoute()
+const router = useRouter()
 const actorStore = useActorStore()
 const overlayStore = useOverlayStore()
 const profileOpen = ref(false)
@@ -67,6 +68,7 @@ async function signOut(): Promise<void> {
   try {
     await logout()
     actorStore.clearCurrentUser('unauthenticated')
+    await router.replace({ name: 'dashboard' })
   } finally {
     loggingOut.value = false
   }
@@ -76,6 +78,7 @@ function passwordChanged(): void {
   passwordDialogOpen.value = false
   profileOpen.value = false
   actorStore.clearCurrentUser('unauthenticated')
+  void router.replace({ name: 'dashboard' })
   ElMessage.success('密码已修改，请使用新密码重新登录。')
 }
 

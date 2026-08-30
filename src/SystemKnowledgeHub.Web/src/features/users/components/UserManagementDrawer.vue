@@ -13,6 +13,7 @@ import {
   getUser,
   getUserLoginMethods,
   getUserLoginSetupOptions,
+  resetUserLocalPassword,
   setLocalCredentialActiveState,
   updateUser,
 } from '../api/usersApi'
@@ -38,11 +39,17 @@ const conflict = ref(false)
 const roles = ref<readonly KnowledgeRole[]>([])
 const loginSetupOptions = ref<UserLoginSetupOptions | null>(null)
 const loginMethods = ref<UserLoginMethods | null>(null)
+const userActive = ref<boolean | null>(null)
 const localCredentialFormVisible = ref(false)
 const localCredentialSubmitting = ref(false)
 const localCredentialError = ref<string | null>(null)
 const localCredentialFieldErrors = reactive<Record<string, string>>({})
 const localCredentialForm = reactive({ username: '', initialPassword: '', confirmPassword: '' })
+const resetPasswordFormVisible = ref(false)
+const resetPasswordSubmitting = ref(false)
+const resetPasswordError = ref<string | null>(null)
+const resetPasswordFieldErrors = reactive<Record<string, string>>({})
+const resetPasswordForm = reactive({ newPassword: '', confirmPassword: '' })
 const originalRoleIds = ref<ReadonlySet<number>>(new Set())
 const concurrencyToken = ref('')
 const form = reactive({
@@ -76,6 +83,33 @@ const localCredentialPasswordMismatch = computed(() =>
   localCredentialForm.confirmPassword.length > 0
   && localCredentialForm.initialPassword !== localCredentialForm.confirmPassword,
 )
+const resetPasswordMismatch = computed(() =>
+  resetPasswordForm.confirmPassword.length > 0
+  && resetPasswordForm.newPassword !== resetPasswordForm.confirmPassword,
+)
+const localLoginAvailability = computed<{ type: 'success' | 'warning'; title: string } | null>(() => {
+  const local = loginMethods.value?.local
+  if (!local?.exists || userActive.value === null) return null
+  if (!userActive.value && local.isActive) {
+    return { type: 'warning', title: '本地登录方式已启用，但用户当前已停用，因此无法登录系统。' }
+  }
+  if (!userActive.value) {
+    return { type: 'warning', title: '用户当前已停用，因此无法登录系统。' }
+  }
+  if (!local.isActive) {
+    return { type: 'warning', title: '用户当前启用，但本地登录方式已停用，因此无法通过本地账号登录。' }
+  }
+  if (!local.globallyEnabled) {
+    return { type: 'warning', title: '用户和本地登录方式均已启用，但当前部署未启用本地登录。' }
+  }
+  if (local.lockedUntil) {
+    return { type: 'warning', title: `本地登录临时锁定至 ${formatDateTime(local.lockedUntil)}。` }
+  }
+  if (local.mustChangePassword) {
+    return { type: 'success', title: '当前可使用临时密码登录；登录后必须先修改密码。' }
+  }
+  return { type: 'success', title: '当前可通过本地账号登录。' }
+})
 
 function assignUser(user: UserDetail): void {
   form.displayName = user.displayName
@@ -86,6 +120,7 @@ function assignUser(user: UserDetail): void {
   form.knowledgeRoleIds = user.knowledgeRoles.map((role) => role.id)
   originalRoleIds.value = new Set(form.knowledgeRoleIds)
   concurrencyToken.value = user.concurrencyToken
+  userActive.value = user.isActive
 }
 
 async function load(): Promise<void> {
@@ -180,6 +215,52 @@ async function toggleLocalCredential(): Promise<void> {
     if (error instanceof ApiError && error.status === 409) await reloadLoginMethods()
   } finally {
     localCredentialSubmitting.value = false
+  }
+}
+
+function clearResetPasswordErrors(): void {
+  resetPasswordError.value = null
+  for (const key of Object.keys(resetPasswordFieldErrors)) delete resetPasswordFieldErrors[key]
+}
+
+function openResetPasswordForm(): void {
+  clearResetPasswordErrors()
+  resetPasswordForm.newPassword = ''
+  resetPasswordForm.confirmPassword = ''
+  resetPasswordFormVisible.value = true
+}
+
+async function resetLocalPassword(): Promise<void> {
+  clearResetPasswordErrors()
+  if (resetPasswordForm.newPassword.length < 8 || resetPasswordForm.newPassword.length > 128) {
+    resetPasswordFieldErrors.newPassword = '新临时密码长度必须为 8～128 个字符。'
+  }
+  if (!resetPasswordForm.confirmPassword) resetPasswordFieldErrors.confirmPassword = '请再次输入新临时密码。'
+  else if (resetPasswordMismatch.value) resetPasswordFieldErrors.confirmPassword = '两次输入的密码不一致。'
+  const local = loginMethods.value?.local
+  if (Object.keys(resetPasswordFieldErrors).length > 0 || resetPasswordSubmitting.value || props.userId === null || !local?.exists) return
+
+  resetPasswordSubmitting.value = true
+  try {
+    await resetUserLocalPassword(props.userId, local, resetPasswordForm.newPassword)
+    resetPasswordForm.newPassword = ''
+    resetPasswordForm.confirmPassword = ''
+    resetPasswordFormVisible.value = false
+    await reloadLoginMethods()
+    ElMessage.success('本地密码已重置；用户下次使用临时密码登录后必须修改密码。')
+  } catch (error: unknown) {
+    if (error instanceof ApiError) {
+      resetPasswordError.value = error.message
+      for (const [field, messages] of Object.entries(error.response.fieldErrors ?? {})) {
+        const message = messages[0]
+        if (message) resetPasswordFieldErrors[field] = message
+      }
+      if (error.status === 409) await reloadLoginMethods()
+    } else {
+      resetPasswordError.value = error instanceof Error ? error.message : '本地密码重置失败。'
+    }
+  } finally {
+    resetPasswordSubmitting.value = false
   }
 }
 
@@ -416,27 +497,53 @@ onMounted(() => void load())
               <article>
                 <div class="user-login-methods__heading">
                   <div><strong>本地账号</strong><small>用户名与密码登录</small></div>
-                  <el-tag v-if="loginMethods.local.exists" size="small" :type="loginMethods.local.isActive ? 'success' : 'info'">{{ loginMethods.local.isActive ? '已启用' : '已停用' }}</el-tag>
+                  <el-tag v-if="loginMethods.local.exists" size="small" :type="loginMethods.local.isActive ? 'success' : 'info'">{{ loginMethods.local.isActive ? '本地登录：启用' : '本地登录：停用' }}</el-tag>
                   <el-tag v-else size="small" type="info">未配置</el-tag>
                 </div>
 
                 <template v-if="loginMethods.local.exists">
                   <dl class="user-login-methods__details">
+                    <div><dt>用户状态</dt><dd>{{ userActive ? '用户启用' : '用户停用' }}</dd></div>
                     <div><dt>用户名</dt><dd class="technical-text">{{ loginMethods.local.username }}</dd></div>
-                    <div><dt>登录方式状态</dt><dd>{{ loginMethods.local.isActive ? '启用' : '停用' }}</dd></div>
+                    <div><dt>本地登录状态</dt><dd>{{ loginMethods.local.isActive ? '启用' : '停用' }}</dd></div>
                     <div><dt>首次登录需修改密码</dt><dd>{{ loginMethods.local.mustChangePassword ? '是' : '否' }}</dd></div>
                     <div><dt>最近密码变更时间</dt><dd>{{ formatDateTime(loginMethods.local.lastPasswordChangedAt) }}</dd></div>
                     <div><dt>全局本地登录</dt><dd>{{ loginMethods.local.globallyEnabled ? '已启用' : '未启用' }}</dd></div>
                     <div v-if="loginMethods.local.lockedUntil"><dt>临时锁定至</dt><dd>{{ formatDateTime(loginMethods.local.lockedUntil) }}</dd></div>
                   </dl>
-                  <el-alert v-if="!loginMethods.local.globallyEnabled" type="warning" title="当前部署未启用本地登录" :closable="false" show-icon />
+                  <el-alert v-if="localLoginAvailability" :type="localLoginAvailability.type" :title="localLoginAvailability.title" :closable="false" show-icon />
+                  <el-alert v-if="localCredentialError" type="error" :title="localCredentialError" :closable="false" show-icon />
                   <div class="user-login-methods__actions">
+                    <el-button plain :loading="resetPasswordSubmitting" @click="openResetPasswordForm">重置密码</el-button>
                     <el-button
                       :type="loginMethods.local.isActive ? 'danger' : 'success'"
                       plain
                       :loading="localCredentialSubmitting"
                       @click="toggleLocalCredential"
                     >{{ loginMethods.local.isActive ? '停用' : '启用' }}</el-button>
+                  </div>
+                  <div v-if="resetPasswordFormVisible" class="local-credential-create local-credential-reset">
+                    <el-alert
+                      type="warning"
+                      title="重置后，该用户现有本地登录会话将全部失效，下次使用临时密码登录后必须修改密码。"
+                      :closable="false"
+                      show-icon
+                    />
+                    <el-alert v-if="!loginMethods.local.isActive" type="info" title="本地登录当前停用；重置密码不会自动启用该登录方式。" :closable="false" show-icon />
+                    <el-alert v-if="resetPasswordError" type="error" :title="resetPasswordError" :closable="false" show-icon />
+                    <div class="user-drawer__row">
+                      <el-form-item label="新临时密码" :error="resetPasswordFieldErrors.newPassword" required>
+                        <el-input v-model="resetPasswordForm.newPassword" type="password" show-password maxlength="128" autocomplete="new-password" />
+                      </el-form-item>
+                      <el-form-item label="确认临时密码" :error="resetPasswordFieldErrors.confirmPassword || (resetPasswordMismatch ? '两次输入的密码不一致。' : '')" required>
+                        <el-input v-model="resetPasswordForm.confirmPassword" type="password" show-password maxlength="128" autocomplete="new-password" />
+                      </el-form-item>
+                    </div>
+                    <p class="user-drawer__help">确认临时密码只在当前页面校验，不会发送到服务器。</p>
+                    <div class="user-login-methods__actions">
+                      <el-button @click="resetPasswordFormVisible = false">取消</el-button>
+                      <el-button type="primary" :loading="resetPasswordSubmitting" :disabled="resetPasswordMismatch" @click="resetLocalPassword">确认重置</el-button>
+                    </div>
                   </div>
                 </template>
 
@@ -472,6 +579,7 @@ onMounted(() => void load())
               :setup-available="loginSetupOptions?.oidcSetupAvailable ?? false"
               :approved-provider="loginSetupOptions?.approvedOidcProvider ?? null"
               :globally-enabled="loginSetupOptions?.oidcGloballyEnabled ?? false"
+              :user-active="userActive ?? false"
               @changed="reloadLoginMethods"
             />
           </template>

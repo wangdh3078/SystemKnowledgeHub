@@ -41,8 +41,8 @@ export function localLogin(username: string, password: string): Promise<void> {
   return apiClient.postRoot('/auth/local/login', request)
 }
 
-export function startEnterpriseLogin(returnUrl: string): void {
-  window.location.assign(`/auth/login?returnUrl=${encodeURIComponent(returnUrl)}`)
+export function startEnterpriseLogin(): void {
+  window.location.assign('/auth/login')
 }
 
 export function logout(): Promise<void> {

@@ -9,6 +9,7 @@ const props = defineProps<{
   setupAvailable: boolean
   approvedProvider: string | null
   globallyEnabled: boolean
+  userActive: boolean
 }>()
 const emit = defineEmits<{ changed: [] }>()
 const identities = ref<readonly LoginIdentity[]>([])
@@ -75,10 +76,12 @@ onMounted(() => void load())
       <div v-if="identities.length" class="login-identities__list">
         <div v-for="identity in identities" :key="identity.id" class="login-identities__item">
           <dl>
+            <div><dt>用户状态</dt><dd>{{ userActive ? '用户启用' : '用户停用' }}</dd></div>
             <div><dt>Provider</dt><dd class="technical-text">{{ identity.provider }}</dd></div>
             <div><dt>Subject / sub</dt><dd class="technical-text">{{ identity.subject }}</dd></div>
-            <div><dt>映射状态</dt><dd>{{ identity.isActive ? '启用' : '停用' }}</dd></div>
+            <div><dt>企业统一登录状态</dt><dd>{{ identity.isActive ? '启用' : '停用' }}</dd></div>
             <div><dt>当前部署可用</dt><dd>{{ globallyEnabled && identity.provider === approvedProvider ? '是' : '否' }}</dd></div>
+            <div><dt>最终登录状态</dt><dd>{{ userActive && identity.isActive && globallyEnabled && identity.provider === approvedProvider ? '可通过企业统一登录' : '当前无法通过此映射登录' }}</dd></div>
           </dl>
           <el-button
             :type="identity.isActive ? 'danger' : 'success'"

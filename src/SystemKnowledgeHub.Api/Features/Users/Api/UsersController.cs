@@ -175,6 +175,43 @@ public sealed class UsersController(
         };
     }
 
+    /// <summary>管理员使用 credential 并发标记重置临时密码，并立即使旧 Local 会话失效。</summary>
+    [HttpPost("{id:long}/local-credential/reset-password")]
+    [ProducesResponseType<LocalLoginMethodResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ApiErrorResponse>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ApiErrorResponse>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ApiErrorResponse>(StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<LocalLoginMethodResponse>> ResetLocalCredentialPassword(
+        long id,
+        [FromBody] ResetUserLocalPasswordRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!ApiIdParser.IsSafePositive(id)) return BadRequest(InvalidId());
+        var result = await localCredentials.ResetPasswordAsync(
+            new ResetUserLocalPasswordCommand(id, request.NewPassword, request.CredentialConcurrencyToken),
+            cancellationToken);
+        return result.Failure switch
+        {
+            LocalCredentialWriteFailure.None => Ok(result.Response),
+            LocalCredentialWriteFailure.Validation => BadRequest(new ApiErrorResponse(
+                "validation_error",
+                "请检查新临时密码和并发标记。",
+                result.FieldErrors,
+                new { reason = result.Reason, resourceType = "LocalLoginCredential", targetUserId = id })),
+            LocalCredentialWriteFailure.NotFound => NotFound(new ApiErrorResponse(
+                "not_found",
+                "未找到指定用户的本地账号。",
+                null,
+                new { reason = "credential_not_found", resourceType = "LocalLoginCredential", targetUserId = id })),
+            LocalCredentialWriteFailure.Conflict => Conflict(new ApiErrorResponse(
+                "conflict",
+                "本地账号已被其他操作修改，请刷新后重试。",
+                null,
+                new { reason = "concurrency_conflict", resourceType = "LocalLoginCredential", targetUserId = id })),
+            _ => throw new InvalidOperationException("Unsupported Local credential reset-password result."),
+        };
+    }
+
     /// <summary>
     /// 创建 canonical User 及其初始 KnowledgeRole assignment。
     /// </summary>

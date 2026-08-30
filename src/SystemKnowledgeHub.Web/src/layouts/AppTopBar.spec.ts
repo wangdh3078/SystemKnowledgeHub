@@ -25,6 +25,8 @@ const currentUser = {
   mustChangePassword: false,
 }
 
+let mountedRouter: ReturnType<typeof createRouter>
+
 async function mountTopBar(
   accessLevel: 'Administrator' | 'Editor' | 'Viewer' = 'Administrator',
   authenticationMethod: 'local' | 'oidc' = 'local',
@@ -37,9 +39,13 @@ async function mountTopBar(
   actorStore.initialized = true
   const router = createRouter({
     history: createMemoryHistory(),
-    routes: [{ path: '/', component: { template: '<div />' }, name: 'dashboard' }],
+    routes: [
+      { path: '/dashboard', component: { template: '<div />' }, name: 'dashboard' },
+      { path: '/admin/users', component: { template: '<div />' }, name: 'users-management' },
+    ],
   })
-  await router.push('/')
+  mountedRouter = router
+  await router.push('/admin/users')
   await router.isReady()
   return mount(AppTopBar, {
     global: {
@@ -114,6 +120,7 @@ describe('AppTopBar logout confirmation', () => {
 
     expect(logout).toHaveBeenCalledOnce()
     expect(useActorStore().authStatus).toBe('unauthenticated')
+    expect(mountedRouter.currentRoute.value.name).toBe('dashboard')
   })
 
   it('toggles the lightweight profile popover and closes it on outside pointer or Escape', async () => {

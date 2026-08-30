@@ -131,10 +131,10 @@ onMounted(() => void load())
 
     <section class="users-filter-bar skh-filter-bar" aria-label="用户筛选">
       <el-input v-model="keyword" clearable :prefix-icon="Search" placeholder="搜索姓名、工号或邮箱" aria-label="搜索用户" />
-      <el-select v-model="isActive" placeholder="状态：全部" @change="resetPageAndLoad">
-        <el-option label="全部状态" value="" />
-        <el-option label="启用" :value="true" />
-        <el-option label="停用" :value="false" />
+      <el-select v-model="isActive" placeholder="用户状态：全部" @change="resetPageAndLoad">
+        <el-option label="全部用户状态" value="" />
+        <el-option label="用户启用" :value="true" />
+        <el-option label="用户停用" :value="false" />
       </el-select>
       <el-button v-if="keyword || isActive !== ''" text type="primary" @click="clearFilters">清除筛选</el-button>
       <span v-if="data">共 {{ data.total }} 位用户</span>
@@ -151,7 +151,7 @@ onMounted(() => void load())
         <el-table-column prop="departmentOrTeam" label="部门 / 团队" min-width="140" show-overflow-tooltip><template #default="scope"><span :class="{ 'text-muted': !scope.row.departmentOrTeam }">{{ scope.row.departmentOrTeam ?? '未记录' }}</span></template></el-table-column>
         <el-table-column prop="jobTitle" label="职位" min-width="130" show-overflow-tooltip><template #default="scope"><span :class="{ 'text-muted': !scope.row.jobTitle }">{{ scope.row.jobTitle ?? '未记录' }}</span></template></el-table-column>
         <el-table-column label="知识身份" min-width="210"><template #default="scope"><div v-if="scope.row.knowledgeRoles.length" class="users-table__roles"><el-tag v-for="role in scope.row.knowledgeRoles" :key="role.id" :type="role.isActive ? 'primary' : 'info'" effect="plain" size="small">{{ role.name }}<template v-if="!role.isActive"> · 停用</template></el-tag></div><span v-else class="text-muted">未配置</span></template></el-table-column>
-        <el-table-column prop="isActive" label="状态" width="80" align="center"><template #default="scope"><el-tag :type="scope.row.isActive ? 'success' : 'info'" effect="plain" size="small">{{ scope.row.isActive ? '启用' : '停用' }}</el-tag></template></el-table-column>
+        <el-table-column prop="isActive" label="用户状态" width="100" align="center"><template #default="scope"><el-tag :type="scope.row.isActive ? 'success' : 'info'" effect="plain" size="small">{{ scope.row.isActive ? '用户启用' : '用户停用' }}</el-tag></template></el-table-column>
         <el-table-column prop="updatedAt" label="更新于" width="156" sortable="custom"><template #default="scope">{{ formatDateTime(scope.row.updatedAt) }}</template></el-table-column>
         <el-table-column label="操作" width="164" fixed="right" class-name="users-table__actions-column"><template #default="scope"><div class="users-table__actions" @click.stop><el-button text type="primary" :icon="EditPen" @click="openEdit(scope.row.id)">编辑</el-button><el-button text :type="scope.row.isActive ? 'danger' : 'success'" :loading="activeActionId === scope.row.id" @click="toggleUser(scope.row)">{{ scope.row.isActive ? '停用' : '启用' }}</el-button></div></template></el-table-column>
       </el-table>

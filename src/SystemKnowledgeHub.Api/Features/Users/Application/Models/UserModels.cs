@@ -241,6 +241,12 @@ public sealed record SetLocalCredentialActiveStateCommand(
     bool IsActive,
     string? ConcurrencyToken);
 
+/// <summary>管理员使用 Local credential 自己的 opaque token 设置一次性临时密码。</summary>
+public sealed record ResetUserLocalPasswordCommand(
+    long UserId,
+    string? NewPassword,
+    string? ConcurrencyToken);
+
 /// <summary>Existing User Local credential 管理的显式业务结果类别。</summary>
 public enum LocalCredentialWriteFailure
 {

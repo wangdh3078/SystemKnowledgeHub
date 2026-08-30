@@ -2,15 +2,18 @@
 import { Connection, SwitchButton } from '@element-plus/icons-vue'
 import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import { useRouter } from 'vue-router'
 import { logout } from './authenticationApi'
 import LocalPasswordChangeForm from './LocalPasswordChangeForm.vue'
 import { useActorStore } from '../stores/actor'
 
 const actorStore = useActorStore()
+const router = useRouter()
 const loggingOut = ref(false)
 
 function passwordChanged(): void {
   actorStore.clearCurrentUser('unauthenticated')
+  void router.replace({ name: 'dashboard' })
   ElMessage.success('密码已修改，请使用新密码重新登录。')
 }
 
@@ -21,6 +24,7 @@ async function signOut(): Promise<void> {
     await logout()
   } finally {
     actorStore.clearCurrentUser('unauthenticated')
+    await router.replace({ name: 'dashboard' })
     loggingOut.value = false
   }
 }

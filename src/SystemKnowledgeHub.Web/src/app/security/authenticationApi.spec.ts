@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { apiClient } from '../../api/client/apiClient'
 import { getAuthenticationOptions, localLogin } from './authenticationApi'
+import source from './authenticationApi.ts?raw'
 
 vi.mock('../../api/client/apiClient', () => ({
   apiClient: {
@@ -39,5 +40,10 @@ describe('authenticationApi', () => {
       username: 'local-admin',
       password: 'correct password',
     })
+  })
+
+  it('starts enterprise login without carrying a previous account returnUrl', () => {
+    expect(source).toContain("window.location.assign('/auth/login')")
+    expect(source).not.toContain('returnUrl')
   })
 })
