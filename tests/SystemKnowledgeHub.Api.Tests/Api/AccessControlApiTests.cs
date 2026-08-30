@@ -26,6 +26,7 @@ public sealed class AccessControlApiTests : IClassFixture<BootstrapWebApplicatio
         using var viewer = await _factory.CreateAuthenticatedClientAsync(viewerId);
         Assert.Equal(HttpStatusCode.OK, (await viewer.GetAsync("/api/dashboard")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await viewer.GetAsync("/api/users")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await viewer.PutAsJsonAsync($"/api/users/{viewerId}/access-level", new { accessLevel = "Editor", concurrencyToken = "ignored" })).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await viewer.PostAsJsonAsync("/api/systems", SystemRequest("viewer"))).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await viewer.PostAsJsonAsync("/api/database-objects", new
         {
@@ -42,6 +43,7 @@ public sealed class AccessControlApiTests : IClassFixture<BootstrapWebApplicatio
         using var editor = await _factory.CreateAuthenticatedClientAsync(editorId);
         Assert.Equal(HttpStatusCode.Created, (await editor.PostAsJsonAsync("/api/systems", SystemRequest("editor"))).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await editor.GetAsync("/api/users")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await editor.PutAsJsonAsync($"/api/users/{editorId}/access-level", new { accessLevel = "Administrator", concurrencyToken = "ignored" })).StatusCode);
 
         using var administrator = _factory.CreateAuthenticatedClient();
         Assert.Equal(HttpStatusCode.OK, (await administrator.GetAsync("/api/users")).StatusCode);
@@ -53,6 +55,33 @@ public sealed class AccessControlApiTests : IClassFixture<BootstrapWebApplicatio
         });
         Assert.Equal(HttpStatusCode.OK, downgradeEditor.StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await editor.PostAsJsonAsync("/api/systems", SystemRequest("editor-downgraded"))).StatusCode);
+
+        var transitionUserId = await CreateUser(AccessLevel.Viewer);
+        var transitionDetail = await ReadUser(administrator, transitionUserId);
+        using var invalidNumericAccess = await administrator.PutAsJsonAsync($"/api/users/{transitionUserId}/access-level", new
+        {
+            accessLevel = 99,
+            concurrencyToken = transitionDetail.GetProperty("concurrencyToken").GetString(),
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, invalidNumericAccess.StatusCode);
+        using var promoteToEditor = await administrator.PutAsJsonAsync($"/api/users/{transitionUserId}/access-level", new
+        {
+            accessLevel = "Editor",
+            concurrencyToken = transitionDetail.GetProperty("concurrencyToken").GetString(),
+        });
+        Assert.Equal(HttpStatusCode.OK, promoteToEditor.StatusCode);
+        var editorResult = await promoteToEditor.Content.ReadFromJsonAsync<JsonElement>();
+        using var promoteToAdministrator = await administrator.PutAsJsonAsync($"/api/users/{transitionUserId}/access-level", new
+        {
+            accessLevel = "Administrator",
+            concurrencyToken = editorResult.GetProperty("concurrencyToken").GetString(),
+        });
+        Assert.Equal(HttpStatusCode.OK, promoteToAdministrator.StatusCode);
+        await using var transitionScope = _factory.Services.CreateAsyncScope();
+        var transitionDb = transitionScope.ServiceProvider.GetRequiredService<KnowledgeHubDbContext>();
+        var transitioned = await transitionDb.Users.SingleAsync(user => user.Id == transitionUserId);
+        Assert.True(transitioned.IsActive);
+        Assert.Equal(AccessLevel.Administrator, transitioned.AccessLevel);
     }
 
     [Fact]
@@ -88,6 +117,8 @@ public sealed class AccessControlApiTests : IClassFixture<BootstrapWebApplicatio
             concurrencyToken = defaultDetail.GetProperty("concurrencyToken").GetString(),
         });
         Assert.Equal(HttpStatusCode.UnprocessableEntity, blockedDowngrade.StatusCode);
+        var blockedBody = await blockedDowngrade.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("last_usable_administrator", blockedBody.GetProperty("details").GetProperty("reason").GetString());
 
         using var blockedDeactivate = await administrator.PutAsJsonAsync($"/api/users/{defaultAdmin.UserId}/active-state", new
         {

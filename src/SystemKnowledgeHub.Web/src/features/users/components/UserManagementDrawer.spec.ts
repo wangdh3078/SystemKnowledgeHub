@@ -2,7 +2,8 @@
 import { computed, defineComponent, h, inject, provide, type ComputedRef, type InjectionKey } from 'vue'
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { UserDetail } from '../api/userContracts'
+import { ApiError } from '../../../api/errors/ApiError'
+import type { AccessLevel, UserDetail } from '../api/userContracts'
 import {
   createUser,
   createUserLocalCredential,
@@ -12,14 +13,23 @@ import {
   getUserLoginSetupOptions,
   resetUserLocalPassword,
   setLocalCredentialActiveState,
+  setUserAccessLevel,
+  updateUser,
 } from '../api/usersApi'
 import UserManagementDrawer from './UserManagementDrawer.vue'
 
-const actorState = vi.hoisted(() => ({ actor: { displayName: '系统管理员', role: 'Administrator' } }))
+const actorState = vi.hoisted(() => ({
+  actor: { displayName: '系统管理员', role: 'Administrator' },
+  currentUser: { id: 900 },
+  isAdministrator: true,
+  refreshCurrentUser: vi.fn(),
+}))
 const overlayState = vi.hoisted(() => ({ closeDrawer: vi.fn(), requestDrawerClose: vi.fn() }))
+const routerState = vi.hoisted(() => ({ replace: vi.fn() }))
 
 vi.mock('../../../app/stores/actor', () => ({ useActorStore: () => actorState }))
 vi.mock('../../../app/stores/overlays', () => ({ useOverlayStore: () => overlayState }))
+vi.mock('vue-router', () => ({ useRouter: () => routerState }))
 vi.mock('element-plus', () => ({ ElMessage: { success: vi.fn() } }))
 vi.mock('../api/usersApi', () => ({
   createUser: vi.fn(),
@@ -30,6 +40,7 @@ vi.mock('../api/usersApi', () => ({
   getUserLoginSetupOptions: vi.fn(),
   resetUserLocalPassword: vi.fn(),
   setLocalCredentialActiveState: vi.fn(),
+  setUserAccessLevel: vi.fn(),
   updateUser: vi.fn(),
 }))
 
@@ -128,6 +139,7 @@ const user: UserDetail = {
   email: null,
   departmentOrTeam: null,
   jobTitle: null,
+  accessLevel: 'Viewer',
   isActive: true,
   knowledgeRoles: [],
   createdAt: '2026-08-30T00:00:00Z',
@@ -150,9 +162,17 @@ async function selectMode(wrapper: ReturnType<typeof mountDrawer>, mode: 'local'
   await flushPromises()
 }
 
+async function selectAccessLevel(wrapper: ReturnType<typeof mountDrawer>, accessLevel: AccessLevel) {
+  await wrapper.find(`.user-access-level__choices input[value="${accessLevel}"]`).trigger('change')
+  await flushPromises()
+}
+
 describe('UserManagementDrawer login setup', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    actorState.currentUser = { id: 900 }
+    actorState.isAdministrator = true
+    actorState.refreshCurrentUser.mockResolvedValue(true)
     vi.mocked(getKnowledgeRoles).mockResolvedValue([])
     vi.mocked(getUserLoginSetupOptions).mockResolvedValue({
       localGloballyEnabled: true,
@@ -176,6 +196,11 @@ describe('UserManagementDrawer login setup', () => {
       oidc: [],
     })
     vi.mocked(createUser).mockResolvedValue(user)
+    vi.mocked(setUserAccessLevel).mockResolvedValue({
+      userId: 42,
+      accessLevel: 'Administrator',
+      concurrencyToken: 'next-user-token',
+    })
     vi.mocked(createUserLocalCredential).mockResolvedValue({
       exists: true,
       username: 'existing-local',
@@ -205,6 +230,9 @@ describe('UserManagementDrawer login setup', () => {
     expect(wrapper.text()).toContain('02知识身份')
     expect(wrapper.text()).toContain('03登录方式')
     expect(wrapper.findAll('.user-login-setup__choices .el-radio')).toHaveLength(3)
+    expect(wrapper.find('.user-access-level__choices input[value="Viewer"]').attributes('checked')).toBeDefined()
+    expect(wrapper.text()).toContain('系统权限')
+    expect(wrapper.text()).toContain('知识身份仅描述知识归属')
     expect(wrapper.find('.user-login-setup__choices').text()).toContain('企业统一登录（OIDC / SSO）')
 
     await selectMode(wrapper, 'local')
@@ -242,6 +270,7 @@ describe('UserManagementDrawer login setup', () => {
     await wrapper.findAll('button').find((button) => button.text() === '创建用户')?.trigger('click')
     await flushPromises()
     expect(createUser).toHaveBeenCalledWith(expect.objectContaining({
+      accessLevel: 'Viewer',
       loginSetup: {
         type: 'local',
         username: 'local-user',
@@ -249,6 +278,88 @@ describe('UserManagementDrawer login setup', () => {
       },
     }))
     expect(JSON.stringify(vi.mocked(createUser).mock.calls[0]?.[0])).not.toContain('confirmPassword')
+  })
+
+  it.each<AccessLevel>(['Editor', 'Administrator'])('creates a user with explicitly selected %s access', async (accessLevel) => {
+    const wrapper = mountDrawer()
+    await flushPromises()
+    await selectAccessLevel(wrapper, accessLevel)
+    await selectMode(wrapper, 'none')
+    await wrapper.findAll('button').find((button) => button.text() === '创建用户')?.trigger('click')
+    await flushPromises()
+
+    expect(createUser).toHaveBeenCalledWith(expect.objectContaining({ accessLevel }))
+  })
+
+  it('shows existing access and saves it through only the independent access-level API', async () => {
+    vi.mocked(getUser).mockResolvedValue({ ...user, accessLevel: 'Editor' })
+    const wrapper = mountDrawer(42)
+    await flushPromises()
+    expect(wrapper.find('.user-access-level__choices input[value="Editor"]').attributes('checked')).toBeDefined()
+
+    await selectAccessLevel(wrapper, 'Administrator')
+    await wrapper.findAll('button').find((button) => button.text() === '保存系统权限')?.trigger('click')
+    await flushPromises()
+
+    expect(setUserAccessLevel).toHaveBeenCalledWith(42, 'Administrator', 'token')
+    expect(updateUser).not.toHaveBeenCalled()
+  })
+
+  it('uses the stable last-Administrator reason for a clear business message', async () => {
+    vi.mocked(getUser).mockResolvedValue({ ...user, accessLevel: 'Administrator' })
+    vi.mocked(setUserAccessLevel).mockRejectedValue(new ApiError(422, {
+      code: 'business_rule_violation',
+      message: 'server text is not the UI contract',
+      fieldErrors: null,
+      details: { reason: 'last_usable_administrator' },
+    }))
+    const wrapper = mountDrawer(42)
+    await flushPromises()
+    await selectAccessLevel(wrapper, 'Editor')
+    await wrapper.findAll('button').find((button) => button.text() === '保存系统权限')?.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('系统必须保留至少一个可登录的启用 Administrator。')
+    expect(wrapper.text()).not.toContain('server text is not the UI contract')
+  })
+
+  it('shows stale AccessLevel conflict without retrying or overwriting', async () => {
+    vi.mocked(getUser).mockResolvedValue({ ...user, accessLevel: 'Editor' })
+    vi.mocked(setUserAccessLevel).mockRejectedValue(new ApiError(409, {
+      code: 'conflict',
+      message: '用户资料已被其他操作修改，请刷新后重试。',
+      fieldErrors: null,
+      details: { resourceType: 'User', resourceId: 42 },
+    }))
+    const wrapper = mountDrawer(42)
+    await flushPromises()
+    await selectAccessLevel(wrapper, 'Administrator')
+    await wrapper.findAll('button').find((button) => button.text() === '保存系统权限')?.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('系统权限已被其他操作修改')
+    expect(wrapper.text()).toContain('系统未覆盖较新的修改')
+    expect(setUserAccessLevel).toHaveBeenCalledOnce()
+    expect(getUser).toHaveBeenCalledOnce()
+  })
+
+  it('refreshes authoritative actor state and leaves the Administrator-only route after self-downgrade', async () => {
+    actorState.currentUser = { id: 42 }
+    actorState.refreshCurrentUser.mockImplementation(async () => {
+      actorState.isAdministrator = false
+      return true
+    })
+    vi.mocked(getUser).mockResolvedValue({ ...user, accessLevel: 'Administrator' })
+    vi.mocked(setUserAccessLevel).mockResolvedValue({ userId: 42, accessLevel: 'Editor', concurrencyToken: 'self-next-token' })
+    const wrapper = mountDrawer(42)
+    await flushPromises()
+    await selectAccessLevel(wrapper, 'Editor')
+    await wrapper.findAll('button').find((button) => button.text() === '保存系统权限')?.trigger('click')
+    await flushPromises()
+
+    expect(actorState.refreshCurrentUser).toHaveBeenCalledOnce()
+    expect(overlayState.closeDrawer).toHaveBeenCalled()
+    expect(routerState.replace).toHaveBeenCalledWith({ name: 'dashboard' })
   })
 
   it('shows the no-login state when an existing user has no credential or identity', async () => {

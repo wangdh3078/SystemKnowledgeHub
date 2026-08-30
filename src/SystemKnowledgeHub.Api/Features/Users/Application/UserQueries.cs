@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using SystemKnowledgeHub.Api.Features.Users.Application.Models;
+using SystemKnowledgeHub.Api.Features.Users.Domain;
 using SystemKnowledgeHub.Api.Persistence;
 using SystemKnowledgeHub.Api.Persistence.Concurrency;
 
@@ -72,6 +73,7 @@ public sealed class UserQueries(
                 user.Email,
                 user.DepartmentOrTeam,
                 user.JobTitle,
+                user.AccessLevel,
                 user.IsActive,
                 user.UpdatedAt))
             .ToArrayAsync(cancellationToken);
@@ -84,6 +86,7 @@ public sealed class UserQueries(
             user.Email,
             user.DepartmentOrTeam,
             user.JobTitle,
+            user.AccessLevel,
             user.IsActive,
             rolesByUser.GetValueOrDefault(user.Id, []),
             user.UpdatedAt)).ToArray();
@@ -114,6 +117,7 @@ public sealed class UserQueries(
                 item.Email,
                 item.DepartmentOrTeam,
                 item.JobTitle,
+                item.AccessLevel,
                 item.IsActive,
                 item.CreatedAt,
                 item.UpdatedAt,
@@ -134,6 +138,7 @@ public sealed class UserQueries(
             user.Email,
             user.DepartmentOrTeam,
             user.JobTitle,
+            user.AccessLevel,
             user.IsActive,
             rolesByUser.GetValueOrDefault(user.Id, []),
             user.CreatedAt,
@@ -363,6 +368,7 @@ public sealed class UserQueries(
         string? Email,
         string? DepartmentOrTeam,
         string? JobTitle,
+        AccessLevel AccessLevel,
         bool IsActive,
         DateTimeOffset UpdatedAt);
 

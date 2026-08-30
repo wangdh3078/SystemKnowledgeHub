@@ -401,6 +401,7 @@ public sealed class EvidenceApiTests : IClassFixture<BootstrapWebApplicationFact
             email = $"u04-{suffix}@example.com",
             departmentOrTeam,
             jobTitle,
+            accessLevel = "Viewer",
             knowledgeRoleIds = roleIds,
             loginSetup = new { type = "none" },
             actor = Actor(),

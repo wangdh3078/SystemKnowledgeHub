@@ -237,6 +237,7 @@ public sealed class UsersController(
                 request.Email,
                 request.DepartmentOrTeam,
                 request.JobTitle,
+                request.AccessLevel,
                 request.KnowledgeRoleIds,
                 request.LoginSetup is null
                     ? null
@@ -346,7 +347,10 @@ public sealed class UsersController(
         CancellationToken cancellationToken)
     {
         if (!ApiIdParser.IsSafePositive(id)) return BadRequest(InvalidId());
-        if (request.AccessLevel is null) return BadRequest(ValidationError(new Dictionary<string, string[]> { ["accessLevel"] = ["访问等级无效。"] }));
+        if (request.AccessLevel is null || !Enum.IsDefined(request.AccessLevel.Value))
+        {
+            return BadRequest(ValidationError(new Dictionary<string, string[]> { ["accessLevel"] = ["系统权限无效。"] }));
+        }
         var result = await service.SetUserAccessLevel(new(id, request.AccessLevel.Value, request.ConcurrencyToken ?? string.Empty), cancellationToken);
         return result.Failure == UserWriteFailure.None
             ? Ok(new UserAccessLevelResponse(id, request.AccessLevel.Value, result.Response!.ConcurrencyToken))
@@ -395,7 +399,7 @@ public sealed class UsersController(
         UserWriteFailure.NotFound => NotFound(NotFoundError(id)),
         UserWriteFailure.Conflict => Conflict(ConcurrencyConflict(id)),
         UserWriteFailure.NoChange => UnprocessableEntity(new ApiErrorResponse("business_rule_violation", "目标访问等级与当前值相同。", null, new { resourceType = "User", resourceId = id })),
-        UserWriteFailure.LastUsableAdministrator => UnprocessableEntity(new ApiErrorResponse("business_rule_violation", "系统必须保留至少一个可登录的启用 Administrator。", null, new { resourceType = "User", resourceId = id })),
+        UserWriteFailure.LastUsableAdministrator => UnprocessableEntity(new ApiErrorResponse("business_rule_violation", "系统必须保留至少一个可登录的启用 Administrator。", null, new { reason = "last_usable_administrator", resourceType = "User", resourceId = id })),
         _ => throw new InvalidOperationException("Unsupported AccessLevel result."),
     };
 

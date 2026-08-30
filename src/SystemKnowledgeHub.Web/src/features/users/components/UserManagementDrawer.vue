@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import { ElMessage } from 'element-plus'
+import { useRouter } from 'vue-router'
 import { ApiError } from '../../../api/errors/ApiError'
 import { formatDateTime } from '../../../app/formatters/dateTime'
 import { useActorStore } from '../../../app/stores/actor'
@@ -15,10 +16,12 @@ import {
   getUserLoginSetupOptions,
   resetUserLocalPassword,
   setLocalCredentialActiveState,
+  setUserAccessLevel,
   updateUser,
 } from '../api/usersApi'
 import LoginIdentityManagementPanel from './LoginIdentityManagementPanel.vue'
 import type {
+  AccessLevel,
   KnowledgeRole,
   LoginSetup,
   UserDetail,
@@ -30,6 +33,7 @@ const props = defineProps<{ userId: number | null }>()
 const emit = defineEmits<{ saved: [user: UserDetail] }>()
 const actorStore = useActorStore()
 const overlayStore = useOverlayStore()
+const router = useRouter()
 const formRef = ref<FormInstance>()
 const loading = ref(true)
 const submitting = ref(false)
@@ -52,12 +56,18 @@ const resetPasswordFieldErrors = reactive<Record<string, string>>({})
 const resetPasswordForm = reactive({ newPassword: '', confirmPassword: '' })
 const originalRoleIds = ref<ReadonlySet<number>>(new Set())
 const concurrencyToken = ref('')
+const loadedUser = ref<UserDetail | null>(null)
+const originalAccessLevel = ref<AccessLevel>('Viewer')
+const accessLevelSubmitting = ref(false)
+const accessLevelError = ref<string | null>(null)
+const accessLevelConflict = ref(false)
 const form = reactive({
   displayName: '',
   employeeNo: '',
   email: '',
   departmentOrTeam: '',
   jobTitle: '',
+  accessLevel: 'Viewer' as AccessLevel,
   knowledgeRoleIds: [] as number[],
   loginSetupType: '' as '' | LoginSetup['type'],
   loginUsername: '',
@@ -69,6 +79,7 @@ const form = reactive({
 const fieldErrors = reactive<Record<string, string>>({})
 const isEdit = computed(() => props.userId !== null)
 const title = computed(() => isEdit.value ? '编辑用户' : '新增用户')
+const accessLevelChanged = computed(() => form.accessLevel !== originalAccessLevel.value)
 const rules: FormRules<typeof form> = {
   displayName: [{ required: true, message: '请输入姓名', trigger: 'blur' }],
   email: [{ type: 'email', message: '请输入有效邮箱地址', trigger: 'blur' }],
@@ -112,11 +123,14 @@ const localLoginAvailability = computed<{ type: 'success' | 'warning'; title: st
 })
 
 function assignUser(user: UserDetail): void {
+  loadedUser.value = user
   form.displayName = user.displayName
   form.employeeNo = user.employeeNo ?? ''
   form.email = user.email ?? ''
   form.departmentOrTeam = user.departmentOrTeam ?? ''
   form.jobTitle = user.jobTitle ?? ''
+  form.accessLevel = user.accessLevel
+  originalAccessLevel.value = user.accessLevel
   form.knowledgeRoleIds = user.knowledgeRoles.map((role) => role.id)
   originalRoleIds.value = new Set(form.knowledgeRoleIds)
   concurrencyToken.value = user.concurrencyToken
@@ -126,6 +140,8 @@ function assignUser(user: UserDetail): void {
 async function load(): Promise<void> {
   loading.value = true
   loadError.value = null
+  accessLevelError.value = null
+  accessLevelConflict.value = false
   clearServerErrors()
   try {
     const [availableRoles, user, setupOptions, methods] = await Promise.all([
@@ -317,6 +333,50 @@ function buildLoginSetup(): LoginSetup {
   return { type: 'none' }
 }
 
+async function saveAccessLevel(): Promise<void> {
+  if (props.userId === null || !accessLevelChanged.value || accessLevelSubmitting.value) return
+
+  accessLevelSubmitting.value = true
+  accessLevelError.value = null
+  accessLevelConflict.value = false
+  try {
+    const result = await setUserAccessLevel(props.userId, form.accessLevel, concurrencyToken.value)
+    const changesCurrentActor = actorStore.currentUser?.id === props.userId
+    concurrencyToken.value = result.concurrencyToken
+    originalAccessLevel.value = result.accessLevel
+    if (loadedUser.value) {
+      loadedUser.value = {
+        ...loadedUser.value,
+        accessLevel: result.accessLevel,
+        concurrencyToken: result.concurrencyToken,
+      }
+      if (!changesCurrentActor) emit('saved', loadedUser.value)
+    }
+    ElMessage.success('系统权限已更新。')
+
+    if (changesCurrentActor) {
+      await actorStore.refreshCurrentUser()
+      if (!actorStore.isAdministrator) {
+        overlayStore.closeDrawer()
+        await router.replace({ name: 'dashboard' })
+      }
+    }
+  } catch (error: unknown) {
+    if (error instanceof ApiError) {
+      accessLevelConflict.value = error.status === 409 && error.response.code === 'conflict'
+      accessLevelError.value = error.status === 422
+        && error.response.code === 'business_rule_violation'
+        && error.response.details?.reason === 'last_usable_administrator'
+        ? '系统必须保留至少一个可登录的启用 Administrator。'
+        : error.message
+    } else {
+      accessLevelError.value = error instanceof Error ? error.message : '系统权限更新失败。'
+    }
+  } finally {
+    accessLevelSubmitting.value = false
+  }
+}
+
 async function submit(): Promise<void> {
   clearServerErrors()
   const valid = await formRef.value?.validate().catch(() => false)
@@ -334,7 +394,7 @@ async function submit(): Promise<void> {
   }
   try {
     const saved = props.userId === null
-      ? await createUser({ ...request, loginSetup: buildLoginSetup() })
+      ? await createUser({ ...request, accessLevel: form.accessLevel, loginSetup: buildLoginSetup() })
       : await updateUser(props.userId, { ...request, concurrencyToken: concurrencyToken.value })
     ElMessage.success(props.userId === null ? '用户已创建。' : '用户资料已保存。')
     emit('saved', saved)
@@ -368,7 +428,7 @@ onMounted(() => void load())
       <div>
         <span>用户管理</span>
         <h2 id="user-drawer-title">{{ title }}</h2>
-        <p>维护人员资料、知识身份与登录身份映射；访问级别由独立安全操作管理。</p>
+        <p>维护人员资料、系统权限、知识身份与登录方式；系统权限与知识身份相互独立。</p>
       </div>
       <el-tooltip content="关闭用户编辑" placement="bottom"><button class="skh-icon-action" type="button" aria-label="关闭用户编辑" @click="overlayStore.requestDrawerClose">×</button></el-tooltip>
     </header>
@@ -413,6 +473,36 @@ onMounted(() => void load())
             <el-form-item label="职位" prop="jobTitle" :error="fieldErrors.jobTitle">
               <el-input v-model="form.jobTitle" maxlength="160" placeholder="例如 Senior Engineer" />
             </el-form-item>
+          </div>
+          <div class="user-access-level">
+            <el-form-item label="系统权限" prop="accessLevel" :error="fieldErrors.accessLevel" required>
+              <el-radio-group v-model="form.accessLevel" class="user-access-level__choices">
+                <el-radio value="Viewer"><span><strong>Viewer</strong><small>只读查看</small></span></el-radio>
+                <el-radio value="Editor"><span><strong>Editor</strong><small>可查看、新增和编辑业务内容</small></span></el-radio>
+                <el-radio value="Administrator"><span><strong>Administrator</strong><small>系统管理</small></span></el-radio>
+              </el-radio-group>
+              <span class="user-drawer__help">系统权限控制功能访问；知识身份仅描述知识归属，两者不会互相提升。</span>
+            </el-form-item>
+            <template v-if="isEdit">
+              <el-alert
+                v-if="accessLevelError"
+                type="error"
+                :title="accessLevelConflict ? '系统权限已被其他操作修改' : accessLevelError"
+                :description="accessLevelConflict ? '系统未覆盖较新的修改；请重新载入后再选择。' : undefined"
+                :closable="false"
+                show-icon
+              />
+              <div class="user-access-level__actions">
+                <el-button v-if="accessLevelConflict" @click="load">重新载入</el-button>
+                <el-button
+                  type="primary"
+                  plain
+                  :loading="accessLevelSubmitting"
+                  :disabled="!accessLevelChanged"
+                  @click="saveAccessLevel"
+                >保存系统权限</el-button>
+              </div>
+            </template>
           </div>
         </section>
 

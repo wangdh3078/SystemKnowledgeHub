@@ -37,6 +37,10 @@ public sealed class UserService(
         CancellationToken cancellationToken)
     {
         var errors = ValidateUserInput(request.DisplayName, request.Actor, request.KnowledgeRoleIds, out var roleIds);
+        if (request.AccessLevel is null || !Enum.IsDefined(request.AccessLevel.Value))
+        {
+            errors["accessLevel"] = ["系统权限无效。"];
+        }
         var setup = request.LoginSetup;
         var setupType = setup?.Type;
         var username = string.Empty;
@@ -141,7 +145,7 @@ public sealed class UserService(
             Email = email,
             DepartmentOrTeam = NormalizeOptional(request.DepartmentOrTeam),
             JobTitle = NormalizeOptional(request.JobTitle),
-            AccessLevel = AccessLevel.Viewer,
+            AccessLevel = request.AccessLevel!.Value,
             IsActive = true,
             CreatedAt = timestamp,
             UpdatedAt = timestamp,

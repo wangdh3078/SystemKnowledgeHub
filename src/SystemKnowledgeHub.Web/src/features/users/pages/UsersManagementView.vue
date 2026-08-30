@@ -9,7 +9,7 @@ import { formatDateTime } from '../../../app/formatters/dateTime'
 import EmptyState from '../../../components/feedback/EmptyState.vue'
 import ErrorState from '../../../components/feedback/ErrorState.vue'
 import LoadingState from '../../../components/feedback/LoadingState.vue'
-import type { UserSummary, UsersSort } from '../api/userContracts'
+import type { AccessLevel, UserSummary, UsersSort } from '../api/userContracts'
 import { getUser, setUserActiveState } from '../api/usersApi'
 import KnowledgeRoleManagementDialog from '../components/KnowledgeRoleManagementDialog.vue'
 import UserManagementDrawer from '../components/UserManagementDrawer.vue'
@@ -31,6 +31,12 @@ const {
 } = useUsersManagement()
 const activeActionId = ref<number | null>(null)
 let keywordTimer: ReturnType<typeof setTimeout> | null = null
+
+const accessLevelDescriptions: Readonly<Record<AccessLevel, string>> = {
+  Viewer: '只读查看',
+  Editor: '内容维护',
+  Administrator: '系统管理',
+}
 
 watch(keyword, () => {
   if (keywordTimer) clearTimeout(keywordTimer)
@@ -117,7 +123,7 @@ onMounted(() => void load())
 <template>
   <main class="users-page skh-page">
     <header class="users-page__header skh-page-header">
-      <div><nav>管理 / 用户管理</nav><h1>用户管理</h1><p>维护人员资料与知识身份。此页面不是身份认证或权限控制边界。</p></div>
+      <div><nav>管理 / 用户管理</nav><h1>用户管理</h1><p>维护人员资料、系统权限与知识身份；系统权限写操作由后端授权最终裁决。</p></div>
       <div class="users-page__header-actions skh-page-header__actions">
         <el-button :icon="Setting" @click="openRoles">知识身份管理</el-button>
         <el-button class="skh-page-primary-action" type="primary" :icon="Plus" @click="openCreate">新增用户</el-button>
@@ -150,6 +156,7 @@ onMounted(() => void load())
         <el-table-column prop="email" label="邮箱" min-width="180" show-overflow-tooltip><template #default="scope"><span :class="{ 'text-muted': !scope.row.email }">{{ scope.row.email ?? '未记录' }}</span></template></el-table-column>
         <el-table-column prop="departmentOrTeam" label="部门 / 团队" min-width="140" show-overflow-tooltip><template #default="scope"><span :class="{ 'text-muted': !scope.row.departmentOrTeam }">{{ scope.row.departmentOrTeam ?? '未记录' }}</span></template></el-table-column>
         <el-table-column prop="jobTitle" label="职位" min-width="130" show-overflow-tooltip><template #default="scope"><span :class="{ 'text-muted': !scope.row.jobTitle }">{{ scope.row.jobTitle ?? '未记录' }}</span></template></el-table-column>
+        <el-table-column prop="accessLevel" label="系统权限" min-width="142"><template #default="scope"><div class="users-table__access-level"><strong class="technical-text">{{ scope.row.accessLevel }}</strong><small>{{ accessLevelDescriptions[scope.row.accessLevel as AccessLevel] }}</small></div></template></el-table-column>
         <el-table-column label="知识身份" min-width="210"><template #default="scope"><div v-if="scope.row.knowledgeRoles.length" class="users-table__roles"><el-tag v-for="role in scope.row.knowledgeRoles" :key="role.id" :type="role.isActive ? 'primary' : 'info'" effect="plain" size="small">{{ role.name }}<template v-if="!role.isActive"> · 停用</template></el-tag></div><span v-else class="text-muted">未配置</span></template></el-table-column>
         <el-table-column prop="isActive" label="用户状态" width="100" align="center"><template #default="scope"><el-tag :type="scope.row.isActive ? 'success' : 'info'" effect="plain" size="small">{{ scope.row.isActive ? '用户启用' : '用户停用' }}</el-tag></template></el-table-column>
         <el-table-column prop="updatedAt" label="更新于" width="156" sortable="custom"><template #default="scope">{{ formatDateTime(scope.row.updatedAt) }}</template></el-table-column>

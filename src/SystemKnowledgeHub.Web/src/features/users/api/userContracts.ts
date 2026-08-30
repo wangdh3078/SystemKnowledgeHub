@@ -17,6 +17,7 @@ export interface UserSummary {
   readonly email: string | null
   readonly departmentOrTeam: string | null
   readonly jobTitle: string | null
+  readonly accessLevel: AccessLevel
   readonly isActive: boolean
   readonly knowledgeRoles: readonly KnowledgeRoleSummary[]
   readonly updatedAt: string
@@ -114,6 +115,7 @@ export interface UserWriteRequest {
 }
 
 export interface CreateUserRequest extends UserWriteRequest {
+  readonly accessLevel: AccessLevel
   readonly loginSetup: LoginSetup
 }
 
@@ -213,6 +215,7 @@ function decodeUserSummary(value: unknown, field: string): UserSummary {
     email: readNullableString(root.email, `${field}.email`),
     departmentOrTeam: readNullableString(root.departmentOrTeam, `${field}.departmentOrTeam`),
     jobTitle: readNullableString(root.jobTitle, `${field}.jobTitle`),
+    accessLevel: readAccessLevel(root.accessLevel, `${field}.accessLevel`),
     isActive: readBoolean(root.isActive, `${field}.isActive`),
     knowledgeRoles: root.knowledgeRoles.map((role, index) => decodeRoleSummary(role, `${field}.knowledgeRoles[${index}]`)),
     updatedAt: readString(root.updatedAt, `${field}.updatedAt`),

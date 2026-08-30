@@ -8,4 +8,11 @@ describe('UsersManagementView status copy', () => {
     expect(source).toContain('placeholder="用户状态：全部"')
     expect(source).not.toContain('prop="isActive" label="状态"')
   })
+
+  it('keeps system access and knowledge identity in separate list columns', () => {
+    expect(source).toContain('prop="accessLevel" label="系统权限"')
+    expect(source).toContain('label="知识身份"')
+    expect(source).toContain('scope.row.accessLevel')
+    expect(source).toContain('scope.row.knowledgeRoles')
+  })
 })

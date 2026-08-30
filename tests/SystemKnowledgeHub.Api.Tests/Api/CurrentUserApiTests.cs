@@ -118,6 +118,7 @@ public sealed class CurrentUserApiTests : IClassFixture<BootstrapWebApplicationF
             email = $"u03-{suffix}@example.com",
             departmentOrTeam = "知识平台组",
             jobTitle = "知识工程师",
+            accessLevel = "Viewer",
             knowledgeRoleIds = roleIds,
             loginSetup = new { type = "none" },
             actor = Actor(),

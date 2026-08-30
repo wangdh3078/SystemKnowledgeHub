@@ -48,6 +48,7 @@ public sealed record UserSummaryResponse(
     string? Email,
     string? DepartmentOrTeam,
     string? JobTitle,
+    AccessLevel AccessLevel,
     bool IsActive,
     IReadOnlyList<KnowledgeRoleSummaryResponse> KnowledgeRoles,
     DateTimeOffset UpdatedAt);
@@ -85,6 +86,7 @@ public sealed record UserDetailResponse(
     string? Email,
     string? DepartmentOrTeam,
     string? JobTitle,
+    AccessLevel AccessLevel,
     bool IsActive,
     IReadOnlyList<KnowledgeRoleSummaryResponse> KnowledgeRoles,
     DateTimeOffset CreatedAt,
@@ -186,6 +188,7 @@ public sealed record CreateUserCommand(
     string? Email,
     string? DepartmentOrTeam,
     string? JobTitle,
+    AccessLevel? AccessLevel,
     IReadOnlyList<long>? KnowledgeRoleIds,
     CreateUserLoginSetupCommand? LoginSetup,
     UserActorContext Actor);

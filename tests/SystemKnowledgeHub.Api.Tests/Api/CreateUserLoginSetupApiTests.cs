@@ -25,6 +25,43 @@ public sealed class CreateUserLoginSetupApiTests : IClassFixture<BootstrapWebApp
         _administrator = factory.CreateAuthenticatedClient();
     }
 
+    [Theory]
+    [InlineData("Viewer")]
+    [InlineData("Editor")]
+    [InlineData("Administrator")]
+    public async Task Create_persists_and_projects_the_explicit_access_level(string accessLevel)
+    {
+        var suffix = Suffix();
+        using var response = await PostUser(_administrator, suffix, new { type = "none" }, accessLevel: accessLevel);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var created = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var userId = created.GetProperty("id").GetInt64();
+        Assert.Equal(accessLevel, created.GetProperty("accessLevel").GetString());
+
+        using var detailResponse = await _administrator.GetAsync($"/api/users/{userId}");
+        Assert.Equal(HttpStatusCode.OK, detailResponse.StatusCode);
+        var detail = await detailResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(accessLevel, detail.GetProperty("accessLevel").GetString());
+
+        using var listResponse = await _administrator.GetAsync($"/api/users?keyword=EMP-{suffix}&sort=displayName%3Aasc&page=1&pageSize=20");
+        Assert.Equal(HttpStatusCode.OK, listResponse.StatusCode);
+        var list = await listResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(accessLevel, Assert.Single(list.GetProperty("items").EnumerateArray()).GetProperty("accessLevel").GetString());
+
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<KnowledgeHubDbContext>();
+        Assert.Equal(Enum.Parse<AccessLevel>(accessLevel), (await db.Users.SingleAsync(item => item.Id == userId)).AccessLevel);
+    }
+
+    [Fact]
+    public async Task Create_rejects_an_unsupported_access_level()
+    {
+        using var response = await PostUser(_administrator, Suffix(), new { type = "none" }, accessLevel: "Owner");
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var numeric = await PostUser(_administrator, Suffix(), new { type = "none" }, accessLevel: 99);
+        Assert.Equal(HttpStatusCode.BadRequest, numeric.StatusCode);
+    }
+
     [Fact]
     public async Task Local_create_persists_required_security_state_and_safe_projection()
     {
@@ -372,7 +409,8 @@ public sealed class CreateUserLoginSetupApiTests : IClassFixture<BootstrapWebApp
         HttpClient client,
         string suffix,
         object? loginSetup,
-        IReadOnlyList<long>? roleIds = null) =>
+        IReadOnlyList<long>? roleIds = null,
+        object? accessLevel = null) =>
         client.PostAsJsonAsync("/api/users", new
         {
             employeeNo = $"EMP-{suffix}",
@@ -380,6 +418,7 @@ public sealed class CreateUserLoginSetupApiTests : IClassFixture<BootstrapWebApp
             email = $"auth-b02-{suffix}@example.test",
             departmentOrTeam = "安全平台组",
             jobTitle = "知识工程师",
+            accessLevel = accessLevel ?? "Viewer",
             knowledgeRoleIds = roleIds ?? Array.Empty<long>(),
             loginSetup,
             actor = new { displayName = "AUTH-B02 管理员", role = "系统管理员" },

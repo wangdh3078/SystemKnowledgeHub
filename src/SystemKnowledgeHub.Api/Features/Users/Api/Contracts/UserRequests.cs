@@ -32,6 +32,7 @@ public sealed record CreateUserRequest(
     string? Email,
     string? DepartmentOrTeam,
     string? JobTitle,
+    AccessLevel? AccessLevel,
     IReadOnlyList<long>? KnowledgeRoleIds,
     CreateUserLoginSetupRequest? LoginSetup,
     UserActorRequest? Actor);
