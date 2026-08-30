@@ -211,6 +211,95 @@ public sealed class CoreSoftDeleteApiTests : IClassFixture<BootstrapWebApplicati
     }
 
     [Fact]
+    public async Task System_with_only_technology_tags_soft_deletes_and_preserves_tombstone_associations_and_current_projection()
+    {
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        var currentUser = await Read(admin, "/api/current-user");
+        var system = await CreateSystem(admin, $"TAG_ONLY_{suffix}");
+        var systemId = Id(system);
+        await AddTechnologyTags(systemId, "Vue", ".NET", "SQLite", "Element Plus");
+
+        await Deleted(admin, $"/api/systems/{systemId}", Token(system));
+
+        using var detail = await admin.GetAsync($"/api/systems/{systemId}");
+        Assert.Equal(HttpStatusCode.NotFound, detail.StatusCode);
+        using var listResponse = await admin.GetAsync($"/api/systems?search=TAG_ONLY_{suffix}&page=1&pageSize=20");
+        Assert.Equal(HttpStatusCode.OK, listResponse.StatusCode);
+        var list = await listResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(0, list.GetProperty("total").GetInt32());
+        Assert.DoesNotContain(list.GetProperty("items").EnumerateArray(), item => item.GetProperty("id").GetInt64() == systemId);
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<KnowledgeHubDbContext>();
+        var tombstone = await db.Systems.IgnoreQueryFilters().Where(item => item.Id == systemId)
+            .Select(item => new DeleteState(item.IsDeleted, item.DeletedAt, item.DeletedByUserId, item.DeletedByDisplayName, item.Version))
+            .SingleAsync();
+        Assert.True(tombstone.IsDeleted);
+        Assert.NotNull(tombstone.DeletedAt);
+        Assert.Equal(TimeSpan.Zero, tombstone.DeletedAt!.Value.Offset);
+        Assert.Equal(currentUser.GetProperty("id").GetInt64(), tombstone.DeletedByUserId);
+        Assert.Equal(currentUser.GetProperty("displayName").GetString(), tombstone.DeletedByDisplayName);
+        Assert.Equal(2, tombstone.Version);
+        Assert.Equal(4, await db.SystemTechnologyTags.CountAsync(item => item.SystemId == systemId));
+    }
+
+    [Fact]
+    public async Task System_with_technology_tags_and_business_function_reports_only_business_function()
+    {
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        var system = await CreateSystem(admin, $"TAG_FUNCTION_{suffix}");
+        var systemId = Id(system);
+        await AddTechnologyTags(systemId, "Vue", "SQLite");
+        await Created(admin, "/api/business-functions", new
+        {
+            systemId, name = $"fn_{suffix}", functionType = "Query", rewriteStatus = "Unknown", actor = Actor(),
+        });
+
+        await AssertBlockers($"/api/systems/{systemId}", Token(system), "businessFunctions");
+    }
+
+    [Fact]
+    public async Task System_with_technology_tags_database_source_and_knowledge_relation_reports_only_true_dependencies()
+    {
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        var system = await CreateSystem(admin, $"TAG_MULTI_{suffix}");
+        var systemId = Id(system);
+        await AddTechnologyTags(systemId, "Vue", "SQLite");
+        await Created(admin, "/api/database-sources", new
+        {
+            systemId, name = $"source_{suffix}", engine = "SQLite", isPrimary = false, actor = Actor(),
+        });
+        var document = await Created(admin, "/api/knowledge-documents", new
+        {
+            documentType = "KnowledgeArticle", title = $"Classification {suffix}", bodyMarkdown = "classification",
+        });
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<KnowledgeHubDbContext>();
+            var now = DateTimeOffset.UtcNow;
+            db.KnowledgeRelations.Add(new KnowledgeRelation
+            {
+                SourceType = KnowledgeTargetType.System,
+                SourceId = systemId,
+                TargetType = KnowledgeTargetType.KnowledgeDocument,
+                TargetId = Id(document),
+                RelationType = RelationType.References,
+                CreatedAt = now,
+                CreatedByName = "test",
+                UpdatedAt = now,
+                KnowledgeStatus = KnowledgeStatus.Unknown,
+                KnowledgeStatusChangedAt = now,
+                KnowledgeStatusChangedByName = "test",
+                KnowledgeStatusChangedByRole = "test",
+                Version = 1,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        await AssertBlockers($"/api/systems/{systemId}", Token(system), "databaseSources", "knowledgeRelations");
+    }
+
+    [Fact]
     public async Task Every_root_reports_its_complete_bounded_active_dependency_categories_without_cascade()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
@@ -308,7 +397,7 @@ public sealed class CoreSoftDeleteApiTests : IClassFixture<BootstrapWebApplicati
         }
 
         await AssertBlockers($"/api/systems/{systemId}", Token(system),
-            "technologyTags", "businessFunctions", "databaseSources", "businessRules", "integrations", "unknownItems", "knowledgeRelations", "proposedKnowledgeUpdates");
+            "businessFunctions", "databaseSources", "businessRules", "integrations", "unknownItems", "knowledgeRelations", "proposedKnowledgeUpdates");
         await AssertBlockers($"/api/database-sources/{Id(source)}", Token(source),
             "databaseObjects", "integrations", "knowledgeRelations", "unknownItems", "proposedKnowledgeUpdates");
         await AssertBlockers($"/api/business-functions/{Id(function)}", Token(function),
@@ -477,7 +566,21 @@ public sealed class CoreSoftDeleteApiTests : IClassFixture<BootstrapWebApplicati
         var blockers = error.GetProperty("details").GetProperty("blockers").EnumerateArray().ToArray();
         Assert.InRange(blockers.Length, 1, 8);
         Assert.Equal(expectedTypes, blockers.Select(item => item.GetProperty("dependencyType").GetString()).ToArray());
+        Assert.DoesNotContain(blockers, item => item.GetProperty("dependencyType").GetString() == "technologyTags");
+        Assert.DoesNotContain(blockers, item => item.GetProperty("displayName").GetString() == "技术标签");
         Assert.All(blockers, item => Assert.True(item.GetProperty("count").GetInt32() > 0));
+    }
+
+    private async Task AddTechnologyTags(long systemId, params string[] technologies)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<KnowledgeHubDbContext>();
+        db.SystemTechnologyTags.AddRange(technologies.Select(technology => new SystemTechnologyTag
+        {
+            SystemId = systemId,
+            Technology = technology,
+        }));
+        await db.SaveChangesAsync();
     }
 
     private static async Task AssertError(HttpResponseMessage response, HttpStatusCode statusCode, string code)

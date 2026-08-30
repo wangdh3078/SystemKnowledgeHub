@@ -27,8 +27,7 @@ public sealed class SystemDeleteService(
         if (!SoftDeleteAuthorization.CanDelete(actor, system.CreatedByUserId)) return new(SoftDeleteFailure.Forbidden);
         if (system.Version != expectedVersion) return new(SoftDeleteFailure.Conflict);
 
-        var blockers = new List<DeleteDependencyBlocker>(8);
-        await Add(blockers, "technologyTags", "技术标签", dbContext.SystemTechnologyTags.CountAsync(item => item.SystemId == systemId, cancellationToken));
+        var blockers = new List<DeleteDependencyBlocker>(7);
         await Add(blockers, "businessFunctions", "业务功能", dbContext.BusinessFunctions.CountAsync(item => item.SystemId == systemId, cancellationToken));
         await Add(blockers, "databaseSources", "数据库来源", dbContext.DatabaseSources.CountAsync(item => item.SystemId == systemId, cancellationToken));
         await Add(blockers, "businessRules", "业务规则", dbContext.BusinessRules.CountAsync(item => item.SystemId == systemId, cancellationToken));
