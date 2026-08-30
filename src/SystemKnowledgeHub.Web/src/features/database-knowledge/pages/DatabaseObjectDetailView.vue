@@ -85,7 +85,7 @@ function rowClassName({ row }: { row: DatabaseColumnSummary }): string {
 }
 
 function openObjectKnowledgeEdit(): void {
-  if (!detail.value) return
+  if (!actorStore.canEdit || !detail.value) return
   overlayStore.openDrawer({ kind: 'edit-database-object', id: detail.value.id, mode: 'edit' })
 }
 
@@ -99,12 +99,14 @@ function evidenceSubjectPayload() {
 }
 
 function openAddEvidence(): void {
+  if (!actorStore.canEdit) return
   const payload = evidenceSubjectPayload()
   if (!payload) return
   overlayStore.openDrawer({ kind: 'add-evidence', id: null, mode: 'create', payload })
 }
 
 function openAddHumanConfirmation(): void {
+  if (!actorStore.canEdit) return
   const payload = evidenceSubjectPayload()
   if (!payload) return
   overlayStore.openDrawer({ kind: 'human-confirmation', id: null, mode: 'create', payload })
@@ -115,7 +117,7 @@ function openEvidence(id: number): void {
 }
 
 function openRegisterColumn(): void {
-  if (!detail.value) return
+  if (!actorStore.canEdit || !detail.value) return
   const greatestOrdinal = Math.max(0, ...detail.value.columns.map((column) => column.ordinalPosition))
   overlayStore.openDialog({
     kind: 'register-database-column',
@@ -168,7 +170,7 @@ async function loadRoute(): Promise<void> {
 }
 
 function requestDelete(): void {
-  if (!detail.value?.canDelete) return
+  if (!actorStore.canEdit || !detail.value?.canDelete) return
   const current = detail.value
   openDeleteDialog(overlayStore, {
     objectTypeLabel: '数据库对象', actionLabel: '删除数据库对象', displayName: current.overview.qualifiedName,
@@ -260,7 +262,7 @@ onBeforeUnmount(() => {
             <p>{{ detail.overview.businessDescription ?? '尚未记录业务说明' }}</p>
           </div>
           <div class="database-object-header__actions">
-            <el-button v-if="detail.canDelete" type="danger" plain :icon="Delete" @click="requestDelete">删除数据库对象</el-button>
+            <el-button v-if="actorStore.canEdit && detail.canDelete" type="danger" plain :icon="Delete" @click="requestDelete">删除数据库对象</el-button>
             <el-button v-if="actorStore.canEdit" text type="primary" :icon="EditPen" @click="openObjectKnowledgeEdit">编辑</el-button>
           </div>
         </div>
@@ -322,7 +324,7 @@ onBeforeUnmount(() => {
         :concurrency-token="detail.concurrencyToken"
         :evidence-count="objectEvidence.length"
         :human-confirmation-count="humanConfirmationCount"
-        :can-change="detail.availableActions.includes('ChangeKnowledgeStatus')"
+        :can-change="actorStore.canEdit && detail.availableActions.includes('ChangeKnowledgeStatus')"
       />
 
       <section class="database-columns-section" aria-labelledby="columns-title">

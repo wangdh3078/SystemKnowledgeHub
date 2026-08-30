@@ -4,11 +4,12 @@ import { getEvidenceList } from '../../evidence/api/evidenceApi'
 import { getDatabaseObjectDetail } from '../api/databaseKnowledgeApi'
 import DatabaseObjectDetailView from './DatabaseObjectDetailView.vue'
 
+const actorState = vi.hoisted(() => ({ canEdit: true }))
 const overlayState = vi.hoisted(() => ({ openDrawer: vi.fn(), currentDrawer: null }))
 const routerState = vi.hoisted(() => ({ replace: vi.fn(), push: vi.fn() }))
 
 vi.mock('../../../app/stores/actor', () => ({
-  useActorStore: () => ({ canEdit: true }),
+  useActorStore: () => actorState,
 }))
 vi.mock('../../../app/stores/overlays', () => ({
   useOverlayStore: () => overlayState,
@@ -106,12 +107,27 @@ const stubs = {
 
 describe('DatabaseObjectDetailView object-level trust closure', () => {
   beforeEach(() => {
+    actorState.canEdit = true
     vi.mocked(getDatabaseObjectDetail).mockReset().mockResolvedValue(detail)
     vi.mocked(getEvidenceList).mockReset().mockResolvedValue({ items: [evidence] })
     overlayState.openDrawer.mockReset()
     routerState.replace.mockReset()
     routerState.push.mockReset()
     document.body.innerHTML = '<div id="context-rail-content"></div>'
+  })
+
+  it('does not expose object-level write actions to Viewer', async () => {
+    actorState.canEdit = false
+    const wrapper = mount(DatabaseObjectDetailView, { global: { stubs } })
+    await flushPromises()
+
+    const buttonLabels = wrapper.findAll('button').map((button) => button.text())
+    expect(buttonLabels).not.toContain('删除数据库对象')
+    expect(buttonLabels).not.toContain('编辑')
+    expect(buttonLabels).not.toContain('添加证据')
+    expect(buttonLabels).not.toContain('添加人工确认')
+    expect(buttonLabels).not.toContain('登记字段')
+    wrapper.unmount()
   })
 
   it('keeps object evidence independent from column evidence and exposes both authoring entries', async () => {

@@ -1,5 +1,6 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
+import { useActorStore } from './actor'
 import { useOverlayStore } from './overlays'
 
 describe('overlayStore', () => {
@@ -56,5 +57,34 @@ describe('overlayStore', () => {
     await closed
 
     expect(continued).toBe(true)
+  })
+
+  it('does not open Database Knowledge authoring overlays for an initialized Viewer', () => {
+    const actorStore = useActorStore()
+    actorStore.currentUser = {
+      id: 42,
+      employeeNo: null,
+      displayName: '只读用户',
+      email: null,
+      departmentOrTeam: null,
+      jobTitle: null,
+      isActive: true,
+      knowledgeRoles: [],
+      accessLevel: 'Viewer',
+      authenticationMethod: 'local',
+      mustChangePassword: false,
+    }
+    actorStore.authStatus = 'authenticated'
+    actorStore.initialized = true
+    const store = useOverlayStore()
+
+    store.openDialog({ kind: 'create-database-knowledge', id: null, mode: 'create' })
+    expect(store.currentDialog).toBeNull()
+
+    store.openDrawer({ kind: 'edit-database-object', id: 45, mode: 'edit' })
+    expect(store.currentDrawer).toBeNull()
+
+    store.openDrawer({ kind: 'database-column', id: 123, mode: 'read' })
+    expect(store.currentDrawer?.kind).toBe('database-column')
   })
 })

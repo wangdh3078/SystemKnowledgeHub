@@ -27,6 +27,15 @@ public sealed class AccessControlApiTests : IClassFixture<BootstrapWebApplicatio
         Assert.Equal(HttpStatusCode.OK, (await viewer.GetAsync("/api/dashboard")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await viewer.GetAsync("/api/users")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await viewer.PostAsJsonAsync("/api/systems", SystemRequest("viewer"))).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await viewer.PostAsJsonAsync("/api/database-objects", new
+        {
+            databaseSourceId = 9,
+            schemaName = "SEC2",
+            objectName = $"VIEWER_DENIED_{Guid.NewGuid():N}",
+            objectType = "Table",
+            accessMode = "Read",
+            actor = new { displayName = "SEC-02 viewer" },
+        })).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await viewer.PostAsJsonAsync("/api/evidence/human-confirmations", new { })).StatusCode);
 
         var editorId = await CreateUser(AccessLevel.Editor);

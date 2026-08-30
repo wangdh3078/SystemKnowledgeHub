@@ -6,6 +6,7 @@ import KnowledgeStatusBadge from '../../../components/data-display/KnowledgeStat
 import EmptyState from '../../../components/feedback/EmptyState.vue'
 import ErrorState from '../../../components/feedback/ErrorState.vue'
 import LoadingState from '../../../components/feedback/LoadingState.vue'
+import { useActorStore } from '../../../app/stores/actor'
 import { useOverlayStore } from '../../../app/stores/overlays'
 import { getSystemsList } from '../../systems/api/systemsApi'
 import type { SystemSummary } from '../../systems/api/systemsContracts'
@@ -21,6 +22,7 @@ import type { DatabaseSourceContext } from '../api/databaseKnowledgeContracts'
 
 const route = useRoute()
 const router = useRouter()
+const actorStore = useActorStore()
 const overlayStore = useOverlayStore()
 const systemOptions = ref<readonly SystemSummary[]>([])
 const systemOptionsError = ref<string | null>(null)
@@ -141,11 +143,12 @@ function openObject(row: DatabaseObjectListItem): void {
 }
 
 function startCreate(): void {
+  if (!actorStore.canEdit) return
   overlayStore.openDialog({ kind: 'create-database-knowledge', id: null, mode: 'create' })
 }
 
 function requestSourceDelete(source: DatabaseSourceContext): void {
-  if (!source.canDelete) return
+  if (!actorStore.canEdit || !source.canDelete) return
   openDeleteDialog(overlayStore, {
     objectTypeLabel: '数据库来源', actionLabel: '删除数据库源', displayName: source.name,
     concurrencyToken: source.concurrencyToken,
@@ -195,7 +198,7 @@ onMounted(() => {
       </div>
       <div class="database-objects-list-page__header-actions skh-page-header__actions">
         <span v-if="data">共 {{ data.total }} 个对象</span>
-        <el-button class="skh-page-primary-action" type="primary" :icon="Plus" @click="startCreate">新增数据库对象</el-button>
+        <el-button v-if="actorStore.canEdit" class="skh-page-primary-action" type="primary" :icon="Plus" @click="startCreate">新增数据库对象</el-button>
       </div>
     </header>
 
@@ -238,7 +241,7 @@ onMounted(() => {
               type="button"
               @click="selectSource(source.id)"
             ><span><strong>{{ source.name }}</strong><small>{{ source.engine }}</small></span></button>
-            <el-tooltip v-if="source.canDelete" content="删除数据库源" placement="right">
+            <el-tooltip v-if="actorStore.canEdit && source.canDelete" content="删除数据库源" placement="right">
               <el-button class="skh-icon-action" text circle type="danger" :icon="Delete" aria-label="删除数据库源" @click="requestSourceDelete(source)" />
             </el-tooltip>
           </div>
