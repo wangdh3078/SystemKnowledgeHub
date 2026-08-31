@@ -54,6 +54,7 @@ function createTestRouter(): Router {
         name: 'database-discovery-difference',
         component: Page,
       },
+      { path: '/database-discovery/sync', name: 'database-discovery-sync', component: Page },
     ],
   })
 }
@@ -91,23 +92,26 @@ describe('Database Discovery route navigation', () => {
         '发现运行',
         '发现快照',
         '差异审查',
+        '手工同步',
       ])
     },
   )
 
-  it('provides four real routes to Administrator', async () => {
+  it('provides five real routes to Administrator', async () => {
     const { view } = await mountAt('Administrator', '/database-discovery')
     expect(view.findAll('a').map((item) => item.text())).toEqual([
       '连接配置',
       '发现运行',
       '发现快照',
       '差异审查',
+      '手工同步',
     ])
     expect(view.findAll('a').map((item) => item.attributes('href'))).toEqual([
       '/database-discovery/connections',
       '/database-discovery/runs',
       '/database-discovery/snapshots',
       '/database-discovery/differences',
+      '/database-discovery/sync',
     ])
     expect(activeLabel(view)).toBe('连接配置')
   })
@@ -119,6 +123,7 @@ describe('Database Discovery route navigation', () => {
     ['/database-discovery/snapshots/41', '发现快照'],
     ['/database-discovery/differences', '差异审查'],
     ['/database-discovery/differences/51', '差异审查'],
+    ['/database-discovery/sync', '手工同步'],
   ])('derives the active tab from direct route %s', async (path, label) => {
     const { view } = await mountAt('Administrator', path)
     expect(activeLabel(view)).toBe(label)

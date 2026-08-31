@@ -9,6 +9,7 @@ const activeSection = computed(() => {
   const path = route.path
   if (path.startsWith('/database-discovery/snapshots')) return 'snapshots'
   if (path.startsWith('/database-discovery/differences')) return 'differences'
+  if (path.startsWith('/database-discovery/sync')) return 'sync'
   if (path.startsWith('/database-discovery/runs')) return 'runs'
   if (
     path === '/database-discovery' ||
@@ -45,6 +46,12 @@ const activeSection = computed(() => {
       :class="{ 'is-active': activeSection === 'differences' }"
       :aria-current="activeSection === 'differences' ? 'page' : undefined"
       >差异审查</RouterLink
+    >
+    <RouterLink
+      :to="{ name: 'database-discovery-sync' }"
+      :class="{ 'is-active': activeSection === 'sync' }"
+      :aria-current="activeSection === 'sync' ? 'page' : undefined"
+      >手工同步</RouterLink
     >
   </nav>
 </template>

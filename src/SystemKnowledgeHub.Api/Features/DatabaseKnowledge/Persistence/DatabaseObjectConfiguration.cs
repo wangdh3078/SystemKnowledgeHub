@@ -18,6 +18,7 @@ public sealed class DatabaseObjectConfiguration : IEntityTypeConfiguration<Datab
             table.HasCheckConstraint("ck_database_objects_business_keys", "business_key_columns_json IS NULL OR (json_valid(business_key_columns_json) AND json_type(business_key_columns_json) = 'array')");
             table.HasCheckConstraint("ck_database_objects_knowledge_status", "knowledge_status IN ('Unknown','Inferred','Confirmed')");
             table.HasCheckConstraint("ck_database_objects_version", "version >= 1");
+            table.HasCheckConstraint("ck_database_objects_technical_identity_version", "technical_identity_algorithm_version >= 1");
             table.HasCheckConstraint("ck_database_objects_deletion_audit", "is_deleted IN (0,1) AND ((is_deleted = 0 AND deleted_at IS NULL AND deleted_by_user_id IS NULL AND deleted_by_display_name IS NULL) OR (deleted_at IS NOT NULL AND deleted_by_user_id IS NOT NULL AND deleted_by_display_name IS NOT NULL AND length(trim(deleted_by_display_name)) > 0))");
         });
 
@@ -27,6 +28,9 @@ public sealed class DatabaseObjectConfiguration : IEntityTypeConfiguration<Datab
         builder.Property(entity => entity.SchemaName).HasColumnName("schema_name").UseCollation("NOCASE").IsRequired();
         builder.Property(entity => entity.ObjectName).HasColumnName("object_name").UseCollation("NOCASE").IsRequired();
         builder.Property(entity => entity.ObjectType).HasColumnName("object_type").HasConversion<string>().IsRequired();
+        builder.Property(entity => entity.DatabaseComment).HasColumnName("database_comment");
+        builder.Property(entity => entity.TechnicalIdentityAlgorithmVersion).HasColumnName("technical_identity_algorithm_version").HasDefaultValue(1).IsRequired();
+        builder.Property(entity => entity.TechnicalIdentity).HasColumnName("technical_identity").HasMaxLength(2048).IsRequired();
         builder.Property(entity => entity.BusinessDescription).HasColumnName("business_description");
         builder.Property(entity => entity.EstimatedRows).HasColumnName("estimated_rows");
         builder.Property(entity => entity.AccessMode).HasColumnName("access_mode").HasConversion<string>().IsRequired();
@@ -59,6 +63,7 @@ public sealed class DatabaseObjectConfiguration : IEntityTypeConfiguration<Datab
         builder.HasIndex(entity => new { entity.DatabaseSourceId, entity.SchemaName, entity.ObjectType, entity.KnowledgeStatus });
         builder.HasIndex(entity => entity.ObjectName);
         builder.HasIndex(entity => entity.KnowledgeStatus);
+        builder.HasIndex(entity => new { entity.DatabaseSourceId, entity.TechnicalIdentityAlgorithmVersion, entity.TechnicalIdentity }).IsUnique();
         builder.HasQueryFilter(entity => !entity.IsDeleted);
     }
 }

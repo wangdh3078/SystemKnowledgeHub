@@ -242,6 +242,7 @@ builder.Services.Configure<DatabaseDiscoveryOptions>(
 builder.Services.AddSingleton<CanonicalSnapshotService>();
 builder.Services.AddSingleton<DatabaseDiscoveryDiffService>();
 builder.Services.AddScoped<DatabaseDiscoveryRunService>();
+builder.Services.AddScoped<DatabaseDiscoverySyncService>();
 builder.Services.AddScoped<DatabaseDiscoveryRunProcessor>();
 builder.Services.AddScoped<DatabaseDiscoveryTerminalWriter>();
 builder.Services.AddSingleton<DatabaseDiscoveryWorkerReadiness>();

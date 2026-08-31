@@ -55,6 +55,7 @@ public sealed class DatabaseDiscoveryOptions
     public int MaximumConstraintsAndIndexes { get; set; } = 250_000;
     public int MaximumSequences { get; set; } = 10_000;
     public int MaximumCanonicalSnapshotBytes { get; set; } = 128 * 1024 * 1024;
+    public int MaximumSyncPlanActions { get; set; } = 2_000;
     public int LeaseDurationSeconds { get; set; } = 30;
     public int HeartbeatIntervalSeconds { get; set; } = 5;
     public int QueuePollIntervalMilliseconds { get; set; } = 2_000;
@@ -84,6 +85,8 @@ public sealed class DatabaseDiscoveryOptions
         Require(MaximumSequences >= 1, "DatabaseDiscovery:MaximumSequences must be positive.");
         Require(MaximumCanonicalSnapshotBytes is >= 1_024 and <= 536_870_912,
             "DatabaseDiscovery:MaximumCanonicalSnapshotBytes must be between 1024 and 536870912.");
+        Require(MaximumSyncPlanActions is >= 1 and <= 10_000,
+            "DatabaseDiscovery:MaximumSyncPlanActions must be between 1 and 10000.");
         Require(LeaseDurationSeconds is >= 2 and <= 3_600,
             "DatabaseDiscovery:LeaseDurationSeconds must be between 2 and 3600.");
         Require(HeartbeatIntervalSeconds >= 1 && HeartbeatIntervalSeconds < LeaseDurationSeconds,

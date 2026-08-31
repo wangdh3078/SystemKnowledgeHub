@@ -82,7 +82,7 @@ public sealed class ControlledDatabaseDiscoveryProvider : IDatabaseDiscoveryProv
     private readonly Channel<PendingDatabaseDiscovery> pending = Channel.CreateUnbounded<PendingDatabaseDiscovery>();
     private int callCount;
 
-    public DatabaseProviderType ProviderType => DatabaseProviderType.Oracle;
+    public DatabaseProviderType ProviderType { get; set; } = DatabaseProviderType.Oracle;
     public int CallCount => Volatile.Read(ref callCount);
     public bool GateCalls { get; set; }
     public Func<DatabaseDiscoveryConnectionContext, DatabaseDiscoveryRequest, int, CanonicalDatabaseDiscoverySnapshot>? SnapshotFactory { get; set; }

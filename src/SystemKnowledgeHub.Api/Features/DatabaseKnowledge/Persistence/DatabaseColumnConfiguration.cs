@@ -15,6 +15,7 @@ public sealed class DatabaseColumnConfiguration : IEntityTypeConfiguration<Datab
             table.HasCheckConstraint("ck_database_columns_nullable", "is_nullable IN (0, 1)");
             table.HasCheckConstraint("ck_database_columns_knowledge_status", "knowledge_status IN ('Unknown','Inferred','Confirmed')");
             table.HasCheckConstraint("ck_database_columns_version", "version >= 1");
+            table.HasCheckConstraint("ck_database_columns_technical_identity_version", "technical_identity_algorithm_version >= 1");
             table.HasCheckConstraint("ck_database_columns_deletion_audit", "is_deleted IN (0,1) AND ((is_deleted = 0 AND deleted_at IS NULL AND deleted_by_user_id IS NULL AND deleted_by_display_name IS NULL) OR (deleted_at IS NOT NULL AND deleted_by_user_id IS NOT NULL AND deleted_by_display_name IS NOT NULL AND length(trim(deleted_by_display_name)) > 0))");
         });
 
@@ -28,6 +29,8 @@ public sealed class DatabaseColumnConfiguration : IEntityTypeConfiguration<Datab
         builder.Property(entity => entity.DefaultValue).HasColumnName("default_value");
         builder.Property(entity => entity.BusinessDescription).HasColumnName("business_description");
         builder.Property(entity => entity.DatabaseComment).HasColumnName("database_comment");
+        builder.Property(entity => entity.TechnicalIdentityAlgorithmVersion).HasColumnName("technical_identity_algorithm_version").HasDefaultValue(1).IsRequired();
+        builder.Property(entity => entity.TechnicalIdentity).HasColumnName("technical_identity").HasMaxLength(2048).IsRequired();
         builder.Property(entity => entity.CreatedAt).HasColumnName("created_at").IsRequired();
         builder.Property(entity => entity.CreatedByUserId).HasColumnName("created_by_user_id");
         builder.Property(entity => entity.CreatedByDisplayName).HasColumnName("created_by_display_name");
@@ -55,6 +58,7 @@ public sealed class DatabaseColumnConfiguration : IEntityTypeConfiguration<Datab
         builder.HasIndex(entity => new { entity.DatabaseObjectId, entity.OrdinalPosition });
         builder.HasIndex(entity => entity.ColumnName);
         builder.HasIndex(entity => entity.KnowledgeStatus);
+        builder.HasIndex(entity => new { entity.DatabaseObjectId, entity.TechnicalIdentityAlgorithmVersion, entity.TechnicalIdentity }).IsUnique();
         builder.HasQueryFilter(entity => !entity.IsDeleted);
     }
 }

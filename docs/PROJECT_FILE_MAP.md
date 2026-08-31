@@ -195,6 +195,18 @@ Search 第一版采用 SQLite 受限 `LIKE` 投影；未创建 FTS5 virtual tabl
 
 以上 `...` 均指 `src/SystemKnowledgeHub.Api/Features/Traceability/`。
 
+### 1.16 Database Discovery manual sync — DBDISC-B04
+
+| 路径 | 一句话职责 | Feature / Vertical Slice | 为什么需要 |
+| --- | --- | --- | --- |
+| `src/SystemKnowledgeHub.Api/Features/DatabaseDiscovery/Domain/DatabaseDiscoverySync.cs` | 定义对象/字段 typed binding、Draft/Ready/Applied/Superseded 计划、应用结果与结构化审计。 | Database Discovery / DBDISC-B04 | 让外部发现身份和 Hub 对象建立可追踪的一对一关系，并持久化人工确认状态。 |
+| `.../Application/DatabaseDiscoverySyncService.cs`、`Models/DatabaseDiscoverySyncModels.cs` | 从最新兼容 Snapshot 派生 reconciliation，执行显式 selection、deterministic preview/hash、确认、stale revalidation 与原子 Apply。 | Database Discovery / DBDISC-B04 | 落实 human-in-the-loop、no automatic rename/delete、知识字段保护和零部分成功语义。 |
+| `.../Api/DatabaseDiscoverySyncController.cs` | 暴露 bounded reconciliation/plan read 与 Editor 写入边界。 | Database Discovery / DBDISC-B04 | 提供 typed API，同时让后端 Authorization、antiforgery 和并发令牌保持最终 authority。 |
+| `.../Persistence/DatabaseDiscoverySyncConfiguration.cs` | 映射 typed bindings、计划、结果、审计的 FK、唯一约束、检查约束与索引。 | Database Discovery / DBDISC-B04 | 在数据库层防止跨 Profile/Scope/identity 重复绑定和重复应用。 |
+| `src/SystemKnowledgeHub.Api/Persistence/Migrations/20260831170031_AddManualDiscoverySyncFoundation.cs` | 增加 B04 表、DatabaseObject/Column 外部结构字段和确定性 legacy identity 回填。 | Database Discovery / DBDISC-B04 | 以单次可回滚迁移建立手工同步持久化基础且保留现有知识行。 |
+
+以上 `...` 均指 `src/SystemKnowledgeHub.Api/Features/DatabaseDiscovery/`。
+
 ## 2. Frontend
 
 ### 2.1 Application and framework foundation
@@ -438,13 +450,23 @@ Search 第一版采用 SQLite 受限 `LIKE` 投影；未创建 FTS5 virtual tabl
 | 路径 | 一句话职责 | Feature / Vertical Slice | 为什么需要 |
 | --- | --- | --- | --- |
 | `.../features/database-discovery/api/databaseDiscoveryContracts.ts`、`databaseDiscoveryApi.ts` | 严格解码并调用 Connection Profile、Run、Snapshot/Difference history 与 detail 的 sanitized、bounded API read/write contracts。 | Database Discovery / DBDISC-B03 / R01 | 让外部 JSON 在 Feature 边界 fail-closed 收窄，且不向浏览器传输 Secret、连接串或完整 Canonical Snapshot。 |
-| `.../features/database-discovery/components/DiscoverySectionNav.vue` | 提供连接配置、发现运行、快照与差异审查四个实际 route，并完全由当前 path 推导 active 状态。 | Database Discovery / DBDISC-B03-R01 | 让 list/detail/direct URL/Back/Forward 都保持正确页面上下文，不维护“最后点击”状态。 |
+| `.../features/database-discovery/components/DiscoverySectionNav.vue` | 提供连接配置、发现运行、快照、差异审查与手工同步五个实际 route，并完全由当前 path 推导 active 状态。 | Database Discovery / DBDISC-B03-R01 / B04 | 让 list/detail/direct URL/Back/Forward 都保持正确页面上下文，不维护“最后点击”状态。 |
 | `.../features/database-discovery/pages/ConnectionProfilesView.vue` | 为 Administrator 提供紧凑主操作与条件化更多菜单，承载 Profile、独立 Secret、连接测试与发现触发。 | Database Discovery / DBDISC-B03-R01 | 完成不依赖 curl/Postman 的安全配置路径，同时收敛按钮密度并保留后端授权为 authority。 |
 | `.../features/database-discovery/pages/DiscoveryRunsView.vue` | 分页展示 durable Run 状态、筛选、真实时间信息、终态 artifact 导航及 Administrator cancel。 | Database Discovery / DBDISC-B03 | 以 2–3 秒、可停止/可取消的前端 polling 呈现 Worker 生命周期，不伪造进度。 |
 | `.../features/database-discovery/pages/DiscoverySnapshotsView.vue`、`DiscoveryDifferencesView.vue` | 分页筛选并直接导航 provider-neutral Snapshot 与 Difference 历史，不要求先选择 Run。 | Database Discovery / DBDISC-B03-R01 | 建立真正可进入的一级审查页面、清晰空态与 B04 手工同步边界。 |
 | `.../features/database-discovery/pages/DiscoverySnapshotView.vue` | 通过 summary、Schema/Object/Sequence 分页和对象结构懒加载审查 provider-neutral Canonical metadata。 | Database Discovery / DBDISC-B03 | 避免向浏览器传输完整 Snapshot JSON，并显式呈现 capability 与可见性边界。 |
 | `.../features/database-discovery/pages/DiscoveryDifferenceView.vue` | 分页筛选 Added/Changed/MissingFromSource/Unchanged，并以 sanitized 字段级 before/after 展示只读差异。 | Database Discovery / DBDISC-B03 | 保持 Missing is not deleted、不推断 Rename、且不提前实现 Sync Plan 或 Apply。 |
-| `.../features/database-discovery/database-discovery.css` | 定义四个 Discovery 页面、状态摘要、bounded 表格与 Host 内 Overlay 的局部响应式样式。 | Database Discovery / DBDISC-B03 | 继承统一页面/表格/分页/Overlay 基线，并保证长标识和常见桌面宽度可用。 |
+| `.../features/database-discovery/database-discovery.css` | 定义 Discovery 审查/同步页面、状态摘要、bounded 表格与响应式 preview 工作区的局部样式。 | Database Discovery / DBDISC-B03 / B04 | 继承统一页面/表格/分页基线，并保证长标识和常见桌面宽度可用。 |
+
+以上 `...` 均指 `src/SystemKnowledgeHub.Web/src/`。
+
+### 2.19 Database Discovery manual sync UX — DBDISC-B04
+
+| 路径 | 一句话职责 | Feature / Vertical Slice | 为什么需要 |
+| --- | --- | --- | --- |
+| `.../features/database-discovery/api/databaseDiscoverySyncContracts.ts`、`databaseDiscoverySyncApi.ts` | 严格解码 reconciliation、plan、preview/apply result，并调用手工同步 API。 | Database Discovery / DBDISC-B04 | 浏览器 fail-closed 消费 provider-neutral contract，不接触 Canonical 原始 JSON、Secret 或连接串。 |
+| `.../features/database-discovery/pages/DiscoverySyncView.vue` | 提供 Profile/category/search/paging、逐项选择、before/after 预览、明确确认、Apply 结果与计划历史。 | Database Discovery / DBDISC-B04 | 让同步是可审查、可解释、可确认的人工工作流，而不是自动或批量盲写。 |
+| `.../app/router/routes.ts` | 注册 `/database-discovery/sync` 正式路由。 | Database Discovery / DBDISC-B04 | 让手工同步拥有可直接进入且可由路由恢复的产品入口。 |
 
 以上 `...` 均指 `src/SystemKnowledgeHub.Web/src/`。
 
@@ -481,6 +503,9 @@ Search 第一版采用 SQLite 受限 `LIKE` 投影；未创建 FTS5 virtual tabl
 | `.../Api/ImpactApiTests.cs` | 以真实 SQLite/HTTP 覆盖七种 allowed path、forbidden path、五类 target、分页排序、distinct meaning、授权、fail-closed、只读、mutation refresh 与 query plan。 | Traceability / TRACE-B03 | 保护 bounded Impact semantics、API safety、canonical truth 与现有索引策略。 |
 | `.../Application/RuntimeConfigurationOptionsTests.cs` | 覆盖 Cookie、password hasher、SQLite、CORS、Serilog 配置的有效/无效边界与 Host wiring。 | Runtime configuration / INFRA-CONFIG-R01 | 证明部署调参有 typed/fail-fast validation，且 password hashing 不能降到安全下限以下。 |
 | `.../Application/DatabaseDiscoveryOptionsTests.cs` | 覆盖 Discovery 默认 timeout/2000ms polling/lease/heartbeat/limits 与无效组合。 | Database Discovery configuration / INFRA-CONFIG-R01 | 防止集中配置改变 worker 恢复语义或接受不安全运行参数。 |
+| `.../Api/DatabaseDiscoverySyncApiTests.cs` | 覆盖 create/link/update/missing/reappeared、显式确认、并发/stale/atomic/limits、权限、provider-neutral 与知识字段保护。 | Database Discovery / DBDISC-B04 | 以真实 SQLite/HTTP 验证手工同步主链路及高风险失败边界。 |
+| `.../Persistence/DatabaseDiscoverySyncMigrationTests.cs` | 从 B03 schema 升级并核对 legacy 数据、B04 表/FK/唯一索引、rollback 与无 provider-specific 表。 | Database Discovery / DBDISC-B04 | 证明迁移保留既有知识，数据库级 binding 约束正确且可回滚。 |
+| `.../TestSupport/DatabaseDiscoveryWebApplicationFactory.cs` | 提供可切换 Oracle/PostgreSQL deterministic provider 的任务专属 Discovery Host。 | Database Discovery / DBDISC-B02 / B04 | 让 provider-neutral sync 回归复用同一受控 fake pipeline，不接触外部数据库或 Secret。 |
 | `.../Application/OracleConnectionTesterTests.cs` | 覆盖 Oracle Test Connection 与 catalog reader 的 typed connection/catalog timeout wiring。 | Oracle runtime configuration / INFRA-CONFIG-R01 | 防止 Oracle 组件退回各自的 15/60 秒局部硬编码。 |
 | `.../Application/AttachmentOptionsTests.cs` | 覆盖附件 allowlist 子集、unsupported/wrong-kind/duplicate fail-fast、multipart 参数及请求上限派生。 | Attachment configuration / INFRA-CONFIG-R01 | 证明部署只能选择代码安全 catalog，且上传大小保持单一来源。 |
 | `.../Api/RuntimeCapabilitiesApiTests.cs` | 覆盖授权附件 capability 的 exact safe projection、匿名拒绝及配置子集反映。 | Runtime capabilities / INFRA-CONFIG-R01 | 防止 capability 暴露 StorageRoot/内部识别信息或偏离后端有效策略。 |
@@ -507,6 +532,7 @@ Search 第一版采用 SQLite 受限 `LIKE` 投影；未创建 FTS5 virtual tabl
 | `.../src/features/knowledge-documents/api/traceabilityContracts.spec.ts` | 覆盖三个 discriminated root、coverage/trust/lineage/truncation 及非法 enum / malformed payload fail-closed。 | Traceability / TRACE-B01 | 在 TRACE UI 之前冻结并验证严格前端读取边界。 |
 | `.../src/features/knowledge-documents/api/impactContracts.spec.ts` | 覆盖全部 Impact pathKind/meaning/target、path consistency、pagination 与 malformed payload fail-closed。 | Traceability / TRACE-B03 | 保护 strict runtime decoder 与闭集 contract。 |
 | `.../src/features/knowledge-documents/components/ImpactContextSection.spec.ts`、`pages/KnowledgeDocumentDetailView.spec.ts` | 覆盖三类 root 文案、空/错/重试、分页、导航、竞态、关系 mutation refresh 与详情层级。 | Traceability / TRACE-B03 | 证明独立状态、authoritative refresh 和 UI placement 不回归 B02/R06。 |
+| `.../src/features/database-discovery/pages/DiscoverySyncView.spec.ts`、`components/DiscoverySectionNav.spec.ts` | 覆盖角色能力、筛选/分页、selection、preview/confirm/apply、错误状态、计划历史与第五导航入口。 | Database Discovery / DBDISC-B04 | 保护 Viewer 只读、Editor/Administrator 明确写入及完整人工同步交互。 |
 | `.../src/features/runtime-capabilities/api/attachmentRuntimeCapabilities.spec.ts` | 覆盖 safe capability 严格 decoder、去重校验、request cache 与失败后重试。 | Runtime capabilities / INFRA-CONFIG-R01 | 防止客户端静默接受 malformed runtime policy 或缓存永久失败。 |
 | `.../src/features/knowledge-documents/components/KnowledgeDocumentAttachmentArea.spec.ts`、`editor/KnowledgeDocumentEditor.spec.ts` | 覆盖普通附件/图片 capability 加载、动态 accept/提示/预检查、失败状态与既有上传行为。 | Attachment frontend / INFRA-CONFIG-R01 | 证明前端不再维护第二份部署 allowlist，且后端仍是最终 authority。 |
 | `.../src/test/setup.ts` | 提供 Vitest/Vue Test Utils 的公共测试初始化。 | Frontend test foundation | 保持测试环境最小一致。 |

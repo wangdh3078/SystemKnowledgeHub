@@ -9,6 +9,7 @@ namespace SystemKnowledgeHub.Api.Tests.Persistence;
 public sealed class DatabaseDiscoveryRunMigrationTests
 {
     private const string PreviousMigration = "20260829233658_AddLocalPasswordLifecycleSafety";
+    private const string TargetMigration = "20260830030122_AddDatabaseDiscoveryRunSnapshotDiffFoundation";
 
     [Fact]
     public async Task B02_migration_adds_run_snapshot_difference_scope_and_database_enforced_active_run_constraint()
@@ -21,7 +22,7 @@ public sealed class DatabaseDiscoveryRunMigrationTests
         await migrator.MigrateAsync(PreviousMigration);
         var before = await Tables(connection);
 
-        await migrator.MigrateAsync();
+        await migrator.MigrateAsync(TargetMigration);
 
         var added = (await Tables(connection)).Except(before, StringComparer.Ordinal).OrderBy(item => item).ToArray();
         Assert.Equal(

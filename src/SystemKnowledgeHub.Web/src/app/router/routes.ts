@@ -23,6 +23,7 @@ import DiscoverySnapshotsView from '../../features/database-discovery/pages/Disc
 import DiscoverySnapshotView from '../../features/database-discovery/pages/DiscoverySnapshotView.vue'
 import DiscoveryDifferencesView from '../../features/database-discovery/pages/DiscoveryDifferencesView.vue'
 import DiscoveryDifferenceView from '../../features/database-discovery/pages/DiscoveryDifferenceView.vue'
+import DiscoverySyncView from '../../features/database-discovery/pages/DiscoverySyncView.vue'
 
 export const routes: readonly RouteRecordRaw[] = [
   {
@@ -245,6 +246,17 @@ export const routes: readonly RouteRecordRaw[] = [
     component: DiscoveryDifferenceView,
     meta: {
       title: '差异审查',
+      layout: 'app-shell',
+      navigationKey: 'database-discovery',
+      hasContextRail: false,
+    },
+  },
+  {
+    path: '/database-discovery/sync',
+    name: 'database-discovery-sync',
+    component: DiscoverySyncView,
+    meta: {
+      title: '手工同步',
       layout: 'app-shell',
       navigationKey: 'database-discovery',
       hasContextRail: false,

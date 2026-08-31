@@ -35,6 +35,11 @@ public sealed class KnowledgeHubDbContext(DbContextOptions<KnowledgeHubDbContext
     public DbSet<DatabaseDiscoverySnapshot> DatabaseDiscoverySnapshots => Set<DatabaseDiscoverySnapshot>();
     public DbSet<DatabaseDiscoveryDifference> DatabaseDiscoveryDifferences => Set<DatabaseDiscoveryDifference>();
     public DbSet<DatabaseDiscoveryDifferenceEntry> DatabaseDiscoveryDifferenceEntries => Set<DatabaseDiscoveryDifferenceEntry>();
+    public DbSet<DatabaseObjectDiscoveryBinding> DatabaseObjectDiscoveryBindings => Set<DatabaseObjectDiscoveryBinding>();
+    public DbSet<DatabaseColumnDiscoveryBinding> DatabaseColumnDiscoveryBindings => Set<DatabaseColumnDiscoveryBinding>();
+    public DbSet<DatabaseDiscoverySyncPlan> DatabaseDiscoverySyncPlans => Set<DatabaseDiscoverySyncPlan>();
+    public DbSet<DatabaseDiscoverySyncApplyResult> DatabaseDiscoverySyncApplyResults => Set<DatabaseDiscoverySyncApplyResult>();
+    public DbSet<DatabaseDiscoverySyncAuditEvent> DatabaseDiscoverySyncAuditEvents => Set<DatabaseDiscoverySyncAuditEvent>();
     public DbSet<Evidence> Evidence => Set<Evidence>();
     public DbSet<Integration> Integrations => Set<Integration>();
     public DbSet<IntegrationContractField> IntegrationContractFields => Set<IntegrationContractField>();

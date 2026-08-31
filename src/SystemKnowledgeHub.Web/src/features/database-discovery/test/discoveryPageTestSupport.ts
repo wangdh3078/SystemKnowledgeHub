@@ -193,19 +193,22 @@ const ElCheckbox = defineComponent({
   inheritAttrs: false,
   props: { modelValue: Boolean, disabled: Boolean },
   emits: ['update:modelValue', 'change'],
-  setup(props, { attrs, emit }) {
+  setup(props, { attrs, emit, slots }) {
     return () =>
-      h('input', {
-        ...attrs,
-        type: 'checkbox',
-        checked: props.modelValue,
-        disabled: props.disabled,
-        onChange: (event: Event) => {
-          const checked = (event.target as HTMLInputElement).checked
-          emit('update:modelValue', checked)
-          emit('change', checked)
-        },
-      })
+      h('label', [
+        h('input', {
+          ...attrs,
+          type: 'checkbox',
+          checked: props.modelValue,
+          disabled: props.disabled,
+          onChange: (event: Event) => {
+            const checked = (event.target as HTMLInputElement).checked
+            emit('update:modelValue', checked)
+            emit('change', checked)
+          },
+        }),
+        slots.default?.(),
+      ])
   },
 })
 
@@ -355,6 +358,7 @@ export const discoveryPageStubs = {
   ElPagination,
   ElRadioButton,
   ElRadioGroup,
+  ElResult: passthrough('ElResult'),
   ElSelect,
   ElSwitch,
   ElTable,

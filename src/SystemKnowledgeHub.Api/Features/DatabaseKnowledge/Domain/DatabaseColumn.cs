@@ -13,6 +13,8 @@ public sealed class DatabaseColumn
     public string? DefaultValue { get; set; }
     public string? BusinessDescription { get; set; }
     public string? DatabaseComment { get; set; }
+    public int TechnicalIdentityAlgorithmVersion { get; set; } = 1;
+    public string TechnicalIdentity { get; set; } = $"manual:column:v1:{Guid.NewGuid():N}";
     public DateTimeOffset CreatedAt { get; set; }
     public long? CreatedByUserId { get; set; }
     public string? CreatedByDisplayName { get; set; }

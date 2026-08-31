@@ -20,6 +20,7 @@ public sealed class DatabaseDiscoveryOptionsTests
         Assert.Equal(2_000, options.QueuePollIntervalMilliseconds);
         Assert.Equal(30, options.LeaseDurationSeconds);
         Assert.Equal(5, options.HeartbeatIntervalSeconds);
+        Assert.Equal(2_000, options.MaximumSyncPlanActions);
         Assert.Equal(new DatabaseDiscoveryLimits(
             128,
             25_000,
@@ -40,6 +41,7 @@ public sealed class DatabaseDiscoveryOptionsTests
     [InlineData("HeartbeatIntervalSeconds", 30, "DatabaseDiscovery:HeartbeatIntervalSeconds")]
     [InlineData("QueuePollIntervalMilliseconds", 24, "DatabaseDiscovery:QueuePollIntervalMilliseconds")]
     [InlineData("QueuePollIntervalMilliseconds", 5000, "queue polling and heartbeat intervals")]
+    [InlineData("MaximumSyncPlanActions", 10001, "DatabaseDiscovery:MaximumSyncPlanActions")]
     public void Invalid_values_fail_closed_with_the_actionable_configuration_key(
         string key,
         int value,
@@ -99,6 +101,7 @@ public sealed class DatabaseDiscoveryOptionsTests
             case "LeaseDurationSeconds": options.LeaseDurationSeconds = value; break;
             case "HeartbeatIntervalSeconds": options.HeartbeatIntervalSeconds = value; break;
             case "QueuePollIntervalMilliseconds": options.QueuePollIntervalMilliseconds = value; break;
+            case "MaximumSyncPlanActions": options.MaximumSyncPlanActions = value; break;
             default: throw new ArgumentOutOfRangeException(nameof(key), key, null);
         }
     }

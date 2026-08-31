@@ -9,6 +9,9 @@ public sealed class DatabaseObject
     public string SchemaName { get; set; } = string.Empty;
     public string ObjectName { get; set; } = string.Empty;
     public DatabaseObjectType ObjectType { get; set; }
+    public string? DatabaseComment { get; set; }
+    public int TechnicalIdentityAlgorithmVersion { get; set; } = 1;
+    public string TechnicalIdentity { get; set; } = $"manual:object:v1:{Guid.NewGuid():N}";
     public string? BusinessDescription { get; set; }
     public long? EstimatedRows { get; set; }
     public DatabaseAccessMode AccessMode { get; set; }
