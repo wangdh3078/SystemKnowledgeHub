@@ -170,9 +170,15 @@ describe('TraceabilitySection', () => {
     expect(wrapper.text()).toContain('直接测试定义')
     expect(wrapper.text()).toContain('规格 A')
     expect(wrapper.text()).toContain('规格 B')
-    expect(wrapper.text()).toContain('缺少测试定义')
+    expect(wrapper.text()).toContain('测试定义关系缺失')
     expect(wrapper.findAll('[aria-label="打开测试用例：测试 A"]')).toHaveLength(2)
     expect(wrapper.text()).toContain('证据 2 · 人工确认 1')
+    expect(wrapper.text()).toContain('可信依据：')
+    expect(wrapper.text()).toContain('与当前需求的关系')
+    expect(wrapper.text()).toContain('该规格说明定义当前需求')
+    expect(wrapper.text()).toContain('与上级规格说明的关系')
+    expect(wrapper.text()).toContain('该测试用例验证该规格说明')
+    expect(wrapper.text()).not.toContain('关系：未知')
     expect(wrapper.text()).toContain('草稿')
     expect(wrapper.text()).toContain('已发布')
 
@@ -181,7 +187,7 @@ describe('TraceabilitySection', () => {
       name: 'knowledge-document-detail',
       params: { id: '2' },
     })
-    await wrapper.get('[aria-label="查看关系详情：由规格说明定义"]').trigger('click')
+    await wrapper.get('[aria-label="查看关系详情：与当前需求的关系"]').trigger('click')
     expect(overlayState.openDrawer).toHaveBeenCalledWith({ kind: 'relationship', id: 10, mode: 'read' })
   })
 
@@ -203,8 +209,9 @@ describe('TraceabilitySection', () => {
     const wrapper = mountSection()
     await flushPromises()
 
-    expect(wrapper.text()).toContain('缺少规格说明')
-    expect(wrapper.text()).toContain('缺少测试定义')
+    expect(wrapper.text()).toContain('规格说明：未关联')
+    expect(wrapper.text()).toContain('测试定义：未关联')
+    expect(wrapper.text()).toContain('规格说明关系缺失')
     expect(wrapper.text()).not.toContain('验证失败')
   })
 
@@ -215,7 +222,7 @@ describe('TraceabilitySection', () => {
 
     expect(wrapper.text()).toContain('上游需求')
     expect(wrapper.text()).toContain('暂无上游需求关系')
-    expect(wrapper.text()).toContain('缺少测试定义')
+    expect(wrapper.text()).toContain('测试定义关系缺失')
     expect(wrapper.text()).not.toContain('缺少需求')
   })
 
@@ -320,7 +327,7 @@ describe('TraceabilitySection', () => {
     expect(wrapper.text()).toContain('测试 T')
     ;(wrapper.vm as unknown as { refresh: () => void }).refresh()
     await flushPromises()
-    expect(wrapper.text()).toContain('缺少测试定义')
+    expect(wrapper.text()).toContain('测试定义关系缺失')
     expect(wrapper.text()).not.toContain('测试 T')
 
     ;(wrapper.vm as unknown as { refresh: () => void }).refresh()
@@ -361,7 +368,7 @@ describe('TraceabilitySection', () => {
     resolveA?.(coveredSpecificationTrace())
     await flushPromises()
 
-    expect(wrapper.text()).toContain('缺少测试定义')
+    expect(wrapper.text()).toContain('测试定义关系缺失')
     expect(wrapper.text()).not.toContain('测试 T')
   })
 })

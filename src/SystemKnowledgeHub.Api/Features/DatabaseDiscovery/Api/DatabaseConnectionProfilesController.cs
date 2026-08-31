@@ -24,6 +24,12 @@ public sealed class DatabaseConnectionProfilesController(
         CancellationToken cancellationToken) =>
         Ok(await profileService.List(cancellationToken));
 
+    [HttpGet("database-sources")]
+    public async Task<ActionResult<IReadOnlyList<DatabaseConnectionSourceOptionResponse>>> ListDatabaseSources(
+        [FromQuery] string? search,
+        CancellationToken cancellationToken) =>
+        Ok(await profileService.ListSourceOptions(search, cancellationToken));
+
     [HttpGet("{id:long}")]
     public async Task<ActionResult<DatabaseConnectionProfileResponse>> Get(
         long id,

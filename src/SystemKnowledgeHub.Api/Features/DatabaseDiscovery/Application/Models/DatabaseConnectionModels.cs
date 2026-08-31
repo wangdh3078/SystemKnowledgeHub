@@ -37,6 +37,7 @@ public sealed record DatabaseProviderSpecificOptionsResponse(int Version);
 public sealed record DatabaseConnectionProfileResponse(
     long Id,
     long DatabaseSourceId,
+    string DatabaseSourceName,
     string Name,
     DatabaseProviderType ProviderType,
     string Host,
@@ -71,6 +72,13 @@ public sealed record DatabaseConnectionTestResponse(
     string? ServiceName,
     string? ContainerName,
     string ConcurrencyToken);
+
+public sealed record DatabaseConnectionSourceOptionResponse(
+    long Id,
+    string Name,
+    string Engine,
+    string SystemName,
+    bool HasConnectionProfile);
 
 public enum DatabaseConnectionFailure
 {

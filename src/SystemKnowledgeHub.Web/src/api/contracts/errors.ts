@@ -24,6 +24,20 @@ export const apiErrorCodes = [
   'attachment_unavailable',
   'preview_not_supported',
   'preview_limit_exceeded',
+  'secret_already_set',
+  'SecretMissing',
+  'SecretUnavailable',
+  'Disabled',
+  'ProviderUnavailable',
+  'ConnectionFailed',
+  'AuthenticationFailed',
+  'InsufficientPrivilege',
+  'UnsupportedDatabaseVersion',
+  'Timeout',
+  'Cancelled',
+  'ConcurrencyConflict',
+  'DiscoveryAlreadyRunning',
+  'DiscoveryTargetImmutable',
 ] as const
 
 export type ApiErrorCode = (typeof apiErrorCodes)[number]

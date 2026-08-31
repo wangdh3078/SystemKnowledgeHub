@@ -12,6 +12,8 @@ const overlayStore = useOverlayStore()
 const hasFeatureDialog = computed(
   () =>
     overlayStore.currentDialog?.kind === 'create-knowledge-object' ||
+    overlayStore.currentDialog?.kind === 'database-discovery-connection-profile' ||
+    overlayStore.currentDialog?.kind === 'database-discovery-connection-secret' ||
     overlayStore.currentDialog?.kind === 'create-system' ||
     overlayStore.currentDialog?.kind === 'create-business-function' ||
     overlayStore.currentDialog?.kind === 'create-business-rule' ||
@@ -35,13 +37,15 @@ const dialogWidth = computed(() =>
       ? '92vw'
       : overlayStore.currentDialog?.kind === 'change-knowledge-status'
         ? '620px'
-        : overlayStore.currentDialog?.kind === 'restore-knowledge-document-revision'
-          ? '680px'
-          : overlayStore.currentDialog?.kind === 'delete-root'
-            ? '520px'
-            : hasFeatureDialog.value
-              ? '780px'
-              : '460px',
+        : overlayStore.currentDialog?.kind === 'database-discovery-connection-secret'
+          ? '460px'
+          : overlayStore.currentDialog?.kind === 'restore-knowledge-document-revision'
+            ? '680px'
+            : overlayStore.currentDialog?.kind === 'delete-root'
+              ? '520px'
+              : hasFeatureDialog.value
+                ? '780px'
+                : '460px',
 )
 const dialogTitle = computed(() =>
   overlayStore.currentDialog?.kind === 'attachment-preview' ? '附件只读预览' : undefined,

@@ -180,8 +180,8 @@ onMounted(() => void load())
     <template v-else-if="detail">
       <header class="evidence-drawer__header skh-drawer-header">
         <el-button text circle :icon="Close" aria-label="关闭证据详情" @click="overlayStore.requestDrawerClose()" />
-        <span>{{ evidenceTypeLabels[detail.evidenceType] }}</span>
-        <h2>{{ detail.sourceTitle }}</h2>
+        <span>类型：{{ evidenceTypeLabels[detail.evidenceType] }}</span>
+        <h2>{{ detail.evidenceType === 'HumanConfirmation' ? `人工确认 · ${detail.provider.displayName}` : detail.sourceTitle }}</h2>
         <p>证据详情</p>
       </header>
 
@@ -205,20 +205,24 @@ onMounted(() => void load())
         </section>
 
         <section class="evidence-detail-section evidence-detail-section--priority">
-          <h3>为什么支持当前知识</h3>
-          <p class="evidence-support-reason">{{ detail.supportReason }}</p>
-          <p v-if="detail.summary" class="evidence-summary">{{ detail.summary }}</p>
+          <h3>{{ detail.evidenceType === 'HumanConfirmation' ? '人工确认内容' : '证据说明' }}</h3>
+          <dl class="evidence-facts">
+            <div v-if="detail.evidenceType === 'HumanConfirmation'"><dt>确认结论</dt><dd>{{ detail.summary ?? '—' }}</dd></div>
+            <div v-else><dt>摘要</dt><dd>{{ detail.summary ?? '—' }}</dd></div>
+            <div><dt>支持理由</dt><dd>{{ detail.supportReason }}</dd></div>
+          </dl>
         </section>
 
         <section class="evidence-detail-section">
-          <h3>证据提供人</h3>
+          <h3>{{ detail.evidenceType === 'HumanConfirmation' ? '确认信息' : '证据提供人' }}</h3>
           <dl class="evidence-facts">
-            <div><dt>姓名</dt><dd>{{ detail.provider.displayName }}</dd></div>
-            <div><dt>角色 / 身份</dt><dd>{{ detail.provider.roleOrIdentity }}</dd></div>
+            <div><dt>{{ detail.evidenceType === 'HumanConfirmation' ? '确认人' : '姓名' }}</dt><dd>{{ detail.provider.displayName }}</dd></div>
+            <div><dt>{{ detail.evidenceType === 'HumanConfirmation' ? '知识身份' : '角色 / 身份' }}</dt><dd>{{ detail.provider.roleOrIdentity }}</dd></div>
             <div><dt>团队</dt><dd>{{ detail.provider.team ?? '—' }}</dd></div>
-            <div><dt>提供时间</dt><dd class="technical-text">{{ formatDateTime(detail.provider.occurredAt) }}</dd></div>
+            <div><dt>{{ detail.evidenceType === 'HumanConfirmation' ? '确认时间' : '提供时间' }}</dt><dd class="technical-text">{{ formatDateTime(detail.provider.occurredAt) }}</dd></div>
             <div v-if="detail.evidenceType === 'HumanConfirmation'"><dt>确认方式</dt><dd>{{ confirmationMethod ?? '—' }}</dd></div>
             <div v-else><dt>快照来源</dt><dd>{{ detail.provider.source ?? '—' }}</dd></div>
+            <div v-if="detail.evidenceType === 'HumanConfirmation' && detail.knowledgeDocumentRevisionNumberSnapshot !== null"><dt>确认修订</dt><dd>修订 {{ detail.knowledgeDocumentRevisionNumberSnapshot }}</dd></div>
           </dl>
         </section>
 

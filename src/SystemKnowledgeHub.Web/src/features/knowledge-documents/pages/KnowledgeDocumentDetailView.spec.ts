@@ -719,6 +719,11 @@ describe('KnowledgeDocumentDetailView editing', () => {
     expect(getEvidenceList).toHaveBeenCalledWith('KnowledgeDocument', 1)
     expect(wrapper.text()).toContain('证据与人工确认')
     expect(wrapper.text()).toContain('保存后不会自动改变知识状态。')
+    expect(wrapper.text()).toContain('类型：现有文档')
+    expect(wrapper.text()).toContain('来源')
+    expect(wrapper.text()).toContain('摘要')
+    expect(wrapper.text()).toContain('支持理由')
+    expect(wrapper.text()).toContain('提供者')
     await button(wrapper, '添加证据')?.trigger('click')
     expect(overlayState.openDrawer).toHaveBeenCalledWith({
       kind: 'add-evidence',
@@ -731,6 +736,46 @@ describe('KnowledgeDocumentDetailView editing', () => {
         subjectRevisionNumber: 1,
       },
     })
+  })
+
+  it('labels every HumanConfirmation field so repeated values remain unambiguous', async () => {
+    vi.mocked(getEvidenceList).mockResolvedValue({
+      items: [
+        {
+          id: 52,
+          evidenceType: 'HumanConfirmation',
+          knowledgeDocumentRevisionNumberSnapshot: 1,
+          sourceTitle: '操作规程 · Oracle 数据库连接异常处理',
+          sourceReference: null,
+          sourceLocator: { confirmationMethod: 'InSystem' },
+          summary: '确认',
+          supportReason: '确认',
+          provider: {
+            displayName: '本地管理员',
+            roleOrIdentity: '知识提供者（未配置知识身份）',
+            occurredAt: '2026-08-22T02:30:00Z',
+            team: null,
+            externalUserKey: null,
+            source: 'InSystem',
+            note: null,
+          },
+        },
+      ],
+    })
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('人工确认 · 本地管理员')
+    expect(wrapper.text()).toContain('类型：人工确认')
+    expect(wrapper.text()).toContain('确认结论')
+    expect(wrapper.text()).toContain('支持理由')
+    expect(wrapper.text()).toContain('确认方式')
+    expect(wrapper.text()).toContain('系统内确认')
+    expect(wrapper.text()).toContain('确认人')
+    expect(wrapper.text()).toContain('知识身份')
+    expect(wrapper.text()).toContain('确认时间')
+    expect(wrapper.text()).toContain('确认修订')
+    expect(wrapper.findAll('.knowledge-document-evidence__item .el-tag')).toHaveLength(0)
   })
 
   it('carries the Detail current revision through the progression panel and HumanConfirmation drawer request', async () => {

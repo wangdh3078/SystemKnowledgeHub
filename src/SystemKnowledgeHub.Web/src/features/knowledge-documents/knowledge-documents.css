@@ -879,26 +879,39 @@ body.knowledge-document-editor-fullscreen-active {
 .knowledge-document-evidence__item:last-child {
   border-bottom: 0;
 }
-.knowledge-document-evidence__item > div {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
+.knowledge-document-evidence__item-heading { display: grid; gap: 3px; }
 .knowledge-document-evidence__item strong {
   color: var(--color-text);
   font-size: 13px;
 }
-.knowledge-document-evidence__item p {
-  margin: 6px 0 0;
+.knowledge-document-evidence__type {
+  margin: 0;
+  color: var(--color-subtle);
+  font-size: 11px;
+}
+.knowledge-document-evidence__facts {
+  display: grid;
+  margin: 9px 0 0;
+  gap: 0;
+}
+.knowledge-document-evidence__facts div {
+  display: grid;
+  grid-template-columns: minmax(76px, auto) minmax(0, 1fr);
+  padding: 5px 0;
+  border-top: 1px solid var(--color-border);
+  gap: 10px;
+}
+.knowledge-document-evidence__facts dt {
+  color: var(--color-subtle);
+  font-size: 11px;
+}
+.knowledge-document-evidence__facts dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
   color: var(--color-muted);
   font-size: 12px;
   line-height: 1.55;
-}
-.knowledge-document-evidence__item small {
-  display: block;
-  margin-top: 7px;
-  color: var(--color-subtle);
-  font-size: 11px;
 }
 .knowledge-document-history {
   min-width: 0;

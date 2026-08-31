@@ -17,6 +17,10 @@ import AccessForbiddenView from '../../features/bootstrap/pages/AccessForbiddenV
 import KnowledgeDocumentsListView from '../../features/knowledge-documents/pages/KnowledgeDocumentsListView.vue'
 import KnowledgeDocumentDetailView from '../../features/knowledge-documents/pages/KnowledgeDocumentDetailView.vue'
 import AdministratorAttachmentsView from '../../features/attachment-administration/pages/AdministratorAttachmentsView.vue'
+import ConnectionProfilesView from '../../features/database-discovery/pages/ConnectionProfilesView.vue'
+import DiscoveryRunsView from '../../features/database-discovery/pages/DiscoveryRunsView.vue'
+import DiscoverySnapshotView from '../../features/database-discovery/pages/DiscoverySnapshotView.vue'
+import DiscoveryDifferenceView from '../../features/database-discovery/pages/DiscoveryDifferenceView.vue'
 
 export const routes: readonly RouteRecordRaw[] = [
   {
@@ -173,6 +177,51 @@ export const routes: readonly RouteRecordRaw[] = [
       title: '知识内容详情',
       layout: 'app-shell',
       navigationKey: 'knowledge-documents',
+      hasContextRail: false,
+    },
+  },
+  {
+    path: '/admin/database-discovery/connections',
+    name: 'database-discovery-connections',
+    component: ConnectionProfilesView,
+    meta: {
+      title: '数据库连接配置',
+      layout: 'app-shell',
+      navigationKey: 'database-discovery',
+      hasContextRail: false,
+      minimumAccessLevel: 'Administrator',
+    },
+  },
+  {
+    path: '/database-discovery/runs',
+    name: 'database-discovery-runs',
+    component: DiscoveryRunsView,
+    meta: {
+      title: '发现运行',
+      layout: 'app-shell',
+      navigationKey: 'database-discovery',
+      hasContextRail: false,
+    },
+  },
+  {
+    path: '/database-discovery/snapshots/:id',
+    name: 'database-discovery-snapshot',
+    component: DiscoverySnapshotView,
+    meta: {
+      title: '发现快照',
+      layout: 'app-shell',
+      navigationKey: 'database-discovery',
+      hasContextRail: false,
+    },
+  },
+  {
+    path: '/database-discovery/differences/:id',
+    name: 'database-discovery-difference',
+    component: DiscoveryDifferenceView,
+    meta: {
+      title: '差异审查',
+      layout: 'app-shell',
+      navigationKey: 'database-discovery',
       hasContextRail: false,
     },
   },

@@ -114,7 +114,12 @@ describe('ImpactContextSection', () => {
     expect(wrapper.text()).toContain('需求直接文档化的上下文')
     expect(wrapper.text()).toContain('由规格说明带入的上下文')
     expect(wrapper.findAll('[aria-label="打开系统 MES"]')).toHaveLength(2)
-    expect(wrapper.text()).toContain('当前需求 → 由规格说明定义 → 规格说明 → 说明 → dbo.orders')
+    expect(wrapper.text()).toContain('为什么显示：')
+    expect(wrapper.text()).toMatch(/关系性质：\s*直接上下文/)
+    expect(wrapper.text()).toContain('上下文对象：')
+    expect(wrapper.text()).toMatch(/关系性质：\s*间接上下文/)
+    expect(wrapper.text()).toContain('当前需求 → 规格说明 → 说明 → dbo.orders')
+    expect(wrapper.text()).toContain('仅用于辅助人工复核，不表示当前文档一定直接影响该对象。')
     expect(wrapper.text()).toContain('系统上下文：MES')
   })
 
@@ -127,7 +132,7 @@ describe('ImpactContextSection', () => {
     const specification = mountSection(2)
     await flushPromises()
     expect(specification.text()).toContain('上游需求声明的适用范围')
-    expect(specification.text()).toContain('不表示规格说明自身声明了适用关系')
+    expect(specification.text()).toContain('作为当前规格说明的间接复核上下文显示')
     expect(specification.text()).toContain('上游需求文档化的上下文')
 
     vi.mocked(getKnowledgeDocumentImpact).mockResolvedValueOnce(response([

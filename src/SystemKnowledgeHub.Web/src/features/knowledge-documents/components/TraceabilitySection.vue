@@ -64,6 +64,25 @@ function traceErrorMessage(reason: unknown): string {
   return '当前无法读取可追溯关系，请稍后重新加载。'
 }
 
+function rootRevisionCoverageText(): string {
+  const coverage = traceability.value?.root.confirmationCoverage
+  if (!coverage) return '待确认'
+  if (coverage.state === 'NoConfirmation') return '未人工确认'
+  if (coverage.state === 'LegacyConfirmationUnknown') return '无法确认覆盖修订情况'
+  if (coverage.state === 'CurrentRevisionConfirmed') {
+    return `已人工确认（修订 ${coverage.lastConfirmedRevisionNumber}）`
+  }
+  return '已确认后有更新'
+}
+
+function coverageSpecificationText(count: number): string {
+  return count > 0 ? `已关联规格说明：${count}` : '规格说明：未关联'
+}
+
+function coverageTestDefinitionText(count: number): string {
+  return count > 0 ? `已关联测试定义：${count}` : '测试定义：未关联'
+}
+
 async function load(): Promise<void> {
   const requestedId = props.documentId
   const sequence = ++requestSequence
@@ -154,22 +173,20 @@ defineExpose({ refresh })
       </div>
 
       <div class="traceability-section__trust" role="status">
-        <strong>当前文档可信上下文</strong>
-        <span>证据 {{ traceability.root.evidenceCount }} · 人工确认 {{ traceability.root.humanConfirmationCount }}</span>
-        <span v-if="traceability.root.confirmationCoverage.state === 'NoConfirmation'">尚无人工确认</span>
-        <span v-else-if="traceability.root.confirmationCoverage.state === 'LegacyConfirmationUnknown'">迁移前人工确认无法确定覆盖的修订。</span>
-        <span v-else-if="traceability.root.confirmationCoverage.state === 'CurrentRevisionConfirmed'">人工确认覆盖当前修订 {{ traceability.root.confirmationCoverage.lastConfirmedRevisionNumber }}</span>
-        <span v-else>内容在最近一次确认后已修改</span>
+        <strong>可信度</strong>
+        <span>证据：{{ traceability.root.evidenceCount }}</span>
+        <span>人工确认：{{ traceability.root.humanConfirmationCount }}</span>
+        <span>当前修订：{{ rootRevisionCoverageText() }}</span>
       </div>
 
       <template v-if="!isArchivedRoot">
         <div v-if="requirementTrace" class="traceability-section__content">
           <div class="traceability-coverage" aria-label="结构覆盖概览">
             <strong>覆盖概览</strong>
-            <span>规格说明覆盖：<b>{{ requirementTrace.coverage.hasSpecification ? '已建立' : '缺少规格说明' }}</b></span>
-            <span>测试定义覆盖：<b>{{ requirementTrace.coverage.hasAnyTestDefinition ? '已建立' : '缺少测试定义' }}</b></span>
+            <span>{{ coverageSpecificationText(requirementTrace.specifications.length) }}</span>
+            <span>{{ coverageTestDefinitionText(requirementTrace.directTestCases.length + requirementTrace.specifications.reduce((count, branch) => count + branch.testCases.length, 0)) }}</span>
           </div>
-          <div v-if="hasMissing('MissingSpecification')" class="traceability-missing" role="status">缺少规格说明</div>
+          <div v-if="hasMissing('MissingSpecification')" class="traceability-missing" role="status">规格说明关系缺失</div>
           <section class="traceability-group" aria-labelledby="trace-specifications-heading">
             <h3 id="trace-specifications-heading">规格说明</h3>
             <div v-if="!requirementTrace.specifications.length" class="traceability-group__empty">暂无规格说明关系</div>
@@ -178,20 +195,28 @@ defineExpose({ refresh })
                 <TraceDocumentNode
                   :document="branch.document"
                   :relationship="branch.relationship"
-                  relationship-label="由规格说明定义"
+                  relationship-label="与当前需求的关系"
+                  relationship-summary="该规格说明定义当前需求"
                   @navigate="navigate"
                   @inspect-relationship="inspectRelationship"
                 />
                 <section class="traceability-branch__children" :aria-labelledby="`trace-specification-tests-${branch.document.id}`">
                   <h4 :id="`trace-specification-tests-${branch.document.id}`">测试定义</h4>
-                  <div v-if="!branch.testCases.length && branch.coverage.missingLinkCodes.includes('MissingTestDefinition')" class="traceability-missing" role="status">缺少测试定义</div>
+                  <div
+                    v-if="!branch.testCases.length && branch.coverage.missingLinkCodes.includes('MissingTestDefinition')"
+                    class="traceability-missing"
+                    role="status"
+                  >
+                    测试定义关系缺失
+                  </div>
                   <ul v-else-if="branch.testCases.length" class="traceability-list traceability-list--nested">
                     <TraceDocumentNode
                       v-for="item in relationItems(branch.testCases)"
                       :key="item.relationship.id"
                       :document="item.document"
                       :relationship="item.relationship"
-                      relationship-label="由测试用例定义验证方式"
+                      relationship-label="与上级规格说明的关系"
+                      relationship-summary="该测试用例验证该规格说明"
                       @navigate="navigate"
                       @inspect-relationship="inspectRelationship"
                     />
@@ -209,7 +234,8 @@ defineExpose({ refresh })
                 :key="item.relationship.id"
                 :document="item.document"
                 :relationship="item.relationship"
-                relationship-label="由测试用例定义验证方式"
+                relationship-label="与当前需求的关系"
+                relationship-summary="该测试用例验证当前需求"
                 @navigate="navigate"
                 @inspect-relationship="inspectRelationship"
               />
@@ -227,7 +253,8 @@ defineExpose({ refresh })
                 :key="item.relationship.id"
                 :document="item.document"
                 :relationship="item.relationship"
-                relationship-label="定义需求"
+                relationship-label="与上级需求的关系"
+                relationship-summary="该需求定义当前规格说明"
                 @navigate="navigate"
                 @inspect-relationship="inspectRelationship"
               />
@@ -235,14 +262,15 @@ defineExpose({ refresh })
           </section>
           <section class="traceability-group" aria-labelledby="trace-specification-tests-heading">
             <h3 id="trace-specification-tests-heading">测试定义</h3>
-            <div v-if="hasMissing('MissingTestDefinition')" class="traceability-missing" role="status">缺少测试定义</div>
+            <div v-if="hasMissing('MissingTestDefinition')" class="traceability-missing" role="status">测试定义关系缺失</div>
             <ul v-else-if="specificationTrace.testCases.length" class="traceability-list">
               <TraceDocumentNode
                 v-for="item in relationItems(specificationTrace.testCases)"
                 :key="item.relationship.id"
                 :document="item.document"
                 :relationship="item.relationship"
-                relationship-label="由测试用例定义验证方式"
+                relationship-label="与当前规格说明的关系"
+                relationship-summary="该测试用例验证当前规格说明"
                 @navigate="navigate"
                 @inspect-relationship="inspectRelationship"
               />
@@ -267,7 +295,8 @@ defineExpose({ refresh })
                     :key="item.relationship.id"
                     :document="item.document"
                     :relationship="item.relationship"
-                    relationship-label="验证需求"
+                    relationship-label="与当前测试定义的关系"
+                    relationship-summary="该需求定义当前测试定义"
                     @navigate="navigate"
                     @inspect-relationship="inspectRelationship"
                   />
@@ -280,7 +309,8 @@ defineExpose({ refresh })
                     <TraceDocumentNode
                       :document="branch.document"
                       :relationship="branch.relationship"
-                      relationship-label="验证规格说明"
+                      relationship-label="与上级规格说明的关系"
+                      relationship-summary="该测试定义关联该上级规格说明"
                       @navigate="navigate"
                       @inspect-relationship="inspectRelationship"
                     />
@@ -292,7 +322,8 @@ defineExpose({ refresh })
                           :key="item.relationship.id"
                           :document="item.document"
                           :relationship="item.relationship"
-                          relationship-label="定义需求"
+                          relationship-label="与上级需求的关系"
+                          relationship-summary="该需求定义了上级规格说明"
                           @navigate="navigate"
                           @inspect-relationship="inspectRelationship"
                         />
@@ -317,7 +348,8 @@ defineExpose({ refresh })
               :key="item.relationship.id"
               :document="item.document"
               :relationship="item.relationship"
-              relationship-label="此文档替代"
+              relationship-label="与当前文档的关系"
+              relationship-summary="当前文档替代该文档"
               @navigate="navigate"
               @inspect-relationship="inspectRelationship"
             />
@@ -331,7 +363,8 @@ defineExpose({ refresh })
               :key="item.relationship.id"
               :document="item.document"
               :relationship="item.relationship"
-              relationship-label="被以下文档替代"
+              relationship-label="与当前文档的关系"
+              relationship-summary="该文档替代当前文档"
               @navigate="navigate"
               @inspect-relationship="inspectRelationship"
             />
@@ -371,13 +404,11 @@ defineExpose({ refresh })
 .traceability-notice,
 .traceability-missing { margin: 0; padding: var(--space-2) var(--space-3); border: 1px solid #e6c36a; border-radius: var(--radius-md); background: #fff8e6; color: #76520e; font-size: 12px; line-height: 1.5; }
 .traceability-notice--info { border-color: var(--color-border-strong); background: var(--color-surface-subtle); color: var(--color-muted); }
-.traceability-section__trust { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-3); color: var(--color-muted); font-size: 11px; line-height: 1.5; }
+.traceability-section__trust { display: grid; gap: var(--space-2); margin-top: var(--space-3); color: var(--color-muted); font-size: 12px; line-height: 1.5; }
 .traceability-section__trust strong { color: var(--color-text); }
 .traceability-section__content { display: grid; gap: var(--space-5); margin-top: var(--space-5); }
-.traceability-coverage { display: flex; flex-wrap: wrap; gap: var(--space-3); padding: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-md); color: var(--color-muted); font-size: 12px; }
-.traceability-coverage strong,
-.traceability-coverage b { color: var(--color-text); }
-.traceability-coverage b { font-weight: 680; }
+.traceability-coverage { display: grid; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-md); color: var(--color-muted); font-size: 12px; }
+.traceability-coverage strong { color: var(--color-text); }
 .traceability-group { min-width: 0; }
 .traceability-group h3 { font-size: 15px; }
 .traceability-list { display: grid; gap: 0; margin: var(--space-3) 0 0; padding: 0; list-style: none; }

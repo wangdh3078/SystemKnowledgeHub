@@ -9,15 +9,16 @@ import ColumnDetailDrawer from '../features/database-knowledge/components/Column
 import DatabaseObjectKnowledgeDrawer from '../features/database-knowledge/components/DatabaseObjectKnowledgeDrawer.vue'
 import IntegrationDrawerContent from '../features/integrations/components/IntegrationDrawerContent.vue'
 import { overlayScrollPreserver as scrollPreserver } from './overlayScrollPreservation'
-import {
-  confirmDrawerDiscard,
-  markDrawerDirty,
-  resetDrawerDirty,
-} from './drawerDirtyState'
+import { confirmDrawerDiscard, markDrawerDirty, resetDrawerDirty } from './drawerDirtyState'
 
 const overlayStore = useOverlayStore()
 const hasTeleportedFeature = computed(() =>
-  ['user-management', 'attachment-administration'].includes(overlayStore.currentDrawer?.kind ?? ''),
+  [
+    'user-management',
+    'attachment-administration',
+    'database-discovery-snapshot-object',
+    'database-discovery-difference-entry',
+  ].includes(overlayStore.currentDrawer?.kind ?? ''),
 )
 const largeDrawerKinds = new Set([
   'user-management',
@@ -28,6 +29,8 @@ const largeDrawerKinds = new Set([
   'edit-business-rule',
   'edit-integration',
   'edit-database-object',
+  'database-discovery-snapshot-object',
+  'database-discovery-difference-entry',
 ])
 const drawerSize = computed(() =>
   largeDrawerKinds.has(overlayStore.currentDrawer?.kind ?? '')
@@ -79,7 +82,7 @@ function handleCloseAutoFocus(): void {
 }
 
 function handleDrawerMutation(): void {
-  markDrawerDirty()
+  if (overlayStore.currentDrawer?.mode !== 'read') markDrawerDirty()
 }
 
 async function handleBeforeClose(done: () => void): Promise<void> {
@@ -108,45 +111,49 @@ async function handleBeforeClose(done: () => void): Promise<void> {
     @close-auto-focus="handleCloseAutoFocus"
     @close="overlayStore.closeDrawer"
   >
-    <div class="skh-drawer-host__content" @input.capture="handleDrawerMutation" @change.capture="handleDrawerMutation">
+    <div
+      class="skh-drawer-host__content"
+      @input.capture="handleDrawerMutation"
+      @change.capture="handleDrawerMutation"
+    >
       <div id="drawer-feature-content"></div>
       <EvidenceDrawerContent
-      v-if="
-        overlayStore.currentDrawer &&
-        ['add-evidence', 'add-investigation-evidence', 'evidence', 'human-confirmation'].includes(
-          overlayStore.currentDrawer.kind,
-        )
-      "
-      :drawer="overlayStore.currentDrawer"
+        v-if="
+          overlayStore.currentDrawer &&
+          ['add-evidence', 'add-investigation-evidence', 'evidence', 'human-confirmation'].includes(
+            overlayStore.currentDrawer.kind,
+          )
+        "
+        :drawer="overlayStore.currentDrawer"
       />
       <RelationshipDrawerContent
-      v-else-if="
-        overlayStore.currentDrawer &&
-        ['add-relationship', 'relationship'].includes(overlayStore.currentDrawer.kind)
-      "
-      :drawer="overlayStore.currentDrawer"
+        v-else-if="
+          overlayStore.currentDrawer &&
+          ['add-relationship', 'relationship'].includes(overlayStore.currentDrawer.kind)
+        "
+        :drawer="overlayStore.currentDrawer"
       />
       <BusinessRuleDrawerContent
-      v-else-if="
-        overlayStore.currentDrawer &&
-        ['business-rule', 'edit-business-rule'].includes(overlayStore.currentDrawer.kind)
-      "
-      :drawer="overlayStore.currentDrawer"
+        v-else-if="
+          overlayStore.currentDrawer &&
+          ['business-rule', 'edit-business-rule'].includes(overlayStore.currentDrawer.kind)
+        "
+        :drawer="overlayStore.currentDrawer"
       />
       <IntegrationDrawerContent
-      v-else-if="
-        overlayStore.currentDrawer &&
-        ['integration', 'edit-integration'].includes(overlayStore.currentDrawer.kind)
-      "
-      :drawer="overlayStore.currentDrawer"
+        v-else-if="
+          overlayStore.currentDrawer &&
+          ['integration', 'edit-integration'].includes(overlayStore.currentDrawer.kind)
+        "
+        :drawer="overlayStore.currentDrawer"
       />
       <ColumnDetailDrawer
-      v-else-if="overlayStore.currentDrawer?.kind === 'database-column'"
-      :column-id="overlayStore.currentDrawer.id"
+        v-else-if="overlayStore.currentDrawer?.kind === 'database-column'"
+        :column-id="overlayStore.currentDrawer.id"
       />
       <DatabaseObjectKnowledgeDrawer
-      v-else-if="overlayStore.currentDrawer?.kind === 'edit-database-object'"
-      :database-object-id="overlayStore.currentDrawer.id"
+        v-else-if="overlayStore.currentDrawer?.kind === 'edit-database-object'"
+        :database-object-id="overlayStore.currentDrawer.id"
       />
       <div v-else-if="!hasTeleportedFeature" class="drawer-host__foundation">
         <el-icon :size="24"><DocumentChecked /></el-icon>

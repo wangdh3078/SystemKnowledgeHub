@@ -22,6 +22,7 @@ public sealed class DatabaseConnectionProfileService(
         var profiles = await dbContext.DatabaseConnectionProfiles
             .AsNoTracking()
             .Include(item => item.Secret)
+            .Include(item => item.DatabaseSource)
             .OrderBy(item => item.Name)
             .ThenBy(item => item.Id)
             .ToArrayAsync(cancellationToken);
@@ -34,8 +35,29 @@ public sealed class DatabaseConnectionProfileService(
         var profile = await dbContext.DatabaseConnectionProfiles
             .AsNoTracking()
             .Include(item => item.Secret)
+            .Include(item => item.DatabaseSource)
             .SingleOrDefaultAsync(item => item.Id == id, cancellationToken);
         return profile is null ? null : ToResponse(profile);
+    }
+
+    public async Task<IReadOnlyList<DatabaseConnectionSourceOptionResponse>> ListSourceOptions(
+        string? search,
+        CancellationToken cancellationToken)
+    {
+        var term = search?.Trim();
+        var query = dbContext.DatabaseSources.AsNoTracking().Include(item => item.System).AsQueryable();
+        if (!string.IsNullOrWhiteSpace(term))
+        {
+            query = query.Where(item => item.Name.Contains(term) || item.System.Name.Contains(term));
+        }
+        return await query.OrderBy(item => item.System.Name).ThenBy(item => item.Name).Take(100)
+            .Select(item => new DatabaseConnectionSourceOptionResponse(
+                item.Id,
+                item.Name,
+                item.Engine,
+                item.System.Name,
+                dbContext.DatabaseConnectionProfiles.Any(profile => profile.DatabaseSourceId == item.Id)))
+            .ToArrayAsync(cancellationToken);
     }
 
     public async Task<DatabaseConnectionOperationResult<DatabaseConnectionProfileResponse>> Create(
@@ -74,6 +96,7 @@ public sealed class DatabaseConnectionProfileService(
         var profile = new DatabaseConnectionProfile
         {
             DatabaseSourceId = source.Id,
+            DatabaseSource = source,
             Name = normalized.Name,
             ProviderType = normalized.ProviderType,
             Host = normalized.Host,
@@ -209,7 +232,9 @@ public sealed class DatabaseConnectionProfileService(
         var enabled = isEnabled.GetValueOrDefault();
 
         await using var transaction = await SqliteImmediateTransaction.BeginAsync(dbContext, cancellationToken);
-        var profile = await dbContext.DatabaseConnectionProfiles.Include(item => item.Secret)
+        var profile = await dbContext.DatabaseConnectionProfiles
+            .Include(item => item.Secret)
+            .Include(item => item.DatabaseSource)
             .SingleOrDefaultAsync(item => item.Id == id, cancellationToken);
         if (profile is null) return Failure(DatabaseConnectionFailure.NotFound);
         if (await HasActiveRun(profile.Id, cancellationToken)) return Failure(DatabaseConnectionFailure.ActiveDiscoveryRun);
@@ -263,7 +288,9 @@ public sealed class DatabaseConnectionProfileService(
         var errors = ValidateSecretCommand(id, null, concurrencyToken, requiresPassword: false, out var expectedVersion);
         if (errors.Count > 0) return Validation(errors);
         await using var transaction = await SqliteImmediateTransaction.BeginAsync(dbContext, cancellationToken);
-        var profile = await dbContext.DatabaseConnectionProfiles.Include(item => item.Secret)
+        var profile = await dbContext.DatabaseConnectionProfiles
+            .Include(item => item.Secret)
+            .Include(item => item.DatabaseSource)
             .SingleOrDefaultAsync(item => item.Id == id, cancellationToken);
         if (profile is null) return Failure(DatabaseConnectionFailure.NotFound);
         if (await HasActiveRun(profile.Id, cancellationToken)) return Failure(DatabaseConnectionFailure.ActiveDiscoveryRun);
@@ -302,7 +329,9 @@ public sealed class DatabaseConnectionProfileService(
         var errors = ValidateSecretCommand(id, password, concurrencyToken, requiresPassword: true, out var expectedVersion);
         if (errors.Count > 0) return Validation(errors);
         await using var transaction = await SqliteImmediateTransaction.BeginAsync(dbContext, cancellationToken);
-        var profile = await dbContext.DatabaseConnectionProfiles.Include(item => item.Secret)
+        var profile = await dbContext.DatabaseConnectionProfiles
+            .Include(item => item.Secret)
+            .Include(item => item.DatabaseSource)
             .SingleOrDefaultAsync(item => item.Id == id, cancellationToken);
         if (profile is null) return Failure(DatabaseConnectionFailure.NotFound);
         if (await HasActiveRun(profile.Id, cancellationToken)) return Failure(DatabaseConnectionFailure.ActiveDiscoveryRun);
@@ -509,6 +538,7 @@ public sealed class DatabaseConnectionProfileService(
     internal DatabaseConnectionProfileResponse ToResponse(DatabaseConnectionProfile profile) => new(
         profile.Id,
         profile.DatabaseSourceId,
+        profile.DatabaseSource?.Name ?? string.Empty,
         profile.Name,
         profile.ProviderType,
         profile.Host,

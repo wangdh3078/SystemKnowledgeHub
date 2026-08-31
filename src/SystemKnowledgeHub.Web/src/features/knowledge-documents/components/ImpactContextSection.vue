@@ -10,6 +10,7 @@ import type {
   ImpactItem,
   ImpactMeaning,
   ImpactResponse,
+  ImpactPathKind,
   ImpactTarget,
   ImpactTargetType,
 } from '../api/impactContracts'
@@ -38,7 +39,7 @@ const meaningOrder: readonly ImpactMeaning[] = [
 const meaningCopy: Readonly<Record<ImpactMeaning, { title: string; description: string }>> = {
   ExplicitRequirementScope: {
     title: '明确适用范围',
-    description: '当前需求通过“适用于”明确声明的范围。',
+    description: '当前需求明确声明“适用于”该对象。',
   },
   DocumentedByRequirement: {
     title: '需求直接文档化的上下文',
@@ -54,19 +55,19 @@ const meaningCopy: Readonly<Record<ImpactMeaning, { title: string; description: 
   },
   UpstreamRequirementScope: {
     title: '上游需求声明的适用范围',
-    description: '来自定义当前规格说明的上游需求，不表示规格说明自身声明了适用关系。',
+    description: '关联的上游需求声明“适用于”该对象，因此作为当前规格说明的间接复核上下文显示。',
   },
   UpstreamRequirementDocumentedContext: {
     title: '上游需求文档化的上下文',
-    description: '来自定义当前规格说明的上游需求。',
+    description: '关联的上游需求说明了该对象，因此作为当前规格说明的间接复核上下文显示。',
   },
   VerifiedRequirementScope: {
     title: '直接验证需求的适用范围',
-    description: '来自当前测试用例直接定义验证方式的需求。',
+    description: '当前测试用例验证的需求声明“适用于”该对象，因此作为间接复核上下文显示。',
   },
   VerifiedSpecificationDocumentedContext: {
     title: '所验证规格说明文档化的上下文',
-    description: '来自当前测试用例直接定义验证方式的规格说明。',
+    description: '当前测试用例验证的规格说明说明了该对象，因此作为间接复核上下文显示。',
   },
 }
 
@@ -87,7 +88,7 @@ const groups = computed(() => {
         && groupedItems.some((item) => item.pathKind === 'ViaSpecificationDocuments')
         ? {
             title: '由规格说明带入的上下文',
-            description: '来自定义当前需求的规格说明，不表示需求自身直接文档化了该对象。',
+            description: '关联的规格说明说明了该对象，因此作为当前需求的间接复核上下文显示。',
           }
         : meaningCopy[meaning]
       return { meaning, copy, items: groupedItems }
@@ -174,7 +175,7 @@ function pathText(item: ImpactItem): string {
     case 'DirectDocuments':
       return `当前文档 → 说明 → ${item.target.title}`
     case 'ViaSpecificationDocuments':
-      return `当前需求 → 由规格说明定义 → 规格说明 → 说明 → ${item.target.title}`
+      return `当前需求 → 规格说明 → 说明 → ${item.target.title}`
     case 'ViaRequirementAppliesTo':
       return `当前规格说明 ← 定义需求 ← 上游需求 → 适用于 → ${item.target.title}`
     case 'ViaRequirementDocuments':
@@ -184,6 +185,14 @@ function pathText(item: ImpactItem): string {
     case 'ViaVerifiedSpecificationDocuments':
       return `当前测试用例 ← 定义验证方式 ← 规格说明 → 说明 → ${item.target.title}`
   }
+}
+
+function relationNature(pathKind: ImpactPathKind): string {
+  return pathKind.startsWith('Via') ? '间接上下文' : '直接上下文'
+}
+
+function objectLabel(pathKind: ImpactPathKind): string {
+  return pathKind.startsWith('Via') ? '上下文对象：' : '影响对象：'
 }
 
 watch(
@@ -238,7 +247,8 @@ defineExpose({ refresh })
           </header>
           <ul class="impact-context-list">
             <li v-for="item in group.items" :key="`${item.pathKind}-${item.target.type}-${item.target.id}-${item.path.map((segment) => segment.relationshipId).join('-')}`">
-              <div class="impact-context-item__primary">
+              <p class="impact-context-item__field">
+                <span>{{ objectLabel(item.pathKind) }}</span>
                 <button
                   type="button"
                   class="impact-context-item__target"
@@ -247,9 +257,26 @@ defineExpose({ refresh })
                 >
                   {{ item.target.title }}
                 </button>
-                <span>{{ targetTypeLabels[item.target.type] }}</span>
-              </div>
-              <p class="impact-context-item__path">{{ pathText(item) }}</p>
+              </p>
+              <p class="impact-context-item__field">
+                <span>类型：</span>
+                {{ targetTypeLabels[item.target.type] }}
+              </p>
+              <p class="impact-context-item__field">
+                <span>为什么显示：</span>
+                {{ group.copy.description }}
+              </p>
+              <p class="impact-context-item__field">
+                <span>关系性质：</span>
+                {{ relationNature(item.pathKind) }}
+              </p>
+              <p class="impact-context-item__field impact-context-item__path">
+                <span>关系路径：</span>
+                {{ pathText(item) }}
+              </p>
+              <p v-if="relationNature(item.pathKind) === '间接上下文'" class="impact-context-item__notice">
+                仅用于辅助人工复核，不表示当前文档一定直接影响该对象。
+              </p>
               <p v-if="item.target.systemContext.length" class="impact-context-item__system">
                 系统上下文：{{ item.target.systemContext.map((system) => system.name).join('、') }}
               </p>
@@ -307,8 +334,13 @@ defineExpose({ refresh })
 .impact-context-group h3 { font-size: 15px; }
 .impact-context-list { display: grid; gap: 0; margin: var(--space-3) 0 0; padding: 0; list-style: none; }
 .impact-context-list li { min-width: 0; padding: var(--space-3) 0; border-top: 1px solid var(--color-border); }
-.impact-context-item__primary { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
-.impact-context-item__primary > span { color: var(--color-muted); font-size: 11px; }
+.impact-context-item__metadata { display: grid; gap: 4px; margin-top: var(--space-2); }
+.impact-context-item__field,
+.impact-context-item__system,
+.impact-context-item__notice { margin: var(--space-1) 0 0; overflow-wrap: anywhere; color: var(--color-muted); font-size: 11px; line-height: 1.55; }
+.impact-context-item__field > span,
+.impact-context-item__system > span { color: var(--color-subtle); }
+.impact-context-item__field { display: flex; flex-wrap: wrap; gap: 4px; margin: var(--space-1) 0 0; }
 .impact-context-item__target {
   min-width: 0;
   padding: 0;
@@ -322,9 +354,9 @@ defineExpose({ refresh })
 }
 .impact-context-item__target:hover { text-decoration: underline; }
 .impact-context-item__target:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 3px; border-radius: 2px; }
-.impact-context-item__path,
-.impact-context-item__system { margin: var(--space-1) 0 0; overflow-wrap: anywhere; color: var(--color-muted); font-size: 11px; line-height: 1.55; }
+.impact-context-item__path { margin: var(--space-1) 0 0; }
 .impact-context-item__system { color: var(--color-text-secondary, var(--color-muted)); }
+.impact-context-item__notice { color: var(--color-subtle); }
 .impact-context-pagination { margin-top: var(--space-4); }
 
 @media (max-width: 720px) {

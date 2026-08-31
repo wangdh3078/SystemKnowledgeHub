@@ -6,6 +6,7 @@ import {
   Files,
   Grid,
   Paperclip,
+  Search,
   QuestionFilled,
   UserFilled,
 } from '@element-plus/icons-vue'
@@ -19,6 +20,7 @@ export type NavigationKey =
   | 'unknown-items'
   | 'users'
   | 'attachments'
+  | 'database-discovery'
 
 export interface NavigationItem {
   readonly key: NavigationKey
@@ -35,6 +37,7 @@ export interface NavigationItem {
     | 'unknown-items-list'
     | 'users-management'
     | 'attachment-administration'
+    | 'database-discovery-runs'
   readonly minimumAccessLevel?: 'Administrator'
 }
 
@@ -54,6 +57,13 @@ export const navigationItems: readonly NavigationItem[] = [
     icon: Coin,
     enabled: true,
     routeName: 'database-objects-list',
+  },
+  {
+    key: 'database-discovery',
+    label: '数据库发现',
+    icon: Search,
+    enabled: true,
+    routeName: 'database-discovery-runs',
   },
   {
     key: 'knowledge-documents',

@@ -906,20 +906,25 @@ onBeforeUnmount(() => {
             :key="item.id"
             class="knowledge-document-evidence__item"
           >
-            <div>
-              <el-tag size="small" effect="plain">{{
-                evidenceTypeLabels[item.evidenceType]
-              }}</el-tag
-              ><strong>{{ item.sourceTitle }}</strong>
+            <div class="knowledge-document-evidence__item-heading">
+              <p class="knowledge-document-evidence__type">类型：{{ evidenceTypeLabels[item.evidenceType] }}</p>
+              <strong>{{ item.evidenceType === 'HumanConfirmation' ? `人工确认 · ${item.provider.displayName}` : item.sourceTitle }}</strong>
             </div>
-            <p v-if="item.summary">{{ item.summary }}</p>
-            <p>{{ item.supportReason }}</p>
-            <small
-              >提供者：{{ item.provider.displayName }} · {{ item.provider.roleOrIdentity
-              }}<template v-if="getHumanConfirmationListMethod(item)">
-                · {{ confirmationMethodLabels[getHumanConfirmationListMethod(item)!] }}</template
-              ></small
-            >
+            <dl v-if="item.evidenceType === 'HumanConfirmation'" class="knowledge-document-evidence__facts">
+              <div><dt>确认结论</dt><dd>{{ item.summary ?? '—' }}</dd></div>
+              <div><dt>支持理由</dt><dd>{{ item.supportReason }}</dd></div>
+              <div><dt>确认方式</dt><dd>{{ getHumanConfirmationListMethod(item) ? confirmationMethodLabels[getHumanConfirmationListMethod(item)!] : '—' }}</dd></div>
+              <div><dt>确认人</dt><dd>{{ item.provider.displayName }}</dd></div>
+              <div><dt>知识身份</dt><dd>{{ item.provider.roleOrIdentity }}</dd></div>
+              <div><dt>确认时间</dt><dd>{{ formatDateTime(item.provider.occurredAt) }}</dd></div>
+              <div v-if="item.knowledgeDocumentRevisionNumberSnapshot !== null"><dt>确认修订</dt><dd>修订 {{ item.knowledgeDocumentRevisionNumberSnapshot }}</dd></div>
+            </dl>
+            <dl v-else class="knowledge-document-evidence__facts">
+              <div><dt>来源</dt><dd>{{ item.sourceTitle }}</dd></div>
+              <div><dt>摘要</dt><dd>{{ item.summary ?? '—' }}</dd></div>
+              <div><dt>支持理由</dt><dd>{{ item.supportReason }}</dd></div>
+              <div><dt>提供者</dt><dd>{{ item.provider.displayName }} · {{ item.provider.roleOrIdentity }}</dd></div>
+            </dl>
           </article>
         </div>
       </section>

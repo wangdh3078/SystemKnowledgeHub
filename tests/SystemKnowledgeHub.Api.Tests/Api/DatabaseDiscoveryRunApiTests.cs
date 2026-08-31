@@ -78,7 +78,8 @@ public sealed class DatabaseDiscoveryRunApiTests
         using var changedEntries = await viewer.GetAsync($"/api/database-discovery/differences/{second.DifferenceId}/entries?state=Changed");
         var changed = await changedEntries.Content.ReadFromJsonAsync<DatabaseDiscoveryDifferenceEntryPageResponse>(JsonOptions);
         Assert.Equal(DatabaseDiscoveryEntityKind.Column, Assert.Single(changed!.Items).EntityKind);
-        using var unchangedEntries = await viewer.GetAsync($"/api/database-discovery/differences/{second.DifferenceId}/entries?state=Unchanged&pageSize=200");
+        using var unchangedEntries = await viewer.GetAsync($"/api/database-discovery/differences/{second.DifferenceId}/entries?state=Unchanged&pageSize=100");
+        Assert.Equal(HttpStatusCode.OK, unchangedEntries.StatusCode);
         var unchanged = await unchangedEntries.Content.ReadFromJsonAsync<DatabaseDiscoveryDifferenceEntryPageResponse>(JsonOptions);
         Assert.Equal(12, unchanged!.Total);
 
@@ -111,7 +112,7 @@ public sealed class DatabaseDiscoveryRunApiTests
         factory.DiscoveryProvider.SnapshotFactory = (connection, request, call) =>
         {
             var snapshot = CanonicalSnapshotFixtures.Create(connection, request, version: 1);
-            return call == 1 ? snapshot : snapshot with { Sequences = [] };
+            return call == 2 ? snapshot with { Sequences = [] } : snapshot;
         };
         using var administrator = factory.CreateAuthenticatedClient();
         var profile = await SetSecret(administrator, await CreateProfile(factory, administrator), "missing-secret");
@@ -128,11 +129,35 @@ public sealed class DatabaseDiscoveryRunApiTests
         Assert.Equal(12, difference.SummaryCounts.Unchanged);
         using var missingResponse = await administrator.GetAsync(
             $"/api/database-discovery/differences/{second.DifferenceId}/entries?state=MissingFromSource");
-        var missing = await missingResponse.Content.ReadFromJsonAsync<DatabaseDiscoveryDifferenceEntryPageResponse>(JsonOptions);
+        var missingJson = await missingResponse.Content.ReadAsStringAsync();
+        AssertDifferenceProjectionSanitized(missingJson);
+        var missing = JsonSerializer.Deserialize<DatabaseDiscoveryDifferenceEntryPageResponse>(missingJson, JsonOptions);
         var entry = Assert.Single(missing!.Items);
         Assert.Equal(DatabaseDiscoveryEntityKind.Sequence, entry.EntityKind);
-        Assert.NotNull(entry.Before);
-        Assert.Null(entry.After);
+        var missingName = Assert.Single(entry.Changes.Where(item => item.Field == "name"));
+        Assert.Equal("ORDER_SEQ", missingName.Before!.Value.GetString());
+        Assert.Null(missingName.After);
+        var missingType = Assert.Single(entry.Changes.Where(item => item.Field == "nativeDataType"));
+        Assert.Equal("NUMBER(19)", missingType.Before!.Value.GetString());
+        Assert.Null(missingType.After);
+
+        profile = await GetProfile(administrator, profile.Id);
+        var third = await WaitForTerminal(administrator, (await Trigger(administrator, profile)).Id);
+        Assert.Equal(DatabaseDiscoveryRunStatus.Succeeded, third.Status);
+        Assert.Equal(second.SnapshotId, third.BaseSnapshotId);
+        using var addedResponse = await administrator.GetAsync(
+            $"/api/database-discovery/differences/{third.DifferenceId}/entries?state=Added");
+        var addedJson = await addedResponse.Content.ReadAsStringAsync();
+        AssertDifferenceProjectionSanitized(addedJson);
+        var added = JsonSerializer.Deserialize<DatabaseDiscoveryDifferenceEntryPageResponse>(addedJson, JsonOptions);
+        var addedEntry = Assert.Single(added!.Items);
+        Assert.Equal(DatabaseDiscoveryEntityKind.Sequence, addedEntry.EntityKind);
+        var addedName = Assert.Single(addedEntry.Changes.Where(item => item.Field == "name"));
+        Assert.Null(addedName.Before);
+        Assert.Equal("ORDER_SEQ", addedName.After!.Value.GetString());
+        var addedType = Assert.Single(addedEntry.Changes.Where(item => item.Field == "nativeDataType"));
+        Assert.Null(addedType.Before);
+        Assert.Equal("NUMBER(19)", addedType.After!.Value.GetString());
 
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<KnowledgeHubDbContext>();
@@ -453,6 +478,291 @@ public sealed class DatabaseDiscoveryRunApiTests
         Assert.NotEqual(claim.LeaseToken, cancelled.ConcurrencyToken);
     }
 
+    [Fact]
+    public async Task B03_bounded_snapshot_projections_and_filtered_difference_reads_are_authorized_and_sanitized()
+    {
+        using var factory = new DatabaseDiscoveryWebApplicationFactory();
+        factory.DiscoveryProvider.SnapshotFactory = (connection, request, version) =>
+            WithProviderNativeTypeCanary(
+                CanonicalSnapshotFixtures.Create(connection, request, version),
+                version);
+        using var administrator = factory.CreateAuthenticatedClient();
+        const string canary = "DBDISC_B03_SECRET_CANARY";
+        var profile = await CreateProfile(factory, administrator);
+        var sourceName = profile.DatabaseSourceName;
+        Assert.False(string.IsNullOrWhiteSpace(sourceName));
+        profile = await SetEnabled(administrator, profile, false);
+        Assert.Equal(sourceName, profile.DatabaseSourceName);
+        profile = await SetEnabled(administrator, profile, true);
+        Assert.Equal(sourceName, profile.DatabaseSourceName);
+        profile = await SetSecret(administrator, profile, canary);
+        Assert.Equal(sourceName, profile.DatabaseSourceName);
+
+        var firstAccepted = await Trigger(administrator, profile);
+        Assert.True(firstAccepted.Id > 0);
+        var first = await WaitForTerminal(administrator, firstAccepted.Id);
+        Assert.Equal(DatabaseDiscoveryRunStatus.Succeeded, first.Status);
+        Assert.True(first.SnapshotId is > 0);
+        Assert.True(first.DifferenceId is > 0);
+
+        var viewerId = await CreateUser(factory, AccessLevel.Viewer);
+        using var viewer = await factory.CreateAuthenticatedClientAsync(viewerId);
+        using var runsResponse = await viewer.GetAsync("/api/database-discovery/runs");
+        Assert.Equal(HttpStatusCode.OK, runsResponse.StatusCode);
+        var runsJson = await runsResponse.Content.ReadAsStringAsync();
+        AssertDiscoveryReadSanitized(runsJson, canary, profile);
+        var runs = JsonSerializer.Deserialize<DatabaseDiscoveryRunPageResponse>(runsJson, JsonOptions);
+        Assert.Equal(20, runs!.PageSize);
+        Assert.NotEmpty(runs.Items);
+        await AssertValidationError(viewer, "/api/database-discovery/runs?page=0", "page");
+        await AssertValidationError(viewer, "/api/database-discovery/runs?pageSize=101", "pageSize");
+
+        using var summaryResponse = await viewer.GetAsync($"/api/database-discovery/snapshots/{first.SnapshotId}/summary");
+        Assert.Equal(HttpStatusCode.OK, summaryResponse.StatusCode);
+        var summaryJson = await summaryResponse.Content.ReadAsStringAsync();
+        Assert.DoesNotContain("\"content\":", summaryJson, StringComparison.OrdinalIgnoreCase);
+        AssertDiscoveryReadSanitized(summaryJson, canary, profile);
+        var summary = JsonSerializer.Deserialize<DatabaseDiscoverySnapshotSummaryResponse>(summaryJson, JsonOptions);
+        Assert.Equal(2, summary!.Counts.Objects);
+        Assert.NotEmpty(summary.IncludedSchemas);
+
+        using var defaultSchemasResponse = await viewer.GetAsync($"/api/database-discovery/snapshots/{first.SnapshotId}/schemas");
+        Assert.Equal(HttpStatusCode.OK, defaultSchemasResponse.StatusCode);
+        var defaultSchemas = await defaultSchemasResponse.Content.ReadFromJsonAsync<DatabaseDiscoverySchemaPageResponse>(JsonOptions);
+        Assert.Equal(20, defaultSchemas!.PageSize);
+        Assert.NotEmpty(defaultSchemas.Items);
+
+        using var schemasResponse = await viewer.GetAsync($"/api/database-discovery/snapshots/{first.SnapshotId}/schemas?pageSize=1");
+        Assert.Equal(HttpStatusCode.OK, schemasResponse.StatusCode);
+        var schemasJson = await schemasResponse.Content.ReadAsStringAsync();
+        AssertDiscoveryReadSanitized(schemasJson, canary, profile);
+        var schemas = JsonSerializer.Deserialize<DatabaseDiscoverySchemaPageResponse>(schemasJson, JsonOptions);
+        Assert.Single(schemas!.Items);
+        Assert.Equal(1, schemas.Total);
+        Assert.Equal(1, schemas.PageSize);
+
+        using var objectsResponse = await viewer.GetAsync($"/api/database-discovery/snapshots/{first.SnapshotId}/objects?objectType=Table&pageSize=1");
+        Assert.Equal(HttpStatusCode.OK, objectsResponse.StatusCode);
+        var objectsJson = await objectsResponse.Content.ReadAsStringAsync();
+        AssertDiscoveryReadSanitized(objectsJson, canary, profile);
+        var objects = JsonSerializer.Deserialize<DatabaseDiscoveryObjectPageResponse>(objectsJson, JsonOptions);
+        var databaseObject = Assert.Single(objects!.Items);
+        Assert.Equal(2, objects.Total);
+        Assert.Equal(DatabaseDiscoveryObjectType.Table, databaseObject.ObjectType);
+        Assert.False(string.IsNullOrWhiteSpace(databaseObject.Name));
+        using var objectResponse = await viewer.GetAsync(
+            $"/api/database-discovery/snapshots/{first.SnapshotId}/object-review?logicalIdentity={Uri.EscapeDataString(databaseObject.LogicalIdentity)}&pageSize=1");
+        Assert.Equal(HttpStatusCode.OK, objectResponse.StatusCode);
+        var objectJson = await objectResponse.Content.ReadAsStringAsync();
+        AssertDiscoveryReadSanitized(objectJson, canary, profile);
+        AssertNoRawCanonicalInternals(objectJson);
+        var detail = JsonSerializer.Deserialize<DatabaseDiscoveryObjectReviewResponse>(objectJson, JsonOptions);
+        Assert.Single(detail!.Columns.Items);
+        Assert.True(detail.Columns.Total >= 2);
+        Assert.NotEmpty(detail.Constraints.Items);
+        Assert.Equal(1, detail.Columns.PageSize);
+        Assert.Equal(databaseObject.LogicalIdentity, detail.Object.LogicalIdentity);
+
+        using var headerResponse = await viewer.GetAsync(
+            $"/api/database-discovery/snapshots/{first.SnapshotId}/object-header?logicalIdentity={Uri.EscapeDataString(databaseObject.LogicalIdentity)}");
+        Assert.Equal(HttpStatusCode.OK, headerResponse.StatusCode);
+        var headerJson = await headerResponse.Content.ReadAsStringAsync();
+        AssertNoRawCanonicalInternals(headerJson);
+        var header = JsonSerializer.Deserialize<DatabaseDiscoveryObjectHeaderResponse>(headerJson, JsonOptions);
+        Assert.Equal(databaseObject.LogicalIdentity, header!.Object.LogicalIdentity);
+
+        using var columnsResponse = await viewer.GetAsync(
+            $"/api/database-discovery/snapshots/{first.SnapshotId}/object-columns?logicalIdentity={Uri.EscapeDataString(databaseObject.LogicalIdentity)}&pageSize=100");
+        Assert.Equal(HttpStatusCode.OK, columnsResponse.StatusCode);
+        var columnsJson = await columnsResponse.Content.ReadAsStringAsync();
+        AssertNoRawCanonicalInternals(columnsJson);
+        var columns = JsonSerializer.Deserialize<DatabaseDiscoveryColumnPageResponse>(columnsJson, JsonOptions);
+        Assert.Contains(columns!.Items, item => item.NativeDataType.Declaration == "integer");
+
+        using var removedRawObjectResponse = await viewer.GetAsync(
+            $"/api/database-discovery/snapshots/{first.SnapshotId}/object?logicalIdentity={Uri.EscapeDataString(databaseObject.LogicalIdentity)}");
+        Assert.Equal(HttpStatusCode.NotFound, removedRawObjectResponse.StatusCode);
+        using var sequencesResponse = await viewer.GetAsync(
+            $"/api/database-discovery/snapshots/{first.SnapshotId}/sequences?pageSize=1");
+        Assert.Equal(HttpStatusCode.OK, sequencesResponse.StatusCode);
+        var sequencesJson = await sequencesResponse.Content.ReadAsStringAsync();
+        AssertDiscoveryReadSanitized(sequencesJson, canary, profile);
+        var sequences = JsonSerializer.Deserialize<DatabaseDiscoverySequencePageResponse>(sequencesJson, JsonOptions);
+        Assert.Equal(1, sequences!.Total);
+        var sequence = Assert.Single(sequences.Items);
+        Assert.Equal("APP_OWNER", sequence.SchemaName);
+        Assert.Equal("ORDER_SEQ", sequence.Name);
+        Assert.False(string.IsNullOrWhiteSpace(sequence.NativeDataType));
+
+        using var invalidObjectType = await viewer.GetAsync(
+            $"/api/database-discovery/snapshots/{first.SnapshotId}/objects?objectType=999");
+        Assert.Equal(HttpStatusCode.BadRequest, invalidObjectType.StatusCode);
+        await AssertValidationError(
+            viewer,
+            $"/api/database-discovery/snapshots/{first.SnapshotId}/schemas?page=0",
+            "page");
+        await AssertValidationError(
+            viewer,
+            $"/api/database-discovery/snapshots/{first.SnapshotId}/objects?pageSize=101",
+            "pageSize");
+        await AssertValidationError(
+            viewer,
+            $"/api/database-discovery/snapshots/{first.SnapshotId}/object-review?logicalIdentity={Uri.EscapeDataString(databaseObject.LogicalIdentity)}&columnPage=0",
+            "columnPage");
+        await AssertValidationError(
+            viewer,
+            $"/api/database-discovery/snapshots/{first.SnapshotId}/sequences?pageSize=101",
+            "pageSize");
+
+        profile = await GetProfile(administrator, profile.Id);
+        var secondAccepted = await Trigger(administrator, profile);
+        Assert.True(secondAccepted.Id > first.Id);
+        var second = await WaitForTerminal(administrator, secondAccepted.Id);
+        Assert.Equal(DatabaseDiscoveryRunStatus.Succeeded, second.Status);
+        Assert.True(second.SnapshotId is > 0);
+        Assert.True(second.DifferenceId is > 0);
+        Assert.Equal(first.SnapshotId, second.BaseSnapshotId);
+        using var filtered = await viewer.GetAsync(
+            $"/api/database-discovery/differences/{second.DifferenceId}/entries?state=Changed&entityKind=Column&schema=APP_OWNER&search=name");
+        Assert.Equal(HttpStatusCode.OK, filtered.StatusCode);
+        var entriesJson = await filtered.Content.ReadAsStringAsync();
+        AssertDiscoveryReadSanitized(entriesJson, canary, profile);
+        AssertDifferenceProjectionSanitized(entriesJson);
+        var entries = JsonSerializer.Deserialize<DatabaseDiscoveryDifferenceEntryPageResponse>(entriesJson, JsonOptions);
+        var changed = Assert.Single(entries!.Items);
+        Assert.Equal(1, entries.Total);
+        Assert.Equal(20, entries.PageSize);
+        Assert.True(changed.Id is > 0);
+        Assert.Equal(DatabaseDiscoveryEntityKind.Column, changed.EntityKind);
+        Assert.Equal("APP_OWNER", changed.SchemaName);
+        Assert.Equal("CUSTOMERS", changed.ObjectName);
+        Assert.Equal("NAME", changed.ChildName);
+        var typeChange = Assert.Single(changed.Changes);
+        Assert.Equal("nativeDataType", typeChange.Field);
+        Assert.Equal(JsonValueKind.String, typeChange.Before!.Value.ValueKind);
+        Assert.Equal("integer", typeChange.Before.Value.GetString());
+        Assert.Equal(JsonValueKind.String, typeChange.After!.Value.ValueKind);
+        Assert.Equal("bigint", typeChange.After.Value.GetString());
+
+        using var differentSchemaCase = await viewer.GetAsync(
+            $"/api/database-discovery/differences/{second.DifferenceId}/entries?state=Changed&schema=app_owner&search=name");
+        Assert.Equal(HttpStatusCode.OK, differentSchemaCase.StatusCode);
+        var differentCaseEntries = await differentSchemaCase.Content.ReadFromJsonAsync<DatabaseDiscoveryDifferenceEntryPageResponse>(JsonOptions);
+        Assert.Empty(differentCaseEntries!.Items);
+        Assert.Equal(0, differentCaseEntries.Total);
+
+        using var partialSchema = await viewer.GetAsync(
+            $"/api/database-discovery/differences/{second.DifferenceId}/entries?state=Changed&schema=APP&search=name");
+        Assert.Equal(HttpStatusCode.OK, partialSchema.StatusCode);
+        var partialEntries = await partialSchema.Content.ReadFromJsonAsync<DatabaseDiscoveryDifferenceEntryPageResponse>(JsonOptions);
+        Assert.Empty(partialEntries!.Items);
+        Assert.Equal(0, partialEntries.Total);
+
+        using var unchangedFiltered = await viewer.GetAsync(
+            $"/api/database-discovery/differences/{second.DifferenceId}/entries?state=Unchanged&entityKind=DatabaseObject&schema=APP_OWNER&search=customers");
+        Assert.Equal(HttpStatusCode.OK, unchangedFiltered.StatusCode);
+        var unchangedItems = await unchangedFiltered.Content.ReadFromJsonAsync<DatabaseDiscoveryDifferenceEntryPageResponse>(JsonOptions);
+        var unchangedObject = Assert.Single(unchangedItems!.Items);
+        Assert.Equal("APP_OWNER", unchangedObject.SchemaName);
+        Assert.Equal("CUSTOMERS", unchangedObject.ObjectName);
+        Assert.Null(unchangedObject.Id);
+
+        using var invalidKind = await viewer.GetAsync(
+            $"/api/database-discovery/differences/{second.DifferenceId}/entries?state=Changed&entityKind=999");
+        Assert.Equal(HttpStatusCode.BadRequest, invalidKind.StatusCode);
+        using var invalidState = await viewer.GetAsync(
+            $"/api/database-discovery/differences/{second.DifferenceId}/entries?state=999");
+        Assert.Equal(HttpStatusCode.BadRequest, invalidState.StatusCode);
+        await AssertValidationError(
+            viewer,
+            $"/api/database-discovery/differences/{second.DifferenceId}/entries?state=Changed&pageSize=101",
+            "pageSize");
+        await AssertValidationError(
+            viewer,
+            $"/api/database-discovery/differences/{second.DifferenceId}/entries?state=Changed&page=0",
+            "page");
+
+        using var sourceOptions = await administrator.GetAsync(
+            $"/api/admin/database-connection-profiles/database-sources?search={Uri.EscapeDataString(profile.DatabaseSourceName)}");
+        Assert.Equal(HttpStatusCode.OK, sourceOptions.StatusCode);
+        var sourceOptionsJson = await sourceOptions.Content.ReadAsStringAsync();
+        Assert.DoesNotContain(canary, sourceOptionsJson, StringComparison.Ordinal);
+        var options = JsonSerializer.Deserialize<DatabaseConnectionSourceOptionResponse[]>(sourceOptionsJson, JsonOptions);
+        var sourceOption = Assert.Single(options!);
+        Assert.True(sourceOption.HasConnectionProfile);
+        Assert.Equal(profile.DatabaseSourceId, sourceOption.Id);
+        Assert.Equal(profile.DatabaseSourceName, sourceOption.Name);
+        Assert.False(string.IsNullOrWhiteSpace(sourceOption.SystemName));
+        Assert.Equal("Oracle", sourceOption.Engine);
+
+        using var forbiddenSources = await viewer.GetAsync("/api/admin/database-connection-profiles/database-sources");
+        Assert.Equal(HttpStatusCode.Forbidden, forbiddenSources.StatusCode);
+        var editorId = await CreateUser(factory, AccessLevel.Editor);
+        using var editor = await factory.CreateAuthenticatedClientAsync(editorId);
+        using var editorSources = await editor.GetAsync("/api/admin/database-connection-profiles/database-sources");
+        Assert.Equal(HttpStatusCode.Forbidden, editorSources.StatusCode);
+    }
+
+    [Fact]
+    public async Task B03_object_review_resolves_reference_only_foreign_key_target()
+    {
+        using var factory = new DatabaseDiscoveryWebApplicationFactory();
+        factory.DiscoveryProvider.SnapshotFactory = (connection, request, version) =>
+        {
+            var snapshot = CanonicalSnapshotFixtures.Create(connection, request, version);
+            var foreignKey = Assert.Single(snapshot.ForeignKeys);
+            var externalSchemaId = CanonicalSnapshotFixtures.Key("Schema", "CRM_OWNER");
+            var externalObjectId = CanonicalSnapshotFixtures.Key("Object", "CRM_OWNER", "EXTERNAL_CUSTOMERS");
+            var externalColumnId = CanonicalSnapshotFixtures.Key("Column", externalObjectId, "ID");
+            return snapshot with
+            {
+                ForeignKeys =
+                [
+                    foreignKey with
+                    {
+                        ReferencedObjectLogicalIdentity = externalObjectId,
+                        ReferencedColumnLogicalIdentities = [externalColumnId],
+                    },
+                ],
+                ForeignKeyReferenceClosure =
+                [
+                    new CanonicalForeignKeyReferenceStub(
+                        externalSchemaId,
+                        "CRM_OWNER",
+                        externalObjectId,
+                        "EXTERNAL_CUSTOMERS",
+                        externalColumnId,
+                        "ID",
+                        true),
+                ],
+            };
+        };
+
+        using var administrator = factory.CreateAuthenticatedClient();
+        var profile = await SetSecret(
+            administrator,
+            await CreateProfile(factory, administrator),
+            "DBDISC_B03_CLOSURE_SECRET_CANARY");
+        var run = await WaitForTerminal(administrator, (await Trigger(administrator, profile)).Id);
+        Assert.Equal(DatabaseDiscoveryRunStatus.Succeeded, run.Status);
+        Assert.True(run.SnapshotId is > 0);
+
+        var viewerId = await CreateUser(factory, AccessLevel.Viewer);
+        using var viewer = await factory.CreateAuthenticatedClientAsync(viewerId);
+        using var objectsResponse = await viewer.GetAsync(
+            $"/api/database-discovery/snapshots/{run.SnapshotId}/objects?search=ORDERS");
+        Assert.Equal(HttpStatusCode.OK, objectsResponse.StatusCode);
+        var objects = await objectsResponse.Content.ReadFromJsonAsync<DatabaseDiscoveryObjectPageResponse>(JsonOptions);
+        var orders = Assert.Single(objects!.Items);
+        using var reviewResponse = await viewer.GetAsync(
+            $"/api/database-discovery/snapshots/{run.SnapshotId}/object-review?logicalIdentity={Uri.EscapeDataString(orders.LogicalIdentity)}&pageSize=100");
+        Assert.Equal(HttpStatusCode.OK, reviewResponse.StatusCode);
+        var review = await reviewResponse.Content.ReadFromJsonAsync<DatabaseDiscoveryObjectReviewResponse>(JsonOptions);
+        var foreignKey = Assert.Single(review!.Constraints.Items.Where(
+            item => item.EntityKind == DatabaseDiscoveryEntityKind.ForeignKey));
+        Assert.Equal("CRM_OWNER.EXTERNAL_CUSTOMERS", foreignKey.ReferencedObjectName);
+    }
+
     private static async Task<DatabaseDiscoveryRunResponse> Trigger(HttpClient client, DatabaseConnectionProfileResponse profile)
     {
         using var response = await client.PostAsJsonAsync(
@@ -539,6 +849,86 @@ public sealed class DatabaseDiscoveryRunApiTests
             new { password, concurrencyToken = profile.ConcurrencyToken });
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         return await ReadProfile(response);
+    }
+
+    private static async Task<DatabaseConnectionProfileResponse> SetEnabled(
+        HttpClient client,
+        DatabaseConnectionProfileResponse profile,
+        bool isEnabled)
+    {
+        using var response = await client.PutAsJsonAsync(
+            $"/api/admin/database-connection-profiles/{profile.Id}/enabled-state",
+            new { isEnabled, concurrencyToken = profile.ConcurrencyToken });
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        return await ReadProfile(response);
+    }
+
+    private static async Task AssertValidationError(HttpClient client, string path, string field)
+    {
+        using var response = await client.GetAsync(path);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("validation_error", body, StringComparison.Ordinal);
+        Assert.Contains($"\"{field}\"", body, StringComparison.Ordinal);
+    }
+
+    private static void AssertDiscoveryReadSanitized(
+        string body,
+        string canary,
+        DatabaseConnectionProfileResponse profile)
+    {
+        Assert.DoesNotContain(canary, body, StringComparison.Ordinal);
+        Assert.DoesNotContain(profile.Host, body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(profile.Username, body, StringComparison.Ordinal);
+        Assert.DoesNotContain("protectedPayload", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("secretVersion", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("configurationRevision", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("leaseToken", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("leaseOwner", body, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static void AssertDifferenceProjectionSanitized(string body)
+    {
+        AssertNoRawCanonicalInternals(body);
+        using var document = JsonDocument.Parse(body);
+        foreach (var entry in document.RootElement.GetProperty("items").EnumerateArray())
+        {
+            Assert.False(entry.TryGetProperty("before", out _));
+            Assert.False(entry.TryGetProperty("after", out _));
+        }
+    }
+
+    private static void AssertNoRawCanonicalInternals(string body)
+    {
+        Assert.DoesNotContain("nativeDiagnosticIdentity", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("\"namespace\":", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("\"origin\":", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("pg_catalog", body, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static CanonicalDatabaseDiscoverySnapshot WithProviderNativeTypeCanary(
+        CanonicalDatabaseDiscoverySnapshot snapshot,
+        int version)
+    {
+        var declaration = version >= 2 ? "bigint" : "integer";
+        var typeName = version >= 2 ? "int8" : "int4";
+        return snapshot with
+        {
+            Objects = snapshot.Objects.Select(item => item.Name == "CUSTOMERS"
+                ? item with { NativeDiagnosticIdentity = "DBDISC_B03_NATIVE_DIAGNOSTIC_CANARY" }
+                : item).ToArray(),
+            Columns = snapshot.Columns.Select(item => item.Name == "NAME"
+                ? item with
+                {
+                    NativeDataType = item.NativeDataType with
+                    {
+                        Name = typeName,
+                        Namespace = "pg_catalog",
+                        Declaration = declaration,
+                    },
+                }
+                : item).ToArray(),
+        };
     }
 
     private static async Task<DatabaseConnectionProfileResponse> GetProfile(HttpClient client, long id)

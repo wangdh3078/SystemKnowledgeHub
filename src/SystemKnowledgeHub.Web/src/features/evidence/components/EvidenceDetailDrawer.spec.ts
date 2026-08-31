@@ -60,4 +60,42 @@ describe('EvidenceDetailDrawer historical subject', () => {
     expect(wrapper.text()).not.toContain('纠正记录')
     expect(wrapper.text()).not.toContain('添加人工确认')
   })
+
+  it('presents HumanConfirmation as labeled confirmation data rather than a tag-like action', async () => {
+    vi.mocked(getEvidenceDetail).mockResolvedValue({
+      ...deletedEvidence,
+      id: 42,
+      evidenceType: 'HumanConfirmation',
+      knowledgeDocumentRevisionNumberSnapshot: 3,
+      sourceTitle: '需求 R-01',
+      sourceLocator: { confirmationMethod: 'InSystem' },
+      summary: '确认',
+      supportReason: '确认',
+      provider: {
+        ...deletedEvidence.provider,
+        displayName: '本地管理员',
+        roleOrIdentity: '知识提供者（未配置知识身份）',
+        source: 'InSystem',
+      },
+    })
+    const wrapper = mount(EvidenceDetailDrawer, {
+      props: { evidenceId: 42 },
+      global: {
+        components: { ElButton: { template: '<button type="button"><slot /></button>' } },
+        stubs: { KnowledgeStatusBadge: true },
+      },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('类型：人工确认')
+    expect(wrapper.text()).toContain('人工确认 · 本地管理员')
+    expect(wrapper.text()).toContain('确认结论')
+    expect(wrapper.text()).toContain('支持理由')
+    expect(wrapper.text()).toContain('确认方式')
+    expect(wrapper.text()).toContain('确认人')
+    expect(wrapper.text()).toContain('知识身份')
+    expect(wrapper.text()).toContain('确认时间')
+    expect(wrapper.text()).toContain('确认修订')
+    expect(wrapper.findAll('.el-tag')).toHaveLength(0)
+  })
 })
