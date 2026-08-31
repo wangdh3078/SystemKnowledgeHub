@@ -38,35 +38,35 @@ const meaningOrder: readonly ImpactMeaning[] = [
 
 const meaningCopy: Readonly<Record<ImpactMeaning, { title: string; description: string }>> = {
   ExplicitRequirementScope: {
-    title: '明确适用范围',
+    title: '直接关联上下文',
     description: '当前需求明确声明“适用于”该对象。',
   },
   DocumentedByRequirement: {
-    title: '需求直接文档化的上下文',
-    description: '当前需求通过“说明”关系文档化的对象。',
+    title: '直接关联上下文',
+    description: '当前需求通过“说明”关系直接关联该对象。',
   },
   DocumentedBySpecification: {
-    title: '本规格直接文档化的对象',
-    description: '当前规格说明通过“说明”关系文档化的对象。',
+    title: '直接关联上下文',
+    description: '当前规格说明通过“说明”关系直接关联该对象。',
   },
   DocumentedByTestCase: {
-    title: '测试用例直接文档化的对象',
-    description: '当前测试用例通过“说明”关系文档化的对象。',
+    title: '直接关联上下文',
+    description: '当前测试用例通过“说明”关系直接关联该对象。',
   },
   UpstreamRequirementScope: {
-    title: '上游需求声明的适用范围',
+    title: '间接关联上下文',
     description: '关联的上游需求声明“适用于”该对象，因此作为当前规格说明的间接复核上下文显示。',
   },
   UpstreamRequirementDocumentedContext: {
-    title: '上游需求文档化的上下文',
+    title: '间接关联上下文',
     description: '关联的上游需求说明了该对象，因此作为当前规格说明的间接复核上下文显示。',
   },
   VerifiedRequirementScope: {
-    title: '直接验证需求的适用范围',
+    title: '间接关联上下文',
     description: '当前测试用例验证的需求声明“适用于”该对象，因此作为间接复核上下文显示。',
   },
   VerifiedSpecificationDocumentedContext: {
-    title: '所验证规格说明文档化的上下文',
+    title: '间接关联上下文',
     description: '当前测试用例验证的规格说明说明了该对象，因此作为间接复核上下文显示。',
   },
 }
@@ -84,13 +84,15 @@ const groups = computed(() => {
   return meaningOrder
     .map((meaning) => {
       const groupedItems = items.filter((item) => item.meaning === meaning)
-      const copy = meaning === 'DocumentedBySpecification'
-        && groupedItems.some((item) => item.pathKind === 'ViaSpecificationDocuments')
-        ? {
-            title: '由规格说明带入的上下文',
-            description: '关联的规格说明说明了该对象，因此作为当前需求的间接复核上下文显示。',
-          }
-        : meaningCopy[meaning]
+      const copy =
+        meaning === 'DocumentedBySpecification' &&
+        groupedItems.some((item) => item.pathKind === 'ViaSpecificationDocuments')
+          ? {
+              title: '间接关联上下文',
+              description:
+                '由当前需求关联的规格说明进一步说明了该对象，因此作为当前需求的间接复核上下文显示。',
+            }
+          : meaningCopy[meaning]
       return { meaning, copy, items: groupedItems }
     })
     .filter((group) => group.items.length > 0)
@@ -104,7 +106,11 @@ const visibleRange = computed(() => {
 })
 
 function impactErrorMessage(reason: unknown): string {
-  if (reason instanceof ApiError && reason.status === 422 && reason.response.code === 'reference_invalid')
+  if (
+    reason instanceof ApiError &&
+    reason.status === 422 &&
+    reason.response.code === 'reference_invalid'
+  )
     return '影响上下文中存在无法安全解析的引用。'
   return '当前无法读取影响上下文，请稍后重试。'
 }
@@ -188,11 +194,15 @@ function pathText(item: ImpactItem): string {
 }
 
 function relationNature(pathKind: ImpactPathKind): string {
-  return pathKind.startsWith('Via') ? '间接上下文' : '直接上下文'
+  return pathKind.startsWith('Via') ? '间接' : '直接'
 }
 
 function objectLabel(pathKind: ImpactPathKind): string {
   return pathKind.startsWith('Via') ? '上下文对象：' : '影响对象：'
+}
+
+function isIndirect(pathKind: ImpactPathKind): boolean {
+  return pathKind.startsWith('Via')
 }
 
 watch(
@@ -212,13 +222,19 @@ defineExpose({ refresh })
 </script>
 
 <template>
-  <section class="impact-context-section" aria-labelledby="impact-context-heading" :aria-busy="loading">
+  <section
+    class="impact-context-section"
+    aria-labelledby="impact-context-heading"
+    :aria-busy="loading"
+  >
     <div class="impact-context-section__heading">
       <div>
         <h2 id="impact-context-heading">影响上下文</h2>
         <p>基于已支持的显式关系提示可能需要人工复核的结构化上下文，不代表实际或必然影响。</p>
       </div>
-      <span v-if="loading && impact" class="impact-context-section__refreshing" role="status">正在更新…</span>
+      <span v-if="loading && impact" class="impact-context-section__refreshing" role="status"
+        >正在更新…</span
+      >
     </div>
 
     <LoadingState v-if="loading && !impact" message="正在读取影响上下文…" />
@@ -246,7 +262,10 @@ defineExpose({ refresh })
             <p>{{ group.copy.description }}</p>
           </header>
           <ul class="impact-context-list">
-            <li v-for="item in group.items" :key="`${item.pathKind}-${item.target.type}-${item.target.id}-${item.path.map((segment) => segment.relationshipId).join('-')}`">
+            <li
+              v-for="item in group.items"
+              :key="`${item.pathKind}-${item.target.type}-${item.target.id}-${item.path.map((segment) => segment.relationshipId).join('-')}`"
+            >
               <p class="impact-context-item__field">
                 <span>{{ objectLabel(item.pathKind) }}</span>
                 <button
@@ -268,17 +287,35 @@ defineExpose({ refresh })
               </p>
               <p class="impact-context-item__field">
                 <span>关系性质：</span>
-                {{ relationNature(item.pathKind) }}
+                <span
+                  class="impact-context-item__nature"
+                  :class="`impact-context-item__nature--${isIndirect(item.pathKind) ? 'indirect' : 'direct'}`"
+                >
+                  {{ relationNature(item.pathKind) }}
+                </span>
               </p>
-              <p class="impact-context-item__field impact-context-item__path">
+              <p
+                v-if="!isIndirect(item.pathKind)"
+                class="impact-context-item__field impact-context-item__path"
+              >
                 <span>关系路径：</span>
                 {{ pathText(item) }}
               </p>
-              <p v-if="relationNature(item.pathKind) === '间接上下文'" class="impact-context-item__notice">
+              <details v-else class="impact-context-item__path-details">
+                <summary>查看关系路径</summary>
+                <p class="impact-context-item__field impact-context-item__path">
+                  <span>关系路径：</span>
+                  {{ pathText(item) }}
+                </p>
+              </details>
+              <p v-if="isIndirect(item.pathKind)" class="impact-context-item__notice">
                 仅用于辅助人工复核，不表示当前文档一定直接影响该对象。
               </p>
-              <p v-if="item.target.systemContext.length" class="impact-context-item__system">
-                系统上下文：{{ item.target.systemContext.map((system) => system.name).join('、') }}
+              <p
+                v-if="item.target.type !== 'System' && item.target.systemContext.length"
+                class="impact-context-item__system"
+              >
+                所属系统：{{ item.target.systemContext.map((system) => system.name).join('、') }}
               </p>
             </li>
           </ul>
@@ -320,7 +357,9 @@ defineExpose({ refresh })
   color: var(--color-ink);
 }
 
-.impact-context-section__heading h2 { font-size: 18px; }
+.impact-context-section__heading h2 {
+  font-size: 18px;
+}
 .impact-context-section__heading p,
 .impact-context-group header p {
   margin: var(--space-1) 0 0;
@@ -328,19 +367,74 @@ defineExpose({ refresh })
   font-size: 12px;
   line-height: 1.55;
 }
-.impact-context-section__refreshing { color: var(--color-muted); font-size: 12px; white-space: nowrap; }
-.impact-context-section__groups { display: grid; gap: var(--space-5); margin-top: var(--space-5); }
-.impact-context-group { min-width: 0; }
-.impact-context-group h3 { font-size: 15px; }
-.impact-context-list { display: grid; gap: 0; margin: var(--space-3) 0 0; padding: 0; list-style: none; }
-.impact-context-list li { min-width: 0; padding: var(--space-3) 0; border-top: 1px solid var(--color-border); }
-.impact-context-item__metadata { display: grid; gap: 4px; margin-top: var(--space-2); }
+.impact-context-section__refreshing {
+  color: var(--color-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.impact-context-section__groups {
+  display: grid;
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+}
+.impact-context-group {
+  min-width: 0;
+}
+.impact-context-group h3 {
+  font-size: 15px;
+}
+.impact-context-list {
+  display: grid;
+  gap: 0;
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+.impact-context-list li {
+  min-width: 0;
+  padding: var(--space-2) 0 var(--space-3);
+  border-top: 1px solid var(--color-border);
+}
+.impact-context-item__metadata {
+  display: grid;
+  gap: 4px;
+  margin-top: var(--space-2);
+}
 .impact-context-item__field,
 .impact-context-item__system,
-.impact-context-item__notice { margin: var(--space-1) 0 0; overflow-wrap: anywhere; color: var(--color-muted); font-size: 11px; line-height: 1.55; }
+.impact-context-item__notice {
+  margin: var(--space-1) 0 0;
+  overflow-wrap: anywhere;
+  color: var(--color-muted);
+  font-size: 11px;
+  line-height: 1.55;
+}
 .impact-context-item__field > span,
-.impact-context-item__system > span { color: var(--color-subtle); }
-.impact-context-item__field { display: flex; flex-wrap: wrap; gap: 4px; margin: var(--space-1) 0 0; }
+.impact-context-item__system > span {
+  color: var(--color-subtle);
+}
+.impact-context-item__field {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: var(--space-1) 0 0;
+}
+.impact-context-item__nature {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface-subtle);
+  color: var(--color-muted);
+  cursor: default;
+  font-size: 10px;
+  font-weight: 680;
+  line-height: 1.4;
+}
+.impact-context-item__nature--indirect {
+  border-style: dashed;
+}
 .impact-context-item__target {
   min-width: 0;
   padding: 0;
@@ -352,14 +446,47 @@ defineExpose({ refresh })
   text-align: left;
   cursor: pointer;
 }
-.impact-context-item__target:hover { text-decoration: underline; }
-.impact-context-item__target:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 3px; border-radius: 2px; }
-.impact-context-item__path { margin: var(--space-1) 0 0; }
-.impact-context-item__system { color: var(--color-text-secondary, var(--color-muted)); }
-.impact-context-item__notice { color: var(--color-subtle); }
-.impact-context-pagination { margin-top: var(--space-4); }
+.impact-context-item__target:hover {
+  text-decoration: underline;
+}
+.impact-context-item__target:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+.impact-context-item__path {
+  margin: var(--space-1) 0 0;
+}
+.impact-context-item__path-details {
+  margin-top: var(--space-1);
+  color: var(--color-muted);
+  font-size: 11px;
+}
+.impact-context-item__path-details summary {
+  width: fit-content;
+  cursor: pointer;
+  color: var(--color-muted);
+}
+.impact-context-item__path-details summary:hover {
+  color: var(--color-primary);
+}
+.impact-context-item__path-details[open] summary {
+  margin-bottom: 2px;
+}
+.impact-context-item__system {
+  color: var(--color-text-secondary, var(--color-muted));
+}
+.impact-context-item__notice {
+  color: var(--color-subtle);
+}
+.impact-context-pagination {
+  margin-top: var(--space-4);
+}
 
 @media (max-width: 720px) {
-  .impact-context-section__heading { align-items: stretch; flex-direction: column; }
+  .impact-context-section__heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
 }
 </style>

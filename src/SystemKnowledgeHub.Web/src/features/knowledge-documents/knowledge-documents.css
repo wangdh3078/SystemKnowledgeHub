@@ -879,7 +879,10 @@ body.knowledge-document-editor-fullscreen-active {
 .knowledge-document-evidence__item:last-child {
   border-bottom: 0;
 }
-.knowledge-document-evidence__item-heading { display: grid; gap: 3px; }
+.knowledge-document-evidence__item-heading {
+  display: grid;
+  gap: 3px;
+}
 .knowledge-document-evidence__item strong {
   color: var(--color-text);
   font-size: 13px;

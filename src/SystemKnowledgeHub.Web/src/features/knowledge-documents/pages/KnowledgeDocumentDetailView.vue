@@ -891,8 +891,19 @@ onBeforeUnmount(() => {
             <p>记录支持当前知识结论的依据；保存后不会自动改变知识状态。</p>
           </div>
           <div v-if="canEdit && !isArchived" class="knowledge-document-evidence__actions">
-            <el-button class="skh-section-action skh-evidence-action" type="primary" :icon="DocumentChecked" @click="addEvidence">添加证据</el-button
-            ><el-button class="skh-section-action skh-human-confirmation-action" plain :icon="UserFilled" @click="addHumanConfirmation">添加人工确认</el-button>
+            <el-button
+              class="skh-section-action skh-evidence-action"
+              type="primary"
+              :icon="DocumentChecked"
+              @click="addEvidence"
+              >添加证据</el-button
+            ><el-button
+              class="skh-section-action skh-human-confirmation-action"
+              plain
+              :icon="UserFilled"
+              @click="addHumanConfirmation"
+              >添加人工确认</el-button
+            >
           </div>
         </div>
         <p v-if="evidenceLoading">正在加载证据…</p>
@@ -907,23 +918,71 @@ onBeforeUnmount(() => {
             class="knowledge-document-evidence__item"
           >
             <div class="knowledge-document-evidence__item-heading">
-              <p class="knowledge-document-evidence__type">类型：{{ evidenceTypeLabels[item.evidenceType] }}</p>
-              <strong>{{ item.evidenceType === 'HumanConfirmation' ? `人工确认 · ${item.provider.displayName}` : item.sourceTitle }}</strong>
+              <p class="knowledge-document-evidence__type">
+                类型：{{ evidenceTypeLabels[item.evidenceType] }}
+              </p>
+              <strong>{{
+                item.evidenceType === 'HumanConfirmation'
+                  ? `人工确认 · ${item.provider.displayName}`
+                  : item.sourceTitle
+              }}</strong>
             </div>
-            <dl v-if="item.evidenceType === 'HumanConfirmation'" class="knowledge-document-evidence__facts">
-              <div><dt>确认结论</dt><dd>{{ item.summary ?? '—' }}</dd></div>
-              <div><dt>支持理由</dt><dd>{{ item.supportReason }}</dd></div>
-              <div><dt>确认方式</dt><dd>{{ getHumanConfirmationListMethod(item) ? confirmationMethodLabels[getHumanConfirmationListMethod(item)!] : '—' }}</dd></div>
-              <div><dt>确认人</dt><dd>{{ item.provider.displayName }}</dd></div>
-              <div><dt>知识身份</dt><dd>{{ item.provider.roleOrIdentity }}</dd></div>
-              <div><dt>确认时间</dt><dd>{{ formatDateTime(item.provider.occurredAt) }}</dd></div>
-              <div v-if="item.knowledgeDocumentRevisionNumberSnapshot !== null"><dt>确认修订</dt><dd>修订 {{ item.knowledgeDocumentRevisionNumberSnapshot }}</dd></div>
+            <dl
+              v-if="item.evidenceType === 'HumanConfirmation'"
+              class="knowledge-document-evidence__facts"
+            >
+              <div>
+                <dt>确认结论</dt>
+                <dd>{{ item.summary ?? '—' }}</dd>
+              </div>
+              <div>
+                <dt>支持理由</dt>
+                <dd>{{ item.supportReason }}</dd>
+              </div>
+              <div>
+                <dt>确认方式</dt>
+                <dd>
+                  {{
+                    getHumanConfirmationListMethod(item)
+                      ? confirmationMethodLabels[getHumanConfirmationListMethod(item)!]
+                      : '—'
+                  }}
+                </dd>
+              </div>
+              <div>
+                <dt>确认人</dt>
+                <dd>{{ item.provider.displayName }}</dd>
+              </div>
+              <div>
+                <dt>知识身份</dt>
+                <dd>{{ item.provider.roleOrIdentity }}</dd>
+              </div>
+              <div>
+                <dt>确认时间</dt>
+                <dd>{{ formatDateTime(item.provider.occurredAt) }}</dd>
+              </div>
+              <div v-if="item.knowledgeDocumentRevisionNumberSnapshot !== null">
+                <dt>确认修订</dt>
+                <dd>修订 {{ item.knowledgeDocumentRevisionNumberSnapshot }}</dd>
+              </div>
             </dl>
             <dl v-else class="knowledge-document-evidence__facts">
-              <div><dt>来源</dt><dd>{{ item.sourceTitle }}</dd></div>
-              <div><dt>摘要</dt><dd>{{ item.summary ?? '—' }}</dd></div>
-              <div><dt>支持理由</dt><dd>{{ item.supportReason }}</dd></div>
-              <div><dt>提供者</dt><dd>{{ item.provider.displayName }} · {{ item.provider.roleOrIdentity }}</dd></div>
+              <div>
+                <dt>来源</dt>
+                <dd>{{ item.sourceTitle }}</dd>
+              </div>
+              <div>
+                <dt>摘要</dt>
+                <dd>{{ item.summary ?? '—' }}</dd>
+              </div>
+              <div>
+                <dt>支持理由</dt>
+                <dd>{{ item.supportReason }}</dd>
+              </div>
+              <div>
+                <dt>提供者</dt>
+                <dd>{{ item.provider.displayName }} · {{ item.provider.roleOrIdentity }}</dd>
+              </div>
             </dl>
           </article>
         </div>

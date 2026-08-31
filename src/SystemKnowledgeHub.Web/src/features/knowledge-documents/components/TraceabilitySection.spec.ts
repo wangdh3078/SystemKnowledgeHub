@@ -104,7 +104,11 @@ function requirementTrace(): RequirementTraceabilityResponse {
 function specificationTrace(): SpecificationTraceabilityResponse {
   return {
     root: node(2, 'Specification', '规格 S'),
-    coverage: { eligibility: 'Active', hasTestDefinition: false, missingLinkCodes: ['MissingTestDefinition'] },
+    coverage: {
+      eligibility: 'Active',
+      hasTestDefinition: false,
+      missingLinkCodes: ['MissingTestDefinition'],
+    },
     upstreamRequirements: [],
     testCases: [],
     ...metadata,
@@ -128,7 +132,9 @@ function testCaseTrace(): TestCaseTraceabilityResponse {
       {
         relationship: relationship(21, 'VerifiedBy', 'Incoming'),
         document: node(2, 'Specification', '规格 S'),
-        upstreamRequirements: [relation(22, node(4, 'Requirement', '需求 U'), 'SpecifiedBy', 'Incoming')],
+        upstreamRequirements: [
+          relation(22, node(4, 'Requirement', '需求 U'), 'SpecifiedBy', 'Incoming'),
+        ],
       },
     ],
     ...metadata,
@@ -139,11 +145,15 @@ const global = {
   stubs: {
     ElTag: { template: '<span><slot /></span>' },
     LoadingState: { props: ['message'], template: '<div>{{ message }}</div>' },
-    EmptyState: { props: ['title', 'description'], template: '<div>{{ title }} {{ description }}</div>' },
+    EmptyState: {
+      props: ['title', 'description'],
+      template: '<div>{{ title }} {{ description }}</div>',
+    },
     ErrorState: {
       props: ['title', 'message'],
       emits: ['retry'],
-      template: '<div>{{ title }} {{ message }}<button @click="$emit(\'retry\')">重试</button></div>',
+      template:
+        '<div>{{ title }} {{ message }}<button @click="$emit(\'retry\')">重试</button></div>',
     },
   },
 }
@@ -167,18 +177,32 @@ describe('TraceabilitySection', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('规格说明')
-    expect(wrapper.text()).toContain('直接测试定义')
+    expect(wrapper.text()).toContain('直接关联的测试定义')
+    expect(wrapper.text()).toContain('不经过规格说明、直接与当前需求建立验证关系的测试用例。')
     expect(wrapper.text()).toContain('规格 A')
     expect(wrapper.text()).toContain('规格 B')
     expect(wrapper.text()).toContain('测试定义关系缺失')
     expect(wrapper.findAll('[aria-label="打开测试用例：测试 A"]')).toHaveLength(2)
     expect(wrapper.text()).toContain('证据 2 · 人工确认 1')
     expect(wrapper.text()).toContain('可信依据：')
+    expect(wrapper.get('.traceability-section__trust').text()).toContain('可信依据')
+    expect(wrapper.get('.traceability-section__trust').text()).toContain(
+      '当前修订：已人工确认 · 修订 2',
+    )
+    expect(wrapper.get('.traceability-section__trust').text()).not.toContain('可信度')
+    expect(wrapper.get('.traceability-coverage').text()).toMatch(
+      /结构覆盖：\s*规格说明 2\s*·\s*测试定义 2/,
+    )
+    expect(wrapper.find('.traceability-coverage .el-card').exists()).toBe(false)
     expect(wrapper.text()).toContain('与当前需求的关系')
     expect(wrapper.text()).toContain('该规格说明定义当前需求')
     expect(wrapper.text()).toContain('与上级规格说明的关系')
     expect(wrapper.text()).toContain('该测试用例验证该规格说明')
     expect(wrapper.text()).not.toContain('关系：未知')
+    expect(wrapper.get('.trace-document-node__status').text()).toContain('知识状态：')
+    expect(
+      wrapper.get('.trace-document-node__status .knowledge-status-badge').element.tagName,
+    ).toBe('SPAN')
     expect(wrapper.text()).toContain('草稿')
     expect(wrapper.text()).toContain('已发布')
 
@@ -188,7 +212,14 @@ describe('TraceabilitySection', () => {
       params: { id: '2' },
     })
     await wrapper.get('[aria-label="查看关系详情：与当前需求的关系"]').trigger('click')
-    expect(overlayState.openDrawer).toHaveBeenCalledWith({ kind: 'relationship', id: 10, mode: 'read' })
+    expect(wrapper.get('[aria-label="查看关系详情：与当前需求的关系"]').classes()).toContain(
+      'trace-document-node__relationship-link',
+    )
+    expect(overlayState.openDrawer).toHaveBeenCalledWith({
+      kind: 'relationship',
+      id: 10,
+      mode: 'read',
+    })
   })
 
   it('presents Requirement missing Specification and Test Definition as structural gaps', async () => {
@@ -209,8 +240,9 @@ describe('TraceabilitySection', () => {
     const wrapper = mountSection()
     await flushPromises()
 
-    expect(wrapper.text()).toContain('规格说明：未关联')
-    expect(wrapper.text()).toContain('测试定义：未关联')
+    expect(wrapper.text()).toContain('规格说明 未关联')
+    expect(wrapper.text()).toContain('测试定义 未关联')
+    expect(wrapper.text()).toContain('暂无直接关联的测试定义')
     expect(wrapper.text()).toContain('规格说明关系缺失')
     expect(wrapper.text()).not.toContain('验证失败')
   })
@@ -273,7 +305,14 @@ describe('TraceabilitySection', () => {
 
   it('uses a contextual invalid-reference error and retries only the trace request', async () => {
     vi.mocked(getKnowledgeDocumentTraceability)
-      .mockRejectedValueOnce(new ApiError(422, { code: 'reference_invalid', message: 'invalid', fieldErrors: null, details: null }))
+      .mockRejectedValueOnce(
+        new ApiError(422, {
+          code: 'reference_invalid',
+          message: 'invalid',
+          fieldErrors: null,
+          details: null,
+        }),
+      )
       .mockResolvedValueOnce(requirementTrace())
     const wrapper = mountSection()
     await flushPromises()
@@ -289,14 +328,26 @@ describe('TraceabilitySection', () => {
     let resolveA: ((value: TraceabilityResponse) => void) | undefined
     let resolveB: ((value: TraceabilityResponse) => void) | undefined
     vi.mocked(getKnowledgeDocumentTraceability)
-      .mockImplementationOnce(() => new Promise<TraceabilityResponse>((resolve) => { resolveA = resolve }))
-      .mockImplementationOnce(() => new Promise<TraceabilityResponse>((resolve) => { resolveB = resolve }))
+      .mockImplementationOnce(
+        () =>
+          new Promise<TraceabilityResponse>((resolve) => {
+            resolveA = resolve
+          }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise<TraceabilityResponse>((resolve) => {
+            resolveB = resolve
+          }),
+      )
     const wrapper = mountSection(1)
     await flushPromises()
     await wrapper.setProps({ documentId: 2 })
     resolveB?.({
       ...specificationTrace(),
-      upstreamRequirements: [relation(30, node(9, 'Requirement', '需求 B'), 'SpecifiedBy', 'Incoming')],
+      upstreamRequirements: [
+        relation(30, node(9, 'Requirement', '需求 B'), 'SpecifiedBy', 'Incoming'),
+      ],
     })
     await flushPromises()
     resolveA?.(requirementTrace())
@@ -356,8 +407,18 @@ describe('TraceabilitySection', () => {
     let resolveB: ((value: TraceabilityResponse) => void) | undefined
     vi.mocked(getKnowledgeDocumentTraceability)
       .mockResolvedValueOnce(coveredSpecificationTrace())
-      .mockImplementationOnce(() => new Promise<TraceabilityResponse>((resolve) => { resolveA = resolve }))
-      .mockImplementationOnce(() => new Promise<TraceabilityResponse>((resolve) => { resolveB = resolve }))
+      .mockImplementationOnce(
+        () =>
+          new Promise<TraceabilityResponse>((resolve) => {
+            resolveA = resolve
+          }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise<TraceabilityResponse>((resolve) => {
+            resolveB = resolve
+          }),
+      )
     const wrapper = mountSection(2)
     await flushPromises()
 

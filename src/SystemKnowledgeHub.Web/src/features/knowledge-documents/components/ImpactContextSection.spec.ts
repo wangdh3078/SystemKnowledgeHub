@@ -15,34 +15,87 @@ function item(
   meaning: ImpactItem['meaning'],
   title: string,
 ): ImpactItem {
-  const path = pathKind === 'DirectAppliesTo'
-    ? [{ relationshipId: id * 10, relationType: 'AppliesTo' as const, direction: 'Outgoing' as const }]
-    : pathKind === 'DirectDocuments'
-      ? [{ relationshipId: id * 10, relationType: 'Documents' as const, direction: 'Outgoing' as const }]
-      : pathKind === 'ViaSpecificationDocuments'
+  const path =
+    pathKind === 'DirectAppliesTo'
+      ? [
+          {
+            relationshipId: id * 10,
+            relationType: 'AppliesTo' as const,
+            direction: 'Outgoing' as const,
+          },
+        ]
+      : pathKind === 'DirectDocuments'
         ? [
-            { relationshipId: id * 10, relationType: 'SpecifiedBy' as const, direction: 'Outgoing' as const },
-            { relationshipId: id * 10 + 1, relationType: 'Documents' as const, direction: 'Outgoing' as const },
+            {
+              relationshipId: id * 10,
+              relationType: 'Documents' as const,
+              direction: 'Outgoing' as const,
+            },
           ]
-        : pathKind === 'ViaRequirementAppliesTo'
+        : pathKind === 'ViaSpecificationDocuments'
           ? [
-              { relationshipId: id * 10, relationType: 'SpecifiedBy' as const, direction: 'Incoming' as const },
-              { relationshipId: id * 10 + 1, relationType: 'AppliesTo' as const, direction: 'Outgoing' as const },
+              {
+                relationshipId: id * 10,
+                relationType: 'SpecifiedBy' as const,
+                direction: 'Outgoing' as const,
+              },
+              {
+                relationshipId: id * 10 + 1,
+                relationType: 'Documents' as const,
+                direction: 'Outgoing' as const,
+              },
             ]
-          : pathKind === 'ViaRequirementDocuments'
+          : pathKind === 'ViaRequirementAppliesTo'
             ? [
-                { relationshipId: id * 10, relationType: 'SpecifiedBy' as const, direction: 'Incoming' as const },
-                { relationshipId: id * 10 + 1, relationType: 'Documents' as const, direction: 'Outgoing' as const },
+                {
+                  relationshipId: id * 10,
+                  relationType: 'SpecifiedBy' as const,
+                  direction: 'Incoming' as const,
+                },
+                {
+                  relationshipId: id * 10 + 1,
+                  relationType: 'AppliesTo' as const,
+                  direction: 'Outgoing' as const,
+                },
               ]
-            : pathKind === 'ViaVerifiedRequirementAppliesTo'
+            : pathKind === 'ViaRequirementDocuments'
               ? [
-                  { relationshipId: id * 10, relationType: 'VerifiedBy' as const, direction: 'Incoming' as const },
-                  { relationshipId: id * 10 + 1, relationType: 'AppliesTo' as const, direction: 'Outgoing' as const },
+                  {
+                    relationshipId: id * 10,
+                    relationType: 'SpecifiedBy' as const,
+                    direction: 'Incoming' as const,
+                  },
+                  {
+                    relationshipId: id * 10 + 1,
+                    relationType: 'Documents' as const,
+                    direction: 'Outgoing' as const,
+                  },
                 ]
-              : [
-                  { relationshipId: id * 10, relationType: 'VerifiedBy' as const, direction: 'Incoming' as const },
-                  { relationshipId: id * 10 + 1, relationType: 'Documents' as const, direction: 'Outgoing' as const },
-                ]
+              : pathKind === 'ViaVerifiedRequirementAppliesTo'
+                ? [
+                    {
+                      relationshipId: id * 10,
+                      relationType: 'VerifiedBy' as const,
+                      direction: 'Incoming' as const,
+                    },
+                    {
+                      relationshipId: id * 10 + 1,
+                      relationType: 'AppliesTo' as const,
+                      direction: 'Outgoing' as const,
+                    },
+                  ]
+                : [
+                    {
+                      relationshipId: id * 10,
+                      relationType: 'VerifiedBy' as const,
+                      direction: 'Incoming' as const,
+                    },
+                    {
+                      relationshipId: id * 10 + 1,
+                      relationType: 'Documents' as const,
+                      direction: 'Outgoing' as const,
+                    },
+                  ]
   return {
     pathKind,
     meaning,
@@ -56,23 +109,33 @@ function item(
   }
 }
 
-function response(items: readonly ImpactItem[], page = 1, pageSize = 20, total = items.length): ImpactResponse {
+function response(
+  items: readonly ImpactItem[],
+  page = 1,
+  pageSize = 20,
+  total = items.length,
+): ImpactResponse {
   return { items, page, pageSize, total, maxDepth: 2 }
 }
 
 const global = {
   stubs: {
     LoadingState: { props: ['message'], template: '<div>{{ message }}</div>' },
-    EmptyState: { props: ['title', 'description'], template: '<div>{{ title }} {{ description }}</div>' },
+    EmptyState: {
+      props: ['title', 'description'],
+      template: '<div>{{ title }} {{ description }}</div>',
+    },
     ErrorState: {
       props: ['title', 'message'],
       emits: ['retry'],
-      template: '<div role="alert">{{ title }} {{ message }}<button @click="$emit(\'retry\')">重试</button></div>',
+      template:
+        '<div role="alert">{{ title }} {{ message }}<button @click="$emit(\'retry\')">重试</button></div>',
     },
     ElPagination: {
       props: ['currentPage', 'pageSize', 'total'],
       emits: ['current-change'],
-      template: '<nav aria-label="影响上下文分页"><button class="next-page" @click="$emit(\'current-change\', 2)">第 2 页</button></nav>',
+      template:
+        '<nav aria-label="影响上下文分页"><button class="next-page" @click="$emit(\'current-change\', 2)">第 2 页</button></nav>',
     },
   },
 }
@@ -100,51 +163,71 @@ describe('ImpactContextSection', () => {
   afterEach(() => vi.restoreAllMocks())
 
   it('renders Requirement meanings as separate compact groups and preserves same-target meanings', async () => {
-    vi.mocked(getKnowledgeDocumentImpact).mockResolvedValue(response([
-      item(1, 'DirectAppliesTo', 'ExplicitRequirementScope', 'MES'),
-      item(1, 'DirectDocuments', 'DocumentedByRequirement', 'MES'),
-      item(3, 'ViaSpecificationDocuments', 'DocumentedBySpecification', 'dbo.orders'),
-    ]))
+    vi.mocked(getKnowledgeDocumentImpact).mockResolvedValue(
+      response([
+        item(1, 'DirectAppliesTo', 'ExplicitRequirementScope', 'MES'),
+        item(1, 'DirectDocuments', 'DocumentedByRequirement', 'MES'),
+        item(3, 'ViaSpecificationDocuments', 'DocumentedBySpecification', 'dbo.orders'),
+      ]),
+    )
     const wrapper = mountSection()
     await flushPromises()
 
     expect(wrapper.text()).toContain('影响上下文')
     expect(wrapper.text()).toContain('不代表实际或必然影响')
-    expect(wrapper.text()).toContain('明确适用范围')
-    expect(wrapper.text()).toContain('需求直接文档化的上下文')
-    expect(wrapper.text()).toContain('由规格说明带入的上下文')
+    expect(wrapper.text()).toContain('直接关联上下文')
+    expect(wrapper.text()).toContain('间接关联上下文')
     expect(wrapper.findAll('[aria-label="打开系统 MES"]')).toHaveLength(2)
     expect(wrapper.text()).toContain('为什么显示：')
-    expect(wrapper.text()).toMatch(/关系性质：\s*直接上下文/)
+    expect(wrapper.text()).toMatch(/关系性质：\s*直接/)
     expect(wrapper.text()).toContain('上下文对象：')
-    expect(wrapper.text()).toMatch(/关系性质：\s*间接上下文/)
+    expect(wrapper.text()).toMatch(/关系性质：\s*间接/)
+    expect(wrapper.get('.impact-context-item__nature--direct').element.tagName).toBe('SPAN')
+    expect(wrapper.get('.impact-context-item__nature--indirect').element.tagName).toBe('SPAN')
+    const indirectPath = wrapper.get('.impact-context-item__path-details')
+    expect((indirectPath.element as HTMLDetailsElement).open).toBe(false)
+    expect(indirectPath.get('summary').text()).toBe('查看关系路径')
+    await indirectPath.get('summary').trigger('click')
+    expect((indirectPath.element as HTMLDetailsElement).open).toBe(true)
     expect(wrapper.text()).toContain('当前需求 → 规格说明 → 说明 → dbo.orders')
     expect(wrapper.text()).toContain('仅用于辅助人工复核，不表示当前文档一定直接影响该对象。')
-    expect(wrapper.text()).toContain('系统上下文：MES')
+    expect(wrapper.text()).toContain('所属系统：MES')
+    expect(
+      wrapper.find('[aria-label="打开系统 MES"]').element.parentElement?.parentElement?.textContent,
+    ).not.toContain('所属系统：MES')
   })
 
   it('renders Specification and TestCase derived meanings without claiming inherited canonical AppliesTo', async () => {
-    vi.mocked(getKnowledgeDocumentImpact).mockResolvedValueOnce(response([
-      item(1, 'DirectDocuments', 'DocumentedBySpecification', 'MES'),
-      item(2, 'ViaRequirementAppliesTo', 'UpstreamRequirementScope', 'WMS'),
-      item(3, 'ViaRequirementDocuments', 'UpstreamRequirementDocumentedContext', 'dbo.orders'),
-    ]))
+    vi.mocked(getKnowledgeDocumentImpact).mockResolvedValueOnce(
+      response([
+        item(1, 'DirectDocuments', 'DocumentedBySpecification', 'MES'),
+        item(2, 'ViaRequirementAppliesTo', 'UpstreamRequirementScope', 'WMS'),
+        item(3, 'ViaRequirementDocuments', 'UpstreamRequirementDocumentedContext', 'dbo.orders'),
+      ]),
+    )
     const specification = mountSection(2)
     await flushPromises()
-    expect(specification.text()).toContain('上游需求声明的适用范围')
+    expect(specification.text()).toContain('间接关联上下文')
     expect(specification.text()).toContain('作为当前规格说明的间接复核上下文显示')
-    expect(specification.text()).toContain('上游需求文档化的上下文')
+    expect(specification.text()).toContain('关联的上游需求说明了该对象')
 
-    vi.mocked(getKnowledgeDocumentImpact).mockResolvedValueOnce(response([
-      item(1, 'DirectDocuments', 'DocumentedByTestCase', 'MES'),
-      item(2, 'ViaVerifiedRequirementAppliesTo', 'VerifiedRequirementScope', 'WMS'),
-      item(3, 'ViaVerifiedSpecificationDocuments', 'VerifiedSpecificationDocumentedContext', 'dbo.orders'),
-    ]))
+    vi.mocked(getKnowledgeDocumentImpact).mockResolvedValueOnce(
+      response([
+        item(1, 'DirectDocuments', 'DocumentedByTestCase', 'MES'),
+        item(2, 'ViaVerifiedRequirementAppliesTo', 'VerifiedRequirementScope', 'WMS'),
+        item(
+          3,
+          'ViaVerifiedSpecificationDocuments',
+          'VerifiedSpecificationDocumentedContext',
+          'dbo.orders',
+        ),
+      ]),
+    )
     await specification.setProps({ documentId: 3 })
     await flushPromises()
-    expect(specification.text()).toContain('测试用例直接文档化的对象')
-    expect(specification.text()).toContain('直接验证需求的适用范围')
-    expect(specification.text()).toContain('所验证规格说明文档化的上下文')
+    expect(specification.text()).toContain('当前测试用例通过“说明”关系直接关联该对象')
+    expect(specification.text()).toContain('当前测试用例验证的需求声明“适用于”该对象')
+    expect(specification.text()).toContain('当前测试用例验证的规格说明说明了该对象')
   })
 
   it('renders independent loading, neutral empty, generic error/retry, and invalid-reference states', async () => {
@@ -165,7 +248,12 @@ describe('ImpactContextSection', () => {
     expect(wrapper.text()).toContain('当前无法读取影响上下文')
 
     vi.mocked(getKnowledgeDocumentImpact).mockRejectedValueOnce(
-      new ApiError(422, { code: 'reference_invalid', message: 'invalid', fieldErrors: null, details: null }),
+      new ApiError(422, {
+        code: 'reference_invalid',
+        message: 'invalid',
+        fieldErrors: null,
+        details: null,
+      }),
     )
     await wrapper.get('button').trigger('click')
     await flushPromises()
@@ -174,18 +262,12 @@ describe('ImpactContextSection', () => {
 
   it('changes only the Impact page and navigates targets through existing detail routes', async () => {
     vi.mocked(getKnowledgeDocumentImpact)
-      .mockResolvedValueOnce(response(
-        [item(1, 'DirectAppliesTo', 'ExplicitRequirementScope', 'MES')],
-        1,
-        20,
-        21,
-      ))
-      .mockResolvedValueOnce(response(
-        [item(2, 'DirectDocuments', 'DocumentedByRequirement', 'Inventory')],
-        2,
-        20,
-        21,
-      ))
+      .mockResolvedValueOnce(
+        response([item(1, 'DirectAppliesTo', 'ExplicitRequirementScope', 'MES')], 1, 20, 21),
+      )
+      .mockResolvedValueOnce(
+        response([item(2, 'DirectDocuments', 'DocumentedByRequirement', 'Inventory')], 2, 20, 21),
+      )
     const wrapper = mountSection()
     await flushPromises()
     expect(wrapper.text()).toContain('当前 1–20 / 21')
@@ -204,31 +286,22 @@ describe('ImpactContextSection', () => {
     const refreshedFirstPage = deferred<ImpactResponse>()
     const secondPage = deferred<ImpactResponse>()
     vi.mocked(getKnowledgeDocumentImpact)
-      .mockResolvedValueOnce(response(
-        [item(1, 'DirectDocuments', 'DocumentedByRequirement', 'Initial')],
-        1,
-        20,
-        21,
-      ))
+      .mockResolvedValueOnce(
+        response([item(1, 'DirectDocuments', 'DocumentedByRequirement', 'Initial')], 1, 20, 21),
+      )
       .mockReturnValueOnce(refreshedFirstPage.promise)
       .mockReturnValueOnce(secondPage.promise)
     const wrapper = mountSection()
     await flushPromises()
     ;(wrapper.vm as unknown as { refresh: () => void }).refresh()
     await wrapper.get('.next-page').trigger('click')
-    secondPage.resolve(response(
-      [item(2, 'DirectDocuments', 'DocumentedByRequirement', 'Page 2 newest')],
-      2,
-      20,
-      21,
-    ))
+    secondPage.resolve(
+      response([item(2, 'DirectDocuments', 'DocumentedByRequirement', 'Page 2 newest')], 2, 20, 21),
+    )
     await flushPromises()
-    refreshedFirstPage.resolve(response(
-      [item(1, 'DirectDocuments', 'DocumentedByRequirement', 'Page 1 stale')],
-      1,
-      20,
-      21,
-    ))
+    refreshedFirstPage.resolve(
+      response([item(1, 'DirectDocuments', 'DocumentedByRequirement', 'Page 1 stale')], 1, 20, 21),
+    )
     await flushPromises()
     expect(wrapper.text()).toContain('Page 2 newest')
     expect(wrapper.text()).not.toContain('Page 1 stale')
@@ -239,14 +312,18 @@ describe('ImpactContextSection', () => {
     const older = deferred<ImpactResponse>()
     const newer = deferred<ImpactResponse>()
     vi.mocked(getKnowledgeDocumentImpact)
-      .mockResolvedValueOnce(response([item(1, 'DirectAppliesTo', 'ExplicitRequirementScope', 'Initial')]))
+      .mockResolvedValueOnce(
+        response([item(1, 'DirectAppliesTo', 'ExplicitRequirementScope', 'Initial')]),
+      )
       .mockReturnValueOnce(older.promise)
       .mockReturnValueOnce(newer.promise)
     const wrapper = mountSection()
     await flushPromises()
     ;(wrapper.vm as unknown as { refresh: () => void }).refresh()
     ;(wrapper.vm as unknown as { refresh: () => void }).refresh()
-    newer.resolve(response([item(2, 'DirectAppliesTo', 'ExplicitRequirementScope', 'Re-added current')]))
+    newer.resolve(
+      response([item(2, 'DirectAppliesTo', 'ExplicitRequirementScope', 'Re-added current')]),
+    )
     await flushPromises()
     older.resolve(response([]))
     await flushPromises()
@@ -258,7 +335,9 @@ describe('ImpactContextSection', () => {
     const oldRoot = deferred<ImpactResponse>()
     vi.mocked(getKnowledgeDocumentImpact)
       .mockReturnValueOnce(oldRoot.promise)
-      .mockResolvedValueOnce(response([item(2, 'DirectDocuments', 'DocumentedBySpecification', 'New root')]))
+      .mockResolvedValueOnce(
+        response([item(2, 'DirectDocuments', 'DocumentedBySpecification', 'New root')]),
+      )
     const wrapper = mountSection(1)
     await wrapper.setProps({ documentId: 2 })
     await flushPromises()

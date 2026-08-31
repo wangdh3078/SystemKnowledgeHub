@@ -25,12 +25,12 @@ const emit = defineEmits<{
 
 const confirmationCoverageText = computed(() => {
   const coverage = props.document.confirmationCoverage
-  if (coverage.state === 'NoConfirmation') return '尚无人工确认'
-  if (coverage.state === 'LegacyConfirmationUnknown') return '迁移前人工确认无法确定覆盖的修订。'
+  if (coverage.state === 'NoConfirmation') return '当前修订未人工确认'
+  if (coverage.state === 'LegacyConfirmationUnknown') return '当前修订确认范围未知'
   if (coverage.state === 'CurrentRevisionConfirmed') {
-    return `人工确认覆盖当前修订 ${coverage.lastConfirmedRevisionNumber}`
+    return `当前修订已确认 · 修订 ${coverage.lastConfirmedRevisionNumber}`
   }
-  return '内容在最近一次确认后已修改'
+  return '当前修订在确认后有更新'
 })
 
 const hasReadableRelationship = computed(
@@ -41,7 +41,9 @@ const readableRelationshipSummary = computed(() => props.relationshipSummary ?? 
 const relationshipButtonLabel = computed(() =>
   readableRelationshipLabel.value
     ? `查看关系详情：${readableRelationshipLabel.value}`
-    : props.relationship ? '查看关系详情' : '',
+    : props.relationship
+      ? '查看关系详情'
+      : '',
 )
 </script>
 
@@ -56,31 +58,42 @@ const relationshipButtonLabel = computed(() =>
       {{ document.title }}
     </button>
     <div class="trace-document-node__meta">
-      <p><span class="trace-document-node__meta-label">类型：</span> {{ documentTypeLabels[document.documentType] }}</p>
-      <p><span class="trace-document-node__meta-label">生命周期：</span> {{ lifecycleLabels[document.lifecycleStatus] }}</p>
-      <KnowledgeStatusBadge :status="document.knowledgeStatus" />
+      <p>
+        <span class="trace-document-node__meta-label">类型：</span>
+        {{ documentTypeLabels[document.documentType] }}
+      </p>
+      <p>
+        <span class="trace-document-node__meta-label">生命周期：</span>
+        {{ lifecycleLabels[document.lifecycleStatus] }}
+      </p>
+      <p class="trace-document-node__status">
+        <span class="trace-document-node__meta-label">知识状态：</span>
+        <KnowledgeStatusBadge :status="document.knowledgeStatus" />
+      </p>
     </div>
     <div v-if="hasReadableRelationship" class="trace-document-node__relationship">
-      <p v-if="readableRelationshipLabel" class="trace-document-node__relationship-label">
-        {{ readableRelationshipLabel }}
+      <p class="trace-document-node__relationship-summary">
+        <span v-if="readableRelationshipLabel" class="trace-document-node__relationship-label">
+          {{ readableRelationshipLabel }}：
+        </span>
+        <span v-if="readableRelationshipSummary">{{ readableRelationshipSummary }}</span>
+        <button
+          v-if="relationship"
+          type="button"
+          class="trace-document-node__relationship-link"
+          :aria-label="relationshipButtonLabel"
+          @click="emit('inspectRelationship', relationship!)"
+        >
+          查看关系详情
+        </button>
       </p>
-      <p v-if="readableRelationshipSummary" class="trace-document-node__relationship-summary">
-        {{ readableRelationshipSummary }}
-      </p>
-      <button
-        v-if="relationship"
-        type="button"
-        class="trace-document-node__relationship-link"
-        :aria-label="relationshipButtonLabel"
-        @click="emit('inspectRelationship', relationship!)"
-      >
-        查看关系详情
-      </button>
     </div>
     <div class="trace-document-node__trust">
       <span class="trace-document-node__trust-label">可信依据：</span>
-      <span>证据 {{ document.evidenceCount }} · 人工确认 {{ document.humanConfirmationCount }}</span>
-      <span>{{ confirmationCoverageText }}</span>
+      <span
+        >证据 {{ document.evidenceCount }} · 人工确认 {{ document.humanConfirmationCount }} ·
+        {{ confirmationCoverageText }}</span
+      >
     </div>
   </li>
 </template>
@@ -132,6 +145,23 @@ const relationshipButtonLabel = computed(() =>
   line-height: 1.5;
 }
 
+.trace-document-node__meta p {
+  margin: 0;
+}
+
+.trace-document-node__status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.trace-document-node__status :deep(.knowledge-status-badge) {
+  min-height: 0;
+  padding: 1px 7px;
+  cursor: default;
+  pointer-events: none;
+}
+
 .trace-document-node__meta-label {
   color: var(--color-subtle);
 }
@@ -153,8 +183,6 @@ const relationshipButtonLabel = computed(() =>
 }
 
 .trace-document-node__relationship {
-  display: grid;
-  gap: 6px;
   margin-top: var(--space-2);
   color: var(--color-muted);
   font-size: 11px;
@@ -162,7 +190,6 @@ const relationshipButtonLabel = computed(() =>
 }
 
 .trace-document-node__relationship-label {
-  margin: 0;
   color: var(--color-ink);
   font-weight: 680;
 }
@@ -172,10 +199,13 @@ const relationshipButtonLabel = computed(() =>
 }
 
 .trace-document-node__relationship-link {
-  color: var(--color-primary);
+  margin-left: var(--space-2);
   padding: 0;
+  color: var(--color-muted);
+  font-size: 10px;
 }
 
-.trace-document-node__trust-label { color: var(--color-subtle); }
-
+.trace-document-node__trust-label {
+  color: var(--color-subtle);
+}
 </style>
