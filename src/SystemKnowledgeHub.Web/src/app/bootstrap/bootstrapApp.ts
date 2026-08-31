@@ -8,6 +8,9 @@ import {
   ElDatePicker,
   ElDialog,
   ElDivider,
+  ElDropdown,
+  ElDropdownItem,
+  ElDropdownMenu,
   ElDrawer,
   ElForm,
   ElFormItem,
@@ -36,6 +39,9 @@ import 'element-plus/es/components/date-picker/style/css'
 import 'element-plus/es/components/drawer/style/css'
 import 'element-plus/es/components/dialog/style/css'
 import 'element-plus/es/components/divider/style/css'
+import 'element-plus/es/components/dropdown/style/css'
+import 'element-plus/es/components/dropdown-item/style/css'
+import 'element-plus/es/components/dropdown-menu/style/css'
 import 'element-plus/es/components/form/style/css'
 import 'element-plus/es/components/form-item/style/css'
 import 'element-plus/es/components/icon/style/css'
@@ -63,7 +69,10 @@ import '../../styles/typography.css'
 import '../../styles/element-plus-overrides.css'
 import '../../styles/ui-foundation.css'
 import '../../styles/app.css'
-import { setApiAntiforgeryTokenProvider, setApiSecurityErrorHandler } from '../../api/client/apiClient'
+import {
+  setApiAntiforgeryTokenProvider,
+  setApiSecurityErrorHandler,
+} from '../../api/client/apiClient'
 import { useActorStore } from '../stores/actor'
 
 export async function bootstrapApp(): Promise<void> {
@@ -92,6 +101,9 @@ export async function bootstrapApp(): Promise<void> {
   app.use(ElDrawer)
   app.use(ElDialog)
   app.use(ElDivider)
+  app.use(ElDropdown)
+  app.use(ElDropdownItem)
+  app.use(ElDropdownMenu)
   app.use(ElForm)
   app.use(ElFormItem)
   app.use(ElIcon)

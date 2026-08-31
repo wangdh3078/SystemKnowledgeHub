@@ -105,6 +105,38 @@ export interface RunFilterOptions {
   readonly profiles: readonly RunFilterOption[]
   readonly databaseSources: readonly RunFilterOption[]
 }
+export interface SnapshotHistoryItem {
+  readonly id: number
+  readonly runId: number
+  readonly profileId: number
+  readonly profileName: string
+  readonly databaseSourceId: number
+  readonly databaseSourceName: string
+  readonly providerType: DatabaseProviderType
+  readonly capturedAt: string
+  readonly includedSchemas: readonly string[]
+  readonly scopeGenerationId: number
+  readonly baseSnapshotId: number | null
+  readonly differenceId: number | null
+  readonly counts: DiscoveryCounts
+}
+export interface DifferenceHistoryItem {
+  readonly id: number
+  readonly profileId: number
+  readonly profileName: string
+  readonly databaseSourceId: number
+  readonly databaseSourceName: string
+  readonly providerType: DatabaseProviderType
+  readonly baseSnapshotId: number | null
+  readonly targetSnapshotId: number
+  readonly createdAt: string
+  readonly summaryCounts: {
+    readonly added: number
+    readonly changed: number
+    readonly missingFromSource: number
+    readonly unchanged: number
+  }
+}
 export interface SnapshotSummary {
   readonly id: number
   readonly runId: number
@@ -452,6 +484,61 @@ function page<T>(value: unknown, decode: (item: unknown) => T, field: string): P
   }
 }
 export const decodeRuns = (value: unknown): Page<DiscoveryRun> => page(value, decodeRun, 'runs')
+export const decodeSnapshotHistory = (value: unknown): Page<SnapshotHistoryItem> =>
+  page(
+    value,
+    (item) => {
+      const r = object(item, 'snapshotHistoryItem')
+      return {
+        id: id(r.id, 'snapshotHistoryItem.id'),
+        runId: id(r.runId, 'snapshotHistoryItem.runId'),
+        profileId: id(r.profileId, 'snapshotHistoryItem.profileId'),
+        profileName: string(r.profileName, 'snapshotHistoryItem.profileName'),
+        databaseSourceId: id(r.databaseSourceId, 'snapshotHistoryItem.databaseSourceId'),
+        databaseSourceName: string(r.databaseSourceName, 'snapshotHistoryItem.databaseSourceName'),
+        providerType: provider(r.providerType, 'snapshotHistoryItem.providerType'),
+        capturedAt: string(r.capturedAt, 'snapshotHistoryItem.capturedAt'),
+        includedSchemas: strings(r.includedSchemas, 'snapshotHistoryItem.includedSchemas'),
+        scopeGenerationId: id(r.scopeGenerationId, 'snapshotHistoryItem.scopeGenerationId'),
+        baseSnapshotId: nullableId(r.baseSnapshotId, 'snapshotHistoryItem.baseSnapshotId'),
+        differenceId: nullableId(r.differenceId, 'snapshotHistoryItem.differenceId'),
+        counts: counts(r.counts, 'snapshotHistoryItem.counts'),
+      }
+    },
+    'snapshotHistory',
+  )
+export const decodeDifferenceHistory = (value: unknown): Page<DifferenceHistoryItem> =>
+  page(
+    value,
+    (item) => {
+      const r = object(item, 'differenceHistoryItem')
+      const summary = object(r.summaryCounts, 'differenceHistoryItem.summaryCounts')
+      return {
+        id: id(r.id, 'differenceHistoryItem.id'),
+        profileId: id(r.profileId, 'differenceHistoryItem.profileId'),
+        profileName: string(r.profileName, 'differenceHistoryItem.profileName'),
+        databaseSourceId: id(r.databaseSourceId, 'differenceHistoryItem.databaseSourceId'),
+        databaseSourceName: string(
+          r.databaseSourceName,
+          'differenceHistoryItem.databaseSourceName',
+        ),
+        providerType: provider(r.providerType, 'differenceHistoryItem.providerType'),
+        baseSnapshotId: nullableId(r.baseSnapshotId, 'differenceHistoryItem.baseSnapshotId'),
+        targetSnapshotId: id(r.targetSnapshotId, 'differenceHistoryItem.targetSnapshotId'),
+        createdAt: string(r.createdAt, 'differenceHistoryItem.createdAt'),
+        summaryCounts: {
+          added: integer(summary.added, 'differenceHistoryItem.summaryCounts.added'),
+          changed: integer(summary.changed, 'differenceHistoryItem.summaryCounts.changed'),
+          missingFromSource: integer(
+            summary.missingFromSource,
+            'differenceHistoryItem.summaryCounts.missingFromSource',
+          ),
+          unchanged: integer(summary.unchanged, 'differenceHistoryItem.summaryCounts.unchanged'),
+        },
+      }
+    },
+    'differenceHistory',
+  )
 export function decodeRunFilterOptions(value: unknown): RunFilterOptions {
   const r = object(value, 'runFilterOptions')
   const options = (items: unknown, field: string): readonly RunFilterOption[] => {

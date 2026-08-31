@@ -83,6 +83,22 @@ public sealed class DatabaseDiscoveryRunsController(
         return response is null ? NotFound(Error("not_found", "未找到指定发现快照。")) : Ok(response);
     }
 
+    [HttpGet("snapshots")]
+    public async Task<ActionResult<DatabaseDiscoverySnapshotHistoryPageResponse>> ListSnapshots(
+        [FromQuery] long? profileId,
+        [FromQuery] long? databaseSourceId,
+        [FromQuery] int? page,
+        [FromQuery] int? pageSize,
+        CancellationToken cancellationToken)
+    {
+        var paginationError = ValidatePagination(pageSize, ("page", page));
+        if (paginationError is not null) return BadRequest(paginationError);
+        var access = await ResolveAccess(cancellationToken);
+        if (access.Error is not null) return StatusCode(access.StatusCode!.Value, access.Error);
+        return Ok(await runService.ListSnapshots(
+            profileId, databaseSourceId, page, pageSize, access.IsAdministrator, cancellationToken));
+    }
+
     [HttpGet("snapshots/{id:long}/summary")]
     public async Task<ActionResult<DatabaseDiscoverySnapshotSummaryResponse>> GetSnapshotSummary(
         long id, CancellationToken cancellationToken)
@@ -218,6 +234,22 @@ public sealed class DatabaseDiscoveryRunsController(
         if (access.Error is not null) return StatusCode(access.StatusCode!.Value, access.Error);
         var response = await runService.GetDifference(id, access.IsAdministrator, cancellationToken);
         return response is null ? NotFound(Error("not_found", "未找到指定发现差异。")) : Ok(response);
+    }
+
+    [HttpGet("differences")]
+    public async Task<ActionResult<DatabaseDiscoveryDifferenceHistoryPageResponse>> ListDifferences(
+        [FromQuery] long? profileId,
+        [FromQuery] long? databaseSourceId,
+        [FromQuery] int? page,
+        [FromQuery] int? pageSize,
+        CancellationToken cancellationToken)
+    {
+        var paginationError = ValidatePagination(pageSize, ("page", page));
+        if (paginationError is not null) return BadRequest(paginationError);
+        var access = await ResolveAccess(cancellationToken);
+        if (access.Error is not null) return StatusCode(access.StatusCode!.Value, access.Error);
+        return Ok(await runService.ListDifferences(
+            profileId, databaseSourceId, page, pageSize, access.IsAdministrator, cancellationToken));
     }
 
     [HttpGet("differences/{id:long}/entries")]

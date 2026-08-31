@@ -17,16 +17,34 @@
   gap: var(--space-2);
   border-bottom: 1px solid var(--color-border);
 }
-.discovery-tabs a,
-.discovery-tabs span {
+.discovery-tabs a {
   padding: 10px 16px;
   color: var(--color-muted);
   text-decoration: none;
 }
-.discovery-tabs a.router-link-active {
+.discovery-tabs a.is-active {
   border-bottom: 2px solid var(--color-primary);
   color: var(--color-primary);
   font-weight: 680;
+}
+.discovery-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+  color: var(--color-muted);
+  font-size: 12px;
+}
+.discovery-breadcrumb a {
+  color: inherit;
+  text-decoration: none;
+}
+.discovery-breadcrumb a:hover,
+.discovery-breadcrumb a:focus-visible {
+  color: var(--color-primary);
+}
+.discovery-breadcrumb strong {
+  color: var(--color-text);
 }
 .discovery-table-section {
   display: flex;
@@ -149,6 +167,13 @@
   flex-wrap: wrap;
   gap: var(--space-2);
 }
+.discovery-dropdown-danger {
+  color: var(--color-danger, #b42318) !important;
+}
+.discovery-dropdown-enable {
+  color: var(--color-primary) !important;
+  font-weight: 650;
+}
 .discovery-selection-bar {
   display: flex;
   align-items: center;
@@ -163,6 +188,11 @@
 }
 .discovery-pagination {
   margin-top: var(--space-3);
+}
+.discovery-empty-actions {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-3);
 }
 .discovery-row--focused td {
   background: var(--color-primary-soft, #f2f0ff) !important;

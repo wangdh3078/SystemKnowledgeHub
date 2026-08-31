@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   decodeDifference,
+  decodeDifferenceHistory,
   decodeDifferenceEntries,
   decodeObjectReview,
   decodeObjects,
@@ -8,6 +9,7 @@ import {
   decodeRun,
   decodeSequences,
   decodeSnapshotSummary,
+  decodeSnapshotHistory,
 } from './databaseDiscoveryContracts'
 
 const counts = () => ({
@@ -115,6 +117,51 @@ const validDifferenceSummary = () => ({
   host: 'must-not-cross-difference-read-model',
   username: 'must-not-cross-difference-read-model',
   secretReference: 'must-not-cross-difference-read-model',
+})
+
+const validSnapshotHistory = () => ({
+  items: [
+    {
+      id: 9,
+      runId: 11,
+      profileId: 1,
+      profileName: 'PG',
+      databaseSourceId: 2,
+      databaseSourceName: '应用数据库',
+      providerType: 'PostgreSql',
+      capturedAt: '2026-08-30T00:00:02Z',
+      includedSchemas: ['public'],
+      scopeGenerationId: 7,
+      baseSnapshotId: 8,
+      differenceId: 10,
+      counts: counts(),
+      canonicalContentJson: 'must-not-cross-history-read-model',
+    },
+  ],
+  page: 1,
+  pageSize: 20,
+  total: 1,
+})
+
+const validDifferenceHistory = () => ({
+  items: [
+    {
+      id: 10,
+      profileId: 1,
+      profileName: 'PG',
+      databaseSourceId: 2,
+      databaseSourceName: '应用数据库',
+      providerType: 'PostgreSql',
+      baseSnapshotId: 8,
+      targetSnapshotId: 9,
+      createdAt: '2026-08-30T00:00:03Z',
+      summaryCounts: { added: 1, changed: 1, missingFromSource: 1, unchanged: 1 },
+      canonicalContentJson: 'must-not-cross-history-read-model',
+    },
+  ],
+  page: 1,
+  pageSize: 20,
+  total: 1,
 })
 
 const validObjectPage = () => ({
@@ -239,10 +286,12 @@ describe('database discovery provider-neutral decoders', () => {
     const profile = decodeProfile(validProfile())
     const run = decodeRun(validRun())
     const summary = decodeSnapshotSummary(validSnapshotSummary())
+    const snapshotHistory = decodeSnapshotHistory(validSnapshotHistory())
     const objects = decodeObjects(validObjectPage())
     const sequences = decodeSequences(validSequencePage())
     const review = decodeObjectReview(validObjectReview())
     const difference = decodeDifference(validDifferenceSummary())
+    const differenceHistory = decodeDifferenceHistory(validDifferenceHistory())
     const entries = decodeDifferenceEntries(validDifferenceEntryPage())
 
     expect(profile).toMatchObject({
@@ -264,6 +313,12 @@ describe('database discovery provider-neutral decoders', () => {
     expect(summary).not.toHaveProperty('host')
     expect(summary).not.toHaveProperty('username')
     expect(summary).not.toHaveProperty('secretReference')
+    expect(snapshotHistory.items[0]).toMatchObject({
+      providerType: 'PostgreSql',
+      differenceId: 10,
+      counts: { objects: 2, columns: 4 },
+    })
+    expect(snapshotHistory.items[0]).not.toHaveProperty('canonicalContentJson')
     expect(objects.items[0]).toMatchObject({ objectType: 'Table', name: 'CUSTOMERS' })
     expect(sequences.items[0]).toMatchObject({ name: 'CUSTOMERS_SEQ', incrementValue: '1' })
     expect(review.object).toMatchObject({ objectType: 'Table', name: 'CUSTOMERS' })
@@ -275,6 +330,12 @@ describe('database discovery provider-neutral decoders', () => {
     expect(difference).not.toHaveProperty('host')
     expect(difference).not.toHaveProperty('username')
     expect(difference).not.toHaveProperty('secretReference')
+    expect(differenceHistory.items[0]).toMatchObject({
+      providerType: 'PostgreSql',
+      targetSnapshotId: 9,
+      summaryCounts: { added: 1, changed: 1, missingFromSource: 1, unchanged: 1 },
+    })
+    expect(differenceHistory.items[0]).not.toHaveProperty('canonicalContentJson')
     expect(entries.items[0]).toMatchObject({
       entityKind: 'Column',
       state: 'Changed',

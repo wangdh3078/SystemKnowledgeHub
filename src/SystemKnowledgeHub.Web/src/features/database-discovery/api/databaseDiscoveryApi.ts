@@ -4,6 +4,7 @@ import {
   decodeConnectionTest,
   decodeConstraintPage,
   decodeDifference,
+  decodeDifferenceHistory,
   decodeDifferenceEntries,
   decodeObjectHeader,
   decodeObjectReview,
@@ -14,6 +15,7 @@ import {
   decodeRun,
   decodeRunFilterOptions,
   decodeRuns,
+  decodeSnapshotHistory,
   decodeSchemas,
   decodeSequences,
   decodeSnapshotSummary,
@@ -22,6 +24,7 @@ import {
   type ConnectionTestResult,
   type DatabaseProviderType,
   type DifferenceEntry,
+  type DifferenceHistoryItem,
   type DifferenceState,
   type DifferenceSummary,
   type DiscoveryRun,
@@ -30,6 +33,7 @@ import {
   type RunFilterOptions,
   type Page,
   type SnapshotObject,
+  type SnapshotHistoryItem,
   type SnapshotObjectHeader,
   type SnapshotObjectReview,
   type SnapshotConstraint,
@@ -138,6 +142,36 @@ export const listRuns = (
 }
 export const getRun = (id: number, signal?: AbortSignal): Promise<DiscoveryRun> =>
   apiClient.get(`/database-discovery/runs/${safe(id)}`, { signal, decode: decodeRun })
+export const listSnapshots = (
+  page: number,
+  pageSize: number,
+  profileId?: number,
+  databaseSourceId?: number,
+  signal?: AbortSignal,
+): Promise<Page<SnapshotHistoryItem>> => {
+  const query = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
+  if (profileId) query.set('profileId', String(profileId))
+  if (databaseSourceId) query.set('databaseSourceId', String(databaseSourceId))
+  return apiClient.get(`/database-discovery/snapshots?${query}`, {
+    signal,
+    decode: decodeSnapshotHistory,
+  })
+}
+export const listDifferences = (
+  page: number,
+  pageSize: number,
+  profileId?: number,
+  databaseSourceId?: number,
+  signal?: AbortSignal,
+): Promise<Page<DifferenceHistoryItem>> => {
+  const query = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
+  if (profileId) query.set('profileId', String(profileId))
+  if (databaseSourceId) query.set('databaseSourceId', String(databaseSourceId))
+  return apiClient.get(`/database-discovery/differences?${query}`, {
+    signal,
+    decode: decodeDifferenceHistory,
+  })
+}
 export const cancelRun = (run: DiscoveryRun): Promise<DiscoveryRun> =>
   apiClient.post(
     `/database-discovery/runs/${safe(run.id)}/cancel`,

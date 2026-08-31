@@ -21,9 +21,14 @@ interface SelectContext {
   readonly select: (value: unknown) => void
 }
 
+interface DropdownContext {
+  readonly command: (value: string) => void
+}
+
 const tableRowsKey: InjectionKey<ComputedRef<readonly TableRow[]>> = Symbol('discovery-table-rows')
 const radioGroupKey: InjectionKey<RadioGroupContext> = Symbol('discovery-radio-group')
 const selectKey: InjectionKey<SelectContext> = Symbol('discovery-select')
+const dropdownKey: InjectionKey<DropdownContext> = Symbol('discovery-dropdown')
 
 const ElTable = defineComponent({
   name: 'ElTable',
@@ -275,18 +280,79 @@ const ElRadioButton = defineComponent({
   },
 })
 
+const ElDropdown = defineComponent({
+  name: 'ElDropdown',
+  emits: ['command'],
+  setup(_, { emit, slots }) {
+    provide(dropdownKey, { command: (value) => emit('command', value) })
+    return () =>
+      h('div', { class: 'el-dropdown-stub' }, [
+        h('div', { class: 'el-dropdown-trigger-stub' }, slots.default?.()),
+        h('div', { class: 'el-dropdown-menu-stub' }, slots.dropdown?.()),
+      ])
+  },
+})
+
+const ElDropdownItem = defineComponent({
+  name: 'ElDropdownItem',
+  props: { command: { type: String, required: true } },
+  setup(props, { slots }) {
+    const dropdown = inject(dropdownKey)
+    return () =>
+      h(
+        'button',
+        {
+          type: 'button',
+          'data-dropdown-command': props.command,
+          onClick: () => dropdown?.command(props.command),
+        },
+        slots.default?.(),
+      )
+  },
+})
+
+const ElPagination = defineComponent({
+  name: 'ElPagination',
+  props: {
+    currentPage: { type: Number, default: 1 },
+    total: { type: Number, default: 0 },
+    pageSize: { type: Number, default: 20 },
+  },
+  emits: ['update:currentPage', 'current-change'],
+  setup(props, { emit }) {
+    return () =>
+      h(
+        'button',
+        {
+          type: 'button',
+          'data-pagination-next': '',
+          disabled: props.currentPage * props.pageSize >= props.total,
+          onClick: () => {
+            const next = props.currentPage + 1
+            emit('update:currentPage', next)
+            emit('current-change', next)
+          },
+        },
+        '下一页',
+      )
+  },
+})
+
 export const discoveryPageStubs = {
   DiscoverySectionNav: passthrough('DiscoverySectionNav', 'nav'),
   ElAlert,
   ElButton,
   ElCheckbox,
   ElDrawer,
+  ElDropdown,
+  ElDropdownItem,
+  ElDropdownMenu: passthrough('ElDropdownMenu'),
   ElForm: passthrough('ElForm', 'form'),
   ElFormItem,
   ElInput,
   ElInputNumber,
   ElOption,
-  ElPagination: passthrough('ElPagination'),
+  ElPagination,
   ElRadioButton,
   ElRadioGroup,
   ElSelect,

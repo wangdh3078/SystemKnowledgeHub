@@ -202,7 +202,13 @@ onBeforeUnmount(() => {
   <main class="discovery-page skh-page">
     <header class="discovery-page__header skh-page-header">
       <div>
-        <small class="discovery-eyebrow">数据库发现 / 发现快照</small>
+        <nav class="discovery-breadcrumb" aria-label="面包屑">
+          <RouterLink :to="{ name: 'database-discovery-runs' }">数据库发现</RouterLink>
+          <span>/</span>
+          <RouterLink :to="{ name: 'database-discovery-snapshots' }">发现快照</RouterLink>
+          <span>/</span>
+          <strong>Snapshot #{{ id }}</strong>
+        </nav>
         <h1>快照 #{{ id }}</h1>
         <p>只读取有界摘要、分页列表和按需对象详情，不下载完整规范快照。</p>
       </div>

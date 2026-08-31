@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Close, Plus, Refresh, VideoPlay } from '@element-plus/icons-vue'
+import { ArrowDown, Close, Plus, Refresh, VideoPlay } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
 import { ApiError } from '../../../api/errors/ApiError'
 import { useActorStore } from '../../../app/stores/actor'
@@ -304,9 +304,16 @@ async function saveSecret(): Promise<void> {
 }
 async function clear(profile: ConnectionProfile): Promise<void> {
   try {
-    await ElMessageBox.confirm('清除后，该连接将不能测试或开始发现。', '清除连接密码', {
-      type: 'warning',
-    })
+    await ElMessageBox.confirm(
+      '清除后，该连接将不能测试连接或执行发现；如需恢复，必须重新设置密码。',
+      '确认清除连接密码',
+      {
+        type: 'warning',
+        confirmButtonText: '清除密码',
+        cancelButtonText: '取消',
+        confirmButtonClass: 'el-button--danger',
+      },
+    )
     testResult.value = ''
     await api.clearSecret(profile)
     ElMessage.success('连接密码已清除。')
@@ -359,6 +366,14 @@ async function trigger(profile: ConnectionProfile): Promise<void> {
 }
 function openHistory(profile: ConnectionProfile): void {
   void router.push({ name: 'database-discovery-runs', query: { profileId: String(profile.id) } })
+}
+type ProfileMoreCommand = 'edit' | 'history' | 'secret' | 'toggle' | 'clear'
+function handleMoreCommand(profile: ConnectionProfile, command: ProfileMoreCommand): void {
+  if (command === 'edit') openEdit(profile)
+  else if (command === 'history') openHistory(profile)
+  else if (command === 'secret') openSecret(profile)
+  else if (command === 'toggle') void toggle(profile)
+  else if (command === 'clear') void clear(profile)
 }
 onMounted(load)
 watch(profileDialogOpen, (open, previous) => {
@@ -472,32 +487,10 @@ onBeforeUnmount(() => {
             <small>发现成功 {{ format(row.lastSuccessfulDiscoveryAt) }}</small>
           </template>
         </el-table-column>
-        <el-table-column label="操作" min-width="390" fixed="right">
+        <el-table-column label="操作" min-width="300" fixed="right">
           <template #default="{ row }">
-            <div class="discovery-actions">
-              <template v-if="actorStore.isAdministrator">
-                <el-button size="small" @click="openEdit(row)">编辑</el-button>
-                <el-button size="small" @click="toggle(row)">{{
-                  row.isEnabled ? '停用' : '启用'
-                }}</el-button>
-                <el-button size="small" @click="openSecret(row)">{{
-                  row.hasSecret ? '替换密码' : '设置密码'
-                }}</el-button>
-                <el-button v-if="row.hasSecret" size="small" type="danger" plain @click="clear(row)"
-                  >清除密码</el-button
-                >
-                <el-button
-                  size="small"
-                  :icon="Refresh"
-                  :disabled="!row.isEnabled || !row.hasSecret"
-                  :loading="actionKey === `test-${row.id}`"
-                  @click="test(row)"
-                  >测试连接</el-button
-                >
-              </template>
-              <el-button size="small" @click="openHistory(row)">运行历史</el-button>
+            <div v-if="actorStore.isAdministrator" class="discovery-actions">
               <el-button
-                v-if="actorStore.isAdministrator"
                 size="small"
                 type="primary"
                 :icon="VideoPlay"
@@ -506,6 +499,47 @@ onBeforeUnmount(() => {
                 @click="trigger(row)"
                 >开始发现</el-button
               >
+              <el-button
+                size="small"
+                :icon="Refresh"
+                :disabled="!row.isEnabled || !row.hasSecret"
+                :loading="actionKey === `test-${row.id}`"
+                @click="test(row)"
+                >测试连接</el-button
+              >
+              <el-dropdown
+                trigger="click"
+                @command="handleMoreCommand(row, $event as ProfileMoreCommand)"
+              >
+                <el-button size="small"
+                  >更多<el-icon class="el-icon--right"><ArrowDown /></el-icon
+                ></el-button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item
+                      v-if="!row.isEnabled"
+                      command="toggle"
+                      class="discovery-dropdown-enable"
+                      >启用连接</el-dropdown-item
+                    >
+                    <el-dropdown-item command="edit">编辑连接</el-dropdown-item>
+                    <el-dropdown-item command="history">运行历史</el-dropdown-item>
+                    <el-dropdown-item command="secret">{{
+                      row.hasSecret ? '替换密码' : '设置密码'
+                    }}</el-dropdown-item>
+                    <el-dropdown-item v-if="row.isEnabled" command="toggle"
+                      >停用连接</el-dropdown-item
+                    >
+                    <el-dropdown-item
+                      v-if="row.hasSecret"
+                      command="clear"
+                      divided
+                      class="discovery-dropdown-danger"
+                      >清除密码</el-dropdown-item
+                    >
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
             </div>
           </template>
         </el-table-column>

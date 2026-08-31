@@ -437,10 +437,11 @@ Search 第一版采用 SQLite 受限 `LIKE` 投影；未创建 FTS5 virtual tabl
 
 | 路径 | 一句话职责 | Feature / Vertical Slice | 为什么需要 |
 | --- | --- | --- | --- |
-| `.../features/database-discovery/api/databaseDiscoveryContracts.ts`、`databaseDiscoveryApi.ts` | 严格解码并调用 Connection Profile、Run、Snapshot 与 Difference 的 sanitized、bounded API read/write contracts。 | Database Discovery / DBDISC-B03 | 让外部 JSON 在 Feature 边界 fail-closed 收窄，且不向浏览器传输 Secret、连接串或完整 Canonical Snapshot。 |
-| `.../features/database-discovery/components/DiscoverySectionNav.vue` | 在连接配置、发现运行、快照与差异审查之间提供统一的 Discovery 局部导航。 | Database Discovery / DBDISC-B03 | 保持管理写入口与授权读取入口清晰分离，不复制全局导航。 |
-| `.../features/database-discovery/pages/ConnectionProfilesView.vue` | 为 Administrator 提供 Profile 新增/编辑/启停、独立 Secret 管理、连接测试与触发发现的人工操作面。 | Database Discovery / DBDISC-B03 | 完成不依赖 curl/Postman 的安全配置路径，并保留后端授权与独立 Secret API 为 authority。 |
+| `.../features/database-discovery/api/databaseDiscoveryContracts.ts`、`databaseDiscoveryApi.ts` | 严格解码并调用 Connection Profile、Run、Snapshot/Difference history 与 detail 的 sanitized、bounded API read/write contracts。 | Database Discovery / DBDISC-B03 / R01 | 让外部 JSON 在 Feature 边界 fail-closed 收窄，且不向浏览器传输 Secret、连接串或完整 Canonical Snapshot。 |
+| `.../features/database-discovery/components/DiscoverySectionNav.vue` | 提供连接配置、发现运行、快照与差异审查四个实际 route，并完全由当前 path 推导 active 状态。 | Database Discovery / DBDISC-B03-R01 | 让 list/detail/direct URL/Back/Forward 都保持正确页面上下文，不维护“最后点击”状态。 |
+| `.../features/database-discovery/pages/ConnectionProfilesView.vue` | 为 Administrator 提供紧凑主操作与条件化更多菜单，承载 Profile、独立 Secret、连接测试与发现触发。 | Database Discovery / DBDISC-B03-R01 | 完成不依赖 curl/Postman 的安全配置路径，同时收敛按钮密度并保留后端授权为 authority。 |
 | `.../features/database-discovery/pages/DiscoveryRunsView.vue` | 分页展示 durable Run 状态、筛选、真实时间信息、终态 artifact 导航及 Administrator cancel。 | Database Discovery / DBDISC-B03 | 以 2–3 秒、可停止/可取消的前端 polling 呈现 Worker 生命周期，不伪造进度。 |
+| `.../features/database-discovery/pages/DiscoverySnapshotsView.vue`、`DiscoveryDifferencesView.vue` | 分页筛选并直接导航 provider-neutral Snapshot 与 Difference 历史，不要求先选择 Run。 | Database Discovery / DBDISC-B03-R01 | 建立真正可进入的一级审查页面、清晰空态与 B04 手工同步边界。 |
 | `.../features/database-discovery/pages/DiscoverySnapshotView.vue` | 通过 summary、Schema/Object/Sequence 分页和对象结构懒加载审查 provider-neutral Canonical metadata。 | Database Discovery / DBDISC-B03 | 避免向浏览器传输完整 Snapshot JSON，并显式呈现 capability 与可见性边界。 |
 | `.../features/database-discovery/pages/DiscoveryDifferenceView.vue` | 分页筛选 Added/Changed/MissingFromSource/Unchanged，并以 sanitized 字段级 before/after 展示只读差异。 | Database Discovery / DBDISC-B03 | 保持 Missing is not deleted、不推断 Rename、且不提前实现 Sync Plan 或 Apply。 |
 | `.../features/database-discovery/database-discovery.css` | 定义四个 Discovery 页面、状态摘要、bounded 表格与 Host 内 Overlay 的局部响应式样式。 | Database Discovery / DBDISC-B03 | 继承统一页面/表格/分页/Overlay 基线，并保证长标识和常见桌面宽度可用。 |

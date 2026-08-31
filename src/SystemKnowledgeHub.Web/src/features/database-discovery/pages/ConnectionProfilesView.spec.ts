@@ -239,6 +239,54 @@ describe('ConnectionProfilesView', () => {
     expect(api.setSecret).toHaveBeenCalledWith(createdPostgresProfile, 'create-secret')
   })
 
+  it('keeps only primary actions visible and moves secondary actions into the conditional menu', async () => {
+    api.listProfiles.mockResolvedValue([oracleProfile, { ...postgresProfile, isEnabled: false }])
+    const view = mountFor('Administrator')
+    await flushPromises()
+
+    const rows = view.findAll('.discovery-actions')
+    expect(rows).toHaveLength(2)
+    for (const row of rows) {
+      const directButtons = Array.from(row.element.children)
+        .filter((item) => item.tagName === 'BUTTON')
+        .map((item) => item.textContent)
+      expect(directButtons).toEqual(['开始发现', '测试连接'])
+      expect(row.find('.el-dropdown-trigger-stub').text()).toBe('更多')
+    }
+    expect(rows[0]!.findAll(':scope > button').every((item) => !item.attributes('disabled'))).toBe(
+      true,
+    )
+    expect(
+      rows[1]!
+        .findAll(':scope > button')
+        .every((item) => item.attributes('disabled') !== undefined),
+    ).toBe(true)
+
+    expect(rows[0]!.findAll('[data-dropdown-command]').map((item) => item.text())).toEqual([
+      '编辑连接',
+      '运行历史',
+      '替换密码',
+      '停用连接',
+      '清除密码',
+    ])
+    expect(rows[1]!.findAll('[data-dropdown-command]').map((item) => item.text())).toEqual([
+      '启用连接',
+      '编辑连接',
+      '运行历史',
+      '设置密码',
+    ])
+
+    await rows[0]!.find('[data-dropdown-command="edit"]').trigger('click')
+    await flushPromises()
+    expect(view.text()).toContain('编辑数据库连接')
+
+    await rows[0]!.find('[data-dropdown-command="history"]').trigger('click')
+    expect(router.push).toHaveBeenCalledWith({
+      name: 'database-discovery-runs',
+      query: { profileId: '1' },
+    })
+  })
+
   it('sets, replaces, and clears secrets only through the dedicated actions', async () => {
     const view = mountFor('Administrator')
     await flushPromises()
@@ -259,7 +307,15 @@ describe('ConnectionProfilesView', () => {
 
     await button(view, '清除密码').trigger('click')
     await flushPromises()
-    expect(messages.confirm).toHaveBeenCalledOnce()
+    expect(messages.confirm).toHaveBeenCalledWith(
+      '清除后，该连接将不能测试连接或执行发现；如需恢复，必须重新设置密码。',
+      '确认清除连接密码',
+      expect.objectContaining({
+        confirmButtonText: '清除密码',
+        cancelButtonText: '取消',
+        confirmButtonClass: 'el-button--danger',
+      }),
+    )
     expect(api.clearSecret).toHaveBeenCalledWith(oracleProfile)
     expect(messages.success).toHaveBeenCalledWith('连接密码已清除。')
   })
@@ -315,14 +371,16 @@ describe('ConnectionProfilesView', () => {
 
       const writeLabels = [
         '新增数据库连接',
-        '编辑',
-        '停用',
-        '启用',
+        '编辑连接',
+        '停用连接',
+        '启用连接',
         '替换密码',
         '设置密码',
         '清除密码',
         '测试连接',
         '开始发现',
+        '运行历史',
+        '更多',
       ]
       expect(
         view.findAll('button').filter((item) => writeLabels.includes(item.text())),

@@ -622,6 +622,72 @@ public sealed class DatabaseDiscoveryRunApiTests
         Assert.True(second.SnapshotId is > 0);
         Assert.True(second.DifferenceId is > 0);
         Assert.Equal(first.SnapshotId, second.BaseSnapshotId);
+
+        using var snapshotHistoryResponse = await viewer.GetAsync(
+            $"/api/database-discovery/snapshots?profileId={profile.Id}&databaseSourceId={profile.DatabaseSourceId}&pageSize=1");
+        Assert.Equal(HttpStatusCode.OK, snapshotHistoryResponse.StatusCode);
+        var snapshotHistoryJson = await snapshotHistoryResponse.Content.ReadAsStringAsync();
+        AssertDiscoveryReadSanitized(snapshotHistoryJson, canary, profile);
+        Assert.DoesNotContain("canonicalContent", snapshotHistoryJson, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("\"content\":", snapshotHistoryJson, StringComparison.OrdinalIgnoreCase);
+        var snapshotHistory = JsonSerializer.Deserialize<DatabaseDiscoverySnapshotHistoryPageResponse>(
+            snapshotHistoryJson, JsonOptions);
+        var latestSnapshot = Assert.Single(snapshotHistory!.Items);
+        Assert.Equal(2, snapshotHistory.Total);
+        Assert.Equal(1, snapshotHistory.PageSize);
+        Assert.Equal(second.SnapshotId, latestSnapshot.Id);
+        Assert.Equal(second.Id, latestSnapshot.RunId);
+        Assert.Equal(profile.Name, latestSnapshot.ProfileName);
+        Assert.Equal(profile.DatabaseSourceName, latestSnapshot.DatabaseSourceName);
+        Assert.Equal(DatabaseProviderType.Oracle, latestSnapshot.ProviderType);
+        Assert.Equal(first.SnapshotId, latestSnapshot.BaseSnapshotId);
+        Assert.Equal(second.DifferenceId, latestSnapshot.DifferenceId);
+        Assert.Equal(2, latestSnapshot.Counts.Objects);
+        Assert.Contains("APP_OWNER", latestSnapshot.IncludedSchemas);
+
+        using var snapshotHistoryPageTwoResponse = await viewer.GetAsync(
+            $"/api/database-discovery/snapshots?profileId={profile.Id}&page=2&pageSize=1");
+        var snapshotHistoryPageTwo = await snapshotHistoryPageTwoResponse.Content
+            .ReadFromJsonAsync<DatabaseDiscoverySnapshotHistoryPageResponse>(JsonOptions);
+        Assert.Equal(first.SnapshotId, Assert.Single(snapshotHistoryPageTwo!.Items).Id);
+        using var emptySnapshotHistoryResponse = await viewer.GetAsync(
+            "/api/database-discovery/snapshots?databaseSourceId=999999&pageSize=20");
+        var emptySnapshotHistory = await emptySnapshotHistoryResponse.Content
+            .ReadFromJsonAsync<DatabaseDiscoverySnapshotHistoryPageResponse>(JsonOptions);
+        Assert.Empty(emptySnapshotHistory!.Items);
+        await AssertValidationError(viewer, "/api/database-discovery/snapshots?pageSize=101", "pageSize");
+
+        using var differenceHistoryResponse = await viewer.GetAsync(
+            $"/api/database-discovery/differences?profileId={profile.Id}&databaseSourceId={profile.DatabaseSourceId}&pageSize=1");
+        Assert.Equal(HttpStatusCode.OK, differenceHistoryResponse.StatusCode);
+        var differenceHistoryJson = await differenceHistoryResponse.Content.ReadAsStringAsync();
+        AssertDiscoveryReadSanitized(differenceHistoryJson, canary, profile);
+        Assert.DoesNotContain("canonicalContent", differenceHistoryJson, StringComparison.OrdinalIgnoreCase);
+        var differenceHistory = JsonSerializer.Deserialize<DatabaseDiscoveryDifferenceHistoryPageResponse>(
+            differenceHistoryJson, JsonOptions);
+        var latestDifference = Assert.Single(differenceHistory!.Items);
+        Assert.Equal(2, differenceHistory.Total);
+        Assert.Equal(second.DifferenceId, latestDifference.Id);
+        Assert.Equal(profile.Name, latestDifference.ProfileName);
+        Assert.Equal(profile.DatabaseSourceName, latestDifference.DatabaseSourceName);
+        Assert.Equal(DatabaseProviderType.Oracle, latestDifference.ProviderType);
+        Assert.Equal(first.SnapshotId, latestDifference.BaseSnapshotId);
+        Assert.Equal(second.SnapshotId, latestDifference.TargetSnapshotId);
+        Assert.True(latestDifference.SummaryCounts.Changed > 0);
+        Assert.True(latestDifference.SummaryCounts.Unchanged > 0);
+
+        using var differenceHistoryPageTwoResponse = await viewer.GetAsync(
+            $"/api/database-discovery/differences?profileId={profile.Id}&page=2&pageSize=1");
+        var differenceHistoryPageTwo = await differenceHistoryPageTwoResponse.Content
+            .ReadFromJsonAsync<DatabaseDiscoveryDifferenceHistoryPageResponse>(JsonOptions);
+        Assert.Equal(first.DifferenceId, Assert.Single(differenceHistoryPageTwo!.Items).Id);
+        using var emptyDifferenceHistoryResponse = await viewer.GetAsync(
+            "/api/database-discovery/differences?databaseSourceId=999999&pageSize=20");
+        var emptyDifferenceHistory = await emptyDifferenceHistoryResponse.Content
+            .ReadFromJsonAsync<DatabaseDiscoveryDifferenceHistoryPageResponse>(JsonOptions);
+        Assert.Empty(emptyDifferenceHistory!.Items);
+        await AssertValidationError(viewer, "/api/database-discovery/differences?page=0", "page");
+
         using var filtered = await viewer.GetAsync(
             $"/api/database-discovery/differences/{second.DifferenceId}/entries?state=Changed&entityKind=Column&schema=APP_OWNER&search=name");
         Assert.Equal(HttpStatusCode.OK, filtered.StatusCode);
@@ -701,6 +767,10 @@ public sealed class DatabaseDiscoveryRunApiTests
         using var editor = await factory.CreateAuthenticatedClientAsync(editorId);
         using var editorSources = await editor.GetAsync("/api/admin/database-connection-profiles/database-sources");
         Assert.Equal(HttpStatusCode.Forbidden, editorSources.StatusCode);
+        using var editorSnapshots = await editor.GetAsync("/api/database-discovery/snapshots?pageSize=20");
+        Assert.Equal(HttpStatusCode.OK, editorSnapshots.StatusCode);
+        using var editorDifferences = await editor.GetAsync("/api/database-discovery/differences?pageSize=20");
+        Assert.Equal(HttpStatusCode.OK, editorDifferences.StatusCode);
     }
 
     [Fact]

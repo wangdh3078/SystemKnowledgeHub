@@ -89,6 +89,27 @@ public sealed record DatabaseDiscoverySnapshotSummaryResponse(
     IReadOnlyList<CanonicalCapability> Capabilities,
     CanonicalSnapshotCounts Counts);
 
+public sealed record DatabaseDiscoverySnapshotHistoryItemResponse(
+    long Id,
+    long RunId,
+    long ProfileId,
+    string ProfileName,
+    long DatabaseSourceId,
+    string DatabaseSourceName,
+    DatabaseProviderType ProviderType,
+    DateTimeOffset CapturedAt,
+    IReadOnlyList<string> IncludedSchemas,
+    long ScopeGenerationId,
+    long? BaseSnapshotId,
+    long? DifferenceId,
+    CanonicalSnapshotCounts Counts);
+
+public sealed record DatabaseDiscoverySnapshotHistoryPageResponse(
+    IReadOnlyList<DatabaseDiscoverySnapshotHistoryItemResponse> Items,
+    int Page,
+    int PageSize,
+    int Total);
+
 public sealed record DatabaseDiscoverySchemaResponse(string Name, string LogicalIdentity, int ObjectCount, int SequenceCount);
 
 public sealed record DatabaseDiscoverySchemaPageResponse(
@@ -182,6 +203,24 @@ public sealed record DatabaseDiscoveryDifferenceResponse(
     DateTimeOffset CreatedAt,
     DatabaseDiscoveryDifferenceCounts SummaryCounts,
     string ContentSha256);
+
+public sealed record DatabaseDiscoveryDifferenceHistoryItemResponse(
+    long Id,
+    long ProfileId,
+    string ProfileName,
+    long DatabaseSourceId,
+    string DatabaseSourceName,
+    DatabaseProviderType ProviderType,
+    long? BaseSnapshotId,
+    long TargetSnapshotId,
+    DateTimeOffset CreatedAt,
+    DatabaseDiscoveryDifferenceCounts SummaryCounts);
+
+public sealed record DatabaseDiscoveryDifferenceHistoryPageResponse(
+    IReadOnlyList<DatabaseDiscoveryDifferenceHistoryItemResponse> Items,
+    int Page,
+    int PageSize,
+    int Total);
 
 public sealed record DatabaseDiscoveryDifferenceEntryResponse(
     long? Id,

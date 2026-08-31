@@ -19,7 +19,9 @@ import KnowledgeDocumentDetailView from '../../features/knowledge-documents/page
 import AdministratorAttachmentsView from '../../features/attachment-administration/pages/AdministratorAttachmentsView.vue'
 import ConnectionProfilesView from '../../features/database-discovery/pages/ConnectionProfilesView.vue'
 import DiscoveryRunsView from '../../features/database-discovery/pages/DiscoveryRunsView.vue'
+import DiscoverySnapshotsView from '../../features/database-discovery/pages/DiscoverySnapshotsView.vue'
 import DiscoverySnapshotView from '../../features/database-discovery/pages/DiscoverySnapshotView.vue'
+import DiscoveryDifferencesView from '../../features/database-discovery/pages/DiscoveryDifferencesView.vue'
 import DiscoveryDifferenceView from '../../features/database-discovery/pages/DiscoveryDifferenceView.vue'
 
 export const routes: readonly RouteRecordRaw[] = [
@@ -181,7 +183,8 @@ export const routes: readonly RouteRecordRaw[] = [
     },
   },
   {
-    path: '/admin/database-discovery/connections',
+    path: '/database-discovery/connections',
+    alias: ['/database-discovery', '/admin/database-discovery/connections'],
     name: 'database-discovery-connections',
     component: ConnectionProfilesView,
     meta: {
@@ -204,11 +207,33 @@ export const routes: readonly RouteRecordRaw[] = [
     },
   },
   {
+    path: '/database-discovery/snapshots',
+    name: 'database-discovery-snapshots',
+    component: DiscoverySnapshotsView,
+    meta: {
+      title: '发现快照',
+      layout: 'app-shell',
+      navigationKey: 'database-discovery',
+      hasContextRail: false,
+    },
+  },
+  {
     path: '/database-discovery/snapshots/:id',
     name: 'database-discovery-snapshot',
     component: DiscoverySnapshotView,
     meta: {
       title: '发现快照',
+      layout: 'app-shell',
+      navigationKey: 'database-discovery',
+      hasContextRail: false,
+    },
+  },
+  {
+    path: '/database-discovery/differences',
+    name: 'database-discovery-differences',
+    component: DiscoveryDifferencesView,
+    meta: {
+      title: '差异审查',
       layout: 'app-shell',
       navigationKey: 'database-discovery',
       hasContextRail: false,

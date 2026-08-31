@@ -169,6 +169,125 @@ public sealed class DatabaseDiscoveryRunService(
             sources.Select(item => new DatabaseDiscoveryFilterOptionResponse(item.DatabaseSourceId, item.Name)).ToArray());
     }
 
+    public async Task<DatabaseDiscoverySnapshotHistoryPageResponse> ListSnapshots(
+        long? profileId,
+        long? databaseSourceId,
+        int? page,
+        int? pageSize,
+        bool includeHistory,
+        CancellationToken cancellationToken)
+    {
+        var normalizedPage = NormalizePage(page);
+        var normalizedPageSize = NormalizePageSize(pageSize);
+        var accessibleRuns = AccessibleRuns(includeHistory);
+        var accessibleRunIds = accessibleRuns.Select(item => item.Run.Id);
+        var query = dbContext.DatabaseDiscoverySnapshots.AsNoTracking()
+            .Where(item => accessibleRunIds.Contains(item.RunId));
+        if (profileId is not null) query = query.Where(item => item.ProfileId == profileId);
+        if (databaseSourceId is not null)
+        {
+            var profileIds = accessibleRuns
+                .Where(item => item.Profile.DatabaseSourceId == databaseSourceId)
+                .Select(item => item.Profile.Id);
+            query = query.Where(item => profileIds.Contains(item.ProfileId));
+        }
+
+        var total = await query.CountAsync(cancellationToken);
+        var snapshots = await query.OrderByDescending(item => item.Id)
+            .Skip((normalizedPage - 1) * normalizedPageSize)
+            .Take(normalizedPageSize)
+            .ToArrayAsync(cancellationToken);
+        var runIds = snapshots.Select(item => item.RunId).ToArray();
+        var runRows = await accessibleRuns.Where(item => runIds.Contains(item.Run.Id))
+            .ToArrayAsync(cancellationToken);
+        var rowsByRunId = runRows.ToDictionary(item => item.Run.Id);
+        var snapshotIds = snapshots.Select(item => item.Id).ToArray();
+        var differenceIds = await dbContext.DatabaseDiscoveryDifferences.AsNoTracking()
+            .Where(item => snapshotIds.Contains(item.TargetSnapshotId))
+            .Select(item => new { item.TargetSnapshotId, item.Id })
+            .ToDictionaryAsync(item => item.TargetSnapshotId, item => item.Id, cancellationToken);
+
+        var items = snapshots.Select(snapshot =>
+        {
+            var row = rowsByRunId[snapshot.RunId];
+            return new DatabaseDiscoverySnapshotHistoryItemResponse(
+                snapshot.Id,
+                snapshot.RunId,
+                snapshot.ProfileId,
+                row.Profile.Name,
+                row.Profile.DatabaseSourceId,
+                row.DatabaseSourceName,
+                row.Run.ProviderType,
+                snapshot.CapturedAt,
+                DeserializeIncludedSchemas(row.Run.RequestedIncludedSchemasJson),
+                snapshot.ScopeGenerationId,
+                row.Run.BaseSnapshotId,
+                differenceIds.TryGetValue(snapshot.Id, out var differenceId) ? differenceId : null,
+                DeserializeCounts(snapshot.CountsJson)!);
+        }).ToArray();
+        return new(items, normalizedPage, normalizedPageSize, total);
+    }
+
+    public async Task<DatabaseDiscoveryDifferenceHistoryPageResponse> ListDifferences(
+        long? profileId,
+        long? databaseSourceId,
+        int? page,
+        int? pageSize,
+        bool includeHistory,
+        CancellationToken cancellationToken)
+    {
+        var normalizedPage = NormalizePage(page);
+        var normalizedPageSize = NormalizePageSize(pageSize);
+        var accessibleRuns = AccessibleRuns(includeHistory);
+        var accessibleRunIds = accessibleRuns.Select(item => item.Run.Id);
+        var accessibleSnapshots = dbContext.DatabaseDiscoverySnapshots.AsNoTracking()
+            .Where(item => accessibleRunIds.Contains(item.RunId));
+        var accessibleSnapshotIds = accessibleSnapshots.Select(item => item.Id);
+        var query = dbContext.DatabaseDiscoveryDifferences.AsNoTracking()
+            .Where(item => accessibleSnapshotIds.Contains(item.TargetSnapshotId));
+        if (profileId is not null) query = query.Where(item => item.ProfileId == profileId);
+        if (databaseSourceId is not null)
+        {
+            var profileIds = accessibleRuns
+                .Where(item => item.Profile.DatabaseSourceId == databaseSourceId)
+                .Select(item => item.Profile.Id);
+            query = query.Where(item => profileIds.Contains(item.ProfileId));
+        }
+
+        var total = await query.CountAsync(cancellationToken);
+        var differences = await query.OrderByDescending(item => item.Id)
+            .Skip((normalizedPage - 1) * normalizedPageSize)
+            .Take(normalizedPageSize)
+            .ToArrayAsync(cancellationToken);
+        var targetSnapshotIds = differences.Select(item => item.TargetSnapshotId).ToArray();
+        var targetSnapshots = await accessibleSnapshots
+            .Where(item => targetSnapshotIds.Contains(item.Id))
+            .Select(item => new { item.Id, item.RunId })
+            .ToArrayAsync(cancellationToken);
+        var runIds = targetSnapshots.Select(item => item.RunId).ToArray();
+        var runRows = await accessibleRuns.Where(item => runIds.Contains(item.Run.Id))
+            .ToArrayAsync(cancellationToken);
+        var rowsByRunId = runRows.ToDictionary(item => item.Run.Id);
+        var targetRuns = targetSnapshots.ToDictionary(item => item.Id, item => rowsByRunId[item.RunId]);
+
+        var items = differences.Select(difference =>
+        {
+            var row = targetRuns[difference.TargetSnapshotId];
+            return new DatabaseDiscoveryDifferenceHistoryItemResponse(
+                difference.Id,
+                difference.ProfileId,
+                row.Profile.Name,
+                row.Profile.DatabaseSourceId,
+                row.DatabaseSourceName,
+                row.Run.ProviderType,
+                difference.BaseSnapshotId,
+                difference.TargetSnapshotId,
+                difference.CreatedAt,
+                JsonSerializer.Deserialize<DatabaseDiscoveryDifferenceCounts>(difference.SummaryCountsJson, JsonOptions)!);
+        }).ToArray();
+        return new(items, normalizedPage, normalizedPageSize, total);
+    }
+
     public async Task<DatabaseDiscoverySnapshotResponse?> GetSnapshot(long id, bool includeHistory, CancellationToken cancellationToken)
     {
         if (!ApiIdParser.IsSafePositive(id)) return null;
@@ -731,6 +850,9 @@ public sealed class DatabaseDiscoveryRunService(
 
     private static CanonicalSnapshotCounts? DeserializeCounts(string? json) =>
         json is null ? null : JsonSerializer.Deserialize<CanonicalSnapshotCounts>(json, JsonOptions);
+
+    private static IReadOnlyList<string> DeserializeIncludedSchemas(string json) =>
+        JsonSerializer.Deserialize<string[]>(json, JsonOptions) ?? [];
 
     private static DatabaseDiscoveryOperationResult<T> Success<T>(T response) => new(response, null, DatabaseDiscoveryFailure.None);
     private static DatabaseDiscoveryOperationResult<T> Failure<T>(DatabaseDiscoveryFailure failure) => new(default, null, failure);

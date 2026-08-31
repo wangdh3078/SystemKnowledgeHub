@@ -183,7 +183,13 @@ onBeforeUnmount(() => {
   <main class="discovery-page skh-page">
     <header class="discovery-page__header skh-page-header">
       <div>
-        <small class="discovery-eyebrow">数据库发现 / 差异审查</small>
+        <nav class="discovery-breadcrumb" aria-label="面包屑">
+          <RouterLink :to="{ name: 'database-discovery-runs' }">数据库发现</RouterLink>
+          <span>/</span>
+          <RouterLink :to="{ name: 'database-discovery-differences' }">差异审查</RouterLink>
+          <span>/</span>
+          <strong>Difference #{{ id }}</strong>
+        </nav>
         <h1>差异 #{{ id }}</h1>
         <p>审查结构变化；本页面不会应用或同步任何变更。</p>
       </div>
