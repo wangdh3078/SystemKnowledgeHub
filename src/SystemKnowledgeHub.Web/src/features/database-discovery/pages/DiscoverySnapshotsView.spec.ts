@@ -141,6 +141,13 @@ describe('DiscoverySnapshotsView', () => {
     await view.find('[data-pagination-next]').trigger('click')
     await flushPromises()
     expect(api.listSnapshots).toHaveBeenLastCalledWith(2, 20, 2, undefined, expect.any(AbortSignal))
+
+    expect(view.find('[data-pagination-layout]').attributes('data-pagination-layout')).toBe(
+      'total, sizes, prev, pager, next, jumper',
+    )
+    await view.find('[data-page-size="50"]').trigger('click')
+    await flushPromises()
+    expect(api.listSnapshots).toHaveBeenLastCalledWith(1, 50, 2, undefined, expect.any(AbortSignal))
   })
 
   it('navigates from history to Snapshot detail with its Difference shortcut', async () => {

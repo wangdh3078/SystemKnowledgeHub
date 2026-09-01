@@ -321,24 +321,42 @@ const ElPagination = defineComponent({
     currentPage: { type: Number, default: 1 },
     total: { type: Number, default: 0 },
     pageSize: { type: Number, default: 20 },
+    pageSizes: { type: Array as PropType<number[]>, default: () => [] },
+    layout: { type: String, default: '' },
   },
-  emits: ['update:currentPage', 'current-change'],
+  emits: ['update:currentPage', 'update:pageSize', 'current-change', 'size-change'],
   setup(props, { emit }) {
     return () =>
-      h(
-        'button',
-        {
-          type: 'button',
-          'data-pagination-next': '',
-          disabled: props.currentPage * props.pageSize >= props.total,
-          onClick: () => {
-            const next = props.currentPage + 1
-            emit('update:currentPage', next)
-            emit('current-change', next)
+      h('div', { 'data-pagination-layout': props.layout }, [
+        ...props.pageSizes.map((size) =>
+          h(
+            'button',
+            {
+              type: 'button',
+              'data-page-size': String(size),
+              onClick: () => {
+                emit('update:pageSize', size)
+                emit('size-change', size)
+              },
+            },
+            `每页 ${size}`,
+          ),
+        ),
+        h(
+          'button',
+          {
+            type: 'button',
+            'data-pagination-next': '',
+            disabled: props.currentPage * props.pageSize >= props.total,
+            onClick: () => {
+              const next = props.currentPage + 1
+              emit('update:currentPage', next)
+              emit('current-change', next)
+            },
           },
-        },
-        '下一页',
-      )
+          '下一页',
+        ),
+      ])
   },
 })
 

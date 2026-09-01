@@ -46,6 +46,7 @@ export const queryReconciliationObjectGroups = (
   category: string,
   search: string,
   page: number,
+  pageSize: number,
   selectedActions: readonly SyncSelection[],
   signal?: AbortSignal,
 ): Promise<ReconciliationObjectGroupPage> =>
@@ -57,7 +58,7 @@ export const queryReconciliationObjectGroups = (
       category,
       search,
       page,
-      pageSize: 20,
+      pageSize,
       selectedActions,
     },
     { signal, decode: decodeReconciliationObjectGroups },
@@ -69,6 +70,7 @@ export const queryReconciliationObjectChildren = (
   category: string,
   search: string,
   page: number,
+  pageSize: number,
   selectedActions: readonly SyncSelection[],
   signal?: AbortSignal,
 ): Promise<ReconciliationObjectChildrenPage> =>
@@ -81,7 +83,7 @@ export const queryReconciliationObjectChildren = (
       category,
       search,
       page,
-      pageSize: 20,
+      pageSize,
       selectedActions,
     },
     { signal, decode: decodeReconciliationObjectChildren },
@@ -145,10 +147,11 @@ export const getSyncPlan = (id: number, signal?: AbortSignal): Promise<SyncPlan>
   apiClient.get(`/database-discovery/sync-plans/${safe(id)}`, { signal, decode: decodeSyncPlan })
 export const listSyncPlans = (
   page = 1,
+  pageSize = 20,
   profileId?: number,
   signal?: AbortSignal,
 ): Promise<Page<SyncPlan>> => {
-  const query = new URLSearchParams({ page: String(page), pageSize: '20' })
+  const query = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
   if (profileId) query.set('profileId', String(safe(profileId)))
   return apiClient.get(`/database-discovery/sync-plans?${query}`, {
     signal,

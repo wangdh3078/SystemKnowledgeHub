@@ -14,6 +14,7 @@ import '../database-discovery.css'
 const router = useRouter()
 const items = ref<readonly DifferenceHistoryItem[]>([])
 const page = ref(1)
+const pageSize = ref(20)
 const total = ref(0)
 const profileId = ref<number | undefined>()
 const databaseSourceId = ref<number | undefined>()
@@ -39,7 +40,7 @@ async function load(): Promise<void> {
   try {
     const result = await listDifferences(
       page.value,
-      20,
+      pageSize.value,
       profileId.value,
       databaseSourceId.value,
       controller.signal,
@@ -61,6 +62,11 @@ async function load(): Promise<void> {
 }
 
 function handleFilterChange(): void {
+  page.value = 1
+  void load()
+}
+function handlePageSizeChange(value: number): void {
+  pageSize.value = value
   page.value = 1
   void load()
 }
@@ -190,14 +196,15 @@ onBeforeUnmount(() => {
         </el-table-column>
       </el-table>
       <footer v-if="total > 0" class="discovery-pagination skh-pagination">
-        <span>{{ (page - 1) * 20 + 1 }}–{{ Math.min(page * 20, total) }} / {{ total }}</span>
         <el-pagination
           v-model:current-page="page"
+          v-model:page-size="pageSize"
           :total="total"
-          :page-size="20"
+          :page-sizes="[20, 50, 100]"
           background
-          layout="prev,pager,next"
+          layout="total, sizes, prev, pager, next, jumper"
           @current-change="load"
+          @size-change="handlePageSizeChange"
         />
       </footer>
       <p v-if="error" class="discovery-inline-error" role="alert">刷新失败：{{ error }}</p>

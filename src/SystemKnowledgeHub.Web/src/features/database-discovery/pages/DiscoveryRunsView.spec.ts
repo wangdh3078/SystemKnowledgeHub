@@ -67,11 +67,11 @@ const run = (status: DiscoveryRun['status']): DiscoveryRun => ({
   concurrencyToken: `run-${status}`,
 })
 
-const page = (item: DiscoveryRun): Page<DiscoveryRun> => ({
+const page = (item: DiscoveryRun, total = 1): Page<DiscoveryRun> => ({
   items: [item],
   page: 1,
   pageSize: 20,
-  total: 1,
+  total,
 })
 
 function mountFor(accessLevel: AccessLevel) {
@@ -186,6 +186,28 @@ describe('DiscoveryRunsView', () => {
       name: 'database-discovery-difference',
       params: { id: '9' },
     })
+
+    wrapper.unmount()
+  })
+
+  it('uses the selected server page size and resets the page to one', async () => {
+    api.listRuns.mockResolvedValue(page(run('Succeeded'), 101))
+    const wrapper = mountFor('Viewer')
+    await flushPromises()
+
+    expect(api.listRuns).toHaveBeenCalledWith(1, 20, undefined, undefined, expect.any(AbortSignal))
+    expect(wrapper.find('[data-pagination-layout]').attributes('data-pagination-layout')).toBe(
+      'total, sizes, prev, pager, next, jumper',
+    )
+    await wrapper.find('[data-page-size="50"]').trigger('click')
+    await flushPromises()
+    expect(api.listRuns).toHaveBeenLastCalledWith(
+      1,
+      50,
+      undefined,
+      undefined,
+      expect.any(AbortSignal),
+    )
 
     wrapper.unmount()
   })

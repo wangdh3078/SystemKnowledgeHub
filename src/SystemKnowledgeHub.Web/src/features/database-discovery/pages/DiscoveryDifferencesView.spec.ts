@@ -107,6 +107,19 @@ describe('DiscoveryDifferencesView', () => {
       22,
       expect.any(AbortSignal),
     )
+
+    expect(view.find('[data-pagination-layout]').attributes('data-pagination-layout')).toBe(
+      'total, sizes, prev, pager, next, jumper',
+    )
+    await view.find('[data-page-size="100"]').trigger('click')
+    await flushPromises()
+    expect(api.listDifferences).toHaveBeenLastCalledWith(
+      1,
+      100,
+      undefined,
+      22,
+      expect.any(AbortSignal),
+    )
   })
 
   it('navigates directly to Difference detail', async () => {

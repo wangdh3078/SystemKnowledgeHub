@@ -36,7 +36,7 @@ public sealed class DatabaseDiscoverySyncController(
         [FromBody] DatabaseDiscoveryReconciliationObjectQueryRequest request,
         CancellationToken cancellationToken)
     {
-        var error = ValidatePagination(request.Page, request.PageSize);
+        var error = ValidatePagination(request.Page, request.PageSize, maximumPageSize: 200);
         if (error is not null) return BadRequest(error);
         return MapRead(await service.QueryObjectGroups(request, cancellationToken));
     }
@@ -46,7 +46,7 @@ public sealed class DatabaseDiscoverySyncController(
         [FromBody] DatabaseDiscoveryReconciliationObjectChildrenQueryRequest request,
         CancellationToken cancellationToken)
     {
-        var error = ValidatePagination(request.Page, request.PageSize);
+        var error = ValidatePagination(request.Page, request.PageSize, maximumPageSize: 200);
         if (error is not null) return BadRequest(error);
         return MapRead(await service.QueryObjectChildren(request, cancellationToken));
     }
@@ -175,11 +175,17 @@ public sealed class DatabaseDiscoverySyncController(
             : new(null, result.StatusCode, result.Error);
     }
 
-    private static ApiErrorResponse? ValidatePagination(int? page, int? pageSize)
+    private static ApiErrorResponse? ValidatePagination(
+        int? page,
+        int? pageSize,
+        int maximumPageSize = 100)
     {
         var errors = new Dictionary<string, string[]>();
         if (page is <= 0 or > 1_000_000) errors["page"] = ["page 必须是正整数。"];
-        if (pageSize is <= 0 or > 100) errors["pageSize"] = ["pageSize 必须是 1 到 100 之间的整数。"];
+        if (pageSize is <= 0 || pageSize > maximumPageSize)
+        {
+            errors["pageSize"] = [$"pageSize 必须是 1 到 {maximumPageSize} 之间的整数。"];
+        }
         return errors.Count == 0 ? null : new("validation_error", "请求内容无效。", errors, null);
     }
 

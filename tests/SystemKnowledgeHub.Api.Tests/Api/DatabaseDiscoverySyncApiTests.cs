@@ -218,6 +218,21 @@ public sealed class DatabaseDiscoverySyncApiTests
 
         var viewerId = await CreateUser(factory, AccessLevel.Viewer);
         using var viewer = await factory.CreateAuthenticatedClientAsync(viewerId);
+        var maximumGroups = await QueryObjectGroups(
+            viewer, profile.Id, run.SnapshotId!.Value, [], pageSize: 200);
+        Assert.Equal(200, maximumGroups.PageSize);
+        using (var oversizedGroups = await viewer.PostAsJsonAsync(
+            "/api/database-discovery/reconciliation/object-groups/query", new
+            {
+                profileId = profile.Id,
+                targetSnapshotId = run.SnapshotId,
+                category = "",
+                search = "",
+                page = 1,
+                pageSize = 201,
+                selectedActions = Array.Empty<object>(),
+            }))
+            Assert.Equal(HttpStatusCode.BadRequest, oversizedGroups.StatusCode);
         var groups = await QueryObjectGroups(viewer, profile.Id, run.SnapshotId!.Value, [], search: "NAME");
         var customers = Assert.Single(groups.Items);
         Assert.Equal("CUSTOMERS", customers.ObjectName);
@@ -238,6 +253,22 @@ public sealed class DatabaseDiscoverySyncApiTests
         Assert.Equal("NAME", name.Name);
         Assert.Equal(1, name.SelectableCount);
         Assert.Equal(0, name.SelectedCount);
+        var maximumChildren = await QueryObjectChildren(viewer, profile.Id, run.SnapshotId.Value,
+            customers.ObjectLogicalIdentity, [], page: 1, pageSize: 200);
+        Assert.Equal(200, maximumChildren.PageSize);
+        using (var oversizedChildren = await viewer.PostAsJsonAsync(
+            "/api/database-discovery/reconciliation/object-children/query", new
+            {
+                profileId = profile.Id,
+                targetSnapshotId = run.SnapshotId,
+                objectLogicalIdentity = customers.ObjectLogicalIdentity,
+                category = "",
+                search = "",
+                page = 1,
+                pageSize = 201,
+                selectedActions = Array.Empty<object>(),
+            }))
+            Assert.Equal(HttpStatusCode.BadRequest, oversizedChildren.StatusCode);
 
         using (var forbidden = await viewer.PostAsJsonAsync(
             "/api/database-discovery/reconciliation/object-selection", new
@@ -794,7 +825,8 @@ public sealed class DatabaseDiscoverySyncApiTests
         long profileId,
         long targetSnapshotId,
         IReadOnlyList<DatabaseDiscoverySyncSelectionRequest> selectedActions,
-        string search = "")
+        string search = "",
+        int pageSize = 100)
     {
         using var response = await client.PostAsJsonAsync(
             "/api/database-discovery/reconciliation/object-groups/query", new
@@ -804,7 +836,7 @@ public sealed class DatabaseDiscoverySyncApiTests
                 category = "",
                 search,
                 page = 1,
-                pageSize = 100,
+                pageSize,
                 selectedActions,
             });
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
