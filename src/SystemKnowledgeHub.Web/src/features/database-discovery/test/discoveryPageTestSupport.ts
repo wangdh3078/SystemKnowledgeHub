@@ -191,7 +191,7 @@ const ElSwitch = defineComponent({
 const ElCheckbox = defineComponent({
   name: 'ElCheckbox',
   inheritAttrs: false,
-  props: { modelValue: Boolean, disabled: Boolean },
+  props: { modelValue: Boolean, disabled: Boolean, indeterminate: Boolean },
   emits: ['update:modelValue', 'change'],
   setup(props, { attrs, emit, slots }) {
     return () =>
@@ -201,6 +201,7 @@ const ElCheckbox = defineComponent({
           type: 'checkbox',
           checked: props.modelValue,
           disabled: props.disabled,
+          'data-indeterminate': String(props.indeterminate),
           onChange: (event: Event) => {
             const checked = (event.target as HTMLInputElement).checked
             emit('update:modelValue', checked)

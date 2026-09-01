@@ -22,6 +22,7 @@ import {
   ElRadio,
   ElRadioButton,
   ElRadioGroup,
+  ElResult,
   ElSelect,
   ElTable,
   ElTableColumn,
@@ -54,6 +55,7 @@ import 'element-plus/es/components/pagination/style/css'
 import 'element-plus/es/components/radio/style/css'
 import 'element-plus/es/components/radio-button/style/css'
 import 'element-plus/es/components/radio-group/style/css'
+import 'element-plus/es/components/result/style/css'
 import 'element-plus/es/components/select/style/css'
 import 'element-plus/es/components/table/style/css'
 import 'element-plus/es/components/table-column/style/css'
@@ -114,6 +116,7 @@ export async function bootstrapApp(): Promise<void> {
   app.use(ElRadio)
   app.use(ElRadioButton)
   app.use(ElRadioGroup)
+  app.use(ElResult)
   app.use(ElSelect)
   app.use(ElTable)
   app.use(ElTableColumn)

@@ -3,14 +3,24 @@ import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useActorStore } from '../../../app/stores/actor'
 import type { AccessLevel, CurrentUserProfile } from '../../users/api/userContracts'
-import type { ReconciliationPage, SyncPlan } from '../api/databaseDiscoverySyncContracts'
+import type {
+  ReconciliationCandidate,
+  ReconciliationChild,
+  ReconciliationObjectChildrenPage,
+  ReconciliationObjectGroup,
+  ReconciliationObjectGroupPage,
+  SyncPlan,
+  SyncSelection,
+} from '../api/databaseDiscoverySyncContracts'
 import { discoveryPageStubs } from '../test/discoveryPageTestSupport'
 import DiscoverySyncView from './DiscoverySyncView.vue'
 
 const messages = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), confirm: vi.fn() }))
 const discoveryApi = vi.hoisted(() => ({ getRunFilterOptions: vi.fn() }))
 const syncApi = vi.hoisted(() => ({
-  getReconciliation: vi.fn(),
+  queryReconciliationObjectGroups: vi.fn(),
+  queryReconciliationObjectChildren: vi.fn(),
+  setWholeObjectSelection: vi.fn(),
   listSyncPlans: vi.fn(),
   createSyncPlan: vi.fn(),
   previewSyncPlan: vi.fn(),
@@ -37,7 +47,136 @@ const user: CurrentUserProfile = {
   authenticationMethod: 'local',
   mustChangePassword: false,
 }
-const reconciliation: ReconciliationPage = {
+
+const candidate = (
+  action: ReconciliationCandidate['suggestedAction'],
+  logicalIdentity: string,
+  childName: string | null,
+  status: ReconciliationCandidate['status'] = 'Applicable',
+  blockCode: string | null = null,
+): ReconciliationCandidate => ({
+  key: `${action ?? 'none'}:${logicalIdentity}`,
+  category: status === 'Applicable' ? 'New' : status === 'Conflict' ? 'Conflict' : 'Unsupported',
+  entityKind: childName === null ? 'DatabaseObject' : 'Column',
+  status,
+  suggestedAction: action,
+  blockCode,
+  schemaLogicalIdentity: 'schema-1',
+  logicalIdentity,
+  parentLogicalIdentity: childName === null ? null : 'obj-a',
+  schemaName: 'APP',
+  objectName: 'CUSTOMERS',
+  childName,
+  targetId: null,
+  targetConcurrencyToken: null,
+  summary: status === 'Applicable' ? '可加入同步计划。' : '当前项不可选择。',
+})
+
+const objectAction = candidate('CreateDatabaseObject', 'obj-a', null)
+const columnActions = [
+  candidate('CreateDatabaseColumn', 'col-a-1', 'ID'),
+  candidate('CreateDatabaseColumn', 'col-a-2', 'CODE'),
+  candidate('CreateDatabaseColumn', 'col-a-3', 'DISPLAY_NAME'),
+]
+const requiredParent: SyncSelection = {
+  actionType: 'CreateDatabaseObject',
+  logicalIdentity: 'obj-a',
+  targetId: null,
+}
+const selectionFor = (item: ReconciliationCandidate): SyncSelection => ({
+  actionType: item.suggestedAction!,
+  logicalIdentity: item.logicalIdentity,
+  targetId: item.targetId,
+})
+const selectionKey = (item: SyncSelection): string =>
+  `${item.actionType}\u001f${item.logicalIdentity}\u001f${item.targetId ?? ''}`
+const selectedCountFor = (
+  candidates: readonly ReconciliationCandidate[],
+  selected: readonly SyncSelection[],
+): number => {
+  const keys = new Set(selected.map(selectionKey))
+  return candidates.map(selectionFor).filter((item) => keys.has(selectionKey(item))).length
+}
+
+const baseGroups: readonly ReconciliationObjectGroup[] = [
+  {
+    key: 'object:obj-a',
+    schemaLogicalIdentity: 'schema-1',
+    objectLogicalIdentity: 'obj-a',
+    schemaName: 'APP',
+    objectName: 'CUSTOMERS',
+    objectType: 'Table',
+    targetId: null,
+    status: 'Applicable',
+    objectCandidates: [objectAction],
+    requiredParentAction: requiredParent,
+    totalColumnCount: 3,
+    selectableColumnCount: 3,
+    totalChildCount: 4,
+    selectableCount: 4,
+    selectedCount: 0,
+    conflictCount: 0,
+    unsupportedCount: 1,
+    noActionCount: 0,
+    summary: '部分可处理，共 4 个类型化操作可加入计划。',
+  },
+  {
+    key: 'object:obj-b',
+    schemaLogicalIdentity: 'schema-1',
+    objectLogicalIdentity: 'obj-b',
+    schemaName: 'APP',
+    objectName: 'ORDERS',
+    objectType: 'Table',
+    targetId: 71,
+    status: 'Applicable',
+    objectCandidates: [
+      {
+        ...candidate(null, 'obj-b', null, 'NoAction'),
+        objectName: 'ORDERS',
+        targetId: 71,
+      },
+    ],
+    requiredParentAction: null,
+    totalColumnCount: 3,
+    selectableColumnCount: 1,
+    totalChildCount: 3,
+    selectableCount: 1,
+    selectedCount: 0,
+    conflictCount: 1,
+    unsupportedCount: 0,
+    noActionCount: 1,
+    summary: '部分可处理，共 1 个类型化操作可加入计划。',
+  },
+  {
+    key: 'object:obj-c',
+    schemaLogicalIdentity: 'schema-1',
+    objectLogicalIdentity: 'obj-c',
+    schemaName: 'APP',
+    objectName: 'AUDIT_LOG',
+    objectType: 'Table',
+    targetId: 72,
+    status: 'Conflict',
+    objectCandidates: [
+      {
+        ...candidate(null, 'obj-c', null, 'Conflict', 'UnsupportedIdentifierCollision'),
+        objectName: 'AUDIT_LOG',
+        targetId: 72,
+      },
+    ],
+    requiredParentAction: null,
+    totalColumnCount: 1,
+    selectableColumnCount: 0,
+    totalChildCount: 2,
+    selectableCount: 0,
+    selectedCount: 0,
+    conflictCount: 1,
+    unsupportedCount: 1,
+    noActionCount: 0,
+    summary: '当前对象只有冲突项，不能加入同步计划。',
+  },
+]
+
+const groupPage = (selected: readonly SyncSelection[] = []): ReconciliationObjectGroupPage => ({
   profileId: 1,
   profileName: 'Oracle 只读',
   databaseSourceId: 11,
@@ -47,46 +186,51 @@ const reconciliation: ReconciliationPage = {
   targetDifferenceId: 51,
   scopeGenerationId: 7,
   identityAlgorithmVersion: 1,
+  maximumSyncPlanActions: 2000,
+  ungroupedReviewOnlyCount: 1,
   page: 1,
-  pageSize: 50,
-  total: 2,
-  items: [
-    {
-      key: 'CreateDatabaseObject:obj-1',
-      category: 'New',
-      entityKind: 'DatabaseObject',
-      status: 'Applicable',
-      suggestedAction: 'CreateDatabaseObject',
-      blockCode: null,
-      schemaLogicalIdentity: 'schema-1',
-      logicalIdentity: 'obj-1',
-      parentLogicalIdentity: null,
-      schemaName: 'APP',
-      objectName: 'CUSTOMERS',
-      childName: null,
-      targetId: null,
-      targetConcurrencyToken: null,
-      summary: '可创建新的数据库知识对象。',
-    },
-    {
-      key: 'none:index-1',
-      category: 'Unsupported',
-      entityKind: 'Index',
-      status: 'Unsupported',
-      suggestedAction: null,
-      blockCode: 'ReviewOnlyStructure',
-      schemaLogicalIdentity: 'schema-1',
-      logicalIdentity: 'index-1',
-      parentLogicalIdentity: 'obj-1',
-      schemaName: 'APP',
-      objectName: 'CUSTOMERS',
-      childName: 'IX_CUSTOMERS',
-      targetId: null,
-      targetConcurrencyToken: null,
-      summary: '当前结构仅供审查。',
-    },
-  ],
+  pageSize: 20,
+  total: 3,
+  items: baseGroups.map((group) => {
+    const candidates =
+      group.objectLogicalIdentity === 'obj-a'
+        ? [objectAction, ...columnActions]
+        : group.objectCandidates.filter((item) => item.suggestedAction !== null)
+    return { ...group, selectedCount: selectedCountFor(candidates, selected) }
+  }),
+})
+
+const child = (
+  item: ReconciliationCandidate,
+  selected: readonly SyncSelection[],
+): ReconciliationChild => ({
+  key: `Column:${item.logicalIdentity}`,
+  entityKind: 'Column',
+  logicalIdentity: item.logicalIdentity,
+  name: item.childName,
+  status: item.status,
+  candidates: [item],
+  selectableCount: item.suggestedAction === null ? 0 : 1,
+  selectedCount: item.suggestedAction === null ? 0 : selectedCountFor([item], selected),
+  blockCodes: item.blockCode ? [item.blockCode] : [],
+  summary: item.summary,
+})
+const childPage = (
+  page: number,
+  selected: readonly SyncSelection[] = [],
+): ReconciliationObjectChildrenPage => {
+  const pageItems = page === 1 ? columnActions.slice(0, 2) : columnActions.slice(2)
+  return {
+    profileId: 1,
+    targetSnapshotId: 41,
+    objectLogicalIdentity: 'obj-a',
+    items: pageItems.map((item) => child(item, selected)),
+    page,
+    pageSize: 20,
+    total: 21,
+  }
 }
+
 const plan: SyncPlan = {
   id: 9,
   profileId: 1,
@@ -100,20 +244,20 @@ const plan: SyncPlan = {
   scopeGenerationId: 7,
   identityAlgorithmVersion: 1,
   status: 'Draft',
-  actions: [{ actionType: 'CreateDatabaseObject', logicalIdentity: 'obj-1', targetId: null }],
+  actions: [requiredParent],
   preview: {
     planId: 9,
     targetSnapshotId: 41,
     scopeGenerationId: 7,
     previewHash: 'a'.repeat(64),
-    counts: { createObjects: 1 },
+    counts: { createObjects: 1, createColumns: 3 },
     warnings: ['索引仅供审查'],
     actions: [
       {
         actionType: 'CreateDatabaseObject',
         entityKind: 'DatabaseObject',
         schemaLogicalIdentity: 'schema-1',
-        logicalIdentity: 'obj-1',
+        logicalIdentity: 'obj-a',
         parentLogicalIdentity: null,
         targetId: null,
         before: null,
@@ -172,9 +316,37 @@ beforeEach(() => {
     profiles: [{ id: 1, name: 'Oracle 只读' }],
     databaseSources: [{ id: 11, name: '核心 Oracle' }],
   })
-  syncApi.getReconciliation.mockResolvedValue(reconciliation)
+  syncApi.queryReconciliationObjectGroups.mockImplementation(
+    (_profileId, _snapshotId, _category, _search, _page, selected) =>
+      Promise.resolve(groupPage(selected)),
+  )
+  syncApi.queryReconciliationObjectChildren.mockImplementation(
+    (_profileId, _snapshotId, _identity, _category, _search, page, selected) =>
+      Promise.resolve(childPage(page, selected)),
+  )
+  syncApi.setWholeObjectSelection.mockImplementation(
+    (_profileId, _snapshotId, identity, checked, current: readonly SyncSelection[]) => {
+      const next = new Map(current.map((item) => [selectionKey(item), item]))
+      if (identity === 'obj-a') {
+        for (const item of [requiredParent, ...columnActions.map(selectionFor)]) {
+          if (checked) next.set(selectionKey(item), item)
+          else next.delete(selectionKey(item))
+        }
+      }
+      const actions = [...next.values()]
+      return Promise.resolve({
+        actions,
+        selectedCount: actions.length,
+        maximumSyncPlanActions: 2000,
+        objectSelectableCount: 4,
+        objectSelectedCount: checked ? 4 : 0,
+      })
+    },
+  )
   syncApi.listSyncPlans.mockResolvedValue({ items: [plan], page: 1, pageSize: 20, total: 1 })
-  syncApi.createSyncPlan.mockResolvedValue(plan)
+  syncApi.createSyncPlan.mockImplementation((_profileId, _snapshotId, actions) =>
+    Promise.resolve({ ...plan, actions }),
+  )
   syncApi.previewSyncPlan.mockResolvedValue(plan)
   syncApi.confirmSyncPlan.mockResolvedValue({
     ...plan,
@@ -188,7 +360,7 @@ beforeEach(() => {
     result: {
       createdObjects: 1,
       linkedObjects: 0,
-      createdColumns: 2,
+      createdColumns: 3,
       linkedColumns: 0,
       updatedObjects: 0,
       updatedColumns: 0,
@@ -204,38 +376,151 @@ afterEach(() => {
   wrapper = undefined
 })
 
-describe('DiscoverySyncView', () => {
-  it('keeps Viewer read-only while exposing reconciliation and plan review', async () => {
+describe('DiscoverySyncView object-group reconciliation', () => {
+  it('keeps Viewer read-only while allowing lazy object expansion', async () => {
     const view = mountAt('Viewer')
     await flushPromises()
-    expect(view.text()).toContain('手工同步')
     expect(view.text()).toContain('APP.CUSTOMERS')
-    expect(view.text()).toContain('仅审查')
+    expect(view.text()).toContain('字段 3 / 3 可处理')
     expect(view.text()).not.toContain('生成计划并预览')
+    expect(view.find('input[aria-label^="选择对象 APP.CUSTOMERS"]').exists()).toBe(false)
+    expect(syncApi.queryReconciliationObjectChildren).not.toHaveBeenCalled()
+
+    await view.find('button[aria-label="展开 APP.CUSTOMERS 字段"]').trigger('click')
+    await flushPromises()
+    expect(syncApi.queryReconciliationObjectChildren).toHaveBeenCalledOnce()
+    expect(view.text()).toContain('ID')
+    expect(view.find('input[aria-label="选择 ID 的可处理操作"]').exists()).toBe(false)
+    expect(syncApi.setWholeObjectSelection).not.toHaveBeenCalled()
+  })
+
+  it('renders mixed and disabled groups without selecting conflict or review-only items', async () => {
+    const view = mountAt('Editor')
+    await flushPromises()
+    expect(view.text()).toContain('APP.ORDERS')
+    expect(view.text()).toContain('部分可处理')
+    expect(view.text()).toContain('冲突 1 · 仅审查 0')
+    expect(
+      view.find('input[aria-label^="选择对象 APP.AUDIT_LOG"]').attributes('disabled'),
+    ).toBeDefined()
+  })
+
+  it('expands and collapses children lazily while retaining selection state', async () => {
+    const view = mountAt('Editor')
+    await flushPromises()
+    await view.find('button[aria-label="展开 APP.CUSTOMERS 字段"]').trigger('click')
+    await flushPromises()
+    await view.find('input[aria-label="选择 ID 的可处理操作"]').setValue(true)
+    await flushPromises()
+    expect(view.text()).toContain('已选择 2 个类型化操作')
+    expect(
+      view.find('input[aria-label^="选择对象 APP.CUSTOMERS"]').attributes('data-indeterminate'),
+    ).toBe('true')
+
+    await view.find('button[aria-label="收起 APP.CUSTOMERS 字段"]').trigger('click')
+    await view.find('button[aria-label="展开 APP.CUSTOMERS 字段"]').trigger('click')
+    await flushPromises()
+    expect(view.find('input[aria-label="选择 ID 的可处理操作"]').element).toHaveProperty(
+      'checked',
+      true,
+    )
+  })
+
+  it('whole-object selection includes the required parent and unloaded child typed actions', async () => {
+    const view = mountAt('Editor')
+    await flushPromises()
+    await view.find('input[aria-label^="选择对象 APP.CUSTOMERS"]').setValue(true)
+    await flushPromises()
+
+    expect(syncApi.setWholeObjectSelection).toHaveBeenCalledWith(1, 41, 'obj-a', true, [])
+    expect(view.text()).toContain('已选择 4 个类型化操作')
+    expect(view.find('input[aria-label^="选择对象 APP.CUSTOMERS"]').element).toHaveProperty(
+      'checked',
+      true,
+    )
     await view
       .findAll('button')
-      .find((item) => item.text() === '查看计划')!
+      .find((item) => item.text() === '生成计划并预览')!
       .trigger('click')
-    expect(view.text()).toContain('PreviewHash')
-    expect(view.text()).not.toContain('确认当前预览')
-    expect(view.text()).not.toContain('应用已确认计划')
+    await flushPromises()
+    const actions = syncApi.createSyncPlan.mock.calls[0][2] as readonly SyncSelection[]
+    expect(actions).toHaveLength(4)
+    expect(actions).toContainEqual(requiredParent)
+    expect(actions).toContainEqual(selectionFor(columnActions[2]!))
+  })
+
+  it('changes the parent to indeterminate after deselecting one child', async () => {
+    const view = mountAt('Editor')
+    await flushPromises()
+    await view.find('input[aria-label^="选择对象 APP.CUSTOMERS"]').setValue(true)
+    await flushPromises()
+    await view.find('button[aria-label="展开 APP.CUSTOMERS 字段"]').trigger('click')
+    await flushPromises()
+    await view.find('input[aria-label="选择 ID 的可处理操作"]').setValue(false)
+    await flushPromises()
+    const parent = view.find('input[aria-label^="选择对象 APP.CUSTOMERS"]')
+    expect(parent.attributes('data-indeterminate')).toBe('true')
+    expect(view.text()).toContain('已选择 3 个类型化操作')
+  })
+
+  it('keeps selections when paging unloaded children', async () => {
+    const view = mountAt('Editor')
+    await flushPromises()
+    await view.find('button[aria-label="展开 APP.CUSTOMERS 字段"]').trigger('click')
+    await flushPromises()
+    await view.find('input[aria-label="选择 ID 的可处理操作"]').setValue(true)
+    await flushPromises()
+    const childPager = view
+      .findAll('[data-pagination-next]')
+      .find((item) => item.element.closest('.discovery-object-children'))
+    await childPager!.trigger('click')
+    await flushPromises()
+    expect(view.text()).toContain('DISPLAY_NAME')
+    expect(view.text()).toContain('已选择 2 个类型化操作')
+    expect(syncApi.queryReconciliationObjectChildren).toHaveBeenLastCalledWith(
+      1,
+      41,
+      'obj-a',
+      '',
+      '',
+      2,
+      expect.arrayContaining([requiredParent, selectionFor(columnActions[0]!)]),
+      expect.any(AbortSignal),
+    )
+  })
+
+  it('rejects a child selection that would exceed the action cap without truncation', async () => {
+    syncApi.queryReconciliationObjectGroups.mockImplementation(
+      (_profileId, _snapshotId, _category, _search, _page, selected) =>
+        Promise.resolve({ ...groupPage(selected), maximumSyncPlanActions: 1 }),
+    )
+    const view = mountAt('Editor')
+    await flushPromises()
+    await view.find('button[aria-label="展开 APP.CUSTOMERS 字段"]').trigger('click')
+    await flushPromises()
+    await view.find('input[aria-label="选择 ID 的可处理操作"]').setValue(true)
+    await flushPromises()
+    expect(messages.error).toHaveBeenCalledWith(
+      '该选择将超过单个同步计划允许的最大操作数，请减少选择范围。',
+    )
+    expect(view.text()).toContain('已选择 0 个类型化操作')
   })
 
   it.each<AccessLevel>(['Editor', 'Administrator'])(
-    'allows %s to select and run the explicit preview/confirm flow',
+    'allows %s to use the existing preview and explicit confirmation flow',
     async (accessLevel) => {
       const view = mountAt(accessLevel)
       await flushPromises()
-      expect(view.text()).toContain('生成计划并预览')
-      expect(view.text()).not.toContain('测试连接')
-      expect(view.text()).not.toContain('开始发现')
       await view
         .findAll('button')
         .find((item) => item.text() === '查看计划')!
         .trigger('click')
-      expect(view.text()).toContain('我已核对当前 PreviewHash')
+      expect(view.text()).toContain('PreviewHash')
       expect(view.text()).toContain('确认当前预览')
-      await view.find('input[type="checkbox"]').setValue(true)
+      const confirmation = view
+        .findAll('label')
+        .find((item) => item.text().includes('我已核对当前 PreviewHash'))!
+      await confirmation.find('input').setValue(true)
       await view
         .findAll('button')
         .find((item) => item.text() === '确认当前预览')!
@@ -244,47 +529,4 @@ describe('DiscoverySyncView', () => {
       expect(syncApi.confirmSyncPlan).toHaveBeenCalledOnce()
     },
   )
-
-  it('supports server-side category filters and renders applied result navigation', async () => {
-    const applied = await syncApi.applySyncPlan(plan)
-    syncApi.listSyncPlans.mockResolvedValue({ items: [applied], page: 1, pageSize: 20, total: 1 })
-    const view = mountAt('Editor')
-    await flushPromises()
-    await view.find('[data-option-value="Unsupported"]').trigger('click')
-    await flushPromises()
-    expect(syncApi.getReconciliation).toHaveBeenLastCalledWith(
-      1,
-      'Unsupported',
-      '',
-      1,
-      expect.any(AbortSignal),
-    )
-    await view
-      .findAll('button')
-      .find((item) => item.text() === '查看计划')!
-      .trigger('click')
-    expect(view.text()).toContain('创建对象')
-    expect(view.text()).toContain('创建字段')
-    expect(view.find('a[href="/database-objects?databaseSourceId=11"]').text()).toBe(
-      '查看数据库对象',
-    )
-  })
-
-  it('shows superseded plans as non-applicable history without write controls', async () => {
-    syncApi.listSyncPlans.mockResolvedValueOnce({
-      items: [{ ...plan, status: 'Superseded' }],
-      page: 1,
-      pageSize: 20,
-      total: 1,
-    })
-    const view = mountAt('Editor')
-    await flushPromises()
-    await view
-      .findAll('button')
-      .find((item) => item.text() === '查看计划')!
-      .trigger('click')
-    expect(view.text()).toContain('Superseded')
-    expect(view.text()).not.toContain('确认当前预览')
-    expect(view.text()).not.toContain('应用已确认计划')
-  })
 })

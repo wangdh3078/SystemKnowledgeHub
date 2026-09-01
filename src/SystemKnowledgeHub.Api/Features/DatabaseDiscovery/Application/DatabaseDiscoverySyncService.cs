@@ -19,6 +19,7 @@ public sealed class DatabaseDiscoverySyncService(
     IOptions<DatabaseDiscoveryOptions> options)
 {
     private static readonly JsonSerializerOptions JsonOptions = CreateJsonOptions();
+    private const string ActionLimitMessage = "该选择将超过单个同步计划允许的最大操作数，请减少选择范围。";
     private readonly DatabaseDiscoveryOptions settings = Validate(options.Value);
 
     public async Task<DatabaseDiscoveryReconciliationPageResponse?> GetReconciliation(
@@ -64,6 +65,187 @@ public sealed class DatabaseDiscoverySyncService(
             filtered.Length);
     }
 
+    public async Task<DatabaseDiscoverySyncOperationResult<DatabaseDiscoveryReconciliationObjectGroupPageResponse>>
+        QueryObjectGroups(
+            DatabaseDiscoveryReconciliationObjectQueryRequest request,
+            CancellationToken cancellationToken)
+    {
+        if (request.ProfileId <= 0)
+            return Validation<DatabaseDiscoveryReconciliationObjectGroupPageResponse>("profileId", "连接配置 ID 无效。");
+        var actionErrors = ValidateOptionalActions(request.SelectedActions);
+        if (actionErrors.Count > 0)
+            return new(null, actionErrors, DatabaseDiscoverySyncFailure.Validation,
+                actionErrors["actions"].Contains(ActionLimitMessage) ? "ActionLimitExceeded" : null);
+
+        var context = await LoadContext(request.ProfileId, cancellationToken);
+        if (context is null)
+            return new(null, null, DatabaseDiscoverySyncFailure.NotFound);
+        if (request.TargetSnapshotId is not null && request.TargetSnapshotId != context.SnapshotEntity.Id)
+            return new(null, null, DatabaseDiscoverySyncFailure.LatestSnapshotChanged, "LatestSnapshotChanged");
+
+        var selections = NormalizeSelections(request.SelectedActions ?? []);
+        var grouped = await BuildObjectGroups(context, selections, cancellationToken);
+        var filtered = grouped.Groups
+            .Where(x => MatchesGroupFilter(x, request.Category, request.Search))
+            .OrderBy(x => x.SchemaName, StringComparer.Ordinal)
+            .ThenBy(x => x.ObjectName, StringComparer.Ordinal)
+            .ThenBy(x => x.ObjectLogicalIdentity, StringComparer.Ordinal)
+            .ToArray();
+        var resolvedPage = request.Page ?? 1;
+        var resolvedPageSize = request.PageSize ?? 20;
+        var items = filtered.Skip((resolvedPage - 1) * resolvedPageSize).Take(resolvedPageSize)
+            .Select(ToGroupResponse).ToArray();
+        return new(new(
+            context.Profile.Id,
+            context.Profile.Name,
+            context.Profile.DatabaseSourceId,
+            context.Profile.DatabaseSource.Name,
+            context.Profile.ProviderType,
+            context.SnapshotEntity.Id,
+            context.DifferenceId,
+            context.SnapshotEntity.ScopeGenerationId,
+            context.SnapshotEntity.IdentityAlgorithmVersion,
+            settings.MaximumSyncPlanActions,
+            grouped.UngroupedReviewOnlyCount,
+            items,
+            resolvedPage,
+            resolvedPageSize,
+            filtered.Length), null, DatabaseDiscoverySyncFailure.None);
+    }
+
+    public async Task<DatabaseDiscoverySyncOperationResult<DatabaseDiscoveryReconciliationObjectChildrenPageResponse>>
+        QueryObjectChildren(
+            DatabaseDiscoveryReconciliationObjectChildrenQueryRequest request,
+            CancellationToken cancellationToken)
+    {
+        if (request.ProfileId <= 0)
+            return Validation<DatabaseDiscoveryReconciliationObjectChildrenPageResponse>("profileId", "连接配置 ID 无效。");
+        if (request.TargetSnapshotId <= 0)
+            return Validation<DatabaseDiscoveryReconciliationObjectChildrenPageResponse>("targetSnapshotId", "目标快照 ID 无效。");
+        if (string.IsNullOrWhiteSpace(request.ObjectLogicalIdentity) || request.ObjectLogicalIdentity.Length > 2048)
+            return Validation<DatabaseDiscoveryReconciliationObjectChildrenPageResponse>("objectLogicalIdentity", "对象技术身份无效。");
+        var actionErrors = ValidateOptionalActions(request.SelectedActions);
+        if (actionErrors.Count > 0)
+            return new(null, actionErrors, DatabaseDiscoverySyncFailure.Validation,
+                actionErrors["actions"].Contains(ActionLimitMessage) ? "ActionLimitExceeded" : null);
+
+        var context = await LoadContext(request.ProfileId, cancellationToken);
+        if (context is null)
+            return new(null, null, DatabaseDiscoverySyncFailure.NotFound);
+        if (request.TargetSnapshotId != context.SnapshotEntity.Id)
+            return new(null, null, DatabaseDiscoverySyncFailure.LatestSnapshotChanged, "LatestSnapshotChanged");
+
+        var grouped = await BuildObjectGroups(
+            context,
+            NormalizeSelections(request.SelectedActions ?? []),
+            cancellationToken);
+        var group = grouped.Groups.SingleOrDefault(x => string.Equals(
+            x.ObjectLogicalIdentity, request.ObjectLogicalIdentity.Trim(), StringComparison.Ordinal));
+        if (group is null)
+            return new(null, null, DatabaseDiscoverySyncFailure.NotFound);
+
+        var normalizedCategory = request.Category?.Trim();
+        var normalizedSearch = request.Search?.Trim();
+        var parentMatchesSearch = string.IsNullOrWhiteSpace(normalizedSearch)
+            || group.SchemaName.Contains(normalizedSearch, StringComparison.OrdinalIgnoreCase)
+            || group.ObjectName.Contains(normalizedSearch, StringComparison.OrdinalIgnoreCase);
+        var filtered = group.Children
+            .Where(x => string.IsNullOrWhiteSpace(normalizedCategory)
+                || x.Candidates.Any(candidate => string.Equals(
+                    candidate.Category, normalizedCategory, StringComparison.Ordinal)))
+            .Where(x => parentMatchesSearch
+                || (x.Name?.Contains(normalizedSearch!, StringComparison.OrdinalIgnoreCase) ?? false))
+            .OrderBy(x => x.EntityKind == DatabaseDiscoveryEntityKind.Column ? 0 : 1)
+            .ThenBy(x => x.Name, StringComparer.Ordinal)
+            .ThenBy(x => x.Key, StringComparer.Ordinal)
+            .ToArray();
+        var resolvedPage = request.Page ?? 1;
+        var resolvedPageSize = request.PageSize ?? 20;
+        return new(new(
+            context.Profile.Id,
+            context.SnapshotEntity.Id,
+            group.ObjectLogicalIdentity,
+            filtered.Skip((resolvedPage - 1) * resolvedPageSize).Take(resolvedPageSize)
+                .Select(ToChildResponse).ToArray(),
+            resolvedPage,
+            resolvedPageSize,
+            filtered.Length), null, DatabaseDiscoverySyncFailure.None);
+    }
+
+    public async Task<DatabaseDiscoverySyncOperationResult<DatabaseDiscoveryReconciliationObjectSelectionResponse>>
+        ExpandObjectSelection(
+            DatabaseDiscoveryReconciliationObjectSelectionRequest request,
+            CancellationToken cancellationToken)
+    {
+        if (request.ProfileId <= 0)
+            return Validation<DatabaseDiscoveryReconciliationObjectSelectionResponse>("profileId", "连接配置 ID 无效。");
+        if (request.TargetSnapshotId <= 0)
+            return Validation<DatabaseDiscoveryReconciliationObjectSelectionResponse>("targetSnapshotId", "目标快照 ID 无效。");
+        if (string.IsNullOrWhiteSpace(request.ObjectLogicalIdentity) || request.ObjectLogicalIdentity.Length > 2048)
+            return Validation<DatabaseDiscoveryReconciliationObjectSelectionResponse>("objectLogicalIdentity", "对象技术身份无效。");
+        var actionErrors = ValidateOptionalActions(request.CurrentActions);
+        if (actionErrors.Count > 0)
+            return new(null, actionErrors, DatabaseDiscoverySyncFailure.Validation,
+                actionErrors["actions"].Contains(ActionLimitMessage) ? "ActionLimitExceeded" : null);
+
+        var context = await LoadContext(request.ProfileId, cancellationToken);
+        if (context is null)
+            return new(null, null, DatabaseDiscoverySyncFailure.NotFound);
+        if (request.TargetSnapshotId != context.SnapshotEntity.Id)
+            return new(null, null, DatabaseDiscoverySyncFailure.LatestSnapshotChanged, "LatestSnapshotChanged");
+
+        var grouped = await BuildObjectGroups(
+            context,
+            NormalizeSelections(request.CurrentActions ?? []),
+            cancellationToken);
+        var objectIdentity = request.ObjectLogicalIdentity.Trim();
+        var group = grouped.Groups.SingleOrDefault(x => string.Equals(
+            x.ObjectLogicalIdentity, objectIdentity, StringComparison.Ordinal));
+        if (group is null)
+            return new(null, null, DatabaseDiscoverySyncFailure.NotFound);
+
+        var selections = NormalizeSelections(request.CurrentActions ?? [])
+            .ToDictionary(SelectionKey, StringComparer.Ordinal);
+        var groupCandidates = SelectableCandidates(group).ToArray();
+        if (request.Selected)
+        {
+            foreach (var candidate in groupCandidates)
+                selections[SelectionKey(candidate)] = Selection(candidate);
+        }
+        else
+        {
+            foreach (var candidate in groupCandidates)
+                selections.Remove(SelectionKey(candidate));
+        }
+
+        foreach (var item in grouped.Groups.Where(x => x.RequiredParentAction is not null))
+        {
+            var hasSelectedChild = item.Children.SelectMany(x => x.Candidates)
+                .Where(IsSelectable)
+                .Any(candidate => selections.ContainsKey(SelectionKey(candidate)));
+            if (hasSelectedChild)
+                selections[SelectionKey(item.RequiredParentAction!)] = item.RequiredParentAction!;
+        }
+
+        var actions = NormalizeSelections(selections.Values.ToArray());
+        if (actions.Count > settings.MaximumSyncPlanActions)
+            return new(null, new Dictionary<string, string[]> { ["actions"] = [ActionLimitMessage] },
+                DatabaseDiscoverySyncFailure.Validation, "ActionLimitExceeded");
+
+        var selectableKeys = grouped.Groups.SelectMany(SelectableCandidates)
+            .Select(SelectionKey).ToHashSet(StringComparer.Ordinal);
+        if (actions.Any(action => !selectableKeys.Contains(SelectionKey(action))))
+            return new(null, null, DatabaseDiscoverySyncFailure.Conflict, "SelectionNoLongerApplicable");
+        var validation = await ValidateSelections(context, actions, cancellationToken);
+        if (validation is not null)
+            return new(null, validation.FieldErrors, validation.Failure, validation.ReasonCode);
+
+        var selectedKeys = actions.Select(SelectionKey).ToHashSet(StringComparer.Ordinal);
+        var selectedInObject = groupCandidates.Count(candidate => selectedKeys.Contains(SelectionKey(candidate)));
+        return new(new(actions, actions.Count, settings.MaximumSyncPlanActions,
+            groupCandidates.Length, selectedInObject), null, DatabaseDiscoverySyncFailure.None);
+    }
+
     public async Task<DatabaseDiscoverySyncOperationResult<DatabaseDiscoverySyncPlanResponse>> CreatePlan(
         CreateDatabaseDiscoverySyncPlanRequest request,
         DatabaseDiscoverySyncActor actor,
@@ -77,7 +259,7 @@ public sealed class DatabaseDiscoverySyncService(
             return new(null, null, DatabaseDiscoverySyncFailure.LatestSnapshotChanged, "LatestSnapshotChanged");
         var actions = NormalizeSelections(request.Actions!);
         if (actions.Count > settings.MaximumSyncPlanActions)
-            return Validation<DatabaseDiscoverySyncPlanResponse>("actions", $"同步计划最多包含 {settings.MaximumSyncPlanActions} 个操作。");
+            return Validation<DatabaseDiscoverySyncPlanResponse>("actions", ActionLimitMessage);
         var validation = await ValidateSelections(context, actions, cancellationToken);
         if (validation is not null) return validation;
 
@@ -432,7 +614,12 @@ public sealed class DatabaseDiscoverySyncService(
                 var currentMaximum = await dbContext.DatabaseColumns.IgnoreQueryFilters()
                     .Where(x => x.DatabaseObjectId == objectId && !x.IsDeleted)
                     .MaxAsync(x => (int?)x.OrdinalPosition, cancellationToken) ?? 0;
-                var stage = currentMaximum + 1;
+                var plannedMaximum = actions
+                    .Where(x => x.EntityKind == DatabaseDiscoveryEntityKind.Column
+                        && x.ExpectedParentTargetId == objectId
+                        && x.After?.OrdinalPosition is not null)
+                    .Max(x => x.After!.OrdinalPosition!.Value);
+                var stage = Math.Max(currentMaximum, plannedMaximum) + 1;
                 foreach (var action in updateColumnActions.Where(x => columnTargets[x.TargetId!.Value].DatabaseObjectId == objectId))
                     columnTargets[action.TargetId!.Value].OrdinalPosition = stage++;
             }
@@ -743,6 +930,225 @@ public sealed class DatabaseDiscoverySyncService(
         return candidates;
     }
 
+    private async Task<GroupedReconciliation> BuildObjectGroups(
+        SyncContext context,
+        IReadOnlyList<DatabaseDiscoverySyncSelectionRequest> selections,
+        CancellationToken cancellationToken)
+    {
+        var candidates = await BuildCandidates(context, cancellationToken);
+        var snapshotObjects = context.Snapshot.Objects.ToDictionary(x => x.LogicalIdentity, StringComparer.Ordinal);
+        var objectIdentities = snapshotObjects.Keys
+            .Concat(candidates.Where(x => x.EntityKind == DatabaseDiscoveryEntityKind.DatabaseObject)
+                .Select(x => x.LogicalIdentity))
+            .Concat(candidates.Where(x => x.ParentLogicalIdentity is not null)
+                .Select(x => x.ParentLogicalIdentity!))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        var targetIds = candidates.Where(x => x.EntityKind == DatabaseDiscoveryEntityKind.DatabaseObject
+                && x.TargetId is not null)
+            .Select(x => x.TargetId!.Value).Distinct().ToArray();
+        var targetTypes = await dbContext.DatabaseObjects.IgnoreQueryFilters().AsNoTracking()
+            .Where(x => targetIds.Contains(x.Id))
+            .ToDictionaryAsync(x => x.Id, x => x.ObjectType.ToString(), cancellationToken);
+        var selectedKeys = selections.Select(SelectionKey).ToHashSet(StringComparer.Ordinal);
+        var groups = new List<ReconciliationObjectGroupData>();
+
+        foreach (var identity in objectIdentities)
+        {
+            var objectCandidates = candidates.Where(x => x.EntityKind == DatabaseDiscoveryEntityKind.DatabaseObject
+                    && string.Equals(x.LogicalIdentity, identity, StringComparison.Ordinal))
+                .OrderBy(x => x.Key, StringComparer.Ordinal).ToArray();
+            var rawChildren = candidates.Where(x => x.EntityKind != DatabaseDiscoveryEntityKind.DatabaseObject
+                    && string.Equals(x.ParentLogicalIdentity, identity, StringComparison.Ordinal))
+                .ToArray();
+            if (objectCandidates.Length == 0 && rawChildren.Length == 0) continue;
+
+            var requiredParentCandidate = objectCandidates.FirstOrDefault(x => IsSelectable(x)
+                && x.SuggestedAction is DatabaseDiscoverySyncActionType.CreateDatabaseObject
+                    or DatabaseDiscoverySyncActionType.LinkExistingDatabaseObject);
+            var hasExistingParent = objectCandidates.Any(x => x.TargetId is not null
+                && !string.Equals(x.Category, "New", StringComparison.Ordinal)
+                && x.BlockCode is not "RebaselineRequired" and not "UnsupportedIdentifierCollision"
+                and not "BoundTargetUnavailable");
+            if (!hasExistingParent && requiredParentCandidate is null)
+            {
+                rawChildren = rawChildren.Select(candidate =>
+                    IsSelectable(candidate)
+                    && candidate.SuggestedAction is DatabaseDiscoverySyncActionType.CreateDatabaseColumn
+                        or DatabaseDiscoverySyncActionType.LinkExistingDatabaseColumn
+                        ? candidate with
+                        {
+                            Category = "Conflict",
+                            Status = DatabaseDiscoveryReconciliationStatus.Conflict,
+                            SuggestedAction = null,
+                            BlockCode = "ParentObjectActionRequired",
+                            Summary = "字段操作缺少可创建或链接的父对象，不能加入同步计划。",
+                        }
+                        : candidate).ToArray();
+            }
+
+            var children = rawChildren
+                .GroupBy(x => $"{x.EntityKind}\u001f{x.LogicalIdentity}", StringComparer.Ordinal)
+                .Select(group =>
+                {
+                    var rows = group.OrderBy(x => x.Key, StringComparer.Ordinal).ToArray();
+                    var selectable = rows.Where(IsSelectable).ToArray();
+                    var first = rows[0];
+                    var selectedCount = selectable.Count(x => selectedKeys.Contains(SelectionKey(x)));
+                    return new ReconciliationChildData(
+                        group.Key,
+                        first.EntityKind,
+                        first.LogicalIdentity,
+                        first.ChildName,
+                        AggregateStatus(rows),
+                        rows,
+                        selectable.Length,
+                        selectedCount,
+                        rows.Where(x => !string.IsNullOrWhiteSpace(x.BlockCode))
+                            .Select(x => x.BlockCode!).Distinct(StringComparer.Ordinal).ToArray(),
+                        string.Join("；", rows.Select(x => x.Summary).Distinct(StringComparer.Ordinal)));
+                })
+                .OrderBy(x => x.EntityKind == DatabaseDiscoveryEntityKind.Column ? 0 : 1)
+                .ThenBy(x => x.Name, StringComparer.Ordinal)
+                .ThenBy(x => x.Key, StringComparer.Ordinal)
+                .ToArray();
+
+            var snapshotObject = snapshotObjects.GetValueOrDefault(identity);
+            var firstCandidate = objectCandidates.FirstOrDefault() ?? rawChildren.First();
+            var targetId = objectCandidates.Select(x => x.TargetId).FirstOrDefault(x => x is not null);
+            var objectType = snapshotObject?.ObjectType.ToString()
+                ?? (targetId is not null ? targetTypes.GetValueOrDefault(targetId.Value) : null)
+                ?? "Unknown";
+            var objectSelectable = objectCandidates.Where(IsSelectable).ToArray();
+            var selectableCount = objectSelectable.Length + children.Sum(x => x.SelectableCount);
+            var selectedCount = objectSelectable.Count(x => selectedKeys.Contains(SelectionKey(x)))
+                + children.Sum(x => x.SelectedCount);
+            var statuses = objectCandidates.Select(x => x.Status).Concat(children.Select(x => x.Status)).ToArray();
+            var conflictCount = children.Count(x => x.Candidates.Any(candidate =>
+                candidate.Status == DatabaseDiscoveryReconciliationStatus.Conflict));
+            var unsupportedCount = children.Count(x => x.Candidates.Any(candidate =>
+                candidate.Status == DatabaseDiscoveryReconciliationStatus.Unsupported));
+            var noActionCount = children.Count(x => x.Candidates.Any(candidate =>
+                candidate.Status == DatabaseDiscoveryReconciliationStatus.NoAction));
+            groups.Add(new(
+                $"object:{identity}",
+                firstCandidate.SchemaLogicalIdentity,
+                identity,
+                firstCandidate.SchemaName,
+                firstCandidate.ObjectName,
+                objectType,
+                targetId,
+                AggregateStatus(statuses),
+                objectCandidates,
+                requiredParentCandidate is null ? null : Selection(requiredParentCandidate),
+                children.Count(x => x.EntityKind == DatabaseDiscoveryEntityKind.Column),
+                children.Count(x => x.EntityKind == DatabaseDiscoveryEntityKind.Column && x.SelectableCount > 0),
+                children.Length,
+                selectableCount,
+                selectedCount,
+                conflictCount,
+                unsupportedCount,
+                noActionCount,
+                GroupSummary(selectableCount, conflictCount, unsupportedCount, noActionCount),
+                children));
+        }
+
+        var ungroupedReviewOnlyCount = candidates.Count(x => x.EntityKind != DatabaseDiscoveryEntityKind.DatabaseObject
+            && x.ParentLogicalIdentity is null && x.Status == DatabaseDiscoveryReconciliationStatus.Unsupported);
+        return new(groups, ungroupedReviewOnlyCount);
+    }
+
+    private static DatabaseDiscoveryReconciliationObjectGroupResponse ToGroupResponse(
+        ReconciliationObjectGroupData group) => new(
+            group.Key,
+            group.SchemaLogicalIdentity,
+            group.ObjectLogicalIdentity,
+            group.SchemaName,
+            group.ObjectName,
+            group.ObjectType,
+            group.TargetId,
+            group.Status,
+            group.ObjectCandidates,
+            group.RequiredParentAction,
+            group.TotalColumnCount,
+            group.SelectableColumnCount,
+            group.TotalChildCount,
+            group.SelectableCount,
+            group.SelectedCount,
+            group.ConflictCount,
+            group.UnsupportedCount,
+            group.NoActionCount,
+            group.Summary);
+
+    private static DatabaseDiscoveryReconciliationChildResponse ToChildResponse(
+        ReconciliationChildData child) => new(
+            child.Key,
+            child.EntityKind,
+            child.LogicalIdentity,
+            child.Name,
+            child.Status,
+            child.Candidates,
+            child.SelectableCount,
+            child.SelectedCount,
+            child.BlockCodes,
+            child.Summary);
+
+    private static bool MatchesGroupFilter(
+        ReconciliationObjectGroupData group,
+        string? category,
+        string? search)
+    {
+        var normalizedCategory = category?.Trim();
+        if (!string.IsNullOrWhiteSpace(normalizedCategory)
+            && !group.ObjectCandidates.Concat(group.Children.SelectMany(x => x.Candidates))
+                .Any(x => string.Equals(x.Category, normalizedCategory, StringComparison.Ordinal)))
+            return false;
+        var normalizedSearch = search?.Trim();
+        return string.IsNullOrWhiteSpace(normalizedSearch)
+            || group.SchemaName.Contains(normalizedSearch, StringComparison.OrdinalIgnoreCase)
+            || group.ObjectName.Contains(normalizedSearch, StringComparison.OrdinalIgnoreCase)
+            || group.Children.Any(x => x.Name?.Contains(normalizedSearch, StringComparison.OrdinalIgnoreCase) ?? false);
+    }
+
+    private static IEnumerable<DatabaseDiscoveryReconciliationCandidateResponse> SelectableCandidates(
+        ReconciliationObjectGroupData group) => group.ObjectCandidates.Where(IsSelectable)
+        .Concat(group.Children.SelectMany(x => x.Candidates).Where(IsSelectable));
+
+    private static bool IsSelectable(DatabaseDiscoveryReconciliationCandidateResponse candidate) =>
+        candidate.Status == DatabaseDiscoveryReconciliationStatus.Applicable
+        && candidate.SuggestedAction is not null;
+
+    private static DatabaseDiscoveryReconciliationStatus AggregateStatus(
+        IEnumerable<DatabaseDiscoveryReconciliationCandidateResponse> candidates) =>
+        AggregateStatus(candidates.Select(x => x.Status));
+
+    private static DatabaseDiscoveryReconciliationStatus AggregateStatus(
+        IEnumerable<DatabaseDiscoveryReconciliationStatus> statuses)
+    {
+        var values = statuses.ToArray();
+        if (values.Contains(DatabaseDiscoveryReconciliationStatus.Applicable))
+            return DatabaseDiscoveryReconciliationStatus.Applicable;
+        if (values.Contains(DatabaseDiscoveryReconciliationStatus.Conflict))
+            return DatabaseDiscoveryReconciliationStatus.Conflict;
+        if (values.Contains(DatabaseDiscoveryReconciliationStatus.Unsupported))
+            return DatabaseDiscoveryReconciliationStatus.Unsupported;
+        return DatabaseDiscoveryReconciliationStatus.NoAction;
+    }
+
+    private static string GroupSummary(
+        int selectableCount,
+        int conflictCount,
+        int unsupportedCount,
+        int noActionCount)
+    {
+        if (selectableCount == 0 && conflictCount > 0) return "当前对象只有冲突项，不能加入同步计划。";
+        if (selectableCount == 0 && unsupportedCount > 0) return "当前对象只有无需操作或仅审查结构。";
+        if (selectableCount == 0) return "对象及字段结构已一致。";
+        return conflictCount + unsupportedCount + noActionCount > 0
+            ? $"部分可处理，共 {selectableCount} 个 typed action 可加入计划。"
+            : $"共 {selectableCount} 个 typed action 可加入计划。";
+    }
+
     private async Task<DatabaseDiscoverySyncOperationResult<DatabaseDiscoverySyncPreviewResponse>> BuildPreview(
         long planId,
         SyncContext context,
@@ -929,7 +1335,9 @@ public sealed class DatabaseDiscoverySyncService(
             var updateCount = parent.Count(x => x.ActionType == DatabaseDiscoverySyncActionType.UpdateDatabaseColumnStructure);
             if (updateCount > 0)
             {
-                var maximum = active.Length == 0 ? 0 : active.Max(x => x.OrdinalPosition);
+                var activeMaximum = active.Length == 0 ? 0 : active.Max(x => x.OrdinalPosition);
+                var plannedMaximum = parent.Max(x => x.After!.OrdinalPosition!.Value);
+                var maximum = Math.Max(activeMaximum, plannedMaximum);
                 if (maximum > int.MaxValue - updateCount)
                     return new(null, null, DatabaseDiscoverySyncFailure.OrdinalCollision, "UnsupportedOrdinal");
             }
@@ -1346,6 +1754,18 @@ public sealed class DatabaseDiscoverySyncService(
         .Select(x => new DatabaseDiscoverySyncSelectionRequest(x.ActionType, x.LogicalIdentity.Trim(), x.TargetId))
         .OrderBy(x => x.ActionType).ThenBy(x => x.LogicalIdentity, StringComparer.Ordinal).ToArray();
 
+    private static DatabaseDiscoverySyncSelectionRequest Selection(
+        DatabaseDiscoveryReconciliationCandidateResponse candidate) => new(
+            candidate.SuggestedAction!.Value,
+            candidate.LogicalIdentity,
+            candidate.TargetId);
+
+    private static string SelectionKey(DatabaseDiscoveryReconciliationCandidateResponse candidate) =>
+        SelectionKey(Selection(candidate));
+
+    private static string SelectionKey(DatabaseDiscoverySyncSelectionRequest selection) =>
+        $"{(int)selection.ActionType}\u001f{selection.LogicalIdentity}\u001f{selection.TargetId?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty}";
+
     private static IReadOnlyList<DatabaseDiscoverySyncSelectionRequest> DeserializeSelections(string json) =>
         JsonSerializer.Deserialize<DatabaseDiscoverySyncSelectionRequest[]>(json, JsonOptions) ?? [];
 
@@ -1363,12 +1783,20 @@ public sealed class DatabaseDiscoverySyncService(
         var errors = new Dictionary<string, string[]>();
         if (actions is null || actions.Count == 0) errors["actions"] = ["至少选择一个同步操作。"];
         else if (actions.Count > settings.MaximumSyncPlanActions)
-            errors["actions"] = [$"同步计划最多包含 {settings.MaximumSyncPlanActions} 个操作。"];
+            errors["actions"] = [ActionLimitMessage];
         else if (actions.Any(x => !Enum.IsDefined(x.ActionType) || string.IsNullOrWhiteSpace(x.LogicalIdentity)
             || x.LogicalIdentity.Length > 2048 || x.TargetId is <= 0))
             errors["actions"] = ["同步操作包含无效类型、技术身份或目标 ID。"];
         else if (actions.GroupBy(x => $"{(int)x.ActionType}\u001f{x.LogicalIdentity}", StringComparer.Ordinal).Any(x => x.Count() > 1))
             errors["actions"] = ["同步操作不能重复。"];
+        return errors;
+    }
+
+    private Dictionary<string, string[]> ValidateOptionalActions(
+        IReadOnlyList<DatabaseDiscoverySyncSelectionRequest>? actions)
+    {
+        if (actions is null || actions.Count == 0) return [];
+        var errors = ValidateActions(actions);
         return errors;
     }
 
@@ -1407,6 +1835,44 @@ public sealed class DatabaseDiscoverySyncService(
         long? DifferenceId,
         long? BaseSnapshotId,
         CanonicalDatabaseDiscoverySnapshot Snapshot);
+
+    private sealed record GroupedReconciliation(
+        IReadOnlyList<ReconciliationObjectGroupData> Groups,
+        int UngroupedReviewOnlyCount);
+
+    private sealed record ReconciliationObjectGroupData(
+        string Key,
+        string SchemaLogicalIdentity,
+        string ObjectLogicalIdentity,
+        string SchemaName,
+        string ObjectName,
+        string ObjectType,
+        long? TargetId,
+        DatabaseDiscoveryReconciliationStatus Status,
+        IReadOnlyList<DatabaseDiscoveryReconciliationCandidateResponse> ObjectCandidates,
+        DatabaseDiscoverySyncSelectionRequest? RequiredParentAction,
+        int TotalColumnCount,
+        int SelectableColumnCount,
+        int TotalChildCount,
+        int SelectableCount,
+        int SelectedCount,
+        int ConflictCount,
+        int UnsupportedCount,
+        int NoActionCount,
+        string Summary,
+        IReadOnlyList<ReconciliationChildData> Children);
+
+    private sealed record ReconciliationChildData(
+        string Key,
+        DatabaseDiscoveryEntityKind EntityKind,
+        string LogicalIdentity,
+        string? Name,
+        DatabaseDiscoveryReconciliationStatus Status,
+        IReadOnlyList<DatabaseDiscoveryReconciliationCandidateResponse> Candidates,
+        int SelectableCount,
+        int SelectedCount,
+        IReadOnlyList<string> BlockCodes,
+        string Summary);
 
     private sealed record PreviewHashPayload(
         int FormatVersion,

@@ -31,6 +31,33 @@ public sealed class DatabaseDiscoverySyncController(
         return result is null ? NotFound(ApiError("not_found", "未找到连接配置或可同步的完整快照。")) : Ok(result);
     }
 
+    [HttpPost("reconciliation/object-groups/query")]
+    public async Task<ActionResult<DatabaseDiscoveryReconciliationObjectGroupPageResponse>> QueryObjectGroups(
+        [FromBody] DatabaseDiscoveryReconciliationObjectQueryRequest request,
+        CancellationToken cancellationToken)
+    {
+        var error = ValidatePagination(request.Page, request.PageSize);
+        if (error is not null) return BadRequest(error);
+        return MapRead(await service.QueryObjectGroups(request, cancellationToken));
+    }
+
+    [HttpPost("reconciliation/object-children/query")]
+    public async Task<ActionResult<DatabaseDiscoveryReconciliationObjectChildrenPageResponse>> QueryObjectChildren(
+        [FromBody] DatabaseDiscoveryReconciliationObjectChildrenQueryRequest request,
+        CancellationToken cancellationToken)
+    {
+        var error = ValidatePagination(request.Page, request.PageSize);
+        if (error is not null) return BadRequest(error);
+        return MapRead(await service.QueryObjectChildren(request, cancellationToken));
+    }
+
+    [Authorize(Policy = AccessPolicies.Editor)]
+    [HttpPost("reconciliation/object-selection")]
+    public async Task<ActionResult<DatabaseDiscoveryReconciliationObjectSelectionResponse>> ExpandObjectSelection(
+        [FromBody] DatabaseDiscoveryReconciliationObjectSelectionRequest request,
+        CancellationToken cancellationToken) =>
+        MapRead(await service.ExpandObjectSelection(request, cancellationToken));
+
     [HttpGet("sync-plans")]
     public async Task<ActionResult<DatabaseDiscoverySyncPlanPageResponse>> ListPlans(
         [FromQuery] long? profileId,
@@ -124,6 +151,20 @@ public sealed class DatabaseDiscoverySyncController(
         DatabaseDiscoverySyncFailure.OrdinalCollision => Conflict(ApiError("OrdinalCollision", "字段名称或序号发生冲突。")),
         DatabaseDiscoverySyncFailure.LatestSnapshotChanged => Conflict(ApiError("LatestSnapshotChanged", "最新完整快照已变化，计划已失效。")),
         _ => Conflict(ApiError(result.ReasonCode ?? "ConcurrencyConflict", "同步计划或目标数据已变化，请重新预览。")),
+    };
+
+    private ActionResult<T> MapRead<T>(DatabaseDiscoverySyncOperationResult<T> result) => result.Failure switch
+    {
+        DatabaseDiscoverySyncFailure.None => Ok(result.Response),
+        DatabaseDiscoverySyncFailure.Validation when result.ReasonCode == "ActionLimitExceeded" =>
+            BadRequest(ApiError("ActionLimitExceeded", "该选择将超过单个同步计划允许的最大操作数，请减少选择范围。")),
+        DatabaseDiscoverySyncFailure.Validation =>
+            BadRequest(new ApiErrorResponse("validation_error", "请求内容无效。", result.FieldErrors, null)),
+        DatabaseDiscoverySyncFailure.NotFound =>
+            NotFound(ApiError("not_found", "未找到连接配置、可同步的完整快照或数据库对象。")),
+        DatabaseDiscoverySyncFailure.LatestSnapshotChanged =>
+            Conflict(ApiError("LatestSnapshotChanged", "最新完整快照已变化，请重新加载 Reconciliation。")),
+        _ => Conflict(ApiError(result.ReasonCode ?? "SelectionNoLongerApplicable", "当前选择已变化，请重新加载 Reconciliation。")),
     };
 
     private async Task<ActorResolution> ResolveActor(CancellationToken cancellationToken)

@@ -40,6 +40,98 @@ public sealed record DatabaseDiscoveryReconciliationPageResponse(
     int PageSize,
     int Total);
 
+public sealed record DatabaseDiscoveryReconciliationObjectQueryRequest(
+    long ProfileId,
+    long? TargetSnapshotId,
+    string? Category,
+    string? Search,
+    int? Page,
+    int? PageSize,
+    IReadOnlyList<DatabaseDiscoverySyncSelectionRequest>? SelectedActions);
+
+public sealed record DatabaseDiscoveryReconciliationObjectChildrenQueryRequest(
+    long ProfileId,
+    long TargetSnapshotId,
+    string? ObjectLogicalIdentity,
+    string? Category,
+    string? Search,
+    int? Page,
+    int? PageSize,
+    IReadOnlyList<DatabaseDiscoverySyncSelectionRequest>? SelectedActions);
+
+public sealed record DatabaseDiscoveryReconciliationObjectSelectionRequest(
+    long ProfileId,
+    long TargetSnapshotId,
+    string? ObjectLogicalIdentity,
+    bool Selected,
+    IReadOnlyList<DatabaseDiscoverySyncSelectionRequest>? CurrentActions);
+
+public sealed record DatabaseDiscoveryReconciliationObjectGroupResponse(
+    string Key,
+    string SchemaLogicalIdentity,
+    string ObjectLogicalIdentity,
+    string SchemaName,
+    string ObjectName,
+    string ObjectType,
+    long? TargetId,
+    DatabaseDiscoveryReconciliationStatus Status,
+    IReadOnlyList<DatabaseDiscoveryReconciliationCandidateResponse> ObjectCandidates,
+    DatabaseDiscoverySyncSelectionRequest? RequiredParentAction,
+    int TotalColumnCount,
+    int SelectableColumnCount,
+    int TotalChildCount,
+    int SelectableCount,
+    int SelectedCount,
+    int ConflictCount,
+    int UnsupportedCount,
+    int NoActionCount,
+    string Summary);
+
+public sealed record DatabaseDiscoveryReconciliationObjectGroupPageResponse(
+    long ProfileId,
+    string ProfileName,
+    long DatabaseSourceId,
+    string DatabaseSourceName,
+    DatabaseProviderType ProviderType,
+    long TargetSnapshotId,
+    long? TargetDifferenceId,
+    long ScopeGenerationId,
+    int IdentityAlgorithmVersion,
+    int MaximumSyncPlanActions,
+    int UngroupedReviewOnlyCount,
+    IReadOnlyList<DatabaseDiscoveryReconciliationObjectGroupResponse> Items,
+    int Page,
+    int PageSize,
+    int Total);
+
+public sealed record DatabaseDiscoveryReconciliationChildResponse(
+    string Key,
+    DatabaseDiscoveryEntityKind EntityKind,
+    string LogicalIdentity,
+    string? Name,
+    DatabaseDiscoveryReconciliationStatus Status,
+    IReadOnlyList<DatabaseDiscoveryReconciliationCandidateResponse> Candidates,
+    int SelectableCount,
+    int SelectedCount,
+    IReadOnlyList<string> BlockCodes,
+    string Summary);
+
+public sealed record DatabaseDiscoveryReconciliationObjectChildrenPageResponse(
+    long ProfileId,
+    long TargetSnapshotId,
+    string ObjectLogicalIdentity,
+    IReadOnlyList<DatabaseDiscoveryReconciliationChildResponse> Items,
+    int Page,
+    int PageSize,
+    int Total);
+
+public sealed record DatabaseDiscoveryReconciliationObjectSelectionResponse(
+    IReadOnlyList<DatabaseDiscoverySyncSelectionRequest> Actions,
+    int SelectedCount,
+    int MaximumSyncPlanActions,
+    int ObjectSelectableCount,
+    int ObjectSelectedCount);
+
 public sealed record DatabaseDiscoverySyncSelectionRequest(
     DatabaseDiscoverySyncActionType ActionType,
     string LogicalIdentity,

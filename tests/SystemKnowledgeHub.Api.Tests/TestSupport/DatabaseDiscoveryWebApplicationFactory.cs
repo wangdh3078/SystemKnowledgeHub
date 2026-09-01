@@ -42,6 +42,7 @@ public sealed class DatabaseDiscoveryWebApplicationFactory : BootstrapWebApplica
     public int WorkerLeaseDurationSeconds { get; set; } = 4;
     public int WorkerHeartbeatIntervalSeconds { get; set; } = 1;
     public int WorkerOverallTimeoutSeconds { get; set; } = 10;
+    public int MaximumSyncPlanActions { get; set; } = 2_000;
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -64,6 +65,7 @@ public sealed class DatabaseDiscoveryWebApplicationFactory : BootstrapWebApplica
                 options.LeaseDurationSeconds = WorkerLeaseDurationSeconds;
                 options.HeartbeatIntervalSeconds = WorkerHeartbeatIntervalSeconds;
                 options.QueuePollIntervalMilliseconds = WorkerPollIntervalMilliseconds;
+                options.MaximumSyncPlanActions = MaximumSyncPlanActions;
             });
             services.UseIsolatedTestSerilog(LogFilePath, LogSink);
             services.AddHostedService<DatabaseDiscoveryWorker>();

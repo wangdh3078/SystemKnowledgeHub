@@ -26,6 +26,21 @@ public sealed class DatabaseDiscoverySyncApiTests
         factory.DiscoveryProvider.SnapshotFactory = (connection, request, call) =>
         {
             var snapshot = CanonicalSnapshotFixtures.Create(connection, request, call >= 2 ? 2 : 1);
+            if (call >= 2)
+            {
+                var customers = snapshot.Objects.Single(x => x.Name == "CUSTOMERS").LogicalIdentity;
+                var template = snapshot.Columns.Single(x => x.ParentObjectLogicalIdentity == customers && x.Name == "NAME");
+                snapshot = snapshot with
+                {
+                    Columns = [.. snapshot.Columns, template with
+                    {
+                        Name = "EXTERNAL_REFERENCE",
+                        SourceOrdinal = 3,
+                        DatabaseComment = "External source reference",
+                        LogicalIdentity = CanonicalSnapshotFixtures.Key("Column", customers, "EXTERNAL_REFERENCE"),
+                    }],
+                };
+            }
             if (call != 3) return snapshot;
             var orders = snapshot.Objects.Single(x => x.Name == "ORDERS").LogicalIdentity;
             return snapshot with
@@ -130,12 +145,16 @@ public sealed class DatabaseDiscoverySyncApiTests
         var changed = await Reconcile(editor, profile.Id);
         var update = Assert.Single(changed.Items.Where(x => x.SuggestedAction == DatabaseDiscoverySyncActionType.UpdateDatabaseColumnStructure));
         var objectUpdate = Assert.Single(changed.Items.Where(x => x.SuggestedAction == DatabaseDiscoverySyncActionType.UpdateDatabaseObjectStructure && x.ObjectName == "CUSTOMERS"));
-        var updatePlan = await CreatePlan(editor, profile.Id, second.SnapshotId!.Value, [Selection(objectUpdate), Selection(update)]);
+        var createColumn = Assert.Single(changed.Items.Where(x => x.SuggestedAction == DatabaseDiscoverySyncActionType.CreateDatabaseColumn
+            && x.ObjectName == "CUSTOMERS" && x.ChildName == "EXTERNAL_REFERENCE"));
+        var updatePlan = await CreatePlan(editor, profile.Id, second.SnapshotId!.Value,
+            [Selection(objectUpdate), Selection(update), Selection(createColumn)]);
         updatePlan = await Preview(editor, updatePlan);
         updatePlan = await Confirm(editor, updatePlan);
         updatePlan = await Apply(editor, updatePlan);
         Assert.Equal(1, updatePlan.Result!.UpdatedColumns);
         Assert.Equal(1, updatePlan.Result.UpdatedObjects);
+        Assert.Equal(1, updatePlan.Result.CreatedColumns);
         await using (var scope = factory.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<KnowledgeHubDbContext>();
@@ -151,6 +170,10 @@ public sealed class DatabaseDiscoverySyncApiTests
             Assert.Equal(KnowledgeStatus.Confirmed, customers.KnowledgeStatus);
             Assert.Equal("Customer master", customers.DatabaseComment);
             Assert.Equal("[\"ID\"]", customers.PrimaryKeyColumnsJson);
+            var externalReference = await db.DatabaseColumns.SingleAsync(x => x.DatabaseObjectId == customers.Id
+                && x.ColumnName == "EXTERNAL_REFERENCE");
+            Assert.Equal(3, externalReference.OrdinalPosition);
+            Assert.Equal(KnowledgeStatus.Unknown, externalReference.KnowledgeStatus);
         }
 
         profile = await GetProfile(administrator, profile.Id);
@@ -181,6 +204,155 @@ public sealed class DatabaseDiscoverySyncApiTests
         var clearPlan = await Apply(editor, await Confirm(editor, await Preview(editor,
             await CreatePlan(editor, profile.Id, fourth.SnapshotId!.Value, clearActions))));
         Assert.Equal(3, clearPlan.Result!.ClearedMissing);
+    }
+
+    [Fact]
+    public async Task Object_group_reconciliation_is_bounded_and_whole_object_selection_expands_all_typed_actions()
+    {
+        using var factory = new DatabaseDiscoveryWebApplicationFactory();
+        using var administrator = factory.CreateAuthenticatedClient();
+        var profile = await SetSecret(administrator,
+            await CreateProfile(factory, administrator), "object-group-secret");
+        var run = await WaitForTerminal(administrator, (await Trigger(administrator, profile)).Id);
+        Assert.Equal(DatabaseDiscoveryRunStatus.Succeeded, run.Status);
+
+        var viewerId = await CreateUser(factory, AccessLevel.Viewer);
+        using var viewer = await factory.CreateAuthenticatedClientAsync(viewerId);
+        var groups = await QueryObjectGroups(viewer, profile.Id, run.SnapshotId!.Value, [], search: "NAME");
+        var customers = Assert.Single(groups.Items);
+        Assert.Equal("CUSTOMERS", customers.ObjectName);
+        Assert.Equal(2, customers.TotalColumnCount);
+        Assert.Equal(2, customers.SelectableColumnCount);
+        Assert.Equal(3, customers.SelectableCount);
+        Assert.Equal(0, customers.SelectedCount);
+        Assert.Equal(1, customers.UnsupportedCount);
+        Assert.NotNull(customers.RequiredParentAction);
+        Assert.Equal(DatabaseDiscoverySyncActionType.CreateDatabaseObject,
+            customers.RequiredParentAction!.ActionType);
+        Assert.Equal(1, groups.UngroupedReviewOnlyCount);
+
+        var firstChildren = await QueryObjectChildren(viewer, profile.Id, run.SnapshotId.Value,
+            customers.ObjectLogicalIdentity, [], page: 1, pageSize: 1, search: "NAME");
+        Assert.Equal(2, firstChildren.Total);
+        var name = Assert.Single(firstChildren.Items);
+        Assert.Equal("NAME", name.Name);
+        Assert.Equal(1, name.SelectableCount);
+        Assert.Equal(0, name.SelectedCount);
+
+        using (var forbidden = await viewer.PostAsJsonAsync(
+            "/api/database-discovery/reconciliation/object-selection", new
+            {
+                profileId = profile.Id,
+                targetSnapshotId = run.SnapshotId,
+                objectLogicalIdentity = customers.ObjectLogicalIdentity,
+                selected = true,
+                currentActions = Array.Empty<object>(),
+            }))
+            Assert.Equal(HttpStatusCode.Forbidden, forbidden.StatusCode);
+
+        var editorId = await CreateUser(factory, AccessLevel.Editor);
+        using var editor = await factory.CreateAuthenticatedClientAsync(editorId);
+        var expanded = await ExpandObjectSelection(editor, profile.Id, run.SnapshotId.Value,
+            customers.ObjectLogicalIdentity, true, []);
+        Assert.Equal(3, expanded.SelectedCount);
+        Assert.Equal(3, expanded.ObjectSelectableCount);
+        Assert.Equal(3, expanded.ObjectSelectedCount);
+        Assert.Contains(expanded.Actions, x => x.ActionType == DatabaseDiscoverySyncActionType.CreateDatabaseObject
+            && x.LogicalIdentity == customers.ObjectLogicalIdentity);
+        Assert.Equal(2, expanded.Actions.Count(x =>
+            x.ActionType == DatabaseDiscoverySyncActionType.CreateDatabaseColumn));
+        Assert.DoesNotContain(expanded.Actions, x => !Enum.IsDefined(x.ActionType));
+        var selectedChildren = await QueryObjectChildren(editor, profile.Id, run.SnapshotId.Value,
+            customers.ObjectLogicalIdentity, expanded.Actions, page: 1, pageSize: 100);
+        Assert.All(selectedChildren.Items.Where(x => x.SelectableCount > 0),
+            x => Assert.Equal(x.SelectableCount, x.SelectedCount));
+
+        var partial = expanded.Actions.Where(x => x.ActionType != DatabaseDiscoverySyncActionType.CreateDatabaseColumn
+                || !string.Equals(x.LogicalIdentity, name.LogicalIdentity, StringComparison.Ordinal))
+            .ToArray();
+        groups = await QueryObjectGroups(editor, profile.Id, run.SnapshotId.Value, partial);
+        customers = groups.Items.Single(x => x.ObjectLogicalIdentity == customers.ObjectLogicalIdentity);
+        Assert.Equal(2, customers.SelectedCount);
+        Assert.Equal(3, customers.SelectableCount);
+
+        var plan = await CreatePlan(editor, profile.Id, run.SnapshotId.Value,
+            expanded.Actions.Select(x => (object)new
+            {
+                actionType = x.ActionType.ToString(), x.LogicalIdentity, x.TargetId,
+            }).ToArray());
+        plan = await Preview(editor, plan);
+        Assert.Equal(3, plan.Preview!.Actions.Count);
+        Assert.Equal(1, plan.Preview.Counts.CreateObjects);
+        Assert.Equal(2, plan.Preview.Counts.CreateColumns);
+    }
+
+    [Fact]
+    public async Task Object_selection_excludes_conflict_and_review_only_rows()
+    {
+        using var factory = new DatabaseDiscoveryWebApplicationFactory();
+        factory.DiscoveryProvider.SnapshotFactory = (connection, request, call) =>
+        {
+            var snapshot = CanonicalSnapshotFixtures.Create(connection, request, call);
+            return snapshot with
+            {
+                Columns = snapshot.Columns.Select(x => x.Name == "NAME"
+                    ? x with { SourceOrdinal = null }
+                    : x).ToArray(),
+            };
+        };
+        using var administrator = factory.CreateAuthenticatedClient();
+        var profile = await SetSecret(administrator,
+            await CreateProfile(factory, administrator), "object-group-limit-secret");
+        var run = await WaitForTerminal(administrator, (await Trigger(administrator, profile)).Id);
+        var groups = await QueryObjectGroups(administrator, profile.Id, run.SnapshotId!.Value, []);
+        var customers = groups.Items.Single(x => x.ObjectName == "CUSTOMERS");
+        Assert.Equal(2, customers.SelectableCount);
+        Assert.Equal(1, customers.ConflictCount);
+        Assert.Equal(1, customers.UnsupportedCount);
+
+        var children = await QueryObjectChildren(administrator, profile.Id, run.SnapshotId.Value,
+            customers.ObjectLogicalIdentity, [], page: 1, pageSize: 100);
+        Assert.Contains(children.Items, x => x.Name == "NAME"
+            && x.Status == DatabaseDiscoveryReconciliationStatus.Conflict
+            && x.SelectableCount == 0
+            && x.BlockCodes.Contains("UnsupportedOrdinal"));
+        Assert.Contains(children.Items, x => x.Status == DatabaseDiscoveryReconciliationStatus.Unsupported
+            && x.SelectableCount == 0);
+
+        var expanded = await ExpandObjectSelection(administrator, profile.Id, run.SnapshotId.Value,
+            customers.ObjectLogicalIdentity, true, []);
+        Assert.Equal(2, expanded.Actions.Count);
+        Assert.Contains(expanded.Actions, x => x.ActionType == DatabaseDiscoverySyncActionType.CreateDatabaseObject);
+        Assert.Contains(expanded.Actions, x => x.ActionType == DatabaseDiscoverySyncActionType.CreateDatabaseColumn);
+        Assert.DoesNotContain(expanded.Actions, x => x.LogicalIdentity ==
+            children.Items.Single(item => item.Name == "NAME").LogicalIdentity);
+    }
+
+    [Fact]
+    public async Task Whole_object_selection_rejects_action_limit_without_truncation()
+    {
+        using var factory = new DatabaseDiscoveryWebApplicationFactory { MaximumSyncPlanActions = 2 };
+        using var administrator = factory.CreateAuthenticatedClient();
+        var profile = await SetSecret(administrator,
+            await CreateProfile(factory, administrator), "object-group-limit-secret");
+        var run = await WaitForTerminal(administrator, (await Trigger(administrator, profile)).Id);
+        var groups = await QueryObjectGroups(administrator, profile.Id, run.SnapshotId!.Value, []);
+        var customers = groups.Items.Single(x => x.ObjectName == "CUSTOMERS");
+        Assert.Equal(3, customers.SelectableCount);
+
+        using var response = await administrator.PostAsJsonAsync(
+            "/api/database-discovery/reconciliation/object-selection", new
+            {
+                profileId = profile.Id,
+                targetSnapshotId = run.SnapshotId,
+                objectLogicalIdentity = customers.ObjectLogicalIdentity,
+                selected = true,
+                currentActions = Array.Empty<object>(),
+            });
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var error = await response.Content.ReadAsStringAsync();
+        Assert.Contains("该选择将超过单个同步计划允许的最大操作数，请减少选择范围。", error);
+        Assert.DoesNotContain("CreateDatabaseColumn", error);
     }
 
     [Fact]
@@ -384,6 +556,56 @@ public sealed class DatabaseDiscoverySyncApiTests
     }
 
     [Fact]
+    public async Task Ordinal_staging_overflow_is_rejected_without_partial_writes()
+    {
+        using var factory = new DatabaseDiscoveryWebApplicationFactory();
+        using var administrator = factory.CreateAuthenticatedClient();
+        var profile = await SetSecret(administrator,
+            await CreateProfile(factory, administrator), "ordinal-overflow-secret");
+        var first = await WaitForTerminal(administrator, (await Trigger(administrator, profile)).Id);
+        var initial = await Reconcile(administrator, profile.Id);
+        var initialActions = initial.Items.Where(x => x.SuggestedAction is
+                DatabaseDiscoverySyncActionType.CreateDatabaseObject or DatabaseDiscoverySyncActionType.CreateDatabaseColumn)
+            .Select(Selection).ToArray();
+        await Apply(administrator, await Confirm(administrator, await Preview(administrator,
+            await CreatePlan(administrator, profile.Id, first.SnapshotId!.Value, initialActions))));
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<KnowledgeHubDbContext>();
+            var admin = await db.Users.FirstAsync(x => x.AccessLevel == AccessLevel.Administrator);
+            var customers = await db.DatabaseObjects.SingleAsync(x => x.ObjectName == "CUSTOMERS");
+            customers.Columns.Add(Column(int.MaxValue, "MANUAL_MAX", "NUMBER(1)", true, null, null,
+                admin.Id, admin.DisplayName, DateTimeOffset.UtcNow));
+            await db.SaveChangesAsync();
+        }
+
+        profile = await GetProfile(administrator, profile.Id);
+        var second = await WaitForTerminal(administrator, (await Trigger(administrator, profile)).Id);
+        var changed = await Reconcile(administrator, profile.Id);
+        var update = Assert.Single(changed.Items.Where(x =>
+            x.SuggestedAction == DatabaseDiscoverySyncActionType.UpdateDatabaseColumnStructure
+            && x.ChildName == "NAME"));
+        var plan = await CreatePlan(administrator, profile.Id, second.SnapshotId!.Value, [Selection(update)]);
+        using var response = await administrator.PostAsJsonAsync(
+            $"/api/database-discovery/sync-plans/{plan.Id}/preview", new
+            {
+                concurrencyToken = plan.ConcurrencyToken,
+            });
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var error = await response.Content.ReadAsStringAsync();
+        Assert.Contains("OrdinalCollision", error);
+
+        await using var verifyScope = factory.Services.CreateAsyncScope();
+        var verify = verifyScope.ServiceProvider.GetRequiredService<KnowledgeHubDbContext>();
+        Assert.Equal("VARCHAR2(100 CHAR)",
+            (await verify.DatabaseColumns.SingleAsync(x => x.ColumnName == "NAME")).DataType);
+        Assert.Equal(int.MaxValue,
+            (await verify.DatabaseColumns.SingleAsync(x => x.ColumnName == "MANUAL_MAX")).OrdinalPosition);
+        Assert.False(await verify.DatabaseDiscoverySyncApplyResults.AnyAsync(x => x.PlanId == plan.Id));
+    }
+
+    [Fact]
     public async Task Null_source_ordinal_is_an_unsupported_conflict()
     {
         using var factory = new DatabaseDiscoveryWebApplicationFactory();
@@ -566,6 +788,78 @@ public sealed class DatabaseDiscoverySyncApiTests
     {
         actionType = item.SuggestedAction!.Value.ToString(), item.LogicalIdentity, item.TargetId,
     };
+
+    private static async Task<DatabaseDiscoveryReconciliationObjectGroupPageResponse> QueryObjectGroups(
+        HttpClient client,
+        long profileId,
+        long targetSnapshotId,
+        IReadOnlyList<DatabaseDiscoverySyncSelectionRequest> selectedActions,
+        string search = "")
+    {
+        using var response = await client.PostAsJsonAsync(
+            "/api/database-discovery/reconciliation/object-groups/query", new
+            {
+                profileId,
+                targetSnapshotId,
+                category = "",
+                search,
+                page = 1,
+                pageSize = 100,
+                selectedActions,
+            });
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        return await response.Content.ReadFromJsonAsync<DatabaseDiscoveryReconciliationObjectGroupPageResponse>(JsonOptions)
+            ?? throw new InvalidOperationException("Object-group reconciliation response empty.");
+    }
+
+    private static async Task<DatabaseDiscoveryReconciliationObjectChildrenPageResponse> QueryObjectChildren(
+        HttpClient client,
+        long profileId,
+        long targetSnapshotId,
+        string objectLogicalIdentity,
+        IReadOnlyList<DatabaseDiscoverySyncSelectionRequest> selectedActions,
+        int page,
+        int pageSize,
+        string search = "")
+    {
+        using var response = await client.PostAsJsonAsync(
+            "/api/database-discovery/reconciliation/object-children/query", new
+            {
+                profileId,
+                targetSnapshotId,
+                objectLogicalIdentity,
+                category = "",
+                search,
+                page,
+                pageSize,
+                selectedActions,
+            });
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        return await response.Content.ReadFromJsonAsync<DatabaseDiscoveryReconciliationObjectChildrenPageResponse>(JsonOptions)
+            ?? throw new InvalidOperationException("Object-child reconciliation response empty.");
+    }
+
+    private static async Task<DatabaseDiscoveryReconciliationObjectSelectionResponse> ExpandObjectSelection(
+        HttpClient client,
+        long profileId,
+        long targetSnapshotId,
+        string objectLogicalIdentity,
+        bool selected,
+        IReadOnlyList<DatabaseDiscoverySyncSelectionRequest> currentActions)
+    {
+        using var response = await client.PostAsJsonAsync(
+            "/api/database-discovery/reconciliation/object-selection", new
+            {
+                profileId,
+                targetSnapshotId,
+                objectLogicalIdentity,
+                selected,
+                currentActions,
+            });
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        return await response.Content.ReadFromJsonAsync<DatabaseDiscoveryReconciliationObjectSelectionResponse>(JsonOptions)
+            ?? throw new InvalidOperationException("Object selection response empty.");
+    }
 
     private static async Task<DatabaseDiscoveryReconciliationPageResponse> Reconcile(HttpClient client, long profileId)
     {

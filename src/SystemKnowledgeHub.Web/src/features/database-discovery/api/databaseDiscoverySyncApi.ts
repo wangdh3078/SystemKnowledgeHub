@@ -1,10 +1,20 @@
 import { apiClient } from '../../../api/client/apiClient'
 import {
   decodeReconciliation,
+  decodeReconciliationObjectChildren,
+  decodeReconciliationObjectGroups,
+  decodeReconciliationObjectSelection,
   decodeSyncPlan,
   decodeSyncPlans,
 } from './databaseDiscoverySyncContracts'
-import type { ReconciliationPage, SyncPlan, SyncSelection } from './databaseDiscoverySyncContracts'
+import type {
+  ReconciliationObjectChildrenPage,
+  ReconciliationObjectGroupPage,
+  ReconciliationObjectSelection,
+  ReconciliationPage,
+  SyncPlan,
+  SyncSelection,
+} from './databaseDiscoverySyncContracts'
 import type { Page } from './databaseDiscoveryContracts'
 
 const safe = (id: number): number => {
@@ -30,6 +40,70 @@ export const getReconciliation = (
     decode: decodeReconciliation,
   })
 }
+export const queryReconciliationObjectGroups = (
+  profileId: number,
+  targetSnapshotId: number | null,
+  category: string,
+  search: string,
+  page: number,
+  selectedActions: readonly SyncSelection[],
+  signal?: AbortSignal,
+): Promise<ReconciliationObjectGroupPage> =>
+  apiClient.post(
+    '/database-discovery/reconciliation/object-groups/query',
+    {
+      profileId: safe(profileId),
+      targetSnapshotId,
+      category,
+      search,
+      page,
+      pageSize: 20,
+      selectedActions,
+    },
+    { signal, decode: decodeReconciliationObjectGroups },
+  )
+export const queryReconciliationObjectChildren = (
+  profileId: number,
+  targetSnapshotId: number,
+  objectLogicalIdentity: string,
+  category: string,
+  search: string,
+  page: number,
+  selectedActions: readonly SyncSelection[],
+  signal?: AbortSignal,
+): Promise<ReconciliationObjectChildrenPage> =>
+  apiClient.post(
+    '/database-discovery/reconciliation/object-children/query',
+    {
+      profileId: safe(profileId),
+      targetSnapshotId: safe(targetSnapshotId),
+      objectLogicalIdentity,
+      category,
+      search,
+      page,
+      pageSize: 20,
+      selectedActions,
+    },
+    { signal, decode: decodeReconciliationObjectChildren },
+  )
+export const setWholeObjectSelection = (
+  profileId: number,
+  targetSnapshotId: number,
+  objectLogicalIdentity: string,
+  selected: boolean,
+  currentActions: readonly SyncSelection[],
+): Promise<ReconciliationObjectSelection> =>
+  apiClient.post(
+    '/database-discovery/reconciliation/object-selection',
+    {
+      profileId: safe(profileId),
+      targetSnapshotId: safe(targetSnapshotId),
+      objectLogicalIdentity,
+      selected,
+      currentActions,
+    },
+    { decode: decodeReconciliationObjectSelection },
+  )
 export const createSyncPlan = (
   profileId: number,
   targetSnapshotId: number,

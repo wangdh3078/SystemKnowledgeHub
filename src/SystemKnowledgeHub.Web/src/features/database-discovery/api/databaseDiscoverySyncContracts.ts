@@ -48,6 +48,64 @@ export interface ReconciliationPage extends Page<ReconciliationCandidate> {
   readonly scopeGenerationId: number
   readonly identityAlgorithmVersion: number
 }
+export interface ReconciliationObjectGroup {
+  readonly key: string
+  readonly schemaLogicalIdentity: string
+  readonly objectLogicalIdentity: string
+  readonly schemaName: string
+  readonly objectName: string
+  readonly objectType: string
+  readonly targetId: number | null
+  readonly status: ReconciliationStatus
+  readonly objectCandidates: readonly ReconciliationCandidate[]
+  readonly requiredParentAction: SyncSelection | null
+  readonly totalColumnCount: number
+  readonly selectableColumnCount: number
+  readonly totalChildCount: number
+  readonly selectableCount: number
+  readonly selectedCount: number
+  readonly conflictCount: number
+  readonly unsupportedCount: number
+  readonly noActionCount: number
+  readonly summary: string
+}
+export interface ReconciliationObjectGroupPage extends Page<ReconciliationObjectGroup> {
+  readonly profileId: number
+  readonly profileName: string
+  readonly databaseSourceId: number
+  readonly databaseSourceName: string
+  readonly providerType: DatabaseProviderType
+  readonly targetSnapshotId: number
+  readonly targetDifferenceId: number | null
+  readonly scopeGenerationId: number
+  readonly identityAlgorithmVersion: number
+  readonly maximumSyncPlanActions: number
+  readonly ungroupedReviewOnlyCount: number
+}
+export interface ReconciliationChild {
+  readonly key: string
+  readonly entityKind: DiscoveryEntityKind
+  readonly logicalIdentity: string
+  readonly name: string | null
+  readonly status: ReconciliationStatus
+  readonly candidates: readonly ReconciliationCandidate[]
+  readonly selectableCount: number
+  readonly selectedCount: number
+  readonly blockCodes: readonly string[]
+  readonly summary: string
+}
+export interface ReconciliationObjectChildrenPage extends Page<ReconciliationChild> {
+  readonly profileId: number
+  readonly targetSnapshotId: number
+  readonly objectLogicalIdentity: string
+}
+export interface ReconciliationObjectSelection {
+  readonly actions: readonly SyncSelection[]
+  readonly selectedCount: number
+  readonly maximumSyncPlanActions: number
+  readonly objectSelectableCount: number
+  readonly objectSelectedCount: number
+}
 export interface SyncStructure {
   readonly schemaName: string | null
   readonly name: string | null
@@ -213,6 +271,30 @@ const selection = (value: unknown, field: string): SyncSelection => {
     targetId: nullableId(r.targetId, `${field}.targetId`),
   }
 }
+const reconciliationCandidate = (value: unknown, field: string): ReconciliationCandidate => {
+  const c = obj(value, field)
+  return {
+    key: str(c.key, `${field}.key`),
+    category: str(c.category, `${field}.category`),
+    entityKind: entityKind(c.entityKind, `${field}.entityKind`),
+    status: str(c.status, `${field}.status`) as ReconciliationStatus,
+    suggestedAction:
+      c.suggestedAction === null ? null : actionType(c.suggestedAction, `${field}.suggestedAction`),
+    blockCode: nullableStr(c.blockCode, `${field}.blockCode`),
+    schemaLogicalIdentity: str(c.schemaLogicalIdentity, `${field}.schemaLogicalIdentity`),
+    logicalIdentity: str(c.logicalIdentity, `${field}.logicalIdentity`),
+    parentLogicalIdentity: nullableStr(c.parentLogicalIdentity, `${field}.parentLogicalIdentity`),
+    schemaName: str(c.schemaName, `${field}.schemaName`),
+    objectName: str(c.objectName, `${field}.objectName`),
+    childName: nullableStr(c.childName, `${field}.childName`),
+    targetId: nullableId(c.targetId, `${field}.targetId`),
+    targetConcurrencyToken: nullableStr(
+      c.targetConcurrencyToken,
+      `${field}.targetConcurrencyToken`,
+    ),
+    summary: str(c.summary, `${field}.summary`),
+  }
+}
 const preview = (value: unknown, field: string): SyncPreview | null => {
   if (value === null) return null
   const r = obj(value, field)
@@ -257,30 +339,108 @@ export function decodeReconciliation(value: unknown): ReconciliationPage {
     targetDifferenceId: nullableId(r.targetDifferenceId, 'targetDifferenceId'),
     scopeGenerationId: id(r.scopeGenerationId, 'scopeGenerationId'),
     identityAlgorithmVersion: num(r.identityAlgorithmVersion, 'identityAlgorithmVersion', 1),
+    items: r.items.map((item, index) => reconciliationCandidate(item, `items[${index}]`)),
+    page: num(r.page, 'page', 1),
+    pageSize: num(r.pageSize, 'pageSize', 1),
+    total: num(r.total, 'total'),
+  }
+}
+
+export function decodeReconciliationObjectGroups(value: unknown): ReconciliationObjectGroupPage {
+  const r = obj(value, 'objectGroups')
+  if (!Array.isArray(r.items)) throw new Error('objectGroups.items must be an array')
+  return {
+    profileId: id(r.profileId, 'profileId'),
+    profileName: str(r.profileName, 'profileName'),
+    databaseSourceId: id(r.databaseSourceId, 'databaseSourceId'),
+    databaseSourceName: str(r.databaseSourceName, 'databaseSourceName'),
+    providerType: provider(r.providerType, 'providerType'),
+    targetSnapshotId: id(r.targetSnapshotId, 'targetSnapshotId'),
+    targetDifferenceId: nullableId(r.targetDifferenceId, 'targetDifferenceId'),
+    scopeGenerationId: id(r.scopeGenerationId, 'scopeGenerationId'),
+    identityAlgorithmVersion: num(r.identityAlgorithmVersion, 'identityAlgorithmVersion', 1),
+    maximumSyncPlanActions: num(r.maximumSyncPlanActions, 'maximumSyncPlanActions', 1),
+    ungroupedReviewOnlyCount: num(r.ungroupedReviewOnlyCount, 'ungroupedReviewOnlyCount'),
     items: r.items.map((item, index) => {
-      const c = obj(item, `items[${index}]`)
+      const group = obj(item, `items[${index}]`)
+      if (!Array.isArray(group.objectCandidates))
+        throw new Error(`items[${index}].objectCandidates must be an array`)
       return {
-        key: str(c.key, 'key'),
-        category: str(c.category, 'category'),
-        entityKind: entityKind(c.entityKind, 'entityKind'),
-        status: str(c.status, 'status') as ReconciliationStatus,
-        suggestedAction:
-          c.suggestedAction === null ? null : actionType(c.suggestedAction, 'suggestedAction'),
-        blockCode: nullableStr(c.blockCode, 'blockCode'),
-        schemaLogicalIdentity: str(c.schemaLogicalIdentity, 'schemaLogicalIdentity'),
-        logicalIdentity: str(c.logicalIdentity, 'logicalIdentity'),
-        parentLogicalIdentity: nullableStr(c.parentLogicalIdentity, 'parentLogicalIdentity'),
-        schemaName: str(c.schemaName, 'schemaName'),
-        objectName: str(c.objectName, 'objectName'),
-        childName: nullableStr(c.childName, 'childName'),
-        targetId: nullableId(c.targetId, 'targetId'),
-        targetConcurrencyToken: nullableStr(c.targetConcurrencyToken, 'targetConcurrencyToken'),
-        summary: str(c.summary, 'summary'),
+        key: str(group.key, 'key'),
+        schemaLogicalIdentity: str(group.schemaLogicalIdentity, 'schemaLogicalIdentity'),
+        objectLogicalIdentity: str(group.objectLogicalIdentity, 'objectLogicalIdentity'),
+        schemaName: str(group.schemaName, 'schemaName'),
+        objectName: str(group.objectName, 'objectName'),
+        objectType: str(group.objectType, 'objectType'),
+        targetId: nullableId(group.targetId, 'targetId'),
+        status: str(group.status, 'status') as ReconciliationStatus,
+        objectCandidates: group.objectCandidates.map((candidate, candidateIndex) =>
+          reconciliationCandidate(candidate, `objectCandidates[${candidateIndex}]`),
+        ),
+        requiredParentAction:
+          group.requiredParentAction === null
+            ? null
+            : selection(group.requiredParentAction, 'requiredParentAction'),
+        totalColumnCount: num(group.totalColumnCount, 'totalColumnCount'),
+        selectableColumnCount: num(group.selectableColumnCount, 'selectableColumnCount'),
+        totalChildCount: num(group.totalChildCount, 'totalChildCount'),
+        selectableCount: num(group.selectableCount, 'selectableCount'),
+        selectedCount: num(group.selectedCount, 'selectedCount'),
+        conflictCount: num(group.conflictCount, 'conflictCount'),
+        unsupportedCount: num(group.unsupportedCount, 'unsupportedCount'),
+        noActionCount: num(group.noActionCount, 'noActionCount'),
+        summary: str(group.summary, 'summary'),
       }
     }),
     page: num(r.page, 'page', 1),
     pageSize: num(r.pageSize, 'pageSize', 1),
     total: num(r.total, 'total'),
+  }
+}
+
+export function decodeReconciliationObjectChildren(
+  value: unknown,
+): ReconciliationObjectChildrenPage {
+  const r = obj(value, 'objectChildren')
+  if (!Array.isArray(r.items)) throw new Error('objectChildren.items must be an array')
+  return {
+    profileId: id(r.profileId, 'profileId'),
+    targetSnapshotId: id(r.targetSnapshotId, 'targetSnapshotId'),
+    objectLogicalIdentity: str(r.objectLogicalIdentity, 'objectLogicalIdentity'),
+    items: r.items.map((item, index) => {
+      const child = obj(item, `items[${index}]`)
+      if (!Array.isArray(child.candidates))
+        throw new Error(`items[${index}].candidates must be an array`)
+      return {
+        key: str(child.key, 'key'),
+        entityKind: entityKind(child.entityKind, 'entityKind'),
+        logicalIdentity: str(child.logicalIdentity, 'logicalIdentity'),
+        name: nullableStr(child.name, 'name'),
+        status: str(child.status, 'status') as ReconciliationStatus,
+        candidates: child.candidates.map((candidate, candidateIndex) =>
+          reconciliationCandidate(candidate, `candidates[${candidateIndex}]`),
+        ),
+        selectableCount: num(child.selectableCount, 'selectableCount'),
+        selectedCount: num(child.selectedCount, 'selectedCount'),
+        blockCodes: strings(child.blockCodes, 'blockCodes'),
+        summary: str(child.summary, 'summary'),
+      }
+    }),
+    page: num(r.page, 'page', 1),
+    pageSize: num(r.pageSize, 'pageSize', 1),
+    total: num(r.total, 'total'),
+  }
+}
+
+export function decodeReconciliationObjectSelection(value: unknown): ReconciliationObjectSelection {
+  const r = obj(value, 'objectSelection')
+  if (!Array.isArray(r.actions)) throw new Error('objectSelection.actions must be an array')
+  return {
+    actions: r.actions.map((item, index) => selection(item, `actions[${index}]`)),
+    selectedCount: num(r.selectedCount, 'selectedCount'),
+    maximumSyncPlanActions: num(r.maximumSyncPlanActions, 'maximumSyncPlanActions', 1),
+    objectSelectableCount: num(r.objectSelectableCount, 'objectSelectableCount'),
+    objectSelectedCount: num(r.objectSelectedCount, 'objectSelectedCount'),
   }
 }
 

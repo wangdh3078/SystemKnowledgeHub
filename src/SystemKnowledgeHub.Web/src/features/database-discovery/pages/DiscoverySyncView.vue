@@ -11,14 +11,19 @@ import {
   applySyncPlan,
   confirmSyncPlan,
   createSyncPlan,
-  getReconciliation,
   listSyncPlans,
   previewSyncPlan,
+  queryReconciliationObjectChildren,
+  queryReconciliationObjectGroups,
+  setWholeObjectSelection,
 } from '../api/databaseDiscoverySyncApi'
 import type { RunFilterOptions } from '../api/databaseDiscoveryContracts'
 import type {
   ReconciliationCandidate,
-  ReconciliationPage,
+  ReconciliationChild,
+  ReconciliationObjectChildrenPage,
+  ReconciliationObjectGroup,
+  ReconciliationObjectGroupPage,
   SyncActionType,
   SyncPlan,
   SyncSelection,
@@ -32,8 +37,11 @@ const profileId = ref<number>()
 const category = ref('')
 const search = ref('')
 const page = ref(1)
-const reconciliation = ref<ReconciliationPage>()
-const selected = ref<readonly ReconciliationCandidate[]>([])
+const reconciliation = ref<ReconciliationObjectGroupPage>()
+const selected = ref<readonly SyncSelection[]>([])
+const expandedObjects = ref<ReadonlySet<string>>(new Set())
+const childPages = ref<ReadonlyMap<string, ReconciliationObjectChildrenPage>>(new Map())
+const childLoading = ref<ReadonlySet<string>>(new Set())
 const plans = ref<readonly SyncPlan[]>([])
 const activePlan = ref<SyncPlan>()
 const confirmationChecked = ref(false)
@@ -41,6 +49,7 @@ const loading = ref(false)
 const mutating = ref(false)
 const error = ref('')
 let controller = new AbortController()
+const actionLimitMessage = '该选择将超过单个同步计划允许的最大操作数，请减少选择范围。'
 
 const message = (value: unknown) =>
   value instanceof ApiError ? value.message : '手工同步操作失败。'
@@ -65,6 +74,9 @@ const statusLabels = {
   Unsupported: '仅审查',
 } as const
 const selectedCount = computed(() => selected.value.length)
+
+const selectionKey = (selection: SyncSelection): string =>
+  `${selection.actionType}\u001f${selection.logicalIdentity}\u001f${selection.targetId ?? ''}`
 
 function statusType(
   status: ReconciliationCandidate['status'],
@@ -94,43 +106,76 @@ function selectionFor(row: ReconciliationCandidate): SyncSelection {
     targetId: row.targetId,
   }
 }
-function expandedSelections(): readonly SyncSelection[] {
-  const rows = [...selected.value]
-  for (const row of selected.value) {
-    if (row.entityKind !== 'Column' || !row.parentLogicalIdentity) continue
-    const parent = reconciliation.value?.items.find(
-      (item) =>
-        item.logicalIdentity === row.parentLogicalIdentity &&
-        item.entityKind === 'DatabaseObject' &&
-        item.status === 'Applicable' &&
-        (item.suggestedAction === 'CreateDatabaseObject' ||
-          item.suggestedAction === 'LinkExistingDatabaseObject'),
-    )
-    if (parent && !rows.some((item) => item.key === parent.key)) rows.push(parent)
-  }
-  return rows.map(selectionFor)
+function replaceSelections(actions: readonly SyncSelection[]): void {
+  selected.value = [...actions]
+}
+function groupChecked(group: ReconciliationObjectGroup): boolean {
+  return group.selectableCount > 0 && group.selectedCount === group.selectableCount
+}
+function groupIndeterminate(group: ReconciliationObjectGroup): boolean {
+  return group.selectedCount > 0 && group.selectedCount < group.selectableCount
+}
+function childChecked(child: ReconciliationChild): boolean {
+  return child.selectableCount > 0 && child.selectedCount === child.selectableCount
+}
+function childIndeterminate(child: ReconciliationChild): boolean {
+  return child.selectedCount > 0 && child.selectedCount < child.selectableCount
+}
+function groupStatusLabel(group: ReconciliationObjectGroup): string {
+  if (
+    group.selectableCount > 0 &&
+    group.conflictCount + group.unsupportedCount + group.noActionCount > 0
+  )
+    return '部分可处理'
+  return reconciliationStatusLabel(group.status)
+}
+function candidateActions(candidates: readonly ReconciliationCandidate[]): string {
+  const labels = candidates
+    .filter(canSelect)
+    .map((item) => actionLabel(item.suggestedAction))
+    .filter((item, index, items) => items.indexOf(item) === index)
+  return labels.length === 0 ? '—' : labels.join('、')
+}
+function groupActionLabel(group: ReconciliationObjectGroup): string {
+  const objectActions = candidateActions(group.objectCandidates)
+  if (objectActions !== '—') return objectActions
+  return group.selectableColumnCount > 0 ? `${group.selectableColumnCount} 个字段待同步` : '—'
+}
+function setChildLoading(identity: string, value: boolean): void {
+  const next = new Set(childLoading.value)
+  if (value) next.add(identity)
+  else next.delete(identity)
+  childLoading.value = next
 }
 
-async function load(): Promise<void> {
+async function load(resetChildren = true): Promise<void> {
   if (!profileId.value) return
   controller.abort()
   controller = new AbortController()
   loading.value = true
   error.value = ''
-  selected.value = []
   try {
     const [result, planResult] = await Promise.all([
-      getReconciliation(
+      queryReconciliationObjectGroups(
         profileId.value,
+        reconciliation.value?.profileId === profileId.value
+          ? reconciliation.value.targetSnapshotId
+          : null,
         category.value,
         search.value,
         page.value,
+        selected.value,
         controller.signal,
       ),
       listSyncPlans(1, profileId.value, controller.signal),
     ])
     reconciliation.value = result
     plans.value = planResult.items
+    if (resetChildren) {
+      expandedObjects.value = new Set()
+      childPages.value = new Map()
+      childLoading.value = new Set()
+    }
   } catch (value) {
     if (!(value instanceof DOMException && value.name === 'AbortError'))
       error.value = message(value)
@@ -142,8 +187,121 @@ function filterChanged(): void {
   page.value = 1
   void load()
 }
-function selectChanged(rows: ReconciliationCandidate[]): void {
-  selected.value = rows
+function profileChanged(): void {
+  page.value = 1
+  reconciliation.value = undefined
+  replaceSelections([])
+  void load()
+}
+function clearSelections(): void {
+  replaceSelections([])
+  void load()
+}
+async function loadChildren(group: ReconciliationObjectGroup, childPage = 1): Promise<void> {
+  if (!reconciliation.value || !profileId.value) return
+  setChildLoading(group.objectLogicalIdentity, true)
+  try {
+    const result = await queryReconciliationObjectChildren(
+      profileId.value,
+      reconciliation.value.targetSnapshotId,
+      group.objectLogicalIdentity,
+      category.value,
+      search.value,
+      childPage,
+      selected.value,
+      controller.signal,
+    )
+    const next = new Map(childPages.value)
+    next.set(group.objectLogicalIdentity, result)
+    childPages.value = next
+  } catch (value) {
+    if (!(value instanceof DOMException && value.name === 'AbortError'))
+      ElMessage.error(message(value))
+  } finally {
+    setChildLoading(group.objectLogicalIdentity, false)
+  }
+}
+async function toggleExpanded(group: ReconciliationObjectGroup): Promise<void> {
+  const next = new Set(expandedObjects.value)
+  if (next.has(group.objectLogicalIdentity)) {
+    next.delete(group.objectLogicalIdentity)
+    expandedObjects.value = next
+    return
+  }
+  next.add(group.objectLogicalIdentity)
+  expandedObjects.value = next
+  await loadChildren(group, childPages.value.get(group.objectLogicalIdentity)?.page ?? 1)
+}
+async function refreshSelectionState(group: ReconciliationObjectGroup): Promise<void> {
+  if (!profileId.value || !reconciliation.value) return
+  const currentExpanded = new Set(expandedObjects.value)
+  const result = await queryReconciliationObjectGroups(
+    profileId.value,
+    reconciliation.value.targetSnapshotId,
+    category.value,
+    search.value,
+    page.value,
+    selected.value,
+  )
+  reconciliation.value = result
+  expandedObjects.value = currentExpanded
+  if (currentExpanded.has(group.objectLogicalIdentity)) {
+    const refreshedGroup = result.items.find(
+      (item) => item.objectLogicalIdentity === group.objectLogicalIdentity,
+    )
+    if (refreshedGroup)
+      await loadChildren(
+        refreshedGroup,
+        childPages.value.get(group.objectLogicalIdentity)?.page ?? 1,
+      )
+  }
+}
+async function toggleWholeObject(
+  group: ReconciliationObjectGroup,
+  checked: boolean,
+): Promise<void> {
+  if (!profileId.value || !reconciliation.value || !actorStore.canEdit) return
+  mutating.value = true
+  try {
+    const result = await setWholeObjectSelection(
+      profileId.value,
+      reconciliation.value.targetSnapshotId,
+      group.objectLogicalIdentity,
+      checked,
+      selected.value,
+    )
+    replaceSelections(result.actions)
+    await refreshSelectionState(group)
+  } catch (value) {
+    ElMessage.error(message(value))
+  } finally {
+    mutating.value = false
+  }
+}
+async function toggleChild(
+  group: ReconciliationObjectGroup,
+  child: ReconciliationChild,
+  checked: boolean,
+): Promise<void> {
+  if (!actorStore.canEdit || child.selectableCount === 0) return
+  const next = new Map(selected.value.map((item) => [selectionKey(item), item]))
+  const childSelections = child.candidates.filter(canSelect).map(selectionFor)
+  for (const item of childSelections) {
+    if (checked) next.set(selectionKey(item), item)
+    else next.delete(selectionKey(item))
+  }
+  if (checked && group.requiredParentAction)
+    next.set(selectionKey(group.requiredParentAction), group.requiredParentAction)
+  if (next.size > (reconciliation.value?.maximumSyncPlanActions ?? 0)) {
+    ElMessage.error(actionLimitMessage)
+    return
+  }
+  replaceSelections([...next.values()])
+  try {
+    await refreshSelectionState(group)
+  } catch (value) {
+    ElMessage.error(message(value))
+  }
 }
 
 async function createAndPreview(): Promise<void> {
@@ -153,7 +311,7 @@ async function createAndPreview(): Promise<void> {
     let plan = await createSyncPlan(
       reconciliation.value.profileId,
       reconciliation.value.targetSnapshotId,
-      expandedSelections(),
+      selected.value,
     )
     plan = await previewSyncPlan(plan)
     activePlan.value = plan
@@ -199,6 +357,7 @@ async function applyPlan(): Promise<void> {
       item.id === activePlan.value!.id ? activePlan.value! : item,
     )
     ElMessage.success('同步计划已原子应用。')
+    replaceSelections([])
     await load()
   } catch (value) {
     ElMessage.error(message(value))
@@ -240,7 +399,7 @@ onBeforeUnmount(() => controller.abort())
     </el-alert>
 
     <section class="discovery-filters skh-filter-bar" aria-label="手工同步筛选">
-      <el-select v-model="profileId" placeholder="选择连接配置" @change="filterChanged">
+      <el-select v-model="profileId" placeholder="选择连接配置" @change="profileChanged">
         <el-option
           v-for="item in profiles.profiles"
           :key="item.id"
@@ -294,7 +453,11 @@ onBeforeUnmount(() => controller.abort())
       </section>
       <section class="discovery-table-section skh-table-section" :aria-busy="loading">
         <div v-if="actorStore.canEdit" class="discovery-selection-bar">
-          <span>已选择 {{ selectedCount }} 项；字段所需的对象创建/链接操作会一并加入计划。</span>
+          <span
+            >已选择
+            {{ selectedCount }} 个类型化操作；创建/链接对象操作会按字段依赖一并加入计划。</span
+          >
+          <el-button v-if="selectedCount > 0" @click="clearSelections">清除当前选择</el-button>
           <el-button
             type="primary"
             :disabled="selectedCount === 0"
@@ -305,64 +468,145 @@ onBeforeUnmount(() => controller.abort())
         </div>
         <EmptyState
           v-if="reconciliation.items.length === 0"
-          title="当前筛选没有候选项"
+          title="当前筛选没有数据库对象"
           description="可调整分类或搜索条件。"
         />
-        <el-table
-          v-else
-          :data="reconciliation.items"
-          row-key="key"
-          @selection-change="selectChanged"
-        >
-          <el-table-column
-            v-if="actorStore.canEdit"
-            type="selection"
-            width="46"
-            :selectable="canSelect"
+        <div v-else class="discovery-object-groups" role="tree" aria-label="数据库对象同步候选">
+          <article
+            v-for="group in reconciliation.items"
+            :key="group.key"
+            class="discovery-object-group"
+            role="treeitem"
+            :aria-expanded="expandedObjects.has(group.objectLogicalIdentity)"
+          >
+            <div class="discovery-object-group__row">
+              <el-checkbox
+                v-if="actorStore.canEdit"
+                :model-value="groupChecked(group)"
+                :indeterminate="groupIndeterminate(group)"
+                :disabled="group.selectableCount === 0 || mutating"
+                :aria-label="`选择对象 ${group.schemaName}.${group.objectName} 的全部可处理操作`"
+                :aria-checked="groupIndeterminate(group) ? 'mixed' : groupChecked(group)"
+                @change="(checked: boolean) => toggleWholeObject(group, checked)"
+              />
+              <button
+                class="discovery-object-group__toggle"
+                type="button"
+                :aria-label="`${expandedObjects.has(group.objectLogicalIdentity) ? '收起' : '展开'} ${group.schemaName}.${group.objectName} 字段`"
+                :aria-expanded="expandedObjects.has(group.objectLogicalIdentity)"
+                @click="toggleExpanded(group)"
+              >
+                <span aria-hidden="true">{{
+                  expandedObjects.has(group.objectLogicalIdentity) ? '⌄' : '›'
+                }}</span>
+              </button>
+              <div class="discovery-object-group__identity">
+                <strong>{{ group.schemaName }}.{{ group.objectName }}</strong>
+                <small>{{ group.objectType }}</small>
+              </div>
+              <el-tag :type="statusType(group.status)" effect="plain">{{
+                groupStatusLabel(group)
+              }}</el-tag>
+              <div class="discovery-object-group__fact">
+                <small>当前知识库</small>
+                <span>{{ group.targetId ? `已关联 #${group.targetId}` : '未关联' }}</span>
+              </div>
+              <div class="discovery-object-group__fact">
+                <small>建议操作</small><span>{{ groupActionLabel(group) }}</span>
+              </div>
+              <div class="discovery-object-group__counts">
+                <strong
+                  >字段 {{ group.selectableColumnCount }} /
+                  {{ group.totalColumnCount }} 可处理</strong
+                >
+                <small>
+                  冲突 {{ group.conflictCount }} · 仅审查 {{ group.unsupportedCount }} · 已选择
+                  {{ group.selectedCount }} / {{ group.selectableCount }} 个操作
+                </small>
+              </div>
+            </div>
+            <p class="discovery-object-group__summary">{{ group.summary }}</p>
+
+            <div
+              v-if="expandedObjects.has(group.objectLogicalIdentity)"
+              class="discovery-object-children"
+              role="group"
+            >
+              <LoadingState
+                v-if="childLoading.has(group.objectLogicalIdentity)"
+                message="正在加载字段…"
+              />
+              <template v-else-if="childPages.get(group.objectLogicalIdentity)">
+                <div
+                  v-for="child in childPages.get(group.objectLogicalIdentity)!.items"
+                  :key="child.key"
+                  class="discovery-object-child"
+                >
+                  <el-checkbox
+                    v-if="actorStore.canEdit"
+                    :model-value="childChecked(child)"
+                    :indeterminate="childIndeterminate(child)"
+                    :disabled="child.selectableCount === 0"
+                    :aria-label="`选择 ${child.name ?? child.logicalIdentity} 的可处理操作`"
+                    :aria-checked="childIndeterminate(child) ? 'mixed' : childChecked(child)"
+                    @change="(checked: boolean) => toggleChild(group, child, checked)"
+                  />
+                  <span v-else class="discovery-object-child__viewer-space" aria-hidden="true" />
+                  <div class="discovery-object-child__identity">
+                    <strong>{{ child.name ?? child.logicalIdentity }}</strong>
+                    <small>{{ child.entityKind === 'Column' ? '字段' : '仅审查结构' }}</small>
+                  </div>
+                  <el-tag :type="statusType(child.status)" effect="plain">{{
+                    reconciliationStatusLabel(child.status)
+                  }}</el-tag>
+                  <span>{{ candidateActions(child.candidates) }}</span>
+                  <span class="discovery-object-child__summary">{{ child.summary }}</span>
+                  <small v-if="child.blockCodes.length > 0" class="discovery-object-child__block">
+                    原因：{{ child.blockCodes.join('、') }}
+                  </small>
+                </div>
+                <footer
+                  v-if="childPages.get(group.objectLogicalIdentity)!.total > 20"
+                  class="discovery-pagination skh-pagination"
+                >
+                  <span>
+                    字段与审查结构
+                    {{ (childPages.get(group.objectLogicalIdentity)!.page - 1) * 20 + 1 }}–{{
+                      Math.min(
+                        childPages.get(group.objectLogicalIdentity)!.page * 20,
+                        childPages.get(group.objectLogicalIdentity)!.total,
+                      )
+                    }}
+                    / {{ childPages.get(group.objectLogicalIdentity)!.total }}
+                  </span>
+                  <el-pagination
+                    :current-page="childPages.get(group.objectLogicalIdentity)!.page"
+                    :total="childPages.get(group.objectLogicalIdentity)!.total"
+                    :page-size="20"
+                    background
+                    layout="prev,pager,next"
+                    @current-change="(childPage: number) => loadChildren(group, childPage)"
+                  />
+                </footer>
+              </template>
+            </div>
+          </article>
+          <el-alert
+            v-if="reconciliation.ungroupedReviewOnlyCount > 0"
+            :title="`另有 ${reconciliation.ungroupedReviewOnlyCount} 项序列等仅审查结构，请在快照中查看。`"
+            type="info"
+            :closable="false"
           />
-          <el-table-column label="对象" min-width="190"
-            ><template #default="{ row }"
-              ><strong>{{ row.schemaName }}.{{ row.objectName }}</strong
-              ><small v-if="row.childName" class="discovery-block"
-                >字段：{{ row.childName }}</small
-              ></template
-            ></el-table-column
-          >
-          <el-table-column label="判断" width="105"
-            ><template #default="{ row }"
-              ><el-tag :type="statusType(row.status)" effect="plain">{{
-                reconciliationStatusLabel(row.status)
-              }}</el-tag></template
-            ></el-table-column
-          >
-          <el-table-column label="当前知识库" min-width="130"
-            ><template #default="{ row }">{{
-              row.targetId ? `已关联 #${row.targetId}` : '未关联'
-            }}</template></el-table-column
-          >
-          <el-table-column label="建议操作" min-width="150"
-            ><template #default="{ row }">{{
-              actionLabel(row.suggestedAction)
-            }}</template></el-table-column
-          >
-          <el-table-column label="说明" min-width="270"
-            ><template #default="{ row }"
-              ><span>{{ row.summary }}</span
-              ><small v-if="row.blockCode" class="discovery-block"
-                >阻塞原因：{{ row.blockCode }}</small
-              ></template
-            ></el-table-column
-          >
-        </el-table>
+        </div>
         <footer v-if="reconciliation.total > 0" class="discovery-pagination skh-pagination">
           <span
-            >{{ (page - 1) * 50 + 1 }}–{{ Math.min(page * 50, reconciliation.total) }} /
+            >{{ (page - 1) * 20 + 1 }}–{{ Math.min(page * 20, reconciliation.total) }} /
             {{ reconciliation.total }}</span
           >
           <el-pagination
             v-model:current-page="page"
             :total="reconciliation.total"
-            :page-size="50"
+            :page-size="20"
             background
             layout="prev,pager,next"
             @current-change="load"
