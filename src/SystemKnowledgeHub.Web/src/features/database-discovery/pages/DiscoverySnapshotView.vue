@@ -171,7 +171,7 @@ const capabilityLabel: Record<string, string> = {
   NotApplicable: '不适用',
 }
 const providerLabel = (value: SnapshotSummary['providerType']) =>
-  value === 'PostgreSql' ? 'PostgreSQL' : 'Oracle'
+  value === 'PostgreSql' ? 'PostgreSQL' : value === 'SqlServer' ? 'SQL Server' : 'Oracle'
 const objectTypeLabel: Record<SnapshotObject['objectType'], string> = { Table: '表', View: '视图' }
 const constraintLabel: Record<SnapshotConstraint['entityKind'], string> = {
   PrimaryKey: '主键',

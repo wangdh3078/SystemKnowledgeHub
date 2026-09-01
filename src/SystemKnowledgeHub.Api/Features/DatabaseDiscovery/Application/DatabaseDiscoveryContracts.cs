@@ -56,6 +56,7 @@ public sealed class DatabaseDiscoveryOptions
     public int MaximumSequences { get; set; } = 10_000;
     public int MaximumCanonicalSnapshotBytes { get; set; } = 128 * 1024 * 1024;
     public int MaximumSyncPlanActions { get; set; } = 2_000;
+    public bool SqlServerTrustServerCertificate { get; set; }
     public int LeaseDurationSeconds { get; set; } = 30;
     public int HeartbeatIntervalSeconds { get; set; } = 5;
     public int QueuePollIntervalMilliseconds { get; set; } = 2_000;

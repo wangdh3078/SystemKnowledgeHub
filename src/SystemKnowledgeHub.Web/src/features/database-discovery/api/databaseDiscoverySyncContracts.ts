@@ -1,5 +1,5 @@
 import { isSafeApiId } from '../../../api/contracts/id'
-import type { DiscoveryEntityKind, Page } from './databaseDiscoveryContracts'
+import type { DatabaseProviderType, DiscoveryEntityKind, Page } from './databaseDiscoveryContracts'
 
 export type SyncPlanStatus = 'Draft' | 'Ready' | 'Applied' | 'Superseded'
 export type ReconciliationStatus = 'Applicable' | 'NoAction' | 'Conflict' | 'Unsupported'
@@ -42,7 +42,7 @@ export interface ReconciliationPage extends Page<ReconciliationCandidate> {
   readonly profileName: string
   readonly databaseSourceId: number
   readonly databaseSourceName: string
-  readonly providerType: 'Oracle' | 'PostgreSql'
+  readonly providerType: DatabaseProviderType
   readonly targetSnapshotId: number
   readonly targetDifferenceId: number | null
   readonly scopeGenerationId: number
@@ -146,6 +146,10 @@ const strings = (value: unknown, field: string): readonly string[] => {
   if (!Array.isArray(value)) throw new Error(`${field} must be an array`)
   return value.map((item, index) => str(item, `${field}[${index}]`))
 }
+const provider = (value: unknown, field: string): DatabaseProviderType => {
+  if (value === 'Oracle' || value === 'PostgreSql' || value === 'SqlServer') return value
+  throw new Error(`${field} is unsupported`)
+}
 const actionType = (value: unknown, field: string): SyncActionType => {
   const valueString = str(value, field)
   if (
@@ -248,7 +252,7 @@ export function decodeReconciliation(value: unknown): ReconciliationPage {
     profileName: str(r.profileName, 'profileName'),
     databaseSourceId: id(r.databaseSourceId, 'databaseSourceId'),
     databaseSourceName: str(r.databaseSourceName, 'databaseSourceName'),
-    providerType: str(r.providerType, 'providerType') as 'Oracle' | 'PostgreSql',
+    providerType: provider(r.providerType, 'providerType'),
     targetSnapshotId: id(r.targetSnapshotId, 'targetSnapshotId'),
     targetDifferenceId: nullableId(r.targetDifferenceId, 'targetDifferenceId'),
     scopeGenerationId: id(r.scopeGenerationId, 'scopeGenerationId'),

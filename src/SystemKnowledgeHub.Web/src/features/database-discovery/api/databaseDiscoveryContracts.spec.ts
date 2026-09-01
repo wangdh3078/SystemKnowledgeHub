@@ -3,6 +3,9 @@ import {
   decodeDifference,
   decodeDifferenceHistory,
   decodeDifferenceEntries,
+  databaseProviderDefaultPort,
+  databaseProviderEngine,
+  databaseProviderLabel,
   decodeObjectReview,
   decodeObjects,
   decodeProfile,
@@ -282,6 +285,20 @@ const validObjectReview = () => ({
 })
 
 describe('database discovery provider-neutral decoders', () => {
+  it.each([
+    ['Oracle', 'Oracle', 'Oracle', 1521],
+    ['PostgreSql', 'PostgreSQL', 'PostgreSQL', 5432],
+    ['SqlServer', 'SQL Server', 'SQL Server', 1433],
+  ] as const)(
+    'accepts and labels the %s provider without changing the wire value',
+    (providerType, label, engine, defaultPort) => {
+      expect(decodeProfile({ ...validProfile(), providerType }).providerType).toBe(providerType)
+      expect(databaseProviderLabel(providerType)).toBe(label)
+      expect(databaseProviderEngine(providerType)).toBe(engine)
+      expect(databaseProviderDefaultPort(providerType)).toBe(defaultPort)
+    },
+  )
+
   it('decodes complete legal profile, run, snapshot, object, and difference fixtures', () => {
     const profile = decodeProfile(validProfile())
     const run = decodeRun(validRun())
@@ -353,7 +370,7 @@ describe('database discovery provider-neutral decoders', () => {
   })
 
   it.each([
-    ['provider type', () => decodeProfile({ ...validProfile(), providerType: 'SqlServer' })],
+    ['provider type', () => decodeProfile({ ...validProfile(), providerType: 'MySql' })],
     [
       'connection status',
       () => decodeProfile({ ...validProfile(), connectionStatus: 'PartiallySucceeded' }),

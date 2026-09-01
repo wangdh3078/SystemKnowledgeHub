@@ -43,7 +43,7 @@ const statusLabel: Record<DiscoveryRun['status'], string> = {
 }
 const runStatusLabel = (value: DiscoveryRun['status']) => statusLabel[value]
 const providerLabel = (value: DiscoveryRun['providerType']) =>
-  value === 'PostgreSql' ? 'PostgreSQL' : 'Oracle'
+  value === 'PostgreSql' ? 'PostgreSQL' : value === 'SqlServer' ? 'SQL Server' : 'Oracle'
 const progressLabel = (run: DiscoveryRun) =>
   run.status === 'Queued'
     ? '等待后台发现任务处理'

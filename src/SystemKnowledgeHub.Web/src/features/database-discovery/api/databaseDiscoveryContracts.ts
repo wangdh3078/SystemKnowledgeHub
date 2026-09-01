@@ -1,6 +1,24 @@
 import { isSafeApiId } from '../../../api/contracts/id'
 
-export type DatabaseProviderType = 'Oracle' | 'PostgreSql'
+export type DatabaseProviderType = 'Oracle' | 'PostgreSql' | 'SqlServer'
+
+export function databaseProviderLabel(value: DatabaseProviderType): string {
+  if (value === 'PostgreSql') return 'PostgreSQL'
+  if (value === 'SqlServer') return 'SQL Server'
+  return 'Oracle'
+}
+
+export function databaseProviderEngine(value: DatabaseProviderType): string {
+  if (value === 'PostgreSql') return 'PostgreSQL'
+  if (value === 'SqlServer') return 'SQL Server'
+  return 'Oracle'
+}
+
+export function databaseProviderDefaultPort(value: DatabaseProviderType): number {
+  if (value === 'PostgreSql') return 5432
+  if (value === 'SqlServer') return 1433
+  return 1521
+}
 export type DiscoveryRunStatus = 'Queued' | 'Running' | 'Succeeded' | 'Failed' | 'Cancelled'
 export type DifferenceState = 'Added' | 'Changed' | 'MissingFromSource' | 'Unchanged'
 export type DiscoveryEntityKind =
@@ -313,7 +331,7 @@ function strings(value: unknown, field: string): readonly string[] {
   return value.map((item, index) => string(item, `${field}[${index}]`))
 }
 function provider(value: unknown, field: string): DatabaseProviderType {
-  if (value === 'Oracle' || value === 'PostgreSql') return value
+  if (value === 'Oracle' || value === 'PostgreSql' || value === 'SqlServer') return value
   throw new Error(`${field} is unsupported`)
 }
 function connectionStatus(value: unknown, field: string): ConnectionProfile['connectionStatus'] {

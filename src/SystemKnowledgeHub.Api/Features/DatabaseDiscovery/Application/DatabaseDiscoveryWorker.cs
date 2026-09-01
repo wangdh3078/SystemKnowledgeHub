@@ -525,6 +525,8 @@ internal static class DatabaseDiscoveryFailureSafety
             or "Cancelled" or "ProviderUnavailable" or "SnapshotPersistenceFailed"
             or "SecretMissing" or "SecretUnavailable" or "LimitExceeded"
             or "BaselineIncompatible" or "UnresolvedForeignKeyReference"
+            or "UnsupportedIdentifierCollision" or "UnsupportedIndexFamily"
+            or "UnsupportedNativeType"
             or "ConcurrencyConflict" or "RunInterrupted" => value,
         _ => "MetadataQueryFailed",
     };
@@ -544,6 +546,9 @@ internal static class DatabaseDiscoveryFailureSafety
         "LimitExceeded" => "发现结果超过配置的安全限制。",
         "BaselineIncompatible" => "连接配置或兼容基线已变化。",
         "UnresolvedForeignKeyReference" => "无法完整解析外键引用。",
+        "UnsupportedIdentifierCollision" => "目标数据库标识在当前范围内存在歧义。",
+        "UnsupportedIndexFamily" => "发现了当前 Core 无法完整表达的索引类型。",
+        "UnsupportedNativeType" => "发现了当前 Core 无法完整表达的原生类型。",
         "ConcurrencyConflict" => "连接配置、租约或兼容基线已变化。",
         "RunInterrupted" => "发现运行因执行实例中断而失败，请重新触发。",
         _ => "读取数据库结构元数据失败。",
@@ -559,6 +564,10 @@ internal static class DatabaseDiscoveryFailureSafety
         if (value is { Length: 14 }
             && value.StartsWith("SQLSTATE-", StringComparison.Ordinal)
             && value.AsSpan(9).IndexOfAnyExcept("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789") < 0)
+            return value;
+        if (value is { Length: >= 7 and <= 12 }
+            && value.StartsWith("MSSQL-", StringComparison.Ordinal)
+            && value.AsSpan(6).IndexOfAnyExceptInRange('0', '9') < 0)
             return value;
         return null;
     }

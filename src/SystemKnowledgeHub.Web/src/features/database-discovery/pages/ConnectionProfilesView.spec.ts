@@ -106,6 +106,20 @@ const createdPostgresProfile: ConnectionProfile = {
   hasSecret: false,
   concurrencyToken: 'created-token',
 }
+const sqlServerProfile: ConnectionProfile = {
+  ...postgresProfile,
+  id: 4,
+  databaseSourceId: 40,
+  databaseSourceName: '订单 SQL Server',
+  name: 'SQL Server 只读',
+  providerType: 'SqlServer',
+  host: 'sqlserver.internal',
+  port: 1433,
+  databaseName: 'orders',
+  includedSchemas: ['Sales', 'Audit'],
+  hasSecret: false,
+  concurrencyToken: 'sqlserver-token',
+}
 const sources: readonly SourceOption[] = [
   { id: 10, name: '核心库', engine: 'Oracle', systemName: 'ERP', hasConnectionProfile: true },
   { id: 20, name: '分析库', engine: 'PostgreSQL', systemName: 'BI', hasConnectionProfile: true },
@@ -114,6 +128,13 @@ const sources: readonly SourceOption[] = [
     name: '待配置 PG',
     engine: 'PostgreSQL',
     systemName: 'CRM',
+    hasConnectionProfile: false,
+  },
+  {
+    id: 40,
+    name: '订单 SQL Server',
+    engine: 'SQL Server',
+    systemName: 'OMS',
     hasConnectionProfile: false,
   },
 ]
@@ -237,6 +258,55 @@ describe('ConnectionProfilesView', () => {
       isEnabled: true,
     })
     expect(api.setSecret).toHaveBeenCalledWith(createdPostgresProfile, 'create-secret')
+  })
+
+  it('creates a SQL Server profile with the fixed provider contract and default port', async () => {
+    api.createProfile.mockResolvedValue(sqlServerProfile)
+    const view = mountFor('Administrator')
+    await flushPromises()
+
+    await button(view, '新增数据库连接').trigger('click')
+    await view.find('[data-radio-value="SqlServer"]').trigger('click')
+    await flushPromises()
+
+    expect(view.find('[data-label="服务名"]').exists()).toBe(false)
+    expect(view.find('[data-label="数据库名"]').exists()).toBe(true)
+    expect((view.find('[data-label="端口（Port）"] input').element as HTMLInputElement).value).toBe(
+      '1433',
+    )
+    expect(view.find('[data-label="数据库来源"] [data-option-value="10"]').exists()).toBe(false)
+    expect(view.find('[data-label="数据库来源"] [data-option-value="30"]').exists()).toBe(false)
+    expect(view.find('[data-label="数据库来源"] [data-option-value="40"]').exists()).toBe(true)
+
+    await view.find('[data-label="数据库来源"] [data-option-value="40"]').trigger('click')
+    await view.find('[data-label="名称"] input').setValue(' SQL Server 只读 ')
+    await view.find('[data-label="主机（Host）"] input').setValue(' sqlserver.internal ')
+    await view.find('[data-label="数据库名"] input').setValue(' orders ')
+    await view.find('[data-label="用户名"] input').setValue(' discovery ')
+    await view
+      .find('[data-label="包含的架构（Schema，保留大小写，每行一个）"] textarea')
+      .setValue('Sales\nAudit')
+    await view
+      .find('[data-label="连接密码（通过独立密钥接口保存）"] input')
+      .setValue('sqlserver-secret')
+    await button(view, '保存').trigger('click')
+    await flushPromises()
+
+    expect(api.createProfile).toHaveBeenCalledWith({
+      databaseSourceId: 40,
+      name: 'SQL Server 只读',
+      providerType: 'SqlServer',
+      host: 'sqlserver.internal',
+      port: 1433,
+      databaseName: 'orders',
+      serviceName: null,
+      authenticationMode: 'UsernamePassword',
+      username: 'discovery',
+      providerSpecificOptions: { version: 1 },
+      includedSchemas: ['Sales', 'Audit'],
+      isEnabled: true,
+    })
+    expect(api.setSecret).toHaveBeenCalledWith(sqlServerProfile, 'sqlserver-secret')
   })
 
   it('keeps only primary actions visible and moves secondary actions into the conditional menu', async () => {

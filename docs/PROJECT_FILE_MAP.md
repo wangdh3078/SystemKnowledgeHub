@@ -1,6 +1,6 @@
 # System Knowledge Hub — Project File Map
 
-本文件描述当前仓库中主要目录和文件的职责。范围为 Bootstrap 基础设施、**VS-01～VS-15**、UX 稳定化、Post-MVP **U01～U04** 以及 **INFRA-CONFIG-R01** 运行时配置基础；不把 `bin/`、`obj/`、`node_modules/`、`dist/`、lock 文件、运行时 SQLite 数据、普通 Migration 生成文件逐项列入。
+本文件描述当前仓库中主要目录和文件的职责。范围为 Bootstrap 基础设施、**VS-01～VS-15**、UX 稳定化、Post-MVP **U01～U04**、**INFRA-CONFIG-R01** 运行时配置基础以及 Database Discovery Oracle/PostgreSQL/SQL Server Provider；不把 `bin/`、`obj/`、`node_modules/`、`dist/`、lock 文件、运行时 SQLite 数据、普通 Migration 生成文件逐项列入。
 
 ## Documentation placement
 
@@ -19,7 +19,7 @@
 | 路径 | 一句话职责 | Feature / Vertical Slice | 为什么需要 |
 | --- | --- | --- | --- |
 | `src/SystemKnowledgeHub.Api/Program.cs` | 组合 Controllers、Serilog、typed runtime options、Persistence、认证、Development CORS、统一派生的上传限制和应用管线，并在 Host 启动前 fail-fast 校验配置。 | Backend foundation / INFRA-CONFIG-R01 | ASP.NET Core 的唯一组合根与运行入口，避免业务代码把 `IConfiguration` 当作 service locator。 |
-| `src/SystemKnowledgeHub.Api/SystemKnowledgeHub.Api.csproj` | 定义 .NET 8 Web 项目、Development `UserSecretsId` 及 EF Core SQLite、Oracle Provider、认证和 Serilog 依赖。 | Backend foundation / INFRA-CONFIG-R01 | 让后端可还原、构建，以配置驱动 logging，并让本机开发 Secret 留在 tracked config 之外。 |
+| `src/SystemKnowledgeHub.Api/SystemKnowledgeHub.Api.csproj` | 定义 .NET 8 Web 项目、Development `UserSecretsId` 及 EF Core SQLite、Oracle、PostgreSQL、SQL Server Provider、认证和 Serilog 依赖。 | Backend foundation / INFRA-CONFIG-R01 / DBDISC-SQLSERVER-B01 | 让后端可还原、构建，以官方驱动连接三种受控发现目标，并让本机开发 Secret 留在 tracked config 之外。 |
 | `src/SystemKnowledgeHub.Api/Persistence/KnowledgeHubDbContext.cs` | 提供当前已落地实体的唯一 EF Core DbContext。 | Persistence foundation / VS-01～VS-15 + U01 | 连接应用查询、写入、映射和 SQLite。 |
 | `src/SystemKnowledgeHub.Api/Persistence/DbContextConfiguration.cs` | 解析 SQLite 路径，以 typed options 设置 DefaultTimeout/busy_timeout，注册 DbContext，并保留 `foreign_keys=ON` 与 WAL 代码不变量。 | Persistence foundation / INFRA-CONFIG-R01 | 允许运维调整等待参数，同时不允许普通配置关闭关系完整性或 WAL。 |
 | `src/SystemKnowledgeHub.Api/Persistence/KnowledgeHubDesignTimeDbContextFactory.cs` | 为 EF CLI 创建设计时 DbContext。 | Persistence tooling / VS-01 | 生成和检查 Migration 时不依赖启动 Web Host。 |
@@ -204,6 +204,18 @@ Search 第一版采用 SQLite 受限 `LIKE` 投影；未创建 FTS5 virtual tabl
 | `.../Api/DatabaseDiscoverySyncController.cs` | 暴露 bounded reconciliation/plan read 与 Editor 写入边界。 | Database Discovery / DBDISC-B04 | 提供 typed API，同时让后端 Authorization、antiforgery 和并发令牌保持最终 authority。 |
 | `.../Persistence/DatabaseDiscoverySyncConfiguration.cs` | 映射 typed bindings、计划、结果、审计的 FK、唯一约束、检查约束与索引。 | Database Discovery / DBDISC-B04 | 在数据库层防止跨 Profile/Scope/identity 重复绑定和重复应用。 |
 | `src/SystemKnowledgeHub.Api/Persistence/Migrations/20260831170031_AddManualDiscoverySyncFoundation.cs` | 增加 B04 表、DatabaseObject/Column 外部结构字段和确定性 legacy identity 回填。 | Database Discovery / DBDISC-B04 | 以单次可回滚迁移建立手工同步持久化基础且保留现有知识行。 |
+
+以上 `...` 均指 `src/SystemKnowledgeHub.Api/Features/DatabaseDiscovery/`。
+
+### 1.17 Database Discovery SQL Server Provider — DBDISC-SQLSERVER-B01
+
+| 路径 | 一句话职责 | Feature / Vertical Slice | 为什么需要 |
+| --- | --- | --- | --- |
+| `.../Providers/SqlServer/SqlServerConnectionTester.cs` | 使用 `SqlConnectionStringBuilder` 和安全错误规范化验证 SQL Server 2022 会话、版本、数据库、Schema 与 Core catalog 可见性。 | Database Discovery / DBDISC-SQLSERVER-B01 | 为既有 Profile/Test Connection 边界增加受控 major-16 adapter，且不接受连接串片段、用户 SQL 或任意 provider options。 |
+| `.../Providers/SqlServer/SqlClientSqlServerDiscoveryCatalogReader.cs` | 以参数化闭集 `sys.*` 查询读取对象、字段、类型、注释、约束、FK closure、rowstore index 与 Sequence，并执行 least-privilege/fail-closed 规则。 | Database Discovery / DBDISC-SQLSERVER-B01 | 在不读取业务行的前提下把 SQL Server catalog 完整收敛到 provider 边界。 |
+| `.../Providers/SqlServer/SqlServerDiscoveryProvider.cs` | 将 SQL Server catalog DTO 映射为 deterministic provider-neutral Canonical Snapshot、opaque logical identity 和 NativeDataType。 | Database Discovery / DBDISC-SQLSERVER-B01 | 让第三种 Provider 复用既有 Snapshot/Diff/B04 Sync，不向 Core 泄露 vendor model。 |
+| `.../Application/DatabaseDiscoveryWorker.cs` | 在通用 durable failure safety 边界允许严格闭集 SQL Server fail-closed code 与纯数字 `MSSQL-*` token。 | Database Discovery / DBDISC-SQLSERVER-B01 | 保持 raw SqlException/SQL/Secret 不进入 Run、API、audit 或日志，同时让可操作失败仍可识别。 |
+| `.../Application/DatabaseDiscoveryContracts.cs` | 提供默认关闭的 typed `SqlServerTrustServerCertificate` 部署开关。 | Database Discovery configuration / DBDISC-SQLSERVER-B01 | 生产默认验证证书链，且不把证书信任降级暴露为用户 Profile 字段。 |
 
 以上 `...` 均指 `src/SystemKnowledgeHub.Api/Features/DatabaseDiscovery/`。
 
@@ -449,9 +461,9 @@ Search 第一版采用 SQLite 受限 `LIKE` 投影；未创建 FTS5 virtual tabl
 
 | 路径 | 一句话职责 | Feature / Vertical Slice | 为什么需要 |
 | --- | --- | --- | --- |
-| `.../features/database-discovery/api/databaseDiscoveryContracts.ts`、`databaseDiscoveryApi.ts` | 严格解码并调用 Connection Profile、Run、Snapshot/Difference history 与 detail 的 sanitized、bounded API read/write contracts。 | Database Discovery / DBDISC-B03 / R01 | 让外部 JSON 在 Feature 边界 fail-closed 收窄，且不向浏览器传输 Secret、连接串或完整 Canonical Snapshot。 |
+| `.../features/database-discovery/api/databaseDiscoveryContracts.ts`、`databaseDiscoveryApi.ts` | 严格解码并调用 Oracle/PostgreSQL/SQL Server Connection Profile、Run、Snapshot/Difference history 与 detail 的 sanitized、bounded API read/write contracts。 | Database Discovery / DBDISC-B03 / R01 / DBDISC-SQLSERVER-B01 | 让外部 JSON 在 Feature 边界 fail-closed 收窄，提供三种 Provider 的统一 label/engine/default-port，并且不向浏览器传输 Secret、连接串或完整 Canonical Snapshot。 |
 | `.../features/database-discovery/components/DiscoverySectionNav.vue` | 提供连接配置、发现运行、快照、差异审查与手工同步五个实际 route，并完全由当前 path 推导 active 状态。 | Database Discovery / DBDISC-B03-R01 / B04 | 让 list/detail/direct URL/Back/Forward 都保持正确页面上下文，不维护“最后点击”状态。 |
-| `.../features/database-discovery/pages/ConnectionProfilesView.vue` | 为 Administrator 提供紧凑主操作与条件化更多菜单，承载 Profile、独立 Secret、连接测试与发现触发。 | Database Discovery / DBDISC-B03-R01 | 完成不依赖 curl/Postman 的安全配置路径，同时收敛按钮密度并保留后端授权为 authority。 |
+| `.../features/database-discovery/pages/ConnectionProfilesView.vue` | 为 Administrator 提供 Oracle/PostgreSQL/SQL Server Profile 表单、独立 Secret、连接测试与发现触发；SQL Server 使用 DatabaseName、隐藏 ServiceName 并提示默认端口 1433。 | Database Discovery / DBDISC-B03-R01 / DBDISC-SQLSERVER-B01 | 完成不依赖 curl/Postman 的三 Provider 安全配置路径，同时不暴露 raw connection string 并保留后端授权为 authority。 |
 | `.../features/database-discovery/pages/DiscoveryRunsView.vue` | 分页展示 durable Run 状态、筛选、真实时间信息、终态 artifact 导航及 Administrator cancel。 | Database Discovery / DBDISC-B03 | 以 2–3 秒、可停止/可取消的前端 polling 呈现 Worker 生命周期，不伪造进度。 |
 | `.../features/database-discovery/pages/DiscoverySnapshotsView.vue`、`DiscoveryDifferencesView.vue` | 分页筛选并直接导航 provider-neutral Snapshot 与 Difference 历史，不要求先选择 Run。 | Database Discovery / DBDISC-B03-R01 | 建立真正可进入的一级审查页面、清晰空态与 B04 手工同步边界。 |
 | `.../features/database-discovery/pages/DiscoverySnapshotView.vue` | 通过 summary、Schema/Object/Sequence 分页和对象结构懒加载审查 provider-neutral Canonical metadata。 | Database Discovery / DBDISC-B03 | 避免向浏览器传输完整 Snapshot JSON，并显式呈现 capability 与可见性边界。 |
@@ -464,7 +476,7 @@ Search 第一版采用 SQLite 受限 `LIKE` 投影；未创建 FTS5 virtual tabl
 
 | 路径 | 一句话职责 | Feature / Vertical Slice | 为什么需要 |
 | --- | --- | --- | --- |
-| `.../features/database-discovery/api/databaseDiscoverySyncContracts.ts`、`databaseDiscoverySyncApi.ts` | 严格解码 reconciliation、plan、preview/apply result，并调用手工同步 API。 | Database Discovery / DBDISC-B04 | 浏览器 fail-closed 消费 provider-neutral contract，不接触 Canonical 原始 JSON、Secret 或连接串。 |
+| `.../features/database-discovery/api/databaseDiscoverySyncContracts.ts`、`databaseDiscoverySyncApi.ts` | 严格解码三 Provider 的 reconciliation、plan、preview/apply result，并调用手工同步 API。 | Database Discovery / DBDISC-B04 / DBDISC-SQLSERVER-B01 | 浏览器 fail-closed 消费 provider-neutral contract，不接触 Canonical 原始 JSON、Secret、连接串或 vendor-specific Sync model。 |
 | `.../features/database-discovery/pages/DiscoverySyncView.vue` | 提供 Profile/category/search/paging、逐项选择、before/after 预览、明确确认、Apply 结果与计划历史。 | Database Discovery / DBDISC-B04 | 让同步是可审查、可解释、可确认的人工工作流，而不是自动或批量盲写。 |
 | `.../app/router/routes.ts` | 注册 `/database-discovery/sync` 正式路由。 | Database Discovery / DBDISC-B04 | 让手工同步拥有可直接进入且可由路由恢复的产品入口。 |
 
@@ -502,10 +514,12 @@ Search 第一版采用 SQLite 受限 `LIKE` 投影；未创建 FTS5 virtual tabl
 | `.../Api/TraceabilityApiTests.cs` | 以真实 SQLite/HTTP 覆盖三种 root、coverage 边界、生命周期、trust、Supersedes、cycle、limits、排序、授权、fail-closed、只读不变量、query plan 与 fan-out payload。 | Traceability / TRACE-B01 | 保护派生 trace 的语义正确性、bounded-query safety 与 canonical write isolation。 |
 | `.../Api/ImpactApiTests.cs` | 以真实 SQLite/HTTP 覆盖七种 allowed path、forbidden path、五类 target、分页排序、distinct meaning、授权、fail-closed、只读、mutation refresh 与 query plan。 | Traceability / TRACE-B03 | 保护 bounded Impact semantics、API safety、canonical truth 与现有索引策略。 |
 | `.../Application/RuntimeConfigurationOptionsTests.cs` | 覆盖 Cookie、password hasher、SQLite、CORS、Serilog 配置的有效/无效边界与 Host wiring。 | Runtime configuration / INFRA-CONFIG-R01 | 证明部署调参有 typed/fail-fast validation，且 password hashing 不能降到安全下限以下。 |
-| `.../Application/DatabaseDiscoveryOptionsTests.cs` | 覆盖 Discovery 默认 timeout/2000ms polling/lease/heartbeat/limits 与无效组合。 | Database Discovery configuration / INFRA-CONFIG-R01 | 防止集中配置改变 worker 恢复语义或接受不安全运行参数。 |
-| `.../Api/DatabaseDiscoverySyncApiTests.cs` | 覆盖 create/link/update/missing/reappeared、显式确认、并发/stale/atomic/limits、权限、provider-neutral 与知识字段保护。 | Database Discovery / DBDISC-B04 | 以真实 SQLite/HTTP 验证手工同步主链路及高风险失败边界。 |
+| `.../Application/DatabaseDiscoveryOptionsTests.cs` | 覆盖 Discovery 默认 timeout/2000ms polling/lease/heartbeat/limits、SQL Server certificate trust 默认关闭与无效组合。 | Database Discovery configuration / INFRA-CONFIG-R01 / DBDISC-SQLSERVER-B01 | 防止集中配置改变 worker 恢复语义、接受不安全运行参数或默认跳过 SQL Server 证书验证。 |
+| `.../Api/DatabaseDiscoverySyncApiTests.cs` | 覆盖 create/link/update/missing/reappeared、显式确认、并发/stale/atomic/limits、权限、Oracle/PostgreSQL/SQL Server provider-neutral 与知识字段保护。 | Database Discovery / DBDISC-B04 / DBDISC-SQLSERVER-B01 | 以真实 SQLite/HTTP 验证手工同步主链路、高风险失败边界和第三 Provider 无分支复用。 |
 | `.../Persistence/DatabaseDiscoverySyncMigrationTests.cs` | 从 B03 schema 升级并核对 legacy 数据、B04 表/FK/唯一索引、rollback 与无 provider-specific 表。 | Database Discovery / DBDISC-B04 | 证明迁移保留既有知识，数据库级 binding 约束正确且可回滚。 |
-| `.../TestSupport/DatabaseDiscoveryWebApplicationFactory.cs` | 提供可切换 Oracle/PostgreSQL deterministic provider 的任务专属 Discovery Host。 | Database Discovery / DBDISC-B02 / B04 | 让 provider-neutral sync 回归复用同一受控 fake pipeline，不接触外部数据库或 Secret。 |
+| `.../TestSupport/DatabaseDiscoveryWebApplicationFactory.cs` | 提供可切换 Oracle/PostgreSQL/SQL Server deterministic provider 的任务专属 Discovery Host。 | Database Discovery / DBDISC-B02 / B04 / DBDISC-SQLSERVER-B01 | 让 provider-neutral sync 回归复用同一受控 fake pipeline，不接触外部数据库或 Secret。 |
+| `.../Application/SqlServerConnectionTesterTests.cs`、`SqlServerDiscoveryProviderTests.cs` | 覆盖 SQL Server 2022 version gate、typed secure connection、闭集 catalog、identifier/type/comment/constraint/FK/index/Sequence、capability、failure/redaction、cancel/timeout 的 deterministic conformance。 | Database Discovery / DBDISC-SQLSERVER-B01 | 在真实容器之外精确保护第三 Provider 的 mapping 与 fail-closed 边界。 |
+| `.../Api/SqlServerRealIntegrationTests.cs`、`TestSupport/SqlServerRealIntegrationWebApplicationFactory.cs` | 在 task-owned SQL Server 2022 和 SQLite 上走 Test/Worker/Snapshot/Diff/B04 Apply 全链路，并验证最小权限、business canary、redaction、取消和知识字段保护。 | Database Discovery / DBDISC-SQLSERVER-B01 | 提供不能由 mock 代替的实际 catalog、权限、collation、Sequence 波动与第三 Provider 证据。 |
 | `.../Application/OracleConnectionTesterTests.cs` | 覆盖 Oracle Test Connection 与 catalog reader 的 typed connection/catalog timeout wiring。 | Oracle runtime configuration / INFRA-CONFIG-R01 | 防止 Oracle 组件退回各自的 15/60 秒局部硬编码。 |
 | `.../Application/AttachmentOptionsTests.cs` | 覆盖附件 allowlist 子集、unsupported/wrong-kind/duplicate fail-fast、multipart 参数及请求上限派生。 | Attachment configuration / INFRA-CONFIG-R01 | 证明部署只能选择代码安全 catalog，且上传大小保持单一来源。 |
 | `.../Api/RuntimeCapabilitiesApiTests.cs` | 覆盖授权附件 capability 的 exact safe projection、匿名拒绝及配置子集反映。 | Runtime capabilities / INFRA-CONFIG-R01 | 防止 capability 暴露 StorageRoot/内部识别信息或偏离后端有效策略。 |
@@ -532,7 +546,8 @@ Search 第一版采用 SQLite 受限 `LIKE` 投影；未创建 FTS5 virtual tabl
 | `.../src/features/knowledge-documents/api/traceabilityContracts.spec.ts` | 覆盖三个 discriminated root、coverage/trust/lineage/truncation 及非法 enum / malformed payload fail-closed。 | Traceability / TRACE-B01 | 在 TRACE UI 之前冻结并验证严格前端读取边界。 |
 | `.../src/features/knowledge-documents/api/impactContracts.spec.ts` | 覆盖全部 Impact pathKind/meaning/target、path consistency、pagination 与 malformed payload fail-closed。 | Traceability / TRACE-B03 | 保护 strict runtime decoder 与闭集 contract。 |
 | `.../src/features/knowledge-documents/components/ImpactContextSection.spec.ts`、`pages/KnowledgeDocumentDetailView.spec.ts` | 覆盖三类 root 文案、空/错/重试、分页、导航、竞态、关系 mutation refresh 与详情层级。 | Traceability / TRACE-B03 | 证明独立状态、authoritative refresh 和 UI placement 不回归 B02/R06。 |
-| `.../src/features/database-discovery/pages/DiscoverySyncView.spec.ts`、`components/DiscoverySectionNav.spec.ts` | 覆盖角色能力、筛选/分页、selection、preview/confirm/apply、错误状态、计划历史与第五导航入口。 | Database Discovery / DBDISC-B04 | 保护 Viewer 只读、Editor/Administrator 明确写入及完整人工同步交互。 |
+| `.../src/features/database-discovery/pages/ConnectionProfilesView.spec.ts`、`api/databaseDiscoveryContracts.spec.ts` | 覆盖 SQL Server Profile 表单的 DatabaseName/ServiceName 切换、1433 默认端口、engine source 筛选及严格 Provider 解码。 | Database Discovery / DBDISC-SQLSERVER-B01 | 保护第三 Provider 的人工配置入口且不引入 raw connection string 或 vendor-specific review UI。 |
+| `.../src/features/database-discovery/pages/DiscoverySyncView.spec.ts`、`components/DiscoverySectionNav.spec.ts` | 覆盖角色能力、筛选/分页、selection、preview/confirm/apply、错误状态、计划历史与第五导航入口。 | Database Discovery / DBDISC-B04 / DBDISC-SQLSERVER-B01 | 保护 Viewer 只读、Editor/Administrator 明确写入及三 Provider 的完整人工同步交互。 |
 | `.../src/features/runtime-capabilities/api/attachmentRuntimeCapabilities.spec.ts` | 覆盖 safe capability 严格 decoder、去重校验、request cache 与失败后重试。 | Runtime capabilities / INFRA-CONFIG-R01 | 防止客户端静默接受 malformed runtime policy 或缓存永久失败。 |
 | `.../src/features/knowledge-documents/components/KnowledgeDocumentAttachmentArea.spec.ts`、`editor/KnowledgeDocumentEditor.spec.ts` | 覆盖普通附件/图片 capability 加载、动态 accept/提示/预检查、失败状态与既有上传行为。 | Attachment frontend / INFRA-CONFIG-R01 | 证明前端不再维护第二份部署 allowlist，且后端仍是最终 authority。 |
 | `.../src/test/setup.ts` | 提供 Vitest/Vue Test Utils 的公共测试初始化。 | Frontend test foundation | 保持测试环境最小一致。 |
@@ -547,7 +562,7 @@ Search 第一版采用 SQLite 受限 `LIKE` 投影；未创建 FTS5 virtual tabl
 | `global.json` | 固定 .NET SDK 8.0.404 并允许最新 patch。 | Repository foundation | 降低开发机 SDK 漂移。 |
 | `NuGet.Config` | 仅声明官方 nuget.org 源。 | Repository foundation | 让受控环境无需读取用户级配置。 |
 | `.gitignore` | 排除构建、依赖、SQLite、日志和 QA artifacts。 | Repository foundation | 防止生成物进入版本控制。 |
-| `src/SystemKnowledgeHub.Api/appsettings.json` | 保存安全通用默认值：认证运行参数、附件/预览/multipart、Database Discovery、SQLite operational 参数、CORS 空列表与 Serilog Console/rolling File 配置。 | Backend foundation / INFRA-CONFIG-R01 | 集中部署可调参数且不重复环境差异，也不保存真实 Secret。 |
+| `src/SystemKnowledgeHub.Api/appsettings.json` | 保存安全通用默认值：认证运行参数、附件/预览/multipart、Database Discovery（含默认关闭的 SQL Server certificate trust）、SQLite operational 参数、CORS 空列表与 Serilog Console/rolling File 配置。 | Backend foundation / INFRA-CONFIG-R01 / DBDISC-SQLSERVER-B01 | 集中部署可调参数且不重复环境差异，不保存真实 Secret，也不默认跳过 SQL Server 证书验证。 |
 | `src/SystemKnowledgeHub.Api/appsettings.Development.json` | 仅启用 Development Local authentication，并配置两个显式 Vite CORS origins。 | Backend foundation / INFRA-CONFIG-R01 | 分离开发差异，不复制通用 runtime defaults。 |
 | `src/SystemKnowledgeHub.Api/appsettings.Production.json` | 仅保存 Production fail-closed authentication、SQLite、Data Protection 与 attachment path 空占位。 | Production configuration / INFRA-CONFIG-R01 | 强制部署注入持久路径与认证选择，同时不提交 Secret 或机器路径。 |
 | `src/SystemKnowledgeHub.Api/Properties/launchSettings.json` | 定义 Development profile 与 5090 端口。 | Backend tooling | 支持一致的本地 `dotnet run`。 |
@@ -567,6 +582,7 @@ Search 第一版采用 SQLite 受限 `LIKE` 投影；未创建 FTS5 virtual tabl
 | `docs/PROJECT_FILE_MAP.md` | 说明主要仓库文件职责与文档归档位置。 | Repository documentation | 让后续任务能定位设计、规格、标准和验证历史。 |
 | `docs/PRODUCTION_DEPLOYMENT_GUIDE.md` | 说明配置归属、环境覆盖、typed validation、Serilog、持久路径、Secret、runtime capability 与 Production 运维边界。 | Deployment / INFRA-CONFIG-R01 | 让部署方安全覆盖可调参数且不会把通用默认、生产占位或代码不变量混为一谈。 |
 | `docs/reports/INFRA_CONFIG_R01_RUNTIME_CONFIGURATION_SERILOG_VERIFICATION_REPORT.md` | 记录 INFRA-CONFIG-R01 configuration inventory、PASS 验证矩阵、隔离运行证据、数据保护对比和最终结论。 | Verification / INFRA-CONFIG-R01 | 承载已完成 gate、清理和可审计验证证据。 |
+| `docs/reports/DBDISC_SQLSERVER_B01_SQLSERVER_PROVIDER_THIRD_PROVIDER_VERIFICATION_REPORT.md` | 记录 SQL Server 2022 Provider、真实 Docker/最小权限/catalog、Snapshot/Diff、第三 Provider B04 Apply、回归、数据保护与清理证据。 | Verification / DBDISC-SQLSERVER-B01 | 承载 SQL Server major/driver/image 的精确可审计边界及 DBDISC-VERIFY readiness。 |
 | `docs/specifications/System_Knowledge_Hub_MVP_Final_UI_Inventory.md` | 指定正式 UI、状态及唯一 Golden Reference。 | Frozen product specification | 防止引用 SUPERSEDED/DEPRECATED 原型。 |
 | `docs/specifications/System_Knowledge_Hub_MVP_Design_Baseline.md` | 冻结 UI 语言、布局和交互原则。 | Frozen product specification | 后续页面/实现共用视觉规则。 |
 | `docs/specifications/System_Knowledge_Hub_MVP_Domain_Model.md` | 冻结 MVP 核心领域对象和边界。 | Frozen domain specification | 防止实现发明通用知识框架。 |

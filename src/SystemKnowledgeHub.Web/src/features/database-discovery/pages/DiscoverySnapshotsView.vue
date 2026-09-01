@@ -30,7 +30,7 @@ const message = (value: unknown) =>
   value instanceof ApiError ? value.message : '无法加载发现快照历史。'
 const format = (value: string) => new Date(value).toLocaleString('zh-CN')
 const providerLabel = (value: SnapshotHistoryItem['providerType']) =>
-  value === 'PostgreSql' ? 'PostgreSQL' : 'Oracle'
+  value === 'PostgreSql' ? 'PostgreSQL' : value === 'SqlServer' ? 'SQL Server' : 'Oracle'
 
 async function load(): Promise<void> {
   controller.abort()

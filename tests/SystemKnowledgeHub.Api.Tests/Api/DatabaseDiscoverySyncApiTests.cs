@@ -404,28 +404,40 @@ public sealed class DatabaseDiscoverySyncApiTests
             && x.Status == DatabaseDiscoveryReconciliationStatus.Conflict);
     }
 
-    [Fact]
-    public async Task PostgreSql_canonical_snapshot_uses_the_same_provider_neutral_sync_pipeline()
+    [Theory]
+    [InlineData(DatabaseProviderType.PostgreSql)]
+    [InlineData(DatabaseProviderType.SqlServer)]
+    public async Task Additional_provider_canonical_snapshot_uses_the_same_provider_neutral_sync_pipeline(
+        DatabaseProviderType providerType)
     {
         using var factory = new DatabaseDiscoveryWebApplicationFactory();
-        factory.DiscoveryProvider.ProviderType = DatabaseProviderType.PostgreSql;
+        factory.DiscoveryProvider.ProviderType = providerType;
         factory.DiscoveryProvider.SnapshotFactory = (connection, request, call) =>
         {
             var snapshot = CanonicalSnapshotFixtures.Create(connection, request, call);
             return snapshot with
             {
-                ProviderType = DatabaseProviderType.PostgreSql,
-                ProviderVersion = "FakePostgreSql/1",
+                ProviderType = providerType,
+                ProviderVersion = providerType == DatabaseProviderType.SqlServer
+                    ? "FakeSqlServer/1"
+                    : "FakePostgreSql/1",
                 DatabaseInfo = snapshot.DatabaseInfo with
                 {
-                    Provider = "PostgreSql", ServerVersion = "15.8", CurrentDatabaseOrService = "knowledge_test",
-                    CurrentContainer = null, TargetFingerprint = "fake-postgresql-target-v1",
+                    Provider = providerType.ToString(),
+                    ServerVersion = providerType == DatabaseProviderType.SqlServer ? "16.0.4215.2" : "18.6",
+                    CurrentDatabaseOrService = providerType == DatabaseProviderType.SqlServer
+                        ? "SKH_DBDISC"
+                        : "knowledge_test",
+                    CurrentContainer = null,
+                    TargetFingerprint = providerType == DatabaseProviderType.SqlServer
+                        ? "fake-sqlserver-target-v1"
+                        : "fake-postgresql-target-v1",
                 },
             };
         };
         using var administrator = factory.CreateAuthenticatedClient();
         var profile = await SetSecret(administrator,
-            await CreateProfile(factory, administrator, DatabaseProviderType.PostgreSql), "postgresql-secret");
+            await CreateProfile(factory, administrator, providerType), $"{providerType}-secret");
         var run = await WaitForTerminal(administrator, (await Trigger(administrator, profile)).Id);
         Assert.Equal(DatabaseDiscoveryRunStatus.Succeeded, run.Status);
         var reconciliation = await Reconcile(administrator, profile.Id);
@@ -613,13 +625,30 @@ public sealed class DatabaseDiscoverySyncApiTests
         HttpClient client,
         DatabaseProviderType providerType = DatabaseProviderType.Oracle)
     {
-        var postgreSql = providerType == DatabaseProviderType.PostgreSql;
-        var sourceId = await CreateSource(factory, postgreSql ? "PostgreSQL" : "Oracle");
+        var sourceEngine = providerType switch
+        {
+            DatabaseProviderType.PostgreSql => "PostgreSQL",
+            DatabaseProviderType.SqlServer => "SQL Server",
+            _ => "Oracle",
+        };
+        var port = providerType switch
+        {
+            DatabaseProviderType.PostgreSql => 5432,
+            DatabaseProviderType.SqlServer => 1433,
+            _ => 1521,
+        };
+        var databaseName = providerType switch
+        {
+            DatabaseProviderType.PostgreSql => "knowledge_test",
+            DatabaseProviderType.SqlServer => "SKH_DBDISC",
+            _ => null,
+        };
+        var sourceId = await CreateSource(factory, sourceEngine);
         using var response = await client.PostAsJsonAsync("/api/admin/database-connection-profiles", new
         {
             databaseSourceId = sourceId, name = $"B04-{Guid.NewGuid():N}", providerType = providerType.ToString(),
-            host = "db.example.test", port = postgreSql ? 5432 : 1521,
-            databaseName = postgreSql ? "knowledge_test" : null, serviceName = postgreSql ? null : "APP_PDB",
+            host = "db.example.test", port,
+            databaseName, serviceName = providerType == DatabaseProviderType.Oracle ? "APP_PDB" : null,
             authenticationMode = "UsernamePassword", username = "METADATA_READER",
             providerSpecificOptions = new { version = 1 }, includedSchemas = new[] { "APP_OWNER" }, isEnabled = true,
         });

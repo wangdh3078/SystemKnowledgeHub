@@ -23,6 +23,7 @@ using SystemKnowledgeHub.Api.Features.DatabaseKnowledge.Persistence;
 using SystemKnowledgeHub.Api.Features.DatabaseDiscovery.Application;
 using SystemKnowledgeHub.Api.Features.DatabaseDiscovery.Providers.Oracle;
 using SystemKnowledgeHub.Api.Features.DatabaseDiscovery.Providers.PostgreSql;
+using SystemKnowledgeHub.Api.Features.DatabaseDiscovery.Providers.SqlServer;
 using SystemKnowledgeHub.Api.Features.Dashboard.Application;
 using SystemKnowledgeHub.Api.Features.Evidence.Application;
 using SystemKnowledgeHub.Api.Features.Integrations.Application;
@@ -257,6 +258,10 @@ builder.Services.AddSingleton<IOracleDiscoveryCatalogReader, OracleManagedDiscov
 builder.Services.AddSingleton<IDatabaseDiscoveryProvider, OracleDiscoveryProvider>();
 builder.Services.AddSingleton<IPostgreSqlDiscoveryCatalogReader, NpgsqlPostgreSqlDiscoveryCatalogReader>();
 builder.Services.AddSingleton<IDatabaseDiscoveryProvider, PostgreSqlDiscoveryProvider>();
+builder.Services.AddSingleton<ISqlServerConnectionProbe, SqlClientConnectionProbe>();
+builder.Services.AddSingleton<IDatabaseConnectionTester, SqlServerConnectionTester>();
+builder.Services.AddSingleton<ISqlServerDiscoveryCatalogReader, SqlClientSqlServerDiscoveryCatalogReader>();
+builder.Services.AddSingleton<IDatabaseDiscoveryProvider, SqlServerDiscoveryProvider>();
 builder.Services.AddScoped<DashboardQueries>();
 builder.Services.AddScoped<EvidenceSubjectResolver>();
 builder.Services.AddScoped<EvidenceQueries>();

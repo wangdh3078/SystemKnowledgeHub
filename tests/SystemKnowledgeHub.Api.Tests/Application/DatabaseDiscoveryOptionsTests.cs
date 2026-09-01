@@ -21,6 +21,7 @@ public sealed class DatabaseDiscoveryOptionsTests
         Assert.Equal(30, options.LeaseDurationSeconds);
         Assert.Equal(5, options.HeartbeatIntervalSeconds);
         Assert.Equal(2_000, options.MaximumSyncPlanActions);
+        Assert.False(options.SqlServerTrustServerCertificate);
         Assert.Equal(new DatabaseDiscoveryLimits(
             128,
             25_000,
@@ -86,6 +87,7 @@ public sealed class DatabaseDiscoveryOptionsTests
         Assert.Equal(2_000, options.QueuePollIntervalMilliseconds);
         Assert.Equal(30, options.LeaseDurationSeconds);
         Assert.Equal(5, options.HeartbeatIntervalSeconds);
+        Assert.False(options.SqlServerTrustServerCertificate);
     }
 
     private static void Set(DatabaseDiscoveryOptions options, string key, int value)

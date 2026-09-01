@@ -16,6 +16,11 @@ import type {
   DatabaseProviderType,
   SourceOption,
 } from '../api/databaseDiscoveryContracts'
+import {
+  databaseProviderDefaultPort,
+  databaseProviderEngine,
+  databaseProviderLabel,
+} from '../api/databaseDiscoveryContracts'
 import '../database-discovery.css'
 
 const actorStore = useActorStore()
@@ -58,15 +63,12 @@ const secretDialogOpen = computed(
   () => overlayStore.currentDialog?.kind === 'database-discovery-connection-secret',
 )
 const availableSources = computed(() =>
-  sources.value.filter((item) =>
-    form.providerType === 'Oracle' ? item.engine === 'Oracle' : item.engine === 'PostgreSQL',
-  ),
+  sources.value.filter((item) => item.engine === databaseProviderEngine(form.providerType)),
 )
 const message = (value: unknown) =>
   value instanceof ApiError ? value.message : '操作失败，请稍后重试。'
 const format = (value: string | null) => (value ? new Date(value).toLocaleString('zh-CN') : '—')
-const providerLabel = (value: DatabaseProviderType) =>
-  value === 'PostgreSql' ? 'PostgreSQL' : 'Oracle'
+const providerLabel = databaseProviderLabel
 const connectionStatusLabel: Record<ConnectionProfile['connectionStatus'], string> = {
   Unknown: '未测试',
   Succeeded: '测试成功',
@@ -108,7 +110,7 @@ function validate(): boolean {
   if (!form.username.trim()) fieldErrors.username = '请输入用户名。'
   if (form.providerType === 'Oracle' && !form.serviceName.trim())
     fieldErrors.serviceName = '请输入服务名。'
-  if (form.providerType === 'PostgreSql' && !form.databaseName.trim())
+  if (form.providerType !== 'Oracle' && !form.databaseName.trim())
     fieldErrors.databaseName = '请输入数据库名。'
   if (schemas.length === 0 || schemas.length > 128)
     fieldErrors.includedSchemas = '请输入 1 到 128 个 Schema。'
@@ -172,7 +174,7 @@ function reset(provider: DatabaseProviderType = 'Oracle'): void {
     name: '',
     providerType: provider,
     host: '',
-    port: provider === 'Oracle' ? 1521 : 5432,
+    port: databaseProviderDefaultPort(provider),
     databaseName: '',
     serviceName: '',
     username: '',
@@ -213,7 +215,7 @@ function openEdit(profile: ConnectionProfile): void {
   })
 }
 function providerChanged(): void {
-  form.port = form.providerType === 'Oracle' ? 1521 : 5432
+  form.port = databaseProviderDefaultPort(form.providerType)
   form.databaseSourceId = null
   form.databaseName = ''
   form.serviceName = ''
@@ -229,7 +231,7 @@ function payload() {
     providerType: form.providerType,
     host: form.host.trim(),
     port: form.port,
-    databaseName: form.providerType === 'PostgreSql' ? form.databaseName.trim() : null,
+    databaseName: form.providerType !== 'Oracle' ? form.databaseName.trim() : null,
     serviceName: form.providerType === 'Oracle' ? form.serviceName.trim() : null,
     authenticationMode: 'UsernamePassword' as const,
     username: form.username.trim(),
@@ -575,6 +577,7 @@ onBeforeUnmount(() => {
             >
               <el-radio-button value="Oracle">Oracle</el-radio-button>
               <el-radio-button value="PostgreSql">PostgreSQL</el-radio-button>
+              <el-radio-button value="SqlServer">SQL Server</el-radio-button>
             </el-radio-group>
           </el-form-item>
           <el-form-item label="数据库来源" :error="fieldErrors.databaseSourceId" required>
