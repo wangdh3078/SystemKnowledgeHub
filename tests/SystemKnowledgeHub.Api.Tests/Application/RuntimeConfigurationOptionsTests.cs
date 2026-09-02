@@ -138,6 +138,150 @@ public sealed class RuntimeConfigurationOptionsTests
         Assert.Contains("Microsoft.AspNetCore is required", error, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("Testing")]
+    [InlineData("Verification")]
+    public void Isolated_runtime_storage_guard_accepts_only_explicit_task_owned_absolute_paths(
+        string environmentName)
+    {
+        var testRoot = Path.Combine(
+            Path.GetTempPath(),
+            "SystemKnowledgeHub.Api.Tests",
+            "storage-guard",
+            Guid.NewGuid().ToString("N"));
+        var contentRoot = Path.Combine(testRoot, "content-root");
+        var taskRoot = Path.Combine(testRoot, "task-owned");
+        var environment = new TestWebHostEnvironment(contentRoot)
+        {
+            EnvironmentName = environmentName,
+        };
+        var configuration = IsolatedRuntimeConfiguration(taskRoot);
+
+        Assert.True(IsolatedRuntimeStorageGuard.TryResolve(
+            configuration,
+            environment,
+            out var paths,
+            out var error));
+        Assert.Null(error);
+        Assert.NotNull(paths);
+        Assert.Equal(Path.Combine(taskRoot, "knowledge-hub.db"), paths.SqliteDataSourcePath);
+        Assert.Equal(Path.Combine(taskRoot, "keys"), paths.DataProtectionKeyPath);
+        Assert.Equal(Path.Combine(taskRoot, "attachments"), paths.AttachmentStorageRoot);
+        Assert.Equal(Path.Combine(taskRoot, "logs", "runtime-.log"), paths.SerilogFilePath);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("Data Source=App_Data/system-knowledge-hub.db")]
+    [InlineData("Data Source=:memory:")]
+    public void Isolated_runtime_storage_guard_rejects_missing_relative_or_memory_sqlite(
+        string? connectionString)
+    {
+        var testRoot = Path.Combine(
+            Path.GetTempPath(),
+            "SystemKnowledgeHub.Api.Tests",
+            "storage-guard",
+            Guid.NewGuid().ToString("N"));
+        var environment = new TestWebHostEnvironment(Path.Combine(testRoot, "content-root"))
+        {
+            EnvironmentName = IsolatedRuntimeStorageGuard.VerificationEnvironmentName,
+        };
+        var values = IsolatedRuntimeValues(Path.Combine(testRoot, "task-owned"));
+        values["ConnectionStrings:KnowledgeHub"] = connectionString;
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(values).Build();
+
+        Assert.False(IsolatedRuntimeStorageGuard.TryResolve(
+            configuration,
+            environment,
+            out var paths,
+            out var error));
+        Assert.Null(paths);
+        Assert.Equal(IsolatedRuntimeStorageGuard.SqliteError, error);
+    }
+
+    [Fact]
+    public void Isolated_runtime_storage_guard_rejects_repository_or_content_root_paths()
+    {
+        var contentRoot = Path.GetFullPath(Path.Combine(
+            Path.GetTempPath(),
+            "SystemKnowledgeHub.Api.Tests",
+            "storage-guard-content",
+            Guid.NewGuid().ToString("N")));
+        var environment = new TestWebHostEnvironment(contentRoot)
+        {
+            EnvironmentName = IsolatedRuntimeStorageGuard.TestingEnvironmentName,
+        };
+        var values = IsolatedRuntimeValues(Path.Combine(Path.GetTempPath(), "safe-task", Guid.NewGuid().ToString("N")));
+        values["ConnectionStrings:KnowledgeHub"] =
+            $"Data Source={Path.Combine(contentRoot, "App_Data", "system-knowledge-hub.db")}";
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(values).Build();
+
+        Assert.False(IsolatedRuntimeStorageGuard.TryResolve(
+            configuration,
+            environment,
+            out _,
+            out var error));
+        Assert.Equal(IsolatedRuntimeStorageGuard.SqliteError, error);
+    }
+
+    [Theory]
+    [InlineData("src/SystemKnowledgeHub.Api/App_Data/system-knowledge-hub.db")]
+    [InlineData("publish/state/knowledge-hub.db")]
+    [InlineData("bin/Release/state/knowledge-hub.db")]
+    public void Isolated_runtime_storage_guard_rejects_source_and_build_output_paths(
+        string unsafeRelativePath)
+    {
+        var testRoot = Path.Combine(
+            Path.GetTempPath(),
+            "SystemKnowledgeHub.Api.Tests",
+            "storage-guard",
+            Guid.NewGuid().ToString("N"));
+        var environment = new TestWebHostEnvironment(Path.Combine(testRoot, "unrelated-content-root"))
+        {
+            EnvironmentName = IsolatedRuntimeStorageGuard.VerificationEnvironmentName,
+        };
+        var values = IsolatedRuntimeValues(Path.Combine(testRoot, "task-owned"));
+        values["ConnectionStrings:KnowledgeHub"] =
+            $"Data Source={Path.GetFullPath(Path.Combine(testRoot, "outside-content", unsafeRelativePath))}";
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(values).Build();
+
+        Assert.False(IsolatedRuntimeStorageGuard.TryResolve(
+            configuration,
+            environment,
+            out _,
+            out var error));
+        Assert.Equal(IsolatedRuntimeStorageGuard.SqliteError, error);
+    }
+
+    [Theory]
+    [InlineData("DataProtection:KeyPath", "Data Protection key path")]
+    [InlineData("Attachments:StorageRoot", "Attachment StorageRoot")]
+    [InlineData("Serilog:WriteTo:1:Args:path", "Serilog file path")]
+    public void Isolated_runtime_storage_guard_rejects_inherited_relative_auxiliary_paths(
+        string key,
+        string expectedError)
+    {
+        var testRoot = Path.Combine(
+            Path.GetTempPath(),
+            "SystemKnowledgeHub.Api.Tests",
+            "storage-guard",
+            Guid.NewGuid().ToString("N"));
+        var environment = new TestWebHostEnvironment(Path.Combine(testRoot, "content-root"))
+        {
+            EnvironmentName = IsolatedRuntimeStorageGuard.VerificationEnvironmentName,
+        };
+        var values = IsolatedRuntimeValues(Path.Combine(testRoot, "task-owned"));
+        values[key] = "relative/path";
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(values).Build();
+
+        Assert.False(IsolatedRuntimeStorageGuard.TryResolve(
+            configuration,
+            environment,
+            out _,
+            out var error));
+        Assert.Contains(expectedError, error, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void Configured_cookie_and_password_hashing_values_are_wired_into_framework_options()
     {
@@ -167,6 +311,21 @@ public sealed class RuntimeConfigurationOptionsTests
 
     private static IConfiguration SerilogConfiguration() =>
         new ConfigurationBuilder().AddInMemoryCollection(ValidSerilogValues()).Build();
+
+    private static IConfiguration IsolatedRuntimeConfiguration(string taskRoot) =>
+        new ConfigurationBuilder()
+            .AddInMemoryCollection(IsolatedRuntimeValues(taskRoot))
+            .Build();
+
+    private static Dictionary<string, string?> IsolatedRuntimeValues(string taskRoot) => new()
+    {
+        ["ConnectionStrings:KnowledgeHub"] = $"Data Source={Path.Combine(taskRoot, "knowledge-hub.db")}",
+        ["DataProtection:KeyPath"] = Path.Combine(taskRoot, "keys"),
+        ["Attachments:StorageRoot"] = Path.Combine(taskRoot, "attachments"),
+        ["Serilog:WriteTo:0:Name"] = "Console",
+        ["Serilog:WriteTo:1:Name"] = "File",
+        ["Serilog:WriteTo:1:Args:path"] = Path.Combine(taskRoot, "logs", "runtime-.log"),
+    };
 
     private static Dictionary<string, string?> ValidSerilogValues() => new()
     {

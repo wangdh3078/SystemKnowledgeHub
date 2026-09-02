@@ -20,6 +20,9 @@ namespace SystemKnowledgeHub.Api.Tests.TestSupport;
 public class BootstrapWebApplicationFactory : WebApplicationFactory<Program>
 {
     private readonly SqliteConnection _connection;
+    private readonly string _guardStorageRoot;
+    private readonly string _guardDatabasePath;
+    private readonly string _dataProtectionKeyPath;
     private readonly string _attachmentStorageRoot;
     private readonly string _logStorageRoot;
     private readonly string _logFilePath;
@@ -28,6 +31,13 @@ public class BootstrapWebApplicationFactory : WebApplicationFactory<Program>
 
     public BootstrapWebApplicationFactory()
     {
+        _guardStorageRoot = Path.Combine(
+            Path.GetTempPath(),
+            "SystemKnowledgeHub.Api.Tests",
+            "runtime",
+            Guid.NewGuid().ToString("N"));
+        _guardDatabasePath = Path.Combine(_guardStorageRoot, "bootstrap-guard.db");
+        _dataProtectionKeyPath = Path.Combine(_guardStorageRoot, "keys");
         _attachmentStorageRoot = Path.Combine(
             Path.GetTempPath(),
             "SystemKnowledgeHub.Api.Tests",
@@ -66,6 +76,10 @@ public class BootstrapWebApplicationFactory : WebApplicationFactory<Program>
     {
         ConfigureAuthenticationMode(builder);
         builder.UseEnvironment(TestEnvironmentName);
+        builder.UseSetting(
+            "ConnectionStrings:KnowledgeHub",
+            $"Data Source={_guardDatabasePath};Pooling=False");
+        builder.UseSetting("DataProtection:KeyPath", _dataProtectionKeyPath);
         builder.UseSetting("Attachments:StorageRoot", _attachmentStorageRoot);
         builder.UseSetting(
             "Serilog:WriteTo:1:Args:path",
@@ -148,6 +162,7 @@ public class BootstrapWebApplicationFactory : WebApplicationFactory<Program>
     public string AttachmentStorageRoot => _attachmentStorageRoot;
     public string LogStorageRoot => _logStorageRoot;
     public string LogFilePath => _logFilePath;
+    public string GuardDatabasePath => _guardDatabasePath;
 
     public HttpClient CreateAuthenticatedClientWithoutAntiforgery()
     {
@@ -233,6 +248,10 @@ public class BootstrapWebApplicationFactory : WebApplicationFactory<Program>
         if (disposing)
         {
             _connection.Dispose();
+            if (Directory.Exists(_guardStorageRoot))
+            {
+                Directory.Delete(_guardStorageRoot, recursive: true);
+            }
             if (Directory.Exists(_attachmentStorageRoot))
             {
                 Directory.Delete(_attachmentStorageRoot, recursive: true);

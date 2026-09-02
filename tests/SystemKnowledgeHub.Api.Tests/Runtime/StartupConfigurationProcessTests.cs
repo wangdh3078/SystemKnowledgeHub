@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Microsoft.Data.Sqlite;
 
 namespace SystemKnowledgeHub.Api.Tests.Runtime;
 
@@ -254,6 +255,18 @@ public sealed class StartupConfigurationProcessTests
 
             var currentUserResponse = await client.GetAsync("/api/current-user");
             Assert.Equal(System.Net.HttpStatusCode.Unauthorized, currentUserResponse.StatusCode);
+
+            if (environment == "Development")
+            {
+                var databasePath = Path.Combine(temporaryRoot, "knowledge-hub.db");
+                Assert.True(File.Exists(databasePath));
+                await using var connection = new SqliteConnection(
+                    $"Data Source={databasePath};Mode=ReadOnly;Pooling=False");
+                await connection.OpenAsync();
+                await using var command = connection.CreateCommand();
+                command.CommandText = "SELECT COUNT(*) FROM database_objects;";
+                Assert.True(Convert.ToInt32(await command.ExecuteScalarAsync()) > 0);
+            }
         }
         finally
         {

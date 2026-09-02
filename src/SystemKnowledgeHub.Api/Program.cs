@@ -43,15 +43,6 @@ using SystemKnowledgeHub.Api.Shared.Configuration;
 using SystemKnowledgeHub.Api.Shared.Security;
 
 var builder = WebApplication.CreateBuilder(args);
-builder.Host.UseSerilog(
-    (context, services, configuration) =>
-    {
-        configuration
-            .ReadFrom.Configuration(context.Configuration)
-            .ReadFrom.Services(services);
-    },
-    preserveStaticLogger: false,
-    writeToProviders: false);
 
 string? runtimeBindingError;
 if (!TryBindRuntimeOptions(
@@ -100,6 +91,24 @@ if (!TryBindRuntimeOptions(
     ReportStartupConfigurationFailure(builder.Environment, runtimeBindingError!);
     return;
 }
+if (!IsolatedRuntimeStorageGuard.TryResolve(
+        builder.Configuration,
+        builder.Environment,
+        out var isolatedRuntimeStorage,
+        out var isolatedRuntimeStorageError))
+{
+    ReportStartupConfigurationFailure(builder.Environment, isolatedRuntimeStorageError!);
+    return;
+}
+builder.Host.UseSerilog(
+    (context, services, configuration) =>
+    {
+        configuration
+            .ReadFrom.Configuration(context.Configuration)
+            .ReadFrom.Services(services);
+    },
+    preserveStaticLogger: false,
+    writeToProviders: false);
 var requiresProductionConfiguration = !builder.Environment.IsDevelopment()
     && !builder.Environment.IsEnvironment("Testing");
 if (!builder.Environment.IsEnvironment("Testing") && !local.Enabled && !oidc.Enabled)
@@ -515,6 +524,16 @@ if (KnowledgeDocumentSearchMaintenanceCommand.IsRequested(args))
 app.Logger.LogInformation(
     "System Knowledge Hub host is starting in {EnvironmentName}.",
     app.Environment.EnvironmentName);
+
+if (app.Environment.IsEnvironment(IsolatedRuntimeStorageGuard.VerificationEnvironmentName))
+{
+    app.Logger.LogInformation(
+        "Verification runtime SQLite Data Source resolved to {SqliteDataSourcePath}.",
+        isolatedRuntimeStorage!.SqliteDataSourcePath);
+    await using var scope = app.Services.CreateAsyncScope();
+    var dbContext = scope.ServiceProvider.GetRequiredService<KnowledgeHubDbContext>();
+    await dbContext.Database.MigrateAsync();
+}
 
 if (app.Environment.IsDevelopment())
 {
