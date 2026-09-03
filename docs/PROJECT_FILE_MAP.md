@@ -1,6 +1,6 @@
 # System Knowledge Hub — Project File Map
 
-本文件描述当前仓库中主要目录和文件的职责。范围为 Bootstrap 基础设施、**VS-01～VS-15**、UX 稳定化、Post-MVP **U01～U04**、**INFRA-CONFIG-R01** 运行时配置基础以及 Database Discovery Oracle/PostgreSQL/SQL Server Provider；不把 `bin/`、`obj/`、`node_modules/`、`dist/`、lock 文件、运行时 SQLite 数据、普通 Migration 生成文件逐项列入。
+本文件描述当前仓库中主要目录和文件的职责。范围为 Bootstrap 基础设施、**VS-01～VS-15**、UX 稳定化、Post-MVP **U01～U04**、**INFRA-CONFIG-R01** 运行时配置基础、PORTAL-B01 以及 Database Discovery Oracle/PostgreSQL/SQL Server Provider；不把 `bin/`、`obj/`、`node_modules/`、`dist/`、lock 文件、运行时 SQLite 数据、普通 Migration 生成文件逐项列入。
 
 ## Documentation placement
 
@@ -195,7 +195,20 @@ Search 第一版采用 SQLite 受限 `LIKE` 投影；未创建 FTS5 virtual tabl
 
 以上 `...` 均指 `src/SystemKnowledgeHub.Api/Features/Traceability/`。
 
-### 1.16 Database Discovery manual sync — DBDISC-B04
+### 1.16 Portal composition and anonymous read — PORTAL-B01
+
+| 路径 | 一句话职责 | Feature / Vertical Slice | 为什么需要 |
+| --- | --- | --- | --- |
+| `src/SystemKnowledgeHub.Api/Features/Portal/Domain/PortalComposition.cs` | 定义 PortalPage、PortalPageNode、PortalPageSection 及 target/node/source/projection 闭合集。 | Internal Knowledge Portal / PORTAL-B01 | 只持久化组织、引用和顺序，不复制 canonical knowledge facts。 |
+| `.../Persistence/PortalPageConfiguration.cs`、`PortalPageNodeConfiguration.cs`、`PortalPageSectionConfiguration.cs` | 映射三张 Portal 表的 CHECK、RESTRICT FK、soft-delete/current filter、publication audit 与 root/non-root/order indexes。 | Internal Knowledge Portal / PORTAL-B01 | 在 SQLite 层保护 closed vocabulary、nullable shape、active sibling order 和 additive schema。 |
+| `.../Application/PortalCompositionValidator.cs`、`PortalLimits.cs` | 校验 page/section compatibility、node cycle/depth/subtree move/order 和冻结 hard limits。 | Internal Knowledge Portal / PORTAL-B01 | 为当前 fail-closed reads 及后续 B02 transactional writes提供单一服务器规则边界。 |
+| `.../Application/PortalTargetResolver.cs`、`PortalQueries.cs`、`Models/PortalModels.cs` | 批量解析五类 current eligible target，构造 flat tree、canonical breadcrumb 和 closed-discriminator sanitized page sections。 | Internal Knowledge Portal / PORTAL-B01 | 避免 Admin DTO/raw entity/N+1，并让失效 target 或 unsupported projection 整页 fail closed。 |
+| `.../Api/PortalController.cs` | 仅暴露匿名 GET `/api/portal/tree` 与 `/api/portal/pages/{id}`。 | Internal Knowledge Portal / PORTAL-B01 | 在不降低全局 Viewer/Admin authorization 的情况下建立专用 published-only read boundary。 |
+| `src/SystemKnowledgeHub.Api/Persistence/Migrations/20260903142533_AddPortalCompositionFoundation.cs` | additive-only 创建三张 Portal composition 表、约束和索引。 | Internal Knowledge Portal / PORTAL-B01 | 让 Portal 具备可回滚 persistence foundation，且不修改/回填既有知识表。 |
+
+以上 `...` 均指 `src/SystemKnowledgeHub.Api/Features/Portal/`。
+
+### 1.17 Database Discovery manual sync — DBDISC-B04
 
 | 路径 | 一句话职责 | Feature / Vertical Slice | 为什么需要 |
 | --- | --- | --- | --- |
@@ -207,7 +220,7 @@ Search 第一版采用 SQLite 受限 `LIKE` 投影；未创建 FTS5 virtual tabl
 
 以上 `...` 均指 `src/SystemKnowledgeHub.Api/Features/DatabaseDiscovery/`。
 
-### 1.17 Database Discovery SQL Server Provider — DBDISC-SQLSERVER-B01
+### 1.18 Database Discovery SQL Server Provider — DBDISC-SQLSERVER-B01
 
 | 路径 | 一句话职责 | Feature / Vertical Slice | 为什么需要 |
 | --- | --- | --- | --- |
@@ -513,6 +526,8 @@ Search 第一版采用 SQLite 受限 `LIKE` 投影；未创建 FTS5 virtual tabl
 | `.../Api/CurrentUserApiTests.cs` | 验证 Header 解析、Active Profile、缺失/无效/不存在/停用错误与无 Header Admin API 兼容。 | Users / U03 | 用 2 个真实 SQLite/HTTP 测试覆盖 Current User Context 的关键边界。 |
 | `.../Api/TraceabilityApiTests.cs` | 以真实 SQLite/HTTP 覆盖三种 root、coverage 边界、生命周期、trust、Supersedes、cycle、limits、排序、授权、fail-closed、只读不变量、query plan 与 fan-out payload。 | Traceability / TRACE-B01 | 保护派生 trace 的语义正确性、bounded-query safety 与 canonical write isolation。 |
 | `.../Api/ImpactApiTests.cs` | 以真实 SQLite/HTTP 覆盖七种 allowed path、forbidden path、五类 target、分页排序、distinct meaning、授权、fail-closed、只读、mutation refresh 与 query plan。 | Traceability / TRACE-B03 | 保护 bounded Impact semantics、API safety、canonical truth 与现有索引策略。 |
+| `.../Api/PortalAnonymousReadApiTests.cs`、`Application/PortalCompositionValidatorTests.cs`、`Application/PortalQueryPerformanceTests.cs` | 覆盖五类 target、publication/lifecycle/soft-delete、匿名授权隔离、sanitization、breadcrumb、2000/2001、30/31、5/6、depth/cycle/subtree 和固定 query count。 | Internal Knowledge Portal / PORTAL-B01 | 保护 Portal published-only fail-closed contract、hard limits 和 page-oriented bulk query。 |
+| `.../Persistence/PortalCompositionMigrationTests.cs` | 覆盖 fresh/upgrade/rollback、三表 additive scope、CHECK/FK/RESTRICT 与 root/non-root/section unique indexes。 | Internal Knowledge Portal / PORTAL-B01 | 证明 migration chain 不改写 canonical knowledge，且 SQLite 三值逻辑不会绕过 ExplicitReference shape。 |
 | `.../Application/RuntimeConfigurationOptionsTests.cs` | 覆盖 Cookie、password hasher、SQLite、CORS、Serilog 配置的有效/无效边界与 Host wiring。 | Runtime configuration / INFRA-CONFIG-R01 | 证明部署调参有 typed/fail-fast validation，且 password hashing 不能降到安全下限以下。 |
 | `.../Application/DatabaseDiscoveryOptionsTests.cs` | 覆盖 Discovery 默认 timeout/2000ms polling/lease/heartbeat/limits、SQL Server certificate trust 默认关闭与无效组合。 | Database Discovery configuration / INFRA-CONFIG-R01 / DBDISC-SQLSERVER-B01 | 防止集中配置改变 worker 恢复语义、接受不安全运行参数或默认跳过 SQL Server 证书验证。 |
 | `.../Api/DatabaseDiscoverySyncApiTests.cs` | 覆盖 create/link/update/missing/reappeared、显式确认、并发/stale/atomic/limits、权限、Oracle/PostgreSQL/SQL Server provider-neutral 与知识字段保护。 | Database Discovery / DBDISC-B04 / DBDISC-SQLSERVER-B01 | 以真实 SQLite/HTTP 验证手工同步主链路、高风险失败边界和第三 Provider 无分支复用。 |
@@ -625,6 +640,7 @@ Search 第一版采用 SQLite 受限 `LIKE` 投影；未创建 FTS5 virtual tabl
 | `docs/reports/TRACE_B01_DERIVED_TRACE_READ_FOUNDATION_VERIFICATION_REPORT.md` | 记录 TRACE-B01 endpoint、查询策略、三类 projection、自动化、SQLite runtime/query-plan、数据库保护与 B02 readiness。 | Traceability / TRACE-B01 | 为 Derived Trace Read Foundation 提供可复核完成证据。 |
 | `docs/reports/TRACE_B03_BOUNDED_IMPACT_CONTEXT_VERIFICATION_REPORT.md` | 记录 fixed Impact path、API/UI、刷新、自动化、浏览器、SQLite 与 repository DB protection 的最终验证。 | Traceability / TRACE-B03 | 为 Bounded Impact Context 与 PHASE-TRACE-VERIFY readiness 提供可复核证据。 |
 | `docs/design/PORTAL_A01_INTERNAL_KNOWLEDGE_PORTAL_ARCHITECTURE_DECISION.md` 与 `docs/reports/PORTAL_A01_INTERNAL_KNOWLEDGE_PORTAL_ARCHITECTURE_FREEZE_REPORT.md` | 冻结并验证同应用、同部署的匿名只读 Portal，以及 Admin Page Tree、Primary Target、Composite Page、Section 编排、Preview/Publish/Unpublish、sanitization、search、attachment 与 trace 边界。 | Internal Knowledge Portal / Admin Knowledge Composition / PORTAL-A01 | 是 PORTAL-B01～VERIFY 的直接架构与合同依据；任何实现不得复制知识事实或放宽现有 Admin 授权。 |
+| `docs/reports/PORTAL_B01_COMPOSITION_PERSISTENCE_ANONYMOUS_READ_FOUNDATION_VERIFICATION_REPORT.md` | 记录 Portal 三表持久化、tree integrity、controlled resolver、publication/lifecycle、anonymous APIs、sanitization、limits、migration/runtime/security 与 repository data protection 证据。 | Internal Knowledge Portal / PORTAL-B01 | 为 B01 完成状态和 PORTAL-B02 readiness 提供可复核证据。 |
 | `docs/INDEX.md` | 提供当前 canonical 设计、计划、规格、标准与验证文档的简洁入口。 | Repository documentation | 避免 README 与超大 File Map 承担重复导航职责。 |
 | `docs/reports/REPO_CLEAN_A01_WORKSPACE_AUDIT_REPORT.md`、`docs/planning/REPO_CLEAN_B01_SAFE_CLEANUP_PLAN.md` 与 `docs/reports/REPO_CLEAN_B01_SAFE_WORKSPACE_CLEANUP_VERIFICATION_REPORT.md` | 记录仓库工作区审计、获批清理边界、执行与验证结果。 | Repository maintenance / REPO-CLEAN-A01～B01 | 让清理操作、保护项、跳过项与后续人工决定可审计。 |
 | `docs/reports/SEC_01_OIDC_AUTHENTICATION_FOUNDATION_VERIFICATION_REPORT.md` 至 `docs/reports/SEC_04_SECURITY_ROLLOUT_VERIFICATION_REPORT.md` | 记录 OIDC 认证、后端访问控制、前端登录访问 UX 与安全 rollout 的验证结果。 | Security / SEC-01～SEC-04 | 保留安全阶段的连续验证历史。 |

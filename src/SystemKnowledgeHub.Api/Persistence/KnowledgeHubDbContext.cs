@@ -7,6 +7,7 @@ using SystemKnowledgeHub.Api.Features.DatabaseDiscovery.Domain;
 using SystemKnowledgeHub.Api.Features.Evidence.Domain;
 using SystemKnowledgeHub.Api.Features.Integrations.Domain;
 using SystemKnowledgeHub.Api.Features.KnowledgeDocuments.Domain;
+using SystemKnowledgeHub.Api.Features.Portal.Domain;
 using SystemKnowledgeHub.Api.Features.Relationships.Domain;
 using SystemKnowledgeHub.Api.Features.Systems.Domain;
 using SystemKnowledgeHub.Api.Features.UnknownItems.Domain;
@@ -59,6 +60,9 @@ public sealed class KnowledgeHubDbContext(DbContextOptions<KnowledgeHubDbContext
     public DbSet<KnowledgeDocumentRevision> KnowledgeDocumentRevisions => Set<KnowledgeDocumentRevision>();
     public DbSet<Attachment> Attachments => Set<Attachment>();
     public DbSet<AttachmentReference> AttachmentReferences => Set<AttachmentReference>();
+    public DbSet<PortalPage> PortalPages => Set<PortalPage>();
+    public DbSet<PortalPageNode> PortalPageNodes => Set<PortalPageNode>();
+    public DbSet<PortalPageSection> PortalPageSections => Set<PortalPageSection>();
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
