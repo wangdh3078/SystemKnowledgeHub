@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { CaretRight, InfoFilled } from '@element-plus/icons-vue'
 import { ApiError } from '../../../api/errors/ApiError'
 import EmptyState from '../../../components/feedback/EmptyState.vue'
 import ErrorState from '../../../components/feedback/ErrorState.vue'
 import LoadingState from '../../../components/feedback/LoadingState.vue'
+import SkhPagination from '../../../components/data-display/SkhPagination.vue'
 import { useActorStore } from '../../../app/stores/actor'
+import { useOverlayStore } from '../../../app/stores/overlays'
 import { getRunFilterOptions } from '../api/databaseDiscoveryApi'
 import {
   applySyncPlan,
@@ -29,9 +32,18 @@ import type {
   SyncSelection,
 } from '../api/databaseDiscoverySyncContracts'
 import DiscoverySectionNav from '../components/DiscoverySectionNav.vue'
+import SyncPlanDrawer from '../components/SyncPlanDrawer.vue'
+import {
+  reconciliationReason,
+  reconciliationStatusHelp,
+  reconciliationStatusLabels,
+  syncActionLabels,
+  syncPlanStatusLabels,
+} from '../databaseDiscoveryPresentation'
 import '../database-discovery.css'
 
 const actorStore = useActorStore()
+const overlayStore = useOverlayStore()
 const profiles = ref<RunFilterOptions>({ profiles: [], databaseSources: [] })
 const profileId = ref<number>()
 const category = ref('')
@@ -61,24 +73,6 @@ const message = (value: unknown) =>
   value instanceof ApiError ? value.message : '手工同步操作失败。'
 const canSelect = (row: ReconciliationCandidate) =>
   row.status === 'Applicable' && row.suggestedAction !== null
-const actionLabels: Record<SyncActionType, string> = {
-  CreateDatabaseObject: '创建对象',
-  LinkExistingDatabaseObject: '链接对象',
-  CreateDatabaseColumn: '创建字段',
-  LinkExistingDatabaseColumn: '链接字段',
-  UpdateDatabaseObjectStructure: '更新对象结构',
-  UpdateDatabaseColumnStructure: '更新字段结构',
-  MarkObjectSourceMissing: '标记对象来源未发现',
-  ClearObjectSourceMissing: '清除对象来源未发现',
-  MarkColumnSourceMissing: '标记字段来源未发现',
-  ClearColumnSourceMissing: '清除字段来源未发现',
-}
-const statusLabels = {
-  Applicable: '可处理',
-  NoAction: '无需操作',
-  Conflict: '冲突',
-  Unsupported: '仅审查',
-} as const
 const objectActionTypes = new Set<SyncActionType>([
   'CreateDatabaseObject',
   'LinkExistingDatabaseObject',
@@ -91,6 +85,9 @@ const selectedObjectCount = computed(
   () => selected.value.filter((item) => objectActionTypes.has(item.actionType)).length,
 )
 const selectedColumnCount = computed(() => selected.value.length - selectedObjectCount.value)
+const syncPlanDrawerOpen = computed(
+  () => overlayStore.currentDrawer?.kind === 'database-discovery-sync-plan',
+)
 
 const selectionKey = (selection: SyncSelection): string =>
   `${selection.actionType}\u001f${selection.logicalIdentity}\u001f${selection.targetId ?? ''}`
@@ -107,14 +104,25 @@ function statusType(
         : 'info'
 }
 function actionLabel(value: unknown): string {
-  return typeof value === 'string' && value in actionLabels
-    ? actionLabels[value as SyncActionType]
+  return typeof value === 'string' && value in syncActionLabels
+    ? syncActionLabels[value as SyncActionType]
     : '—'
 }
 function reconciliationStatusLabel(value: unknown): string {
-  return typeof value === 'string' && value in statusLabels
-    ? statusLabels[value as ReconciliationCandidate['status']]
+  return typeof value === 'string' && value in reconciliationStatusLabels
+    ? reconciliationStatusLabels[value as ReconciliationCandidate['status']]
     : '未知'
+}
+function reasonLabels(codes: readonly string[]): string {
+  return codes.length === 0 ? '—' : codes.map((code) => reconciliationReason(code).label).join('、')
+}
+function reasonDescriptions(codes: readonly string[]): string {
+  return codes
+    .map((code) => `${reconciliationReason(code).label}：${reconciliationReason(code).description}`)
+    .join('\n')
+}
+function objectTypeLabel(value: string): string {
+  return value === 'Table' ? '表' : value === 'View' ? '视图' : '数据库对象'
 }
 function selectionFor(row: ReconciliationCandidate): SyncSelection {
   return {
@@ -360,6 +368,7 @@ async function createAndPreview(): Promise<void> {
     plan = await previewSyncPlan(plan)
     activePlan.value = plan
     confirmationChecked.value = false
+    overlayStore.openDrawer({ kind: 'database-discovery-sync-plan', id: plan.id, mode: 'edit' })
     plansPage.value = 1
     await loadPlanHistory()
     ElMessage.success('同步计划预览已生成，请核对后显式确认。')
@@ -413,6 +422,14 @@ async function applyPlan(): Promise<void> {
 function openPlan(plan: SyncPlan): void {
   activePlan.value = plan
   confirmationChecked.value = false
+  overlayStore.openDrawer({
+    kind: 'database-discovery-sync-plan',
+    id: plan.id,
+    mode: actorStore.canEdit ? 'edit' : 'read',
+  })
+}
+function closePlanDrawer(): void {
+  overlayStore.closeDrawer()
 }
 
 async function loadPlanHistory(): Promise<void> {
@@ -452,6 +469,7 @@ onMounted(initialize)
 onBeforeUnmount(() => {
   controller.abort()
   plansController.abort()
+  if (syncPlanDrawerOpen.value) overlayStore.closeDrawer()
 })
 </script>
 
@@ -466,8 +484,7 @@ onBeforeUnmount(() => {
     </header>
     <DiscoverySectionNav />
     <el-alert title="人工知识保护" type="info" :closable="false" show-icon>
-      同步只写外部来源拥有的结构字段与 typed
-      binding，不会覆盖业务说明、业务键、访问模式、知识状态或人工证据。
+      同步只更新由外部数据库发现维护的结构信息和来源关联，不会覆盖业务说明、业务键、访问方式、知识状态或人工证据。
     </el-alert>
 
     <section class="discovery-filters skh-filter-bar" aria-label="手工同步筛选">
@@ -504,7 +521,7 @@ onBeforeUnmount(() => {
       <el-button @click="filterChanged">查询</el-button>
     </section>
 
-    <LoadingState v-if="loading && !reconciliation" message="正在生成 Reconciliation…" />
+    <LoadingState v-if="loading && !reconciliation" message="正在生成同步核对结果…" />
     <ErrorState
       v-else-if="error && !reconciliation"
       title="手工同步加载失败"
@@ -520,7 +537,7 @@ onBeforeUnmount(() => {
           <small>最新完整快照</small><strong>#{{ reconciliation.targetSnapshotId }}</strong>
         </div>
         <div>
-          <small>Scope Generation</small><strong>#{{ reconciliation.scopeGenerationId }}</strong>
+          <small>范围代次</small><strong>#{{ reconciliation.scopeGenerationId }}</strong>
         </div>
       </section>
       <section class="discovery-table-section skh-table-section" :aria-busy="loading">
@@ -549,7 +566,22 @@ onBeforeUnmount(() => {
           <div class="discovery-object-groups__header" role="row">
             <span role="columnheader">选择</span>
             <span role="columnheader">对象</span>
-            <span role="columnheader">判断</span>
+            <span role="columnheader" class="discovery-judgement-header"
+              >判断<el-tooltip placement="top"
+                ><template #content
+                  ><dl class="discovery-status-help">
+                    <div v-for="item in reconciliationStatusHelp" :key="item.label">
+                      <dt>{{ item.label }}</dt>
+                      <dd>{{ item.description }}</dd>
+                    </div>
+                  </dl></template
+                ><button
+                  type="button"
+                  class="discovery-status-help__trigger"
+                  aria-label="查看同步判断状态说明"
+                >
+                  <el-icon><InfoFilled /></el-icon></button></el-tooltip
+            ></span>
             <span role="columnheader">当前知识库</span>
             <span role="columnheader">建议操作</span>
             <span role="columnheader">字段</span>
@@ -583,19 +615,23 @@ onBeforeUnmount(() => {
                   :aria-expanded="expandedObjects.has(group.objectLogicalIdentity)"
                   @click="toggleExpanded(group)"
                 >
-                  <span aria-hidden="true">{{
-                    expandedObjects.has(group.objectLogicalIdentity) ? '⌄' : '›'
-                  }}</span>
+                  <el-icon
+                    :class="{ 'is-expanded': expandedObjects.has(group.objectLogicalIdentity) }"
+                    aria-hidden="true"
+                    ><CaretRight
+                  /></el-icon>
                 </button>
               </div>
               <div class="discovery-object-group__identity" role="gridcell">
                 <strong>{{ group.schemaName }}.{{ group.objectName }}</strong>
-                <small>{{ group.objectType }}</small>
+                <small>{{ objectTypeLabel(group.objectType) }}</small>
               </div>
               <div role="gridcell">
-                <el-tag :type="statusType(group.status)" effect="plain">{{
-                  groupStatusLabel(group)
-                }}</el-tag>
+                <el-tooltip :content="group.summary" placement="top">
+                  <el-tag :type="statusType(group.status)" effect="plain" tabindex="0">{{
+                    groupStatusLabel(group)
+                  }}</el-tag>
+                </el-tooltip>
               </div>
               <div class="discovery-object-group__fact" role="gridcell">
                 <span>{{ group.targetId ? `已关联 #${group.targetId}` : '未关联' }}</span>
@@ -651,9 +687,18 @@ onBeforeUnmount(() => {
                     <small>{{ child.entityKind === 'Column' ? '字段' : '仅审查结构' }}</small>
                   </div>
                   <div role="gridcell">
-                    <el-tag :type="statusType(child.status)" effect="plain">{{
-                      reconciliationStatusLabel(child.status)
-                    }}</el-tag>
+                    <el-tooltip
+                      :content="
+                        child.blockCodes.length > 0
+                          ? reasonDescriptions(child.blockCodes)
+                          : child.summary
+                      "
+                      placement="top"
+                    >
+                      <el-tag :type="statusType(child.status)" effect="plain" tabindex="0">{{
+                        reconciliationStatusLabel(child.status)
+                      }}</el-tag>
+                    </el-tooltip>
                   </div>
                   <span role="gridcell">—</span>
                   <span
@@ -667,30 +712,24 @@ onBeforeUnmount(() => {
                     class="discovery-object-child__block"
                     role="gridcell"
                     :title="
-                      child.blockCodes.length > 0 ? child.blockCodes.join('、') : child.summary
+                      child.blockCodes.length > 0
+                        ? reasonDescriptions(child.blockCodes)
+                        : child.summary
                     "
                   >
-                    {{ child.blockCodes.length > 0 ? child.blockCodes.join('、') : '—' }}
+                    {{ reasonLabels(child.blockCodes) }}
                   </small>
                 </div>
-                <footer
-                  v-if="
-                    childPages.get(group.objectLogicalIdentity)!.total >
-                    childPageSize(group.objectLogicalIdentity)
-                  "
-                  class="discovery-pagination skh-pagination"
-                >
-                  <el-pagination
-                    :current-page="childPages.get(group.objectLogicalIdentity)!.page"
-                    :total="childPages.get(group.objectLogicalIdentity)!.total"
-                    :page-size="childPageSize(group.objectLogicalIdentity)"
-                    :page-sizes="[50, 100, 200]"
-                    background
-                    layout="total, sizes, prev, pager, next, jumper"
-                    @current-change="(childPage: number) => loadChildren(group, childPage)"
-                    @size-change="(value: number) => childPageSizeChanged(group, value)"
-                  />
-                </footer>
+                <SkhPagination
+                  class="discovery-pagination"
+                  :current-page="childPages.get(group.objectLogicalIdentity)!.page"
+                  :total="childPages.get(group.objectLogicalIdentity)!.total"
+                  :page-size="childPageSize(group.objectLogicalIdentity)"
+                  :page-sizes="[50, 100, 200]"
+                  :aria-label="`${group.schemaName}.${group.objectName} 字段分页`"
+                  @current-change="(childPage: number) => loadChildren(group, childPage)"
+                  @size-change="(value: number) => childPageSizeChanged(group, value)"
+                />
               </template>
             </div>
           </article>
@@ -701,138 +740,18 @@ onBeforeUnmount(() => {
             :closable="false"
           />
         </div>
-        <footer v-if="reconciliation.total > 0" class="discovery-pagination skh-pagination">
-          <el-pagination
-            v-model:current-page="page"
-            v-model:page-size="pageSize"
-            :total="reconciliation.total"
-            :page-sizes="[50, 100, 200]"
-            background
-            layout="total, sizes, prev, pager, next, jumper"
-            @current-change="load"
-            @size-change="pageSizeChanged"
-          />
-        </footer>
+        <SkhPagination
+          v-model:current-page="page"
+          v-model:page-size="pageSize"
+          class="discovery-pagination"
+          :total="reconciliation.total"
+          :page-sizes="[50, 100, 200]"
+          aria-label="同步核对对象分页"
+          @current-change="() => load()"
+          @size-change="pageSizeChanged"
+        />
       </section>
     </template>
-
-    <section
-      v-if="activePlan?.preview"
-      class="discovery-panel discovery-sync-preview"
-      aria-label="同步计划预览"
-    >
-      <header>
-        <div>
-          <small>计划 #{{ activePlan.id }}</small>
-          <h2>预览与确认</h2>
-        </div>
-        <el-tag>{{ activePlan.status }}</el-tag>
-      </header>
-      <el-alert
-        v-for="warning in activePlan.preview.warnings"
-        :key="warning"
-        :title="warning"
-        type="warning"
-        :closable="false"
-        show-icon
-      />
-      <p class="discovery-hash">
-        PreviewHash：<code>{{ activePlan.preview.previewHash }}</code>
-      </p>
-      <el-table
-        :data="activePlan.preview.actions"
-        :row-key="
-          (row: { actionType: string; logicalIdentity: string }) =>
-            `${row.actionType}:${row.logicalIdentity}`
-        "
-        max-height="420"
-      >
-        <el-table-column label="操作" width="160"
-          ><template #default="{ row }">{{
-            actionLabel(row.actionType)
-          }}</template></el-table-column
-        >
-        <el-table-column prop="summary" label="范围" min-width="180" />
-        <el-table-column label="变更前" min-width="220"
-          ><template #default="{ row }">
-            <pre>{{ row.before ?? '—' }}</pre>
-          </template></el-table-column
-        >
-        <el-table-column label="变更后" min-width="220"
-          ><template #default="{ row }">
-            <pre>{{ row.after ?? '—' }}</pre>
-          </template></el-table-column
-        >
-      </el-table>
-      <div
-        v-if="actorStore.canEdit && activePlan.status === 'Draft'"
-        class="discovery-confirmation"
-      >
-        <el-checkbox v-model="confirmationChecked"
-          >我已核对当前 PreviewHash、before/after 与人工知识保护边界</el-checkbox
-        >
-        <el-button
-          type="primary"
-          :disabled="!confirmationChecked"
-          :loading="mutating"
-          @click="confirmPlan"
-          >确认当前预览</el-button
-        >
-      </div>
-      <div
-        v-if="actorStore.canEdit && activePlan.status === 'Ready'"
-        class="discovery-confirmation"
-      >
-        <span>预览已确认；应用前服务端将再次验证最新快照、binding 与目标并发令牌。</span>
-        <el-button type="danger" :loading="mutating" @click="applyPlan">应用已确认计划</el-button>
-      </div>
-      <template v-if="activePlan.status === 'Applied' && activePlan.result">
-        <el-result
-          icon="success"
-          title="同步计划已应用"
-          sub-title="所有操作已在一个 SQLite 事务中提交。"
-        />
-        <dl class="discovery-sync-result" aria-label="应用结果">
-          <div>
-            <dt>创建对象</dt>
-            <dd>{{ activePlan.result.createdObjects }}</dd>
-          </div>
-          <div>
-            <dt>链接对象</dt>
-            <dd>{{ activePlan.result.linkedObjects }}</dd>
-          </div>
-          <div>
-            <dt>更新对象</dt>
-            <dd>{{ activePlan.result.updatedObjects }}</dd>
-          </div>
-          <div>
-            <dt>创建字段</dt>
-            <dd>{{ activePlan.result.createdColumns }}</dd>
-          </div>
-          <div>
-            <dt>链接字段</dt>
-            <dd>{{ activePlan.result.linkedColumns }}</dd>
-          </div>
-          <div>
-            <dt>更新字段</dt>
-            <dd>{{ activePlan.result.updatedColumns }}</dd>
-          </div>
-          <div>
-            <dt>标记来源未发现</dt>
-            <dd>{{ activePlan.result.markedMissing }}</dd>
-          </div>
-          <div>
-            <dt>清除来源未发现</dt>
-            <dd>{{ activePlan.result.clearedMissing }}</dd>
-          </div>
-        </dl>
-        <a
-          class="el-button el-button--primary"
-          :href="`/database-objects?databaseSourceId=${activePlan.databaseSourceId}`"
-          >查看数据库对象</a
-        >
-      </template>
-    </section>
 
     <section class="discovery-panel">
       <header>
@@ -853,28 +772,40 @@ onBeforeUnmount(() => {
           min-width="150"
         />
         <el-table-column prop="targetSnapshotId" label="快照" width="90" /><el-table-column
-          prop="status"
           label="状态"
           width="110"
-        />
+          ><template #default="{ row }"
+            ><el-tag effect="plain">{{
+              syncPlanStatusLabels[row.status as SyncPlan['status']]
+            }}</el-tag></template
+          ></el-table-column
+        >
         <el-table-column label="操作" width="110"
           ><template #default="{ row }"
             ><el-button size="small" @click="openPlan(row)">查看计划</el-button></template
           ></el-table-column
         >
       </el-table>
-      <footer v-if="plansTotal > 0" class="discovery-pagination skh-pagination">
-        <el-pagination
-          v-model:current-page="plansPage"
-          v-model:page-size="plansPageSize"
-          :total="plansTotal"
-          :page-sizes="[20, 50, 100]"
-          background
-          layout="total, sizes, prev, pager, next, jumper"
-          @current-change="loadPlanHistory"
-          @size-change="plansPageSizeChanged"
-        />
-      </footer>
+      <SkhPagination
+        v-model:current-page="plansPage"
+        v-model:page-size="plansPageSize"
+        class="discovery-pagination"
+        :total="plansTotal"
+        aria-label="同步计划历史分页"
+        @current-change="loadPlanHistory"
+        @size-change="plansPageSizeChanged"
+      />
     </section>
+    <Teleport v-if="syncPlanDrawerOpen && activePlan" defer to="#drawer-feature-content">
+      <SyncPlanDrawer
+        v-model:confirmation-checked="confirmationChecked"
+        :plan="activePlan"
+        :can-edit="actorStore.canEdit"
+        :mutating="mutating"
+        @close="closePlanDrawer"
+        @confirm="confirmPlan"
+        @apply="applyPlan"
+      />
+    </Teleport>
   </main>
 </template>

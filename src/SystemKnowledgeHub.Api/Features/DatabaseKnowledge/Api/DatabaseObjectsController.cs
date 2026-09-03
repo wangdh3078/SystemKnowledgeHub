@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using System.Text.Json;
 using SystemKnowledgeHub.Api.Features.DatabaseKnowledge.Api.Contracts;
 using SystemKnowledgeHub.Api.Features.DatabaseKnowledge.Application;
 using SystemKnowledgeHub.Api.Features.DatabaseKnowledge.Application.Models;
@@ -189,11 +190,16 @@ public sealed class DatabaseObjectsController(
         CancellationToken cancellationToken)
     {
         if (!ApiIdParser.TryParse(id, out var databaseObjectId)) return BadRequest(InvalidId("id"));
+        if (!TryParseEstimatedRows(request.EstimatedRows, out var estimatedRows, out var estimatedRowsError))
+        {
+            return BadRequest(estimatedRowsError);
+        }
 
         var result = await service.UpdateDatabaseObjectKnowledge(
             new UpdateDatabaseObjectKnowledgeCommand(
                 databaseObjectId,
                 request.BusinessDescription,
+                estimatedRows,
                 request.AccessMode ?? string.Empty,
                 request.BusinessKeyColumns,
                 new DatabaseKnowledgeActorContext(request.Actor?.DisplayName ?? string.Empty, request.Actor?.Role),
@@ -298,6 +304,35 @@ public sealed class DatabaseObjectsController(
 
     private static ApiErrorResponse ConflictError(string field, string message) =>
         new("conflict", message, new Dictionary<string, string[]> { [field] = [message] }, null);
+
+    private static bool TryParseEstimatedRows(
+        JsonElement? value,
+        out long? estimatedRows,
+        out ApiErrorResponse? error)
+    {
+        const long maximumSafeInteger = 9_007_199_254_740_991;
+        estimatedRows = null;
+        error = null;
+        if (value is null || value.Value.ValueKind == JsonValueKind.Null)
+        {
+            return true;
+        }
+
+        if (value.Value.ValueKind == JsonValueKind.Number
+            && value.Value.TryGetInt64(out var parsed)
+            && parsed >= 0
+            && parsed <= maximumSafeInteger)
+        {
+            estimatedRows = parsed;
+            return true;
+        }
+
+        error = ValidationError(new Dictionary<string, string[]>
+        {
+            ["estimatedRows"] = ["估算行数必须为空或 0 至 9007199254740991 之间的整数。"],
+        });
+        return false;
+    }
 
     private static ApiErrorResponse InvalidId(string fieldName)
     {

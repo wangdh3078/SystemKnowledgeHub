@@ -19,7 +19,9 @@ vi.mock('vue-router', () => ({
   useRouter: () => routerState,
 }))
 vi.mock('../api/databaseKnowledgeApi', async () => {
-  const actual = await vi.importActual<typeof import('../api/databaseKnowledgeApi')>('../api/databaseKnowledgeApi')
+  const actual = await vi.importActual<typeof import('../api/databaseKnowledgeApi')>(
+    '../api/databaseKnowledgeApi',
+  )
   return { ...actual, getDatabaseObjectDetail: vi.fn() }
 })
 vi.mock('../../evidence/api/evidenceApi', () => ({ getEvidenceList: vi.fn() }))
@@ -27,7 +29,13 @@ vi.mock('../../evidence/api/evidenceApi', () => ({ getEvidenceList: vi.fn() }))
 const detail = {
   id: 45,
   system: { id: 12, name: 'MES' },
-  databaseSource: { id: 9, name: 'MES Oracle', engine: 'Oracle', concurrencyToken: 'source-token', canDelete: true },
+  databaseSource: {
+    id: 9,
+    name: 'MES Oracle',
+    engine: 'Oracle',
+    concurrencyToken: 'source-token',
+    canDelete: true,
+  },
   concurrencyToken: 'object-token',
   canDelete: true,
   overview: {
@@ -42,18 +50,20 @@ const detail = {
     primaryKeyColumns: ['ID'],
     businessKeyColumns: ['CODE'],
   },
-  columns: [{
-    id: 91,
-    ordinalPosition: 1,
-    columnName: 'ID',
-    dataType: 'NUMBER',
-    nullable: false,
-    businessDescription: '主键',
-    evidenceCount: 7,
-    unknownCount: 0,
-    knowledgeStatus: 'Confirmed' as const,
-    selected: false,
-  }],
+  columns: [
+    {
+      id: 91,
+      ordinalPosition: 1,
+      columnName: 'ID',
+      dataType: 'NUMBER',
+      nullable: false,
+      businessDescription: '主键',
+      evidenceCount: 7,
+      unknownCount: 0,
+      knowledgeStatus: 'Confirmed' as const,
+      selected: false,
+    },
+  ],
   contextRail: {
     usedByFunctions: [],
     relatedRuleCount: 0,
@@ -101,7 +111,8 @@ const stubs = {
   RegisterDatabaseColumnDialog: { template: '<div />' },
   KnowledgeStatusProgressionPanel: {
     props: ['targetType', 'evidenceCount', 'humanConfirmationCount', 'status'],
-    template: '<div data-test="progression">{{ targetType }}|{{ evidenceCount }}|{{ humanConfirmationCount }}|{{ status }}</div>',
+    template:
+      '<div data-test="progression">{{ targetType }}|{{ evidenceCount }}|{{ humanConfirmationCount }}|{{ status }}</div>',
   },
 }
 
@@ -109,7 +120,9 @@ describe('DatabaseObjectDetailView object-level trust closure', () => {
   beforeEach(() => {
     actorState.canEdit = true
     vi.mocked(getDatabaseObjectDetail).mockReset().mockResolvedValue(detail)
-    vi.mocked(getEvidenceList).mockReset().mockResolvedValue({ items: [evidence] })
+    vi.mocked(getEvidenceList)
+      .mockReset()
+      .mockResolvedValue({ items: [evidence] })
     overlayState.openDrawer.mockReset()
     routerState.replace.mockReset()
     routerState.push.mockReset()
@@ -141,16 +154,20 @@ describe('DatabaseObjectDetailView object-level trust closure', () => {
 
     const buttons = wrapper.findAll('button')
     await buttons.find((button) => button.text() === '添加证据')?.trigger('click')
-    expect(overlayState.openDrawer).toHaveBeenLastCalledWith(expect.objectContaining({
-      kind: 'add-evidence',
-      payload: expect.objectContaining({ subject: { type: 'DatabaseObject', id: 45 } }),
-    }))
+    expect(overlayState.openDrawer).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        kind: 'add-evidence',
+        payload: expect.objectContaining({ subject: { type: 'DatabaseObject', id: 45 } }),
+      }),
+    )
 
     await buttons.find((button) => button.text() === '添加人工确认')?.trigger('click')
-    expect(overlayState.openDrawer).toHaveBeenLastCalledWith(expect.objectContaining({
-      kind: 'human-confirmation',
-      payload: expect.objectContaining({ subject: { type: 'DatabaseObject', id: 45 } }),
-    }))
+    expect(overlayState.openDrawer).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        kind: 'human-confirmation',
+        payload: expect.objectContaining({ subject: { type: 'DatabaseObject', id: 45 } }),
+      }),
+    )
 
     window.dispatchEvent(new Event('evidence:changed'))
     await flushPromises()
@@ -170,12 +187,33 @@ describe('DatabaseObjectDetailView object-level trust closure', () => {
     await links[0]?.trigger('click')
     expect(routerState.push).toHaveBeenLastCalledWith({ name: 'database-objects-list' })
     await links[1]?.trigger('click')
-    expect(routerState.push).toHaveBeenLastCalledWith({ name: 'system-detail', params: { id: '12' } })
+    expect(routerState.push).toHaveBeenLastCalledWith({
+      name: 'system-detail',
+      params: { id: '12' },
+    })
     await links[2]?.trigger('click')
     expect(routerState.push).toHaveBeenLastCalledWith({
       name: 'database-objects-list',
       query: { systemId: '12', databaseSourceId: '9' },
     })
+    wrapper.unmount()
+  })
+
+  it('reloads and immediately displays the saved estimated row count after the drawer change event', async () => {
+    vi.mocked(getDatabaseObjectDetail)
+      .mockResolvedValueOnce(detail)
+      .mockResolvedValueOnce({
+        ...detail,
+        metadata: { ...detail.metadata, estimatedRows: 52000 },
+      })
+    const wrapper = mount(DatabaseObjectDetailView, { global: { stubs } })
+    await flushPromises()
+
+    window.dispatchEvent(new Event('database-object:changed'))
+    await flushPromises()
+
+    expect(getDatabaseObjectDetail).toHaveBeenCalledTimes(2)
+    expect(wrapper.text()).toContain('5.2万')
     wrapper.unmount()
   })
 })

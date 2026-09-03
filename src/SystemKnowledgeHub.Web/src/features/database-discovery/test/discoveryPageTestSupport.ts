@@ -362,9 +362,12 @@ const ElPagination = defineComponent({
 
 export const discoveryPageStubs = {
   DiscoverySectionNav: passthrough('DiscoverySectionNav', 'nav'),
+  RouterLink: passthrough('RouterLink', 'a'),
   ElAlert,
   ElButton,
   ElCheckbox,
+  ElCollapse: passthrough('ElCollapse'),
+  ElCollapseItem: passthrough('ElCollapseItem'),
   ElDrawer,
   ElDropdown,
   ElDropdownItem,
@@ -373,6 +376,7 @@ export const discoveryPageStubs = {
   ElFormItem,
   ElInput,
   ElInputNumber,
+  ElIcon: passthrough('ElIcon', 'span'),
   ElOption,
   ElPagination,
   ElRadioButton,
@@ -383,4 +387,5 @@ export const discoveryPageStubs = {
   ElTable,
   ElTableColumn,
   ElTag: passthrough('ElTag', 'span'),
+  ElTooltip: passthrough('ElTooltip', 'span'),
 }

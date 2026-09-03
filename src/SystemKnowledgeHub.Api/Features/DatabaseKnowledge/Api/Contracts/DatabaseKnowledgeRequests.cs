@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace SystemKnowledgeHub.Api.Features.DatabaseKnowledge.Api.Contracts;
 
 public sealed record DeleteDatabaseSourceRequest(string? ConcurrencyToken);
@@ -43,6 +45,7 @@ public sealed record RegisterDatabaseColumnRequest(
 
 public sealed record UpdateDatabaseObjectKnowledgeRequest(
     string? BusinessDescription,
+    JsonElement? EstimatedRows,
     string? AccessMode,
     IReadOnlyList<string>? BusinessKeyColumns,
     DatabaseKnowledgeActorRequest? Actor,

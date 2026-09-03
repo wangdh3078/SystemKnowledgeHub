@@ -135,7 +135,7 @@ const global = {
       props: ['currentPage', 'pageSize', 'total'],
       emits: ['current-change'],
       template:
-        '<nav aria-label="影响上下文分页"><button class="next-page" @click="$emit(\'current-change\', 2)">第 2 页</button></nav>',
+        '<nav aria-label="影响上下文分页">共 {{ total }} 条<button class="next-page" @click="$emit(\'current-change\', 2)">第 2 页</button></nav>',
     },
   },
 }
@@ -270,11 +270,11 @@ describe('ImpactContextSection', () => {
       )
     const wrapper = mountSection()
     await flushPromises()
-    expect(wrapper.text()).toContain('当前 1–20 / 21')
+    expect(wrapper.text()).toContain('共 21 条')
     await wrapper.get('.next-page').trigger('click')
     await flushPromises()
     expect(getKnowledgeDocumentImpact).toHaveBeenLastCalledWith(1, 2, 20, expect.any(AbortSignal))
-    expect(wrapper.text()).toContain('当前 21–21 / 21')
+    expect(wrapper.text()).toContain('共 21 条')
     await wrapper.get('[aria-label="打开业务功能 Inventory"]').trigger('click')
     expect(routerState.push).toHaveBeenCalledWith({
       name: 'business-function-detail',
@@ -305,7 +305,7 @@ describe('ImpactContextSection', () => {
     await flushPromises()
     expect(wrapper.text()).toContain('Page 2 newest')
     expect(wrapper.text()).not.toContain('Page 1 stale')
-    expect(wrapper.text()).toContain('当前 21–21 / 21')
+    expect(wrapper.text()).toContain('共 21 条')
   })
 
   it('keeps the newest authoritative relationship refresh when an older reload completes late', async () => {

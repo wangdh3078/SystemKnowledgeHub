@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { Plus, Search } from '@element-plus/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
 import KnowledgeStatusBadge from '../../../components/data-display/KnowledgeStatusBadge.vue'
+import SkhPagination from '../../../components/data-display/SkhPagination.vue'
 import EmptyState from '../../../components/feedback/EmptyState.vue'
 import ErrorState from '../../../components/feedback/ErrorState.vue'
 import LoadingState from '../../../components/feedback/LoadingState.vue'
@@ -45,6 +46,7 @@ const knowledgeStatus = ref<'Unknown' | 'Inferred' | 'Confirmed' | undefined>(
     : undefined,
 )
 const page = ref(Number(route.query.page) > 0 ? Number(route.query.page) : 1)
+const pageSize = ref(Number(route.query.pageSize) > 0 ? Number(route.query.pageSize) : 20)
 let timer: ReturnType<typeof setTimeout> | null = null
 const hasFilters = computed(() =>
   Boolean(query.value || documentType.value || lifecycleStatus.value || knowledgeStatus.value),
@@ -59,6 +61,7 @@ function updateRoute(): void {
       ...(lifecycleStatus.value ? { lifecycleStatus: lifecycleStatus.value } : {}),
       ...(knowledgeStatus.value ? { knowledgeStatus: knowledgeStatus.value } : {}),
       ...(page.value > 1 ? { page: String(page.value) } : {}),
+      ...(pageSize.value !== 20 ? { pageSize: String(pageSize.value) } : {}),
     },
   })
 }
@@ -73,7 +76,7 @@ async function load(): Promise<void> {
       lifecycleStatus: lifecycleStatus.value,
       knowledgeStatus: knowledgeStatus.value,
       page: page.value,
-      pageSize: 20,
+      pageSize: pageSize.value,
     })
   } catch (reason: unknown) {
     error.value = reason instanceof Error ? reason.message : '无法读取知识内容列表。'
@@ -108,6 +111,10 @@ function handlePageChange(next: number): void {
   page.value = next
   void load()
 }
+function handlePageSizeChange(next: number): void {
+  pageSize.value = next
+  resetAndLoad()
+}
 watch(query, () => {
   if (timer) clearTimeout(timer)
   timer = setTimeout(resetAndLoad, 280)
@@ -124,7 +131,12 @@ onMounted(() => void load())
       </div>
       <div>
         <span v-if="data">共 {{ data.total }} 篇</span
-        ><el-button v-if="canEdit" class="skh-page-primary-action" type="primary" :icon="Plus" @click="createOpen = true"
+        ><el-button
+          v-if="canEdit"
+          class="skh-page-primary-action"
+          type="primary"
+          :icon="Plus"
+          @click="createOpen = true"
           >新增知识内容</el-button
         >
       </div>
@@ -171,7 +183,7 @@ onMounted(() => void load())
       <EmptyState
         v-if="data && data.items.length === 0"
         title="还没有知识内容"
-        description="可调整筛选条件，或由 Editor 创建第一篇草稿。"
+        description="可调整筛选条件，或由编辑者创建第一篇草稿。"
       /><el-table
         v-else
         :data="data?.items ?? []"
@@ -210,21 +222,16 @@ onMounted(() => void load())
           }}</template></el-table-column
         ></el-table
       >
-      <footer v-if="data && data.total > 0" class="knowledge-documents-pagination skh-pagination">
-        <span
-          >{{ (data.page - 1) * data.pageSize + 1 }}–{{
-            Math.min(data.page * data.pageSize, data.total)
-          }}
-          / {{ data.total }}</span
-        ><el-pagination
-          background
-          layout="prev, pager, next"
-          :current-page="data.page"
-          :page-size="data.pageSize"
-          :total="data.total"
-          @current-change="handlePageChange"
-        />
-      </footer>
+      <SkhPagination
+        v-if="data"
+        class="knowledge-documents-pagination"
+        :total="data.total"
+        :current-page="data.page"
+        :page-size="data.pageSize"
+        aria-label="知识内容列表分页"
+        @current-change="handlePageChange"
+        @size-change="handlePageSizeChange"
+      />
       <p v-if="error && data" class="knowledge-document-error">刷新失败：{{ error }}</p>
     </section>
     <CreateKnowledgeDocumentDialog

@@ -304,6 +304,7 @@ function mountAt(accessLevel: AccessLevel): VueWrapper {
         },
         ErrorState: { props: ['title', 'message'], template: '<p>{{ title }} {{ message }}</p>' },
         LoadingState: { props: ['message'], template: '<p>{{ message }}</p>' },
+        Teleport: true,
       },
     },
   })
@@ -617,11 +618,11 @@ describe('DiscoverySyncView object-group reconciliation', () => {
         .findAll('button')
         .find((item) => item.text() === '查看计划')!
         .trigger('click')
-      expect(view.text()).toContain('PreviewHash')
+      expect(view.text()).toContain('预览校验值')
       expect(view.text()).toContain('确认当前预览')
       const confirmation = view
         .findAll('label')
-        .find((item) => item.text().includes('我已核对当前 PreviewHash'))!
+        .find((item) => item.text().includes('我已核对预览内容'))!
       await confirmation.find('input').setValue(true)
       await view
         .findAll('button')

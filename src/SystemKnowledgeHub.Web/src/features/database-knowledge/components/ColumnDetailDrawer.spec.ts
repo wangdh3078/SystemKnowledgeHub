@@ -82,4 +82,16 @@ describe('ColumnDetailDrawer write-action visibility', () => {
     expect(buttonLabels).not.toContain('添加证据')
     expect(buttonLabels).not.toContain('新建待确认事项')
   })
+
+  it('shows the four field actions in a stable two-by-two footer order for editors', () => {
+    actorState.canEdit = true
+    const wrapper = mount(ColumnDetailDrawer, {
+      props: { columnId: 123 },
+      global: { stubs },
+    })
+
+    expect(wrapper.findAll('.column-drawer__footer button').map((button) => button.text())).toEqual(
+      ['删除数据库字段', '编辑字段知识', '添加证据', '新建待确认事项'],
+    )
+  })
 })

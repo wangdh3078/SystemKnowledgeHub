@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Close } from '@element-plus/icons-vue'
 import { useOverlayStore } from '../../../app/stores/overlays'
 import EmptyState from '../../../components/feedback/EmptyState.vue'
 import ErrorState from '../../../components/feedback/ErrorState.vue'
 import LoadingState from '../../../components/feedback/LoadingState.vue'
+import SkhPagination from '../../../components/data-display/SkhPagination.vue'
 import DiscoverySectionNav from '../components/DiscoverySectionNav.vue'
 import {
   getSnapshotObjectReview,
@@ -28,7 +29,6 @@ import type {
 } from '../api/databaseDiscoveryContracts'
 import '../database-discovery.css'
 const route = useRoute()
-const router = useRouter()
 const overlayStore = useOverlayStore()
 const id = computed(() => Number(route.params.id))
 const summary = ref<SnapshotSummary | null>(null)
@@ -37,8 +37,10 @@ const objects = ref<readonly SnapshotObject[]>([])
 const sequences = ref<readonly SnapshotSequence[]>([])
 const sequenceTotal = ref(0)
 const sequencePage = ref(1)
+const sequencePageSize = ref(20)
 const total = ref(0)
 const page = ref(1)
+const pageSize = ref(20)
 const schema = ref('')
 const objectType = ref<DiscoveryObjectType | ''>('')
 const search = ref('')
@@ -52,6 +54,7 @@ const indexTotal = ref(0)
 const columnPage = ref(1)
 const constraintPage = ref(1)
 const indexPage = ref(1)
+const detailPageSize = ref(20)
 const selectedIdentity = ref('')
 const loading = ref(false)
 const error = ref('')
@@ -83,6 +86,7 @@ async function load(): Promise<void> {
       getSnapshotObjects(
         id.value,
         page.value,
+        pageSize.value,
         schema.value,
         objectType.value,
         search.value,
@@ -91,6 +95,7 @@ async function load(): Promise<void> {
       getSnapshotSequences(
         id.value,
         sequencePage.value,
+        sequencePageSize.value,
         schema.value,
         search.value,
         controller.signal,
@@ -144,6 +149,7 @@ async function loadDetail(): Promise<void> {
       columnPage.value,
       constraintPage.value,
       indexPage.value,
+      detailPageSize.value,
       detailController.signal,
     )
     if (selectedIdentity.value !== identity || currentRequestId !== detailRequestId) return
@@ -161,14 +167,26 @@ async function loadDetail(): Promise<void> {
     if (currentRequestId === detailRequestId) detailLoading.value = false
   }
 }
-const differenceId = computed(() =>
-  typeof route.query.differenceId === 'string' ? route.query.differenceId : null,
-)
 const capabilityLabel: Record<string, string> = {
   Supported: '支持',
   NotSupported: '不支持',
   Unavailable: '不可用',
   NotApplicable: '不适用',
+}
+const capabilityNameLabel: Readonly<Record<string, string>> = {
+  SupportsContainerDatabase: '容器数据库',
+  SupportsFullDdl: '完整 DDL',
+  SupportsIdentityColumns: '标识列',
+  SupportsInvisibleColumns: '不可见列',
+  SupportsMaterializedViews: '物化视图',
+  SupportsPartitions: '分区',
+  SupportsSequences: '序列',
+  SupportsSynonyms: '同义词',
+  SupportsTriggers: '触发器',
+  SupportsComputedColumns: '计算列',
+}
+const capabilityReasonLabel: Readonly<Record<string, string>> = {
+  CoreScopeExcluded: '当前范围不采集',
 }
 const providerLabel = (value: SnapshotSummary['providerType']) =>
   value === 'PostgreSql' ? 'PostgreSQL' : value === 'SqlServer' ? 'SQL Server' : 'Oracle'
@@ -185,6 +203,23 @@ function applySnapshotFilters(): void {
   page.value = 1
   sequencePage.value = 1
   void load()
+}
+function objectPageSizeChanged(value: number): void {
+  pageSize.value = value
+  page.value = 1
+  void load()
+}
+function sequencePageSizeChanged(value: number): void {
+  sequencePageSize.value = value
+  sequencePage.value = 1
+  void load()
+}
+function detailPageSizeChanged(value: number): void {
+  detailPageSize.value = value
+  columnPage.value = 1
+  constraintPage.value = 1
+  indexPage.value = 1
+  void loadDetail()
 }
 function closeObjectDrawer(): void {
   if (objectDrawerOpen.value) overlayStore.closeDrawer()
@@ -207,19 +242,14 @@ onBeforeUnmount(() => {
           <span>/</span>
           <RouterLink :to="{ name: 'database-discovery-snapshots' }">发现快照</RouterLink>
           <span>/</span>
-          <strong>Snapshot #{{ id }}</strong>
+          <strong>快照 #{{ id }}</strong>
         </nav>
         <h1>快照 #{{ id }}</h1>
         <p>只读取有界摘要、分页列表和按需对象详情，不下载完整规范快照。</p>
       </div>
       <div class="skh-page-header__actions">
-        <el-button
-          v-if="differenceId"
-          type="primary"
-          @click="
-            router.push({ name: 'database-discovery-difference', params: { id: differenceId } })
-          "
-          >查看差异</el-button
+        <RouterLink class="el-button" :to="{ name: 'database-discovery-snapshots' }"
+          >← 返回快照列表</RouterLink
         >
       </div>
     </header>
@@ -253,7 +283,7 @@ onBeforeUnmount(() => {
         ><strong>{{ new Date(summary.capturedAt).toLocaleString('zh-CN') }}</strong>
       </div>
       <div>
-        <small>Schema / 对象 / 字段</small
+        <small>架构（Schema）/ 对象 / 字段</small
         ><strong
           >{{ summary.counts.schemas }} / {{ summary.counts.objects }} /
           {{ summary.counts.columns }}</strong
@@ -295,24 +325,30 @@ onBeforeUnmount(() => {
           <dd class="technical-text">{{ summary.scopeFingerprint }}</dd>
         </div>
       </dl>
-      <h3>能力</h3>
-      <div class="discovery-capabilities">
-        <el-tag
-          v-for="item in summary.capabilities"
-          :key="item.name"
-          :type="
-            item.state === 'Supported'
-              ? 'success'
-              : item.state === 'Unavailable'
-                ? 'warning'
-                : 'info'
-          "
-        >
-          {{ item.name }} · {{ capabilityLabel[item.state] ?? item.state
-          }}<template v-if="item.reasonCode">（{{ item.reasonCode }}）</template>
-        </el-tag>
-        <span v-if="summary.capabilities.length === 0">当前 Provider 未报告可选能力。</span>
-      </div>
+      <el-collapse class="discovery-capability-collapse">
+        <el-collapse-item title="元数据采集能力" name="metadata-capabilities">
+          <div class="discovery-capabilities">
+            <el-tag
+              v-for="item in summary.capabilities"
+              :key="item.name"
+              :type="
+                item.state === 'Supported'
+                  ? 'success'
+                  : item.state === 'Unavailable'
+                    ? 'warning'
+                    : 'info'
+              "
+            >
+              {{ capabilityNameLabel[item.name] ?? '其他能力' }}：{{
+                item.reasonCode
+                  ? (capabilityReasonLabel[item.reasonCode] ?? '当前不可采集')
+                  : (capabilityLabel[item.state] ?? '未知')
+              }}
+            </el-tag>
+            <span v-if="summary.capabilities.length === 0">当前数据库类型未报告可选采集能力。</span>
+          </div>
+        </el-collapse-item>
+      </el-collapse>
     </section>
     <section v-if="summary" class="discovery-panel" :aria-busy="loading">
       <header>
@@ -321,7 +357,7 @@ onBeforeUnmount(() => {
           <el-select
             v-model="schema"
             clearable
-            placeholder="全部 Schema"
+            placeholder="架构（Schema）：全部"
             @change="applySnapshotFilters"
             ><el-option
               v-for="item in schemas"
@@ -371,17 +407,15 @@ onBeforeUnmount(() => {
           ></el-table-column
         ></el-table
       >
-      <footer v-if="total > 0" class="discovery-pagination skh-pagination">
-        <span>{{ (page - 1) * 50 + 1 }}–{{ Math.min(page * 50, total) }} / {{ total }}</span
-        ><el-pagination
-          v-model:current-page="page"
-          :page-size="50"
-          :total="total"
-          background
-          layout="prev,pager,next"
-          @current-change="load"
-        />
-      </footer>
+      <SkhPagination
+        v-model:current-page="page"
+        v-model:page-size="pageSize"
+        class="discovery-pagination"
+        :total="total"
+        aria-label="快照对象分页"
+        @current-change="load"
+        @size-change="objectPageSizeChanged"
+      />
       <p v-if="error" class="discovery-inline-error" role="alert">刷新失败：{{ error }}</p>
     </section>
     <section v-if="summary?.counts.sequences" class="discovery-panel">
@@ -409,19 +443,15 @@ onBeforeUnmount(() => {
           }}</template></el-table-column
         >
       </el-table>
-      <footer v-if="sequenceTotal > 0" class="discovery-pagination skh-pagination">
-        <span
-          >{{ (sequencePage - 1) * 50 + 1 }}–{{ Math.min(sequencePage * 50, sequenceTotal) }} /
-          {{ sequenceTotal }}</span
-        ><el-pagination
-          v-model:current-page="sequencePage"
-          :page-size="50"
-          :total="sequenceTotal"
-          background
-          layout="prev,pager,next"
-          @current-change="load"
-        />
-      </footer>
+      <SkhPagination
+        v-model:current-page="sequencePage"
+        v-model:page-size="sequencePageSize"
+        class="discovery-pagination"
+        :total="sequenceTotal"
+        aria-label="快照序列分页"
+        @current-change="load"
+        @size-change="sequencePageSizeChanged"
+      />
     </section>
     <Teleport v-if="objectDrawerOpen" defer to="#drawer-feature-content">
       <section class="discovery-drawer" aria-labelledby="database-discovery-object-title">
@@ -474,16 +504,14 @@ onBeforeUnmount(() => {
                 min-width="160"
                 show-overflow-tooltip
             /></el-table>
-            <footer v-if="columnTotal > 0" class="skh-pagination">
-              <el-pagination
-                v-model:current-page="columnPage"
-                :page-size="50"
-                :total="columnTotal"
-                background
-                layout="prev,pager,next"
-                @current-change="loadDetail"
-              />
-            </footer>
+            <SkhPagination
+              v-model:current-page="columnPage"
+              :total="columnTotal"
+              :page-size="detailPageSize"
+              aria-label="对象字段分页"
+              @current-change="loadDetail"
+              @size-change="detailPageSizeChanged"
+            />
             <h3>主键 / 外键 / 唯一约束</h3>
             <el-table :data="detailConstraints" class="skh-data-table skh-data-table--dense"
               ><el-table-column label="类型"
@@ -510,16 +538,14 @@ onBeforeUnmount(() => {
                 ></el-table-column
               ></el-table
             >
-            <footer v-if="constraintTotal > 0" class="skh-pagination">
-              <el-pagination
-                v-model:current-page="constraintPage"
-                :page-size="50"
-                :total="constraintTotal"
-                background
-                layout="prev,pager,next"
-                @current-change="loadDetail"
-              />
-            </footer>
+            <SkhPagination
+              v-model:current-page="constraintPage"
+              :total="constraintTotal"
+              :page-size="detailPageSize"
+              aria-label="对象约束分页"
+              @current-change="loadDetail"
+              @size-change="detailPageSizeChanged"
+            />
             <h3>索引</h3>
             <el-table :data="detailIndexes" class="skh-data-table skh-data-table--dense"
               ><el-table-column
@@ -546,16 +572,14 @@ onBeforeUnmount(() => {
                 min-width="160"
                 show-overflow-tooltip
             /></el-table>
-            <footer v-if="indexTotal > 0" class="skh-pagination">
-              <el-pagination
-                v-model:current-page="indexPage"
-                :page-size="50"
-                :total="indexTotal"
-                background
-                layout="prev,pager,next"
-                @current-change="loadDetail"
-              />
-            </footer>
+            <SkhPagination
+              v-model:current-page="indexPage"
+              :total="indexTotal"
+              :page-size="detailPageSize"
+              aria-label="对象索引分页"
+              @current-change="loadDetail"
+              @size-change="detailPageSizeChanged"
+            />
             <p v-if="detailError" class="discovery-inline-error" role="alert">
               刷新失败：{{ detailError }}
             </p>

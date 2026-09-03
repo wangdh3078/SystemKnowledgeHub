@@ -185,13 +185,28 @@ describe('DiscoverySnapshotView', () => {
 
     expect(api.getSnapshotSummary).toHaveBeenCalledWith(42, expect.any(AbortSignal))
     expect(api.getSnapshotSchemas).toHaveBeenCalledWith(42, 1, '', expect.any(AbortSignal))
-    expect(api.getSnapshotObjects).toHaveBeenCalledWith(42, 1, '', '', '', expect.any(AbortSignal))
-    expect(api.getSnapshotSequences).toHaveBeenCalledWith(42, 1, '', '', expect.any(AbortSignal))
+    expect(api.getSnapshotObjects).toHaveBeenCalledWith(
+      42,
+      1,
+      20,
+      '',
+      '',
+      '',
+      expect.any(AbortSignal),
+    )
+    expect(api.getSnapshotSequences).toHaveBeenCalledWith(
+      42,
+      1,
+      20,
+      '',
+      '',
+      expect.any(AbortSignal),
+    )
     expect(api.getSnapshotObjectReview).not.toHaveBeenCalled()
 
     expect(wrapper.text()).toContain('可见性提示')
-    expect(wrapper.text()).toContain('SupportsSequences · 支持')
-    expect(wrapper.text()).toContain('SupportsInvisibleColumns · 不支持（ProviderScope）')
+    expect(wrapper.text()).toContain('序列：支持')
+    expect(wrapper.text()).toContain('不可见列：当前不可采集')
     expect(wrapper.text()).toContain('SalesOps')
     expect(wrapper.text()).toContain('CustomerProfile')
     expect(wrapper.text()).toContain('CustomerSequence')
@@ -207,6 +222,7 @@ describe('DiscoverySnapshotView', () => {
       1,
       1,
       1,
+      20,
       expect.any(AbortSignal),
     )
     expect(wrapper.text()).toContain('SalesOps.CustomerProfile')

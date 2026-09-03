@@ -275,6 +275,121 @@
   font-size: 22px;
   line-height: 1;
 }
+
+.discovery-object-group__toggle .el-icon {
+  transition: transform 160ms ease;
+}
+
+.discovery-object-group__toggle .el-icon.is-expanded {
+  transform: rotate(90deg);
+}
+
+.discovery-judgement-header {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.discovery-status-help__trigger {
+  display: inline-grid;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-muted);
+  cursor: help;
+}
+
+.discovery-status-help__trigger:hover,
+.discovery-status-help__trigger:focus-visible {
+  background: var(--color-surface-subtle, #f1f4f8);
+  color: var(--color-primary);
+  outline: none;
+}
+
+.discovery-status-help {
+  width: min(360px, calc(100vw - 48px));
+  margin: 0;
+}
+
+.discovery-status-help > div + div {
+  margin-top: 8px;
+}
+
+.discovery-status-help dt {
+  font-weight: 700;
+}
+
+.discovery-status-help dd {
+  margin: 2px 0 0;
+  line-height: 1.45;
+}
+
+.sync-plan-drawer {
+  min-width: 0;
+}
+
+.sync-plan-drawer__body {
+  display: grid;
+  padding: 18px 24px 28px;
+  gap: 20px;
+}
+
+.sync-plan-drawer__summary,
+.discovery-sync-result {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
+  gap: 8px;
+}
+
+.sync-plan-drawer__summary > div,
+.discovery-sync-result > div {
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.sync-plan-drawer__summary dt,
+.discovery-sync-result dt {
+  color: var(--color-muted);
+  font-size: 11px;
+}
+
+.sync-plan-drawer__summary dd,
+.discovery-sync-result dd {
+  margin: 4px 0 0;
+  font-weight: 700;
+}
+
+.sync-plan-drawer__section h3 {
+  margin: 0 0 10px;
+}
+
+.sync-plan-drawer__section ul {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  gap: 6px;
+  list-style: none;
+}
+
+.sync-plan-drawer__section li {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  padding: 8px 0;
+  gap: 10px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.sync-plan-drawer__section li span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .discovery-object-group__toggle:hover,
 .discovery-object-group__toggle:focus-visible {
   background: var(--color-primary-soft, #f2f0ff);

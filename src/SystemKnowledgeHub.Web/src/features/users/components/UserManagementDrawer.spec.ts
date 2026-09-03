@@ -1,5 +1,13 @@
 /* eslint-disable vue/one-component-per-file, vue/require-default-prop */
-import { computed, defineComponent, h, inject, provide, type ComputedRef, type InjectionKey } from 'vue'
+import {
+  computed,
+  defineComponent,
+  h,
+  inject,
+  provide,
+  type ComputedRef,
+  type InjectionKey,
+} from 'vue'
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../../api/errors/ApiError'
@@ -60,22 +68,34 @@ const components = {
   ElFormItem: defineComponent({
     props: { label: String, error: String },
     setup(props, { slots }) {
-      return () => h('label', [props.label ? h('span', props.label) : null, slots.default?.(), props.error ? h('em', props.error) : null])
+      return () =>
+        h('label', [
+          props.label ? h('span', props.label) : null,
+          slots.default?.(),
+          props.error ? h('em', props.error) : null,
+        ])
     },
   }),
   ElInput: defineComponent({
     inheritAttrs: false,
-    props: { modelValue: { type: String, default: '' }, type: String, disabled: Boolean, readonly: Boolean },
+    props: {
+      modelValue: { type: String, default: '' },
+      type: String,
+      disabled: Boolean,
+      readonly: Boolean,
+    },
     emits: ['update:modelValue'],
     setup(props, { attrs, emit }) {
-      return () => h('input', {
-        ...attrs,
-        value: props.modelValue,
-        type: props.type ?? 'text',
-        disabled: props.disabled,
-        readonly: props.readonly,
-        onInput: (event: Event) => emit('update:modelValue', (event.target as HTMLInputElement).value),
-      })
+      return () =>
+        h('input', {
+          ...attrs,
+          value: props.modelValue,
+          type: props.type ?? 'text',
+          disabled: props.disabled,
+          readonly: props.readonly,
+          onInput: (event: Event) =>
+            emit('update:modelValue', (event.target as HTMLInputElement).value),
+        })
     },
   }),
   ElRadioGroup: defineComponent({
@@ -96,23 +116,29 @@ const components = {
     props: { value: String, disabled: Boolean },
     setup(props, { slots }) {
       const group = inject(radioKey)!
-      return () => h('label', { class: 'el-radio' }, [
-        h('input', {
-          type: 'radio',
-          value: props.value,
-          disabled: props.disabled,
-          checked: group.value.value === props.value,
-          onChange: () => group.select(props.value),
-        }),
-        slots.default?.(),
-      ])
+      return () =>
+        h('label', { class: 'el-radio' }, [
+          h('input', {
+            type: 'radio',
+            value: props.value,
+            disabled: props.disabled,
+            checked: group.value.value === props.value,
+            onChange: () => group.select(props.value),
+          }),
+          slots.default?.(),
+        ])
     },
   }),
   ElButton: defineComponent({
     props: { disabled: Boolean, loading: Boolean },
     emits: ['click'],
     setup(props, { slots, emit }) {
-      return () => h('button', { type: 'button', disabled: props.disabled, onClick: () => emit('click') }, slots.default?.())
+      return () =>
+        h(
+          'button',
+          { type: 'button', disabled: props.disabled, onClick: () => emit('click') },
+          slots.default?.(),
+        )
     },
   }),
   ElAlert: defineComponent({
@@ -123,7 +149,11 @@ const components = {
   }),
   ElCheckbox: defineComponent({
     setup(_props, { slots }) {
-      return () => h('label', [h('input', { type: 'checkbox', checked: true, disabled: true }), slots.default?.()])
+      return () =>
+        h('label', [
+          h('input', { type: 'checkbox', checked: true, disabled: true }),
+          slots.default?.(),
+        ])
     },
   }),
   ElSelect: { template: '<div><slot /></div>' },
@@ -157,12 +187,18 @@ function mountDrawer(userId: number | null = null) {
   })
 }
 
-async function selectMode(wrapper: ReturnType<typeof mountDrawer>, mode: 'local' | 'oidc' | 'none') {
+async function selectMode(
+  wrapper: ReturnType<typeof mountDrawer>,
+  mode: 'local' | 'oidc' | 'none',
+) {
   await wrapper.find(`input[type="radio"][value="${mode}"]`).trigger('change')
   await flushPromises()
 }
 
-async function selectAccessLevel(wrapper: ReturnType<typeof mountDrawer>, accessLevel: AccessLevel) {
+async function selectAccessLevel(
+  wrapper: ReturnType<typeof mountDrawer>,
+  accessLevel: AccessLevel,
+) {
   await wrapper.find(`.user-access-level__choices input[value="${accessLevel}"]`).trigger('change')
   await flushPromises()
 }
@@ -230,10 +266,14 @@ describe('UserManagementDrawer login setup', () => {
     expect(wrapper.text()).toContain('02知识身份')
     expect(wrapper.text()).toContain('03登录方式')
     expect(wrapper.findAll('.user-login-setup__choices .el-radio')).toHaveLength(3)
-    expect(wrapper.find('.user-access-level__choices input[value="Viewer"]').attributes('checked')).toBeDefined()
+    expect(
+      wrapper.find('.user-access-level__choices input[value="Viewer"]').attributes('checked'),
+    ).toBeDefined()
     expect(wrapper.text()).toContain('系统权限')
     expect(wrapper.text()).toContain('知识身份仅描述知识归属')
-    expect(wrapper.find('.user-login-setup__choices').text()).toContain('企业统一登录（OIDC / SSO）')
+    expect(wrapper.find('.user-login-setup__choices').text()).toContain(
+      '企业统一登录（OIDC / SSO）',
+    )
 
     await selectMode(wrapper, 'local')
     expect(wrapper.text()).toContain('登录用户名')
@@ -263,42 +303,65 @@ describe('UserManagementDrawer login setup', () => {
     await passwordFields[0].setValue('exact password  一')
     await passwordFields[1].setValue('exact password  二')
     expect(wrapper.text()).toContain('两次输入的密码不一致。')
-    expect(wrapper.findAll('button').find((button) => button.text() === '创建用户')?.attributes('disabled')).toBeDefined()
+    expect(
+      wrapper
+        .findAll('button')
+        .find((button) => button.text() === '创建用户')
+        ?.attributes('disabled'),
+    ).toBeDefined()
     expect(createUser).not.toHaveBeenCalled()
 
     await passwordFields[1].setValue('exact password  一')
-    await wrapper.findAll('button').find((button) => button.text() === '创建用户')?.trigger('click')
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === '创建用户')
+      ?.trigger('click')
     await flushPromises()
-    expect(createUser).toHaveBeenCalledWith(expect.objectContaining({
-      accessLevel: 'Viewer',
-      loginSetup: {
-        type: 'local',
-        username: 'local-user',
-        initialPassword: 'exact password  一',
-      },
-    }))
-    expect(JSON.stringify(vi.mocked(createUser).mock.calls[0]?.[0])).not.toContain('confirmPassword')
+    expect(createUser).toHaveBeenCalledWith(
+      expect.objectContaining({
+        accessLevel: 'Viewer',
+        loginSetup: {
+          type: 'local',
+          username: 'local-user',
+          initialPassword: 'exact password  一',
+        },
+      }),
+    )
+    expect(JSON.stringify(vi.mocked(createUser).mock.calls[0]?.[0])).not.toContain(
+      'confirmPassword',
+    )
   })
 
-  it.each<AccessLevel>(['Editor', 'Administrator'])('creates a user with explicitly selected %s access', async (accessLevel) => {
-    const wrapper = mountDrawer()
-    await flushPromises()
-    await selectAccessLevel(wrapper, accessLevel)
-    await selectMode(wrapper, 'none')
-    await wrapper.findAll('button').find((button) => button.text() === '创建用户')?.trigger('click')
-    await flushPromises()
+  it.each<AccessLevel>(['Editor', 'Administrator'])(
+    'creates a user with explicitly selected %s access',
+    async (accessLevel) => {
+      const wrapper = mountDrawer()
+      await flushPromises()
+      await selectAccessLevel(wrapper, accessLevel)
+      await selectMode(wrapper, 'none')
+      await wrapper
+        .findAll('button')
+        .find((button) => button.text() === '创建用户')
+        ?.trigger('click')
+      await flushPromises()
 
-    expect(createUser).toHaveBeenCalledWith(expect.objectContaining({ accessLevel }))
-  })
+      expect(createUser).toHaveBeenCalledWith(expect.objectContaining({ accessLevel }))
+    },
+  )
 
   it('shows existing access and saves it through only the independent access-level API', async () => {
     vi.mocked(getUser).mockResolvedValue({ ...user, accessLevel: 'Editor' })
     const wrapper = mountDrawer(42)
     await flushPromises()
-    expect(wrapper.find('.user-access-level__choices input[value="Editor"]').attributes('checked')).toBeDefined()
+    expect(
+      wrapper.find('.user-access-level__choices input[value="Editor"]').attributes('checked'),
+    ).toBeDefined()
 
     await selectAccessLevel(wrapper, 'Administrator')
-    await wrapper.findAll('button').find((button) => button.text() === '保存系统权限')?.trigger('click')
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === '保存系统权限')
+      ?.trigger('click')
     await flushPromises()
 
     expect(setUserAccessLevel).toHaveBeenCalledWith(42, 'Administrator', 'token')
@@ -307,34 +370,44 @@ describe('UserManagementDrawer login setup', () => {
 
   it('uses the stable last-Administrator reason for a clear business message', async () => {
     vi.mocked(getUser).mockResolvedValue({ ...user, accessLevel: 'Administrator' })
-    vi.mocked(setUserAccessLevel).mockRejectedValue(new ApiError(422, {
-      code: 'business_rule_violation',
-      message: 'server text is not the UI contract',
-      fieldErrors: null,
-      details: { reason: 'last_usable_administrator' },
-    }))
+    vi.mocked(setUserAccessLevel).mockRejectedValue(
+      new ApiError(422, {
+        code: 'business_rule_violation',
+        message: 'server text is not the UI contract',
+        fieldErrors: null,
+        details: { reason: 'last_usable_administrator' },
+      }),
+    )
     const wrapper = mountDrawer(42)
     await flushPromises()
     await selectAccessLevel(wrapper, 'Editor')
-    await wrapper.findAll('button').find((button) => button.text() === '保存系统权限')?.trigger('click')
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === '保存系统权限')
+      ?.trigger('click')
     await flushPromises()
 
-    expect(wrapper.text()).toContain('系统必须保留至少一个可登录的启用 Administrator。')
+    expect(wrapper.text()).toContain('系统必须保留至少一个可登录的启用管理员。')
     expect(wrapper.text()).not.toContain('server text is not the UI contract')
   })
 
   it('shows stale AccessLevel conflict without retrying or overwriting', async () => {
     vi.mocked(getUser).mockResolvedValue({ ...user, accessLevel: 'Editor' })
-    vi.mocked(setUserAccessLevel).mockRejectedValue(new ApiError(409, {
-      code: 'conflict',
-      message: '用户资料已被其他操作修改，请刷新后重试。',
-      fieldErrors: null,
-      details: { resourceType: 'User', resourceId: 42 },
-    }))
+    vi.mocked(setUserAccessLevel).mockRejectedValue(
+      new ApiError(409, {
+        code: 'conflict',
+        message: '用户资料已被其他操作修改，请刷新后重试。',
+        fieldErrors: null,
+        details: { resourceType: 'User', resourceId: 42 },
+      }),
+    )
     const wrapper = mountDrawer(42)
     await flushPromises()
     await selectAccessLevel(wrapper, 'Administrator')
-    await wrapper.findAll('button').find((button) => button.text() === '保存系统权限')?.trigger('click')
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === '保存系统权限')
+      ?.trigger('click')
     await flushPromises()
 
     expect(wrapper.text()).toContain('系统权限已被其他操作修改')
@@ -350,11 +423,18 @@ describe('UserManagementDrawer login setup', () => {
       return true
     })
     vi.mocked(getUser).mockResolvedValue({ ...user, accessLevel: 'Administrator' })
-    vi.mocked(setUserAccessLevel).mockResolvedValue({ userId: 42, accessLevel: 'Editor', concurrencyToken: 'self-next-token' })
+    vi.mocked(setUserAccessLevel).mockResolvedValue({
+      userId: 42,
+      accessLevel: 'Editor',
+      concurrencyToken: 'self-next-token',
+    })
     const wrapper = mountDrawer(42)
     await flushPromises()
     await selectAccessLevel(wrapper, 'Editor')
-    await wrapper.findAll('button').find((button) => button.text() === '保存系统权限')?.trigger('click')
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === '保存系统权限')
+      ?.trigger('click')
     await flushPromises()
 
     expect(actorState.refreshCurrentUser).toHaveBeenCalledOnce()
@@ -373,17 +453,29 @@ describe('UserManagementDrawer login setup', () => {
   it('adds Local to an existing user and never sends confirmation password', async () => {
     const wrapper = mountDrawer(42)
     await flushPromises()
-    await wrapper.findAll('button').find((button) => button.text() === '添加本地账号')?.trigger('click')
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === '添加本地账号')
+      ?.trigger('click')
     const username = wrapper.find('input[autocomplete="username"]')
     const passwords = wrapper.findAll('input[autocomplete="new-password"]')
     await username.setValue('existing-local')
     await passwords[0].setValue('exact existing password 空格')
     await passwords[1].setValue('exact existing password 空格')
-    await wrapper.findAll('button').find((button) => button.text() === '确认添加')?.trigger('click')
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === '确认添加')
+      ?.trigger('click')
     await flushPromises()
 
-    expect(createUserLocalCredential).toHaveBeenCalledWith(42, 'existing-local', 'exact existing password 空格')
-    expect(JSON.stringify(vi.mocked(createUserLocalCredential).mock.calls[0])).not.toContain('confirmPassword')
+    expect(createUserLocalCredential).toHaveBeenCalledWith(
+      42,
+      'existing-local',
+      'exact existing password 空格',
+    )
+    expect(JSON.stringify(vi.mocked(createUserLocalCredential).mock.calls[0])).not.toContain(
+      'confirmPassword',
+    )
   })
 
   it('uses the credential projection and its own token for Local active state', async () => {
@@ -398,12 +490,19 @@ describe('UserManagementDrawer login setup', () => {
       concurrencyToken: 'credential-token',
     } as const
     vi.mocked(getUserLoginMethods).mockResolvedValue({ userId: 42, local, oidc: [] })
-    vi.mocked(setLocalCredentialActiveState).mockResolvedValue({ ...local, isActive: false, concurrencyToken: 'next-token' })
+    vi.mocked(setLocalCredentialActiveState).mockResolvedValue({
+      ...local,
+      isActive: false,
+      concurrencyToken: 'next-token',
+    })
     const wrapper = mountDrawer(42)
     await flushPromises()
     expect(wrapper.text()).toContain('managed-local')
     expect(wrapper.text()).toContain('最近密码变更时间')
-    await wrapper.findAll('button').find((button) => button.text() === '停用')?.trigger('click')
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === '停用')
+      ?.trigger('click')
     await flushPromises()
     expect(setLocalCredentialActiveState).toHaveBeenCalledWith(42, local, false)
   })
@@ -450,7 +549,9 @@ describe('UserManagementDrawer login setup', () => {
     expect(wrapper.text()).toContain('用户状态用户启用')
     expect(wrapper.text()).toContain('本地登录状态停用')
     expect(wrapper.text()).toContain('本地登录：停用')
-    expect(wrapper.text()).toContain('用户当前启用，但本地登录方式已停用，因此无法通过本地账号登录。')
+    expect(wrapper.text()).toContain(
+      '用户当前启用，但本地登录方式已停用，因此无法通过本地账号登录。',
+    )
   })
 
   it('resets a Local password with one client-confirmed value and does not toggle either state', async () => {
@@ -468,17 +569,29 @@ describe('UserManagementDrawer login setup', () => {
     const wrapper = mountDrawer(42)
     await flushPromises()
 
-    await wrapper.findAll('button').find((button) => button.text() === '重置密码')?.trigger('click')
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === '重置密码')
+      ?.trigger('click')
     expect(wrapper.text()).toContain('重置后，该用户现有本地登录会话将全部失效')
     expect(wrapper.text()).toContain('重置密码不会自动启用该登录方式')
     const passwordFields = wrapper.findAll('input[autocomplete="new-password"]')
     await passwordFields[0].setValue('AUTH-B04 temporary password 空格')
     await passwordFields[1].setValue('AUTH-B04 temporary password 空格')
-    await wrapper.findAll('button').find((button) => button.text() === '确认重置')?.trigger('click')
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === '确认重置')
+      ?.trigger('click')
     await flushPromises()
 
-    expect(resetUserLocalPassword).toHaveBeenCalledWith(42, local, 'AUTH-B04 temporary password 空格')
-    expect(JSON.stringify(vi.mocked(resetUserLocalPassword).mock.calls[0])).not.toContain('confirmPassword')
+    expect(resetUserLocalPassword).toHaveBeenCalledWith(
+      42,
+      local,
+      'AUTH-B04 temporary password 空格',
+    )
+    expect(JSON.stringify(vi.mocked(resetUserLocalPassword).mock.calls[0])).not.toContain(
+      'confirmPassword',
+    )
     expect(setLocalCredentialActiveState).not.toHaveBeenCalled()
   })
 })

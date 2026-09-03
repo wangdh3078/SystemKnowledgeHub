@@ -113,6 +113,7 @@ public sealed record RegisterDatabaseColumnResult(
 public sealed record UpdateDatabaseObjectKnowledgeCommand(
     long DatabaseObjectId,
     string? BusinessDescription,
+    long? EstimatedRows,
     string AccessMode,
     IReadOnlyList<string>? BusinessKeyColumns,
     DatabaseKnowledgeActorContext Actor,
@@ -121,6 +122,7 @@ public sealed record UpdateDatabaseObjectKnowledgeCommand(
 public sealed record DatabaseObjectKnowledgeResponse(
     long Id,
     string? BusinessDescription,
+    long? EstimatedRows,
     string AccessMode,
     IReadOnlyList<string> BusinessKeyColumns,
     string KnowledgeStatus,

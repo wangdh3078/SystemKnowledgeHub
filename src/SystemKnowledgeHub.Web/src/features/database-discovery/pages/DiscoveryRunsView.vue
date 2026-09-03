@@ -1,19 +1,19 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { useActorStore } from '../../../app/stores/actor'
 import { ApiError } from '../../../api/errors/ApiError'
 import EmptyState from '../../../components/feedback/EmptyState.vue'
 import ErrorState from '../../../components/feedback/ErrorState.vue'
 import LoadingState from '../../../components/feedback/LoadingState.vue'
+import SkhPagination from '../../../components/data-display/SkhPagination.vue'
 import DiscoverySectionNav from '../components/DiscoverySectionNav.vue'
 import { cancelRun, getRunFilterOptions, listRuns } from '../api/databaseDiscoveryApi'
 import type { DiscoveryRun, RunFilterOptions } from '../api/databaseDiscoveryContracts'
 import '../database-discovery.css'
 const actorStore = useActorStore()
 const route = useRoute()
-const router = useRouter()
 const items = ref<readonly DiscoveryRun[]>([])
 const page = ref(1)
 const pageSize = ref(20)
@@ -114,21 +114,6 @@ async function cancel(run: DiscoveryRun): Promise<void> {
   } catch (e) {
     if (e !== 'cancel' && e !== 'close') ElMessage.error(msg(e))
   }
-}
-function openSnapshot(run: DiscoveryRun): void {
-  if (run.snapshotId)
-    void router.push({
-      name: 'database-discovery-snapshot',
-      params: { id: String(run.snapshotId) },
-      query: run.differenceId ? { differenceId: String(run.differenceId) } : {},
-    })
-}
-function openDifference(run: DiscoveryRun): void {
-  if (run.differenceId)
-    void router.push({
-      name: 'database-discovery-difference',
-      params: { id: String(run.differenceId) },
-    })
 }
 function rowClassName({ row }: { row: DiscoveryRun }): string {
   return String(row.id) === route.query.runId ? 'discovery-row--focused' : ''
@@ -281,19 +266,13 @@ onBeforeUnmount(() => {
             ><span v-else>—</span></template
           ></el-table-column
         >
-        <el-table-column label="操作" width="250" fixed="right">
+        <el-table-column
+          v-if="actorStore.isAdministrator && hasActive"
+          label="操作"
+          width="90"
+          fixed="right"
+        >
           <template #default="{ row }">
-            <el-button
-              v-if="row.snapshotId"
-              size="small"
-              type="primary"
-              plain
-              @click="openSnapshot(row)"
-              >查看快照</el-button
-            >
-            <el-button v-if="row.differenceId" size="small" plain @click="openDifference(row)"
-              >查看差异</el-button
-            >
             <el-button
               v-if="
                 actorStore.isAdministrator && (row.status === 'Queued' || row.status === 'Running')
@@ -306,18 +285,15 @@ onBeforeUnmount(() => {
           </template>
         </el-table-column>
       </el-table>
-      <footer v-if="total > 0" class="discovery-pagination skh-pagination">
-        <el-pagination
-          v-model:current-page="page"
-          v-model:page-size="pageSize"
-          :total="total"
-          :page-sizes="[20, 50, 100]"
-          background
-          layout="total, sizes, prev, pager, next, jumper"
-          @current-change="load"
-          @size-change="handlePageSizeChange"
-        />
-      </footer>
+      <SkhPagination
+        v-model:current-page="page"
+        v-model:page-size="pageSize"
+        class="discovery-pagination"
+        :total="total"
+        aria-label="发现运行分页"
+        @current-change="load"
+        @size-change="handlePageSizeChange"
+      />
       <p v-if="error" class="discovery-inline-error" role="alert">刷新失败：{{ error }}</p>
     </section>
   </main>

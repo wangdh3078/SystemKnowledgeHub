@@ -201,6 +201,7 @@ export const getSnapshotSchemas = (
 export const getSnapshotObjects = (
   id: number,
   page: number,
+  pageSize: number,
   schema: string,
   objectType: DiscoveryObjectType | '',
   search: string,
@@ -208,7 +209,7 @@ export const getSnapshotObjects = (
 ): Promise<Page<SnapshotObject>> => {
   const query = new URLSearchParams({
     page: String(page),
-    pageSize: '50',
+    pageSize: String(pageSize),
     schema,
     objectType,
     search,
@@ -233,6 +234,7 @@ export const getSnapshotObjectReview = (
   columnPage: number,
   constraintPage: number,
   indexPage: number,
+  pageSize: number,
   signal?: AbortSignal,
 ): Promise<SnapshotObjectReview> => {
   const query = new URLSearchParams({
@@ -240,7 +242,7 @@ export const getSnapshotObjectReview = (
     columnPage: String(columnPage),
     constraintPage: String(constraintPage),
     indexPage: String(indexPage),
-    pageSize: '50',
+    pageSize: String(pageSize),
   })
   return apiClient.get(`/database-discovery/snapshots/${safe(id)}/object-review?${query}`, {
     signal,
@@ -280,11 +282,17 @@ export const getSnapshotObjectIndexes = (
 export const getSnapshotSequences = (
   id: number,
   page: number,
+  pageSize: number,
   schema: string,
   search: string,
   signal?: AbortSignal,
 ): Promise<Page<SnapshotSequence>> => {
-  const query = new URLSearchParams({ page: String(page), pageSize: '50', schema, search })
+  const query = new URLSearchParams({
+    page: String(page),
+    pageSize: String(pageSize),
+    schema,
+    search,
+  })
   return apiClient.get(`/database-discovery/snapshots/${safe(id)}/sequences?${query}`, {
     signal,
     decode: decodeSequences,
@@ -296,6 +304,7 @@ export const getDifferenceEntries = (
   id: number,
   state: DifferenceState,
   page: number,
+  pageSize: number,
   entityKind: DiscoveryEntityKind | '',
   schema: string,
   search: string,
@@ -304,7 +313,7 @@ export const getDifferenceEntries = (
   const query = new URLSearchParams({
     state,
     page: String(page),
-    pageSize: '50',
+    pageSize: String(pageSize),
     entityKind,
     schema,
     search,

@@ -164,28 +164,16 @@ describe('DiscoveryRunsView', () => {
     wrapper.unmount()
   })
 
-  it('navigates from a successful run to both produced artifacts', async () => {
+  it('keeps snapshot and difference navigation in their dedicated tabs', async () => {
     api.listRuns.mockResolvedValue(page(run('Succeeded')))
     const wrapper = mountFor('Viewer')
     await flushPromises()
 
     const snapshotButton = wrapper.findAll('button').find((item) => item.text() === '查看快照')
     const differenceButton = wrapper.findAll('button').find((item) => item.text() === '查看差异')
-    expect(snapshotButton).toBeDefined()
-    expect(differenceButton).toBeDefined()
-
-    await snapshotButton!.trigger('click')
-    await differenceButton!.trigger('click')
-
-    expect(router.push).toHaveBeenNthCalledWith(1, {
-      name: 'database-discovery-snapshot',
-      params: { id: '8' },
-      query: { differenceId: '9' },
-    })
-    expect(router.push).toHaveBeenNthCalledWith(2, {
-      name: 'database-discovery-difference',
-      params: { id: '9' },
-    })
+    expect(snapshotButton).toBeUndefined()
+    expect(differenceButton).toBeUndefined()
+    expect(router.push).not.toHaveBeenCalled()
 
     wrapper.unmount()
   })

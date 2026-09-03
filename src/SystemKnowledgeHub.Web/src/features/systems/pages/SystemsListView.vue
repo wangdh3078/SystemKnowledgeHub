@@ -6,6 +6,7 @@ import { useActorStore } from '../../../app/stores/actor'
 import { useOverlayStore } from '../../../app/stores/overlays'
 import { formatDateTime } from '../../../app/formatters/dateTime'
 import KnowledgeStatusBadge from '../../../components/data-display/KnowledgeStatusBadge.vue'
+import SkhPagination from '../../../components/data-display/SkhPagination.vue'
 import EmptyState from '../../../components/feedback/EmptyState.vue'
 import ErrorState from '../../../components/feedback/ErrorState.vue'
 import LoadingState from '../../../components/feedback/LoadingState.vue'
@@ -25,6 +26,7 @@ const {
   knowledgeStatus,
   sort,
   page,
+  pageSize,
   loading,
   error,
   data,
@@ -64,13 +66,23 @@ watch(keyword, () => {
   keywordTimer = setTimeout(resetPageAndLoad, 280)
 })
 
-function handleSortChange(change: { prop: string; order: 'ascending' | 'descending' | null }): void {
+function handleSortChange(change: {
+  prop: string
+  order: 'ascending' | 'descending' | null
+}): void {
   const ascending = change.order === 'ascending'
-  const nextSort: SystemsSort = change.prop === 'name'
-    ? ascending ? 'name:asc' : 'name:desc'
-    : change.prop === 'knowledgeStatus'
-      ? ascending ? 'knowledgeStatus:asc' : 'knowledgeStatus:desc'
-      : ascending ? 'updatedAt:asc' : 'updatedAt:desc'
+  const nextSort: SystemsSort =
+    change.prop === 'name'
+      ? ascending
+        ? 'name:asc'
+        : 'name:desc'
+      : change.prop === 'knowledgeStatus'
+        ? ascending
+          ? 'knowledgeStatus:asc'
+          : 'knowledgeStatus:desc'
+        : ascending
+          ? 'updatedAt:asc'
+          : 'updatedAt:desc'
   sort.value = nextSort
   resetPageAndLoad()
 }
@@ -78,6 +90,11 @@ function handleSortChange(change: { prop: string; order: 'ascending' | 'descendi
 function handlePageChange(nextPage: number): void {
   page.value = nextPage
   void load()
+}
+
+function handlePageSizeChange(nextPageSize: number): void {
+  pageSize.value = nextPageSize
+  resetPageAndLoad()
 }
 
 function openSystem(id: number): void {
@@ -104,7 +121,14 @@ onMounted(() => void load())
       </div>
       <div class="systems-page__header-actions skh-page-header__actions">
         <span v-if="data">共 {{ data.total }} 个系统</span>
-        <el-button v-if="actorStore.canEdit" class="skh-page-primary-action" type="primary" :icon="Plus" @click="openCreate">新增系统</el-button>
+        <el-button
+          v-if="actorStore.canEdit"
+          class="skh-page-primary-action"
+          type="primary"
+          :icon="Plus"
+          @click="openCreate"
+          >新增系统</el-button
+        >
       </div>
     </header>
 
@@ -116,7 +140,12 @@ onMounted(() => void load())
         placeholder="搜索系统名称、显示名称或用途"
         aria-label="搜索系统"
       />
-      <el-select v-model="lifecycle" placeholder="生命周期：全部" clearable @change="resetPageAndLoad">
+      <el-select
+        v-model="lifecycle"
+        placeholder="生命周期：全部"
+        clearable
+        @change="resetPageAndLoad"
+      >
         <el-option
           v-for="item in lifecycleOptions"
           :key="item.value"
@@ -124,10 +153,21 @@ onMounted(() => void load())
           :value="item.value"
         />
       </el-select>
-      <el-select v-model="technology" placeholder="技术：全部" clearable filterable @change="resetPageAndLoad">
+      <el-select
+        v-model="technology"
+        placeholder="技术：全部"
+        clearable
+        filterable
+        @change="resetPageAndLoad"
+      >
         <el-option v-for="item in technologyOptions" :key="item" :label="item" :value="item" />
       </el-select>
-      <el-select v-model="knowledgeStatus" placeholder="知识状态：全部" clearable @change="resetPageAndLoad">
+      <el-select
+        v-model="knowledgeStatus"
+        placeholder="知识状态：全部"
+        clearable
+        @change="resetPageAndLoad"
+      >
         <el-option label="未知" value="Unknown" />
         <el-option label="推断" value="Inferred" />
         <el-option label="已确认" value="Confirmed" />
@@ -157,43 +197,65 @@ onMounted(() => void load())
         @sort-change="handleSortChange"
       >
         <el-table-column prop="name" label="系统名称" min-width="130" sortable="custom">
-          <template #default="scope"><button class="technical-text system-name skh-table-link" type="button" @click.stop="openSystem(scope.row.id)">{{ scope.row.name }}</button></template>
+          <template #default="scope"
+            ><button
+              class="technical-text system-name skh-table-link"
+              type="button"
+              @click.stop="openSystem(scope.row.id)"
+            >
+              {{ scope.row.name }}
+            </button></template
+          >
         </el-table-column>
         <el-table-column prop="displayName" label="显示名称" min-width="120" />
         <el-table-column prop="systemType" label="系统类型" min-width="125" />
         <el-table-column prop="purpose" label="用途" min-width="200" show-overflow-tooltip>
-          <template #default="scope"><span :class="{ 'text-muted': !scope.row.purpose }">{{ scope.row.purpose ?? '尚未记录' }}</span></template>
+          <template #default="scope"
+            ><span :class="{ 'text-muted': !scope.row.purpose }">{{
+              scope.row.purpose ?? '尚未记录'
+            }}</span></template
+          >
         </el-table-column>
         <el-table-column label="技术" min-width="150" show-overflow-tooltip>
           <template #default="scope">
-            <span :class="{ 'text-muted': scope.row.technologies.length === 0 }">{{ scope.row.technologies.join(' · ') || '尚未记录' }}</span>
+            <span :class="{ 'text-muted': scope.row.technologies.length === 0 }">{{
+              scope.row.technologies.join(' · ') || '尚未记录'
+            }}</span>
           </template>
         </el-table-column>
         <el-table-column prop="functionCount" label="业务功能" width="82" align="center" />
         <el-table-column prop="databaseObjectCount" label="数据库对象" width="92" align="center" />
-        <el-table-column prop="openUnknownCount" label="开放待确认事项" width="112" align="center" />
+        <el-table-column
+          prop="openUnknownCount"
+          label="开放待确认事项"
+          width="112"
+          align="center"
+        />
         <el-table-column prop="knowledgeStatus" label="知识状态" width="94" sortable="custom">
-          <template #default="scope"><KnowledgeStatusBadge :status="scope.row.knowledgeStatus" /></template>
+          <template #default="scope"
+            ><KnowledgeStatusBadge :status="scope.row.knowledgeStatus"
+          /></template>
         </el-table-column>
         <el-table-column prop="updatedAt" label="更新于" width="156" sortable="custom">
           <template #default="scope">{{ formatDateTime(scope.row.updatedAt) }}</template>
         </el-table-column>
         <el-table-column width="34" align="right">
-          <template #default><el-icon class="systems-table__next" title="查看系统详情"><ArrowRight /></el-icon></template>
+          <template #default
+            ><el-icon class="systems-table__next" title="查看系统详情"><ArrowRight /></el-icon
+          ></template>
         </el-table-column>
       </el-table>
 
-      <footer v-if="data && data.total > 0" class="systems-pagination skh-pagination">
-        <span>{{ (data.page - 1) * data.pageSize + 1 }}–{{ Math.min(data.page * data.pageSize, data.total) }} / {{ data.total }}</span>
-        <el-pagination
-          background
-          layout="prev, pager, next"
-          :current-page="data.page"
-          :page-size="data.pageSize"
-          :total="data.total"
-          @current-change="handlePageChange"
-        />
-      </footer>
+      <SkhPagination
+        v-if="data"
+        class="systems-pagination"
+        :total="data.total"
+        :current-page="data.page"
+        :page-size="data.pageSize"
+        aria-label="系统列表分页"
+        @current-change="handlePageChange"
+        @size-change="handlePageSizeChange"
+      />
       <p v-if="error && data" class="systems-inline-error">刷新失败：{{ error }}</p>
     </section>
     <CreateSystemFlow @created="resetPageAndLoad" />

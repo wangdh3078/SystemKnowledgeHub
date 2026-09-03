@@ -6,6 +6,12 @@ Base Path：`/api`
 目标客户端：Vue 3  
 目标服务端：.NET 8  
 
+## 0.1 Approved Amendment — UI-CONSISTENCY-R01-R01
+
+2026-09-03 经产品明确批准，对冻结 C11 `PUT /api/database-objects/{id}/knowledge` 作最小修订：`DatabaseObject.EstimatedRows` 归属 Database Knowledge 的人工维护字段，并作为完整对象知识 Section 的正式 `estimatedRows` 字段参与 PUT 请求与响应。本修订用于关闭 UI-CONSISTENCY-R01 中“估算行数（可选）”只能展示、无法真实保存的唯一失败项；除本节与 C11 对应描述外，其余冻结契约不变。
+
+`estimatedRows` 表示“数据库对象当前人工维护的估算行数”。它不是 Database Discovery 自动同步字段、实时数据库统计值、自动采集结果、KnowledgeStatus 或 Evidence。允许 `null`、`0` 或不超过 `9007199254740991` 的正整数；`null` 表示“未维护估算行数”。负数、非整数或超过 JavaScript safe integer 范围的值返回 `400 validation_error`，并在 `fieldErrors.estimatedRows` 中说明错误，不得静默截断或转换。Database Discovery / Manual Sync 不得覆盖已有值；Discovery 新增对象的初始值为 `null`。
+
 依据：
 
 - `System_Knowledge_Hub_MVP_Final_UI_Inventory.md`
@@ -644,7 +650,7 @@ Inventory 中的 Failure Status 表示该 API 可能使用的业务失败范围�
 | C08 CreateDatabaseSource | `POST /api/database-sources` | Source 最小信息 + actor | 新 Source 摘要 + token | 201 | 400 / 404 / 409 / 422 | OV-04 / OV-05 / RP-06 |
 | C09 RegisterDatabaseObject | `POST /api/database-objects` | Object 元数据 / 可选知识 + actor | 新 Object 摘要 + token | 201 | 400 / 404 / 409 / 422 | OV-04 / OV-05 / RP-06 |
 | C10 RegisterDatabaseColumn | `POST /api/database-objects/{id}/columns` | Column 元数据 + actor + parent token | 新 Column 摘要 + parent token | 201 | 400 / 404 / 409 | RP-07 |
-| C11 UpdateDatabaseObjectKnowledge | `PUT /api/database-objects/{id}/knowledge` | 完整对象知识 Section + actor + token | 对象知识 + token | 200 | 400 / 404 / 409 / 422 | RP-07 |
+| C11 UpdateDatabaseObjectKnowledge | `PUT /api/database-objects/{id}/knowledge` | 完整对象知识 Section（业务说明、人工估算行数、访问方式、业务唯一键）+ actor + token | 对象知识 + token | 200 | 400 / 404 / 409 / 422 | RP-07 |
 | C12 UpdateDatabaseColumnKnowledge | `PUT /api/database-columns/{id}/knowledge` | 完整字段业务知识 + actor + token | 字段知识 + token | 200 | 400 / 404 / 409 | DR-11 / DR-03 |
 | C13 AddColumnKnownValue | `POST /api/database-columns/{id}/known-values` | Value / Meaning + actor + token | 新 KnownValue + token | 201 | 400 / 404 / 409 | DR-11 |
 | C14 RemoveColumnKnownValue | `POST /api/database-columns/{id}/known-values/{knownValueId}/remove` | explicit confirm + actor + token | 剩余集合 + token | 200 | 400 / 404 / 409 / 422 | DR-11 |
@@ -924,12 +930,15 @@ Response `201`：
 ```json
 {
   "businessDescription": "设备主数据表",
+  "estimatedRows": 48000,
   "accessMode": "ReadWrite",
   "businessKeyColumns": ["EQP_CODE"],
   "actor": { "displayName": "王敏", "role": null },
   "concurrencyToken": "opaque:dbo-45-22b8"
 }
 ```
+
+C11 是完整 Section 的 `PUT`，请求正式包含 `businessDescription`、`estimatedRows`、`accessMode`、`businessKeyColumns`、`actor` 与 `concurrencyToken`。`estimatedRows: null` 明确清除人工维护值。成功响应返回上述最新对象知识字段、保持不变的 `knowledgeStatus` 与新 opaque `concurrencyToken`；旧 token 继续返回 `409 conflict`。
 
 `PUT /api/database-columns/123/knowledge`
 

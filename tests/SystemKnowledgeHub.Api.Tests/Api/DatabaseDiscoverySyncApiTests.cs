@@ -32,13 +32,14 @@ public sealed class DatabaseDiscoverySyncApiTests
                 var template = snapshot.Columns.Single(x => x.ParentObjectLogicalIdentity == customers && x.Name == "NAME");
                 snapshot = snapshot with
                 {
-                    Columns = [.. snapshot.Columns, template with
-                    {
-                        Name = "EXTERNAL_REFERENCE",
-                        SourceOrdinal = 3,
-                        DatabaseComment = "External source reference",
-                        LogicalIdentity = CanonicalSnapshotFixtures.Key("Column", customers, "EXTERNAL_REFERENCE"),
-                    }],
+                    Columns = [.. snapshot.Columns,
+                        template with
+                        {
+                            Name = "EXTERNAL_REFERENCE",
+                            SourceOrdinal = 3,
+                            DatabaseComment = "External source reference",
+                            LogicalIdentity = CanonicalSnapshotFixtures.Key("Column", customers, "EXTERNAL_REFERENCE"),
+                        }],
                 };
             }
             if (call != 3) return snapshot;
@@ -109,7 +110,11 @@ public sealed class DatabaseDiscoverySyncApiTests
             Assert.Equal(2, await db.DatabaseObjectDiscoveryBindings.CountAsync());
             Assert.Equal(4, await db.DatabaseColumnDiscoveryBindings.CountAsync());
             Assert.All(await db.DatabaseObjects.Where(x => x.DatabaseSourceId == profile.DatabaseSourceId).ToArrayAsync(),
-                item => Assert.Null(item.BusinessKeyColumnsJson));
+                item =>
+                {
+                    Assert.Null(item.BusinessKeyColumnsJson);
+                    Assert.Null(item.EstimatedRows);
+                });
             var customers = await db.DatabaseObjects.SingleAsync(x => x.DatabaseSourceId == profile.DatabaseSourceId && x.ObjectName == "CUSTOMERS");
             Assert.Equal("Customer master", customers.DatabaseComment);
             Assert.Equal(KnowledgeStatus.Unknown, customers.KnowledgeStatus);
@@ -126,11 +131,15 @@ public sealed class DatabaseDiscoverySyncApiTests
             name.BusinessDescription = "人工维护的客户姓名业务定义";
             name.KnownValues.Add(new ColumnKnownValue
             {
-                ValueText = "VIP", Meaning = "人工维护的重要客户", SortOrder = 1,
-                CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow,
+                ValueText = "VIP",
+                Meaning = "人工维护的重要客户",
+                SortOrder = 1,
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow,
             });
             name.Version++;
             customers.BusinessDescription = "人工维护的客户主表说明";
+            customers.EstimatedRows = 48000;
             customers.BusinessKeyColumnsJson = "[\"NAME\"]";
             customers.AccessMode = DatabaseAccessMode.Read;
             customers.KnowledgeStatus = KnowledgeStatus.Confirmed;
@@ -165,6 +174,7 @@ public sealed class DatabaseDiscoverySyncApiTests
             Assert.Equal("VIP", Assert.Single(await db.ColumnKnownValues.Where(x => x.DatabaseColumnId == name.Id).ToArrayAsync()).ValueText);
             Assert.Equal(2, await db.Evidence.CountAsync(x => x.SubjectType == EvidenceSubjectType.DatabaseColumn && x.SubjectId == name.Id));
             Assert.Equal("人工维护的客户主表说明", customers.BusinessDescription);
+            Assert.Equal(48000, customers.EstimatedRows);
             Assert.Equal("[\"NAME\"]", customers.BusinessKeyColumnsJson);
             Assert.Equal(DatabaseAccessMode.Read, customers.AccessMode);
             Assert.Equal(KnowledgeStatus.Confirmed, customers.KnowledgeStatus);
@@ -309,7 +319,9 @@ public sealed class DatabaseDiscoverySyncApiTests
         var plan = await CreatePlan(editor, profile.Id, run.SnapshotId.Value,
             expanded.Actions.Select(x => (object)new
             {
-                actionType = x.ActionType.ToString(), x.LogicalIdentity, x.TargetId,
+                actionType = x.ActionType.ToString(),
+                x.LogicalIdentity,
+                x.TargetId,
             }).ToArray());
         plan = await Preview(editor, plan);
         Assert.Equal(3, plan.Preview!.Actions.Count);
@@ -400,7 +412,8 @@ public sealed class DatabaseDiscoverySyncApiTests
 
         using (var unconfirmed = await administrator.PostAsJsonAsync($"/api/database-discovery/sync-plans/{draft.Id}/apply", new
         {
-            previewHash = new string('a', 64), concurrencyToken = draft.ConcurrencyToken,
+            previewHash = new string('a', 64),
+            concurrencyToken = draft.ConcurrencyToken,
         }))
             Assert.Equal(HttpStatusCode.Conflict, unconfirmed.StatusCode);
 
@@ -408,7 +421,8 @@ public sealed class DatabaseDiscoverySyncApiTests
         var confirmed = await Confirm(administrator, previewed);
         using var update = await administrator.PutAsJsonAsync($"/api/database-discovery/sync-plans/{confirmed.Id}/actions", new
         {
-            actions = new[] { Selection(action) }, concurrencyToken = confirmed.ConcurrencyToken,
+            actions = new[] { Selection(action) },
+            concurrencyToken = confirmed.ConcurrencyToken,
         });
         Assert.Equal(HttpStatusCode.OK, update.StatusCode);
         var updated = await ReadPlan(update);
@@ -418,7 +432,8 @@ public sealed class DatabaseDiscoverySyncApiTests
 
         using (var staleSelection = await administrator.PutAsJsonAsync($"/api/database-discovery/sync-plans/{confirmed.Id}/actions", new
         {
-            actions = new[] { Selection(action) }, concurrencyToken = confirmed.ConcurrencyToken,
+            actions = new[] { Selection(action) },
+            concurrencyToken = confirmed.ConcurrencyToken,
         }))
             Assert.Equal(HttpStatusCode.Conflict, staleSelection.StatusCode);
 
@@ -428,7 +443,8 @@ public sealed class DatabaseDiscoverySyncApiTests
         Assert.Equal(DatabaseDiscoveryRunStatus.Succeeded, second.Status);
         using (var staleSnapshot = await administrator.PostAsJsonAsync($"/api/database-discovery/sync-plans/{updated.Id}/apply", new
         {
-            previewHash = updated.Preview!.PreviewHash, concurrencyToken = updated.ConcurrencyToken,
+            previewHash = updated.Preview!.PreviewHash,
+            concurrencyToken = updated.ConcurrencyToken,
         }))
             Assert.Equal(HttpStatusCode.Conflict, staleSnapshot.StatusCode);
         var superseded = await administrator.GetFromJsonAsync<DatabaseDiscoverySyncPlanResponse>(
@@ -441,7 +457,9 @@ public sealed class DatabaseDiscoverySyncApiTests
             targetSnapshotId = second.SnapshotId,
             actions = Enumerable.Range(1, 2001).Select(i => new
             {
-                actionType = "CreateDatabaseObject", logicalIdentity = $"oversized-{i}", targetId = (long?)null,
+                actionType = "CreateDatabaseObject",
+                logicalIdentity = $"oversized-{i}",
+                targetId = (long?)null,
             }),
         });
         Assert.Equal(HttpStatusCode.BadRequest, oversized.StatusCode);
@@ -518,7 +536,8 @@ public sealed class DatabaseDiscoverySyncApiTests
         }
         using var response = await administrator.PostAsJsonAsync($"/api/database-discovery/sync-plans/{ready.Id}/apply", new
         {
-            previewHash = ready.Preview!.PreviewHash, concurrencyToken = ready.ConcurrencyToken,
+            previewHash = ready.Preview!.PreviewHash,
+            concurrencyToken = ready.ConcurrencyToken,
         });
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
         await using var verifyScope = factory.Services.CreateAsyncScope();
@@ -547,12 +566,23 @@ public sealed class DatabaseDiscoverySyncApiTests
             var now = DateTimeOffset.UtcNow;
             var parent = new DatabaseObject
             {
-                DatabaseSourceId = profile.DatabaseSourceId, SchemaName = sourceObject.SchemaName, ObjectName = sourceObject.Name,
-                ObjectType = DatabaseObjectType.Table, DatabaseComment = sourceObject.DatabaseComment,
-                TechnicalIdentityAlgorithmVersion = snapshot.IdentityAlgorithmVersion, TechnicalIdentity = sourceObject.LogicalIdentity,
-                AccessMode = DatabaseAccessMode.Unknown, CreatedAt = now, CreatedByUserId = admin.Id, CreatedByName = admin.DisplayName,
-                UpdatedAt = now, KnowledgeStatus = KnowledgeStatus.Unknown, KnowledgeStatusChangedAt = now,
-                KnowledgeStatusChangedByName = admin.DisplayName, KnowledgeStatusChangedByRole = "Administrator", Version = 1,
+                DatabaseSourceId = profile.DatabaseSourceId,
+                SchemaName = sourceObject.SchemaName,
+                ObjectName = sourceObject.Name,
+                ObjectType = DatabaseObjectType.Table,
+                DatabaseComment = sourceObject.DatabaseComment,
+                TechnicalIdentityAlgorithmVersion = snapshot.IdentityAlgorithmVersion,
+                TechnicalIdentity = sourceObject.LogicalIdentity,
+                AccessMode = DatabaseAccessMode.Unknown,
+                CreatedAt = now,
+                CreatedByUserId = admin.Id,
+                CreatedByName = admin.DisplayName,
+                UpdatedAt = now,
+                KnowledgeStatus = KnowledgeStatus.Unknown,
+                KnowledgeStatusChangedAt = now,
+                KnowledgeStatusChangedByName = admin.DisplayName,
+                KnowledgeStatusChangedByRole = "Administrator",
+                Version = 1,
             };
             var boundColumn = Column(3, sourceColumn.Name, sourceColumn.NativeDataType.Declaration, sourceColumn.IsNullable,
                 sourceColumn.DefaultExpression, sourceColumn.DatabaseComment, admin.Id, admin.DisplayName, now);
@@ -565,19 +595,32 @@ public sealed class DatabaseDiscoverySyncApiTests
             await db.SaveChangesAsync();
             db.DatabaseObjectDiscoveryBindings.Add(new DatabaseObjectDiscoveryBinding
             {
-                ProfileId = profile.Id, ScopeGenerationId = snapshotEntity.ScopeGenerationId,
-                IdentityAlgorithmVersion = snapshot.IdentityAlgorithmVersion, SchemaLogicalIdentity = sourceObject.SchemaLogicalIdentity,
-                LogicalIdentity = sourceObject.LogicalIdentity, DatabaseObjectId = parent.Id,
-                FirstAppliedSnapshotId = snapshotEntity.Id, LastAppliedSnapshotId = snapshotEntity.Id,
-                CreatedAt = now, UpdatedAt = now, Version = 1,
+                ProfileId = profile.Id,
+                ScopeGenerationId = snapshotEntity.ScopeGenerationId,
+                IdentityAlgorithmVersion = snapshot.IdentityAlgorithmVersion,
+                SchemaLogicalIdentity = sourceObject.SchemaLogicalIdentity,
+                LogicalIdentity = sourceObject.LogicalIdentity,
+                DatabaseObjectId = parent.Id,
+                FirstAppliedSnapshotId = snapshotEntity.Id,
+                LastAppliedSnapshotId = snapshotEntity.Id,
+                CreatedAt = now,
+                UpdatedAt = now,
+                Version = 1,
             });
             db.DatabaseColumnDiscoveryBindings.Add(new DatabaseColumnDiscoveryBinding
             {
-                ProfileId = profile.Id, ScopeGenerationId = snapshotEntity.ScopeGenerationId,
-                IdentityAlgorithmVersion = snapshot.IdentityAlgorithmVersion, SchemaLogicalIdentity = sourceObject.SchemaLogicalIdentity,
-                ParentObjectLogicalIdentity = sourceObject.LogicalIdentity, LogicalIdentity = sourceColumn.LogicalIdentity,
-                DatabaseColumnId = boundColumn.Id, FirstAppliedSnapshotId = snapshotEntity.Id, LastAppliedSnapshotId = snapshotEntity.Id,
-                CreatedAt = now, UpdatedAt = now, Version = 1,
+                ProfileId = profile.Id,
+                ScopeGenerationId = snapshotEntity.ScopeGenerationId,
+                IdentityAlgorithmVersion = snapshot.IdentityAlgorithmVersion,
+                SchemaLogicalIdentity = sourceObject.SchemaLogicalIdentity,
+                ParentObjectLogicalIdentity = sourceObject.LogicalIdentity,
+                LogicalIdentity = sourceColumn.LogicalIdentity,
+                DatabaseColumnId = boundColumn.Id,
+                FirstAppliedSnapshotId = snapshotEntity.Id,
+                LastAppliedSnapshotId = snapshotEntity.Id,
+                CreatedAt = now,
+                UpdatedAt = now,
+                Version = 1,
             });
             await db.SaveChangesAsync();
         }
@@ -723,11 +766,19 @@ public sealed class DatabaseDiscoverySyncApiTests
             var db = scope.ServiceProvider.GetRequiredService<KnowledgeHubDbContext>();
             db.DatabaseObjects.Add(new DatabaseObject
             {
-                DatabaseSourceId = profile.DatabaseSourceId, SchemaName = "APP_OWNER", ObjectName = "CUSTOMERS",
-                ObjectType = DatabaseObjectType.Table, AccessMode = DatabaseAccessMode.Unknown,
-                CreatedAt = DateTimeOffset.UtcNow, CreatedByName = "concurrent", UpdatedAt = DateTimeOffset.UtcNow,
-                KnowledgeStatus = KnowledgeStatus.Unknown, KnowledgeStatusChangedAt = DateTimeOffset.UtcNow,
-                KnowledgeStatusChangedByName = "concurrent", KnowledgeStatusChangedByRole = "Editor", Version = 1,
+                DatabaseSourceId = profile.DatabaseSourceId,
+                SchemaName = "APP_OWNER",
+                ObjectName = "CUSTOMERS",
+                ObjectType = DatabaseObjectType.Table,
+                AccessMode = DatabaseAccessMode.Unknown,
+                CreatedAt = DateTimeOffset.UtcNow,
+                CreatedByName = "concurrent",
+                UpdatedAt = DateTimeOffset.UtcNow,
+                KnowledgeStatus = KnowledgeStatus.Unknown,
+                KnowledgeStatusChangedAt = DateTimeOffset.UtcNow,
+                KnowledgeStatusChangedByName = "concurrent",
+                KnowledgeStatusChangedByRole = "Editor",
+                Version = 1,
             });
             await db.SaveChangesAsync();
         }
@@ -757,12 +808,23 @@ public sealed class DatabaseDiscoverySyncApiTests
             var now = DateTimeOffset.UtcNow;
             var target = new DatabaseObject
             {
-                DatabaseSourceId = profile.DatabaseSourceId, SchemaName = "APP_OWNER", ObjectName = "CUSTOMERS",
-                ObjectType = DatabaseObjectType.Table, DatabaseComment = "人工保留的技术备注",
-                BusinessDescription = "人工维护的客户主表说明", AccessMode = DatabaseAccessMode.Read,
-                CreatedAt = now, CreatedByUserId = admin.Id, CreatedByName = admin.DisplayName,
-                UpdatedAt = now, KnowledgeStatus = KnowledgeStatus.Confirmed, KnowledgeStatusChangedAt = now,
-                KnowledgeStatusChangedByName = admin.DisplayName, KnowledgeStatusChangedByRole = "Administrator", Version = 1,
+                DatabaseSourceId = profile.DatabaseSourceId,
+                SchemaName = "APP_OWNER",
+                ObjectName = "CUSTOMERS",
+                ObjectType = DatabaseObjectType.Table,
+                DatabaseComment = "人工保留的技术备注",
+                BusinessDescription = "人工维护的客户主表说明",
+                EstimatedRows = 48000,
+                AccessMode = DatabaseAccessMode.Read,
+                CreatedAt = now,
+                CreatedByUserId = admin.Id,
+                CreatedByName = admin.DisplayName,
+                UpdatedAt = now,
+                KnowledgeStatus = KnowledgeStatus.Confirmed,
+                KnowledgeStatusChangedAt = now,
+                KnowledgeStatusChangedByName = admin.DisplayName,
+                KnowledgeStatusChangedByRole = "Administrator",
+                Version = 1,
             };
             target.Columns.Add(Column(1, "ID", "NUMBER(19)", false, null, null, admin.Id, admin.DisplayName, now));
             target.Columns.Add(Column(2, "NAME", "VARCHAR2(100 CHAR)", false, null, "Customer name", admin.Id, admin.DisplayName, now));
@@ -781,6 +843,7 @@ public sealed class DatabaseDiscoverySyncApiTests
         var verify = verifyScope.ServiceProvider.GetRequiredService<KnowledgeHubDbContext>();
         var linked = await verify.DatabaseObjects.SingleAsync(x => x.DatabaseSourceId == profile.DatabaseSourceId);
         Assert.Equal("人工维护的客户主表说明", linked.BusinessDescription);
+        Assert.Equal(48000, linked.EstimatedRows);
         Assert.Equal("人工保留的技术备注", linked.DatabaseComment);
         Assert.Equal(DatabaseAccessMode.Read, linked.AccessMode);
         Assert.Equal(KnowledgeStatus.Confirmed, linked.KnowledgeStatus);
@@ -791,13 +854,24 @@ public sealed class DatabaseDiscoverySyncApiTests
     private static DatabaseColumn Column(
         int ordinal, string name, string dataType, bool nullable, string? defaultValue, string? comment,
         long actorId, string actorName, DateTimeOffset now) => new()
-    {
-        OrdinalPosition = ordinal, ColumnName = name, DataType = dataType, IsNullable = nullable,
-        DefaultValue = defaultValue, DatabaseComment = comment, BusinessDescription = $"人工字段说明：{name}",
-        CreatedAt = now, CreatedByUserId = actorId, CreatedByDisplayName = actorName, UpdatedAt = now,
-        KnowledgeStatus = KnowledgeStatus.Confirmed, KnowledgeStatusChangedAt = now,
-        KnowledgeStatusChangedByName = actorName, KnowledgeStatusChangedByRole = "Administrator", Version = 1,
-    };
+        {
+            OrdinalPosition = ordinal,
+            ColumnName = name,
+            DataType = dataType,
+            IsNullable = nullable,
+            DefaultValue = defaultValue,
+            DatabaseComment = comment,
+            BusinessDescription = $"人工字段说明：{name}",
+            CreatedAt = now,
+            CreatedByUserId = actorId,
+            CreatedByDisplayName = actorName,
+            UpdatedAt = now,
+            KnowledgeStatus = KnowledgeStatus.Confirmed,
+            KnowledgeStatusChangedAt = now,
+            KnowledgeStatusChangedByName = actorName,
+            KnowledgeStatusChangedByRole = "Administrator",
+            Version = 1,
+        };
 
     private static Evidence Evidence(EvidenceType type, long subjectId, string title) => new()
     {
@@ -817,7 +891,9 @@ public sealed class DatabaseDiscoverySyncApiTests
 
     private static object Selection(DatabaseDiscoveryReconciliationCandidateResponse item) => new
     {
-        actionType = item.SuggestedAction!.Value.ToString(), item.LogicalIdentity, item.TargetId,
+        actionType = item.SuggestedAction!.Value.ToString(),
+        item.LogicalIdentity,
+        item.TargetId,
     };
 
     private static async Task<DatabaseDiscoveryReconciliationObjectGroupPageResponse> QueryObjectGroups(
@@ -972,11 +1048,18 @@ public sealed class DatabaseDiscoverySyncApiTests
         var sourceId = await CreateSource(factory, sourceEngine);
         using var response = await client.PostAsJsonAsync("/api/admin/database-connection-profiles", new
         {
-            databaseSourceId = sourceId, name = $"B04-{Guid.NewGuid():N}", providerType = providerType.ToString(),
-            host = "db.example.test", port,
-            databaseName, serviceName = providerType == DatabaseProviderType.Oracle ? "APP_PDB" : null,
-            authenticationMode = "UsernamePassword", username = "METADATA_READER",
-            providerSpecificOptions = new { version = 1 }, includedSchemas = new[] { "APP_OWNER" }, isEnabled = true,
+            databaseSourceId = sourceId,
+            name = $"B04-{Guid.NewGuid():N}",
+            providerType = providerType.ToString(),
+            host = "db.example.test",
+            port,
+            databaseName,
+            serviceName = providerType == DatabaseProviderType.Oracle ? "APP_PDB" : null,
+            authenticationMode = "UsernamePassword",
+            username = "METADATA_READER",
+            providerSpecificOptions = new { version = 1 },
+            includedSchemas = new[] { "APP_OWNER" },
+            isEnabled = true,
         });
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         return (await response.Content.ReadFromJsonAsync<DatabaseConnectionProfileResponse>(JsonOptions))!;

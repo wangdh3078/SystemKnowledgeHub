@@ -20,6 +20,7 @@ import KnowledgeDocumentMarkdown from '../markdown/KnowledgeDocumentMarkdown.vue
 import type { MarkdownAttachmentImageContext } from '../markdown/renderMarkdown'
 import RevisionCompareView from './RevisionCompareView.vue'
 import { useOverlayStore } from '../../../app/stores/overlays'
+import SkhPagination from '../../../components/data-display/SkhPagination.vue'
 import { formatDateTime } from '../../../app/formatters/dateTime'
 import KnowledgeDocumentAttachmentArea from './KnowledgeDocumentAttachmentArea.vue'
 import type { AttachmentMetadata } from '../api/attachmentContracts'
@@ -32,7 +33,7 @@ const props = defineProps<{
 const emit = defineEmits<{ return: [] }>()
 const overlayStore = useOverlayStore()
 
-const pageSize = 20
+const pageSize = ref(20)
 const page = ref(1)
 const total = ref(0)
 const owner = ref<HistoricalTargetIdentity | null>(null)
@@ -143,7 +144,7 @@ async function loadList(preserveSelection = false): Promise<void> {
     const response = await listKnowledgeDocumentRevisions(
       props.documentId,
       page.value,
-      pageSize,
+      pageSize.value,
       request.signal,
     )
     if (listRequest !== request) return
@@ -171,9 +172,14 @@ async function loadList(preserveSelection = false): Promise<void> {
   }
 }
 function handlePageChange(nextPage: number): void {
-  if (nextPage === page.value || listLoading.value) return
+  if (listLoading.value) return
   page.value = nextPage
   void loadList()
+}
+function handlePageSizeChange(nextPageSize: number): void {
+  pageSize.value = nextPageSize
+  page.value = 1
+  void loadList(false)
 }
 function retryDetail(): void {
   const item = items.value.find(
@@ -410,21 +416,15 @@ onBeforeUnmount(() => {
           </article>
         </main>
       </div>
-      <footer v-if="total > pageSize" class="knowledge-document-history__pagination">
-        <span
-          >{{ (page - 1) * pageSize + 1 }}–{{ Math.min(page * pageSize, total) }} /
-          {{ total }}</span
-        >
-        <el-pagination
-          background
-          layout="prev, pager, next"
-          :current-page="page"
-          :page-size="pageSize"
-          :total="total"
-          aria-label="修订历史分页"
-          @current-change="handlePageChange"
-        />
-      </footer>
+      <SkhPagination
+        v-model:current-page="page"
+        v-model:page-size="pageSize"
+        class="knowledge-document-history__pagination"
+        :total="total"
+        aria-label="修订历史分页"
+        @current-change="handlePageChange"
+        @size-change="handlePageSizeChange"
+      />
     </template>
   </section>
 </template>

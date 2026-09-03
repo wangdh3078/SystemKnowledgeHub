@@ -7,6 +7,7 @@ import { useOverlayStore } from '../../../app/stores/overlays'
 import EmptyState from '../../../components/feedback/EmptyState.vue'
 import ErrorState from '../../../components/feedback/ErrorState.vue'
 import LoadingState from '../../../components/feedback/LoadingState.vue'
+import SkhPagination from '../../../components/data-display/SkhPagination.vue'
 import type { AdministratorAttachmentListItem } from '../api/administratorAttachmentContracts'
 import {
   administratorAttachmentKindLabels,
@@ -27,6 +28,7 @@ const {
   referenceStatus,
   storageState,
   page,
+  pageSize,
   data,
   statistics,
   loading,
@@ -64,6 +66,11 @@ function openDetail(attachmentId: number): void {
 function handlePageChange(nextPage: number): void {
   page.value = nextPage
   void loadList()
+}
+
+function handlePageSizeChange(nextPageSize: number): void {
+  pageSize.value = nextPageSize
+  resetPageAndLoad()
 }
 
 function afterDetailChange(): void {
@@ -262,7 +269,9 @@ onBeforeUnmount(() => {
         <el-table-column label="类型" min-width="135"
           ><template #default="scope"
             ><strong>{{ kindLabel(scope.row.kind) }}</strong
-            ><small>{{ scope.row.extension }} · {{ previewModeLabel(scope.row.previewMode) }}</small></template
+            ><small
+              >{{ scope.row.extension }} · {{ previewModeLabel(scope.row.previewMode) }}</small
+            ></template
           ></el-table-column
         >
         <el-table-column label="上传" min-width="156"
@@ -279,7 +288,10 @@ onBeforeUnmount(() => {
                 >已删除</el-tag
               >
               <small v-else
-                >#{{ scope.row.owner.documentId }} · {{ formatAdministratorAttachmentOwnerLifecycle(scope.row.owner.lifecycleStatus) }}</small
+                >#{{ scope.row.owner.documentId }} ·
+                {{
+                  formatAdministratorAttachmentOwnerLifecycle(scope.row.owner.lifecycleStatus)
+                }}</small
               >
             </div>
           </template>
@@ -330,22 +342,16 @@ onBeforeUnmount(() => {
         >
       </el-table>
 
-      <footer v-if="data && data.total > 0" class="attachment-admin-pagination skh-pagination">
-        <span
-          >{{ (data.page - 1) * data.pageSize + 1 }}–{{
-            Math.min(data.page * data.pageSize, data.total)
-          }}
-          / {{ data.total }}</span
-        >
-        <el-pagination
-          background
-          layout="prev, pager, next"
-          :current-page="data.page"
-          :page-size="data.pageSize"
-          :total="data.total"
-          @current-change="handlePageChange"
-        />
-      </footer>
+      <SkhPagination
+        v-if="data"
+        class="attachment-admin-pagination"
+        :total="data.total"
+        :current-page="data.page"
+        :page-size="data.pageSize"
+        aria-label="附件列表分页"
+        @current-change="handlePageChange"
+        @size-change="handlePageSizeChange"
+      />
       <p v-if="error && data" class="attachment-admin-page__inline-error" role="alert">
         刷新失败：{{ error }}
       </p>

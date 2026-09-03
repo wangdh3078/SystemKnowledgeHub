@@ -22,8 +22,8 @@ const overlayStore = useOverlayStore()
 const subject = computed<EvidenceSubjectPayload | null>(() =>
   isEvidenceSubjectPayload(props.payload) ? props.payload : null,
 )
-const activeRoles = computed(() =>
-  actorStore.currentUser?.knowledgeRoles.filter((role) => role.isActive) ?? [],
+const activeRoles = computed(
+  () => actorStore.currentUser?.knowledgeRoles.filter((role) => role.isActive) ?? [],
 )
 const requiresRoleSelection = computed(() => activeRoles.value.length > 1)
 const saving = ref(false)
@@ -55,23 +55,32 @@ const rules: FormRules<typeof form> = {
   supportReason: [{ required: true, message: '请输入支持理由', trigger: 'blur' }],
 }
 
-const canSave = computed(() =>
-  actorStore.canEdit
-  && actorStore.currentUser !== null
-  && (!requiresRoleSelection.value || form.knowledgeRoleId !== null)
-  && !conflict.value,
+const canSave = computed(
+  () =>
+    actorStore.canEdit &&
+    actorStore.currentUser !== null &&
+    (!requiresRoleSelection.value || form.knowledgeRoleId !== null) &&
+    !conflict.value,
 )
 
-watch(subject, (value) => {
-  subjectRevisionNumber.value = value?.subjectRevisionNumber ?? null
-  conflict.value = false
-}, { immediate: true })
+watch(
+  subject,
+  (value) => {
+    subjectRevisionNumber.value = value?.subjectRevisionNumber ?? null
+    conflict.value = false
+  },
+  { immediate: true },
+)
 
-watch(activeRoles, (roles) => {
-  if (roles.length <= 1 || !roles.some((role) => role.id === form.knowledgeRoleId)) {
-    form.knowledgeRoleId = null
-  }
-}, { immediate: true })
+watch(
+  activeRoles,
+  (roles) => {
+    if (roles.length <= 1 || !roles.some((role) => role.id === form.knowledgeRoleId)) {
+      form.knowledgeRoleId = null
+    }
+  },
+  { immediate: true },
+)
 
 function normalize(value: string): string | null {
   const result = value.trim()
@@ -129,15 +138,19 @@ async function save(): Promise<void> {
     })
     ElMessage.success('人工确认已记录；知识状态仍需单独推进。')
     window.dispatchEvent(new CustomEvent('evidence:changed'))
-    window.dispatchEvent(new CustomEvent('human-confirmation:changed', {
-      detail: { subject: created.subject },
-    }))
+    window.dispatchEvent(
+      new CustomEvent('human-confirmation:changed', {
+        detail: { subject: created.subject },
+      }),
+    )
     overlayStore.openDrawer({ kind: 'evidence', id: created.id, mode: 'read' })
   } catch (error: unknown) {
     if (error instanceof ApiError) {
-      if (error.status === 409
-        && error.response.code === 'conflict'
-        && subject.value.subject.type === 'KnowledgeDocument') {
+      if (
+        error.status === 409 &&
+        error.response.code === 'conflict' &&
+        subject.value.subject.type === 'KnowledgeDocument'
+      ) {
         conflict.value = true
         errorMessage.value = '当前修订已变化，请重新加载最新内容后再次明确确认。'
       } else {
@@ -147,8 +160,10 @@ async function save(): Promise<void> {
         const message = messages[0]
         if (message) fieldErrors[field] = message
       }
-      if (error.status === 422
-        && (error.response.code === 'invalid_state' || error.response.code === 'reference_invalid')) {
+      if (
+        error.status === 422 &&
+        (error.response.code === 'invalid_state' || error.response.code === 'reference_invalid')
+      ) {
         await refreshCurrentUserAfterRoleError()
       }
     } else {
@@ -160,49 +175,72 @@ async function save(): Promise<void> {
 }
 
 async function reloadLatestDocument(): Promise<void> {
-  if (!subject.value
-    || subject.value.subject.type !== 'KnowledgeDocument'
-    || reloadingDocument.value) return
+  if (
+    !subject.value ||
+    subject.value.subject.type !== 'KnowledgeDocument' ||
+    reloadingDocument.value
+  )
+    return
   reloadingDocument.value = true
   try {
     const document = await getKnowledgeDocument(subject.value.subject.id)
     subjectRevisionNumber.value = document.currentRevisionNumber
     conflict.value = false
     errorMessage.value = `已重新加载当前修订 ${document.currentRevisionNumber}，请再次明确确认最新内容。`
-    window.dispatchEvent(new CustomEvent('knowledge-document:current-refreshed', {
-      detail: { document },
-    }))
+    window.dispatchEvent(
+      new CustomEvent('knowledge-document:current-refreshed', {
+        detail: { document },
+      }),
+    )
   } catch (error: unknown) {
     errorMessage.value = error instanceof Error ? error.message : '重新加载当前文档失败。'
   } finally {
     reloadingDocument.value = false
   }
 }
-
 </script>
 
 <template>
   <div class="evidence-drawer human-confirmation-drawer">
     <header class="evidence-drawer__header skh-drawer-header">
-      <el-button text circle :icon="Close" aria-label="关闭人工确认" @click="overlayStore.requestDrawerClose()" />
+      <el-button
+        text
+        circle
+        :icon="Close"
+        aria-label="关闭人工确认"
+        @click="overlayStore.requestDrawerClose()"
+      />
       <span>添加人工确认</span>
       <h2>记录谁确认了这条知识</h2>
       <p>人工确认属于证据，不会自动推进知识状态。</p>
     </header>
 
-    <div v-if="!subject" class="evidence-drawer__error">缺少有效的知识对象上下文，请关闭后重新进入。</div>
+    <div v-if="!subject" class="evidence-drawer__error">
+      缺少有效的知识对象上下文，请关闭后重新进入。
+    </div>
     <template v-else>
       <section class="evidence-subject-card">
-        <div><small>确认对象</small><strong class="technical-text">{{ subject.title }}</strong></div>
+        <div>
+          <small>确认对象</small><strong class="technical-text">{{ subject.title }}</strong>
+        </div>
         <KnowledgeStatusBadge :status="subject.knowledgeStatus" />
       </section>
       <p v-if="subjectRevisionNumber !== null" class="human-confirmation-revision-context">
         本次人工确认将覆盖当前显示的修订 {{ subjectRevisionNumber }}。
       </p>
 
-      <el-alert v-if="errorMessage" class="evidence-form-alert evidence-form-alert--outer" :type="conflict ? 'warning' : 'error'" :title="errorMessage" :closable="false" show-icon>
+      <el-alert
+        v-if="errorMessage"
+        class="evidence-form-alert evidence-form-alert--outer"
+        :type="conflict ? 'warning' : 'error'"
+        :title="errorMessage"
+        :closable="false"
+        show-icon
+      >
         <template v-if="conflict" #default>
-          <el-button :loading="reloadingDocument" @click="reloadLatestDocument">重新加载最新内容</el-button>
+          <el-button :loading="reloadingDocument" @click="reloadLatestDocument"
+            >重新加载最新内容</el-button
+          >
         </template>
       </el-alert>
 
@@ -213,10 +251,22 @@ async function reloadLatestDocument(): Promise<void> {
 
         <template v-if="actorStore.currentUser">
           <dl class="evidence-current-user__facts">
-            <div><dt>姓名</dt><dd>{{ actorStore.currentUser.displayName }}</dd></div>
-            <div><dt>工号</dt><dd>{{ actorStore.currentUser.employeeNo ?? '—' }}</dd></div>
-            <div><dt>部门 / 团队</dt><dd>{{ actorStore.currentUser.departmentOrTeam ?? '—' }}</dd></div>
-            <div><dt>职位</dt><dd>{{ actorStore.currentUser.jobTitle ?? '—' }}</dd></div>
+            <div>
+              <dt>姓名</dt>
+              <dd>{{ actorStore.currentUser.displayName }}</dd>
+            </div>
+            <div>
+              <dt>工号</dt>
+              <dd>{{ actorStore.currentUser.employeeNo ?? '—' }}</dd>
+            </div>
+            <div>
+              <dt>部门 / 团队</dt>
+              <dd>{{ actorStore.currentUser.departmentOrTeam ?? '—' }}</dd>
+            </div>
+            <div>
+              <dt>职位</dt>
+              <dd>{{ actorStore.currentUser.jobTitle ?? '—' }}</dd>
+            </div>
           </dl>
 
           <div class="evidence-current-user__role">
@@ -232,51 +282,138 @@ async function reloadLatestDocument(): Promise<void> {
             </template>
             <el-form v-else label-position="top">
               <el-form-item label="本次知识身份" :error="fieldErrors.knowledgeRoleId" required>
-                <el-select v-model="form.knowledgeRoleId" placeholder="选择本次确认使用的知识身份" @change="clearFieldError('knowledgeRoleId')">
-                  <el-option v-for="role in activeRoles" :key="role.id" :label="role.name" :value="role.id" />
+                <el-select
+                  v-model="form.knowledgeRoleId"
+                  placeholder="选择本次确认使用的知识身份"
+                  @change="clearFieldError('knowledgeRoleId')"
+                >
+                  <el-option
+                    v-for="role in activeRoles"
+                    :key="role.id"
+                    :label="role.name"
+                    :value="role.id"
+                  />
                 </el-select>
               </el-form-item>
             </el-form>
           </div>
         </template>
 
-        <el-alert v-else type="warning" title="当前认证身份不可用于人工确认，请重新登录或联系系统管理员。" :closable="false" show-icon />
+        <el-alert
+          v-else
+          type="warning"
+          title="当前认证身份不可用于人工确认，请重新登录或联系系统管理员。"
+          :closable="false"
+          show-icon
+        />
       </section>
 
-      <el-form ref="formRef" :model="form" :rules="rules" class="evidence-form" label-position="top" @submit.prevent>
+      <el-form
+        ref="formRef"
+        :model="form"
+        :rules="rules"
+        class="evidence-form"
+        label-position="top"
+        @submit.prevent
+      >
         <section class="evidence-form-section evidence-form-section--confirmation">
           <h3>确认事实</h3>
           <div class="evidence-form__grid">
-            <el-form-item label="确认方式" prop="confirmationMethod" :error="fieldErrors.confirmationMethod" required>
-              <el-select v-model="form.confirmationMethod" placeholder="选择确认方式" @change="clearFieldError('confirmationMethod')">
-                <el-option v-for="method in confirmationMethods" :key="method.value" :label="method.label" :value="method.value" />
+            <el-form-item
+              label="确认方式"
+              prop="confirmationMethod"
+              :error="fieldErrors.confirmationMethod"
+              required
+            >
+              <el-select
+                v-model="form.confirmationMethod"
+                placeholder="选择确认方式"
+                @change="clearFieldError('confirmationMethod')"
+              >
+                <el-option
+                  v-for="method in confirmationMethods"
+                  :key="method.value"
+                  :label="method.label"
+                  :value="method.value"
+                />
               </el-select>
             </el-form-item>
-            <el-form-item label="确认时间" prop="confirmedAt" :error="fieldErrors.confirmedAt" required>
-              <el-date-picker v-model="form.confirmedAt" type="datetime" value-format="YYYY-MM-DD HH:mm:ss" format="YYYY-MM-DD HH:mm:ss" placeholder="选择本地确认时间" @change="clearFieldError('confirmedAt')" />
-              <p class="evidence-form__help">已按打开表单时的本地时间预填；仅在确认事实发生于其他时间时修改。</p>
+            <el-form-item
+              label="确认时间"
+              prop="confirmedAt"
+              :error="fieldErrors.confirmedAt"
+              required
+            >
+              <el-date-picker
+                v-model="form.confirmedAt"
+                type="datetime"
+                value-format="YYYY-MM-DD HH:mm:ss"
+                format="YYYY-MM-DD HH:mm:ss"
+                placeholder="选择本地确认时间"
+                @change="clearFieldError('confirmedAt')"
+              />
+              <p class="evidence-form__help">
+                已按打开表单时的本地时间预填；仅在确认事实发生于其他时间时修改。
+              </p>
             </el-form-item>
           </div>
-          <el-form-item label="确认结论" prop="confirmationStatement" :error="fieldErrors.confirmationStatement" required>
-            <el-input v-model="form.confirmationStatement" type="textarea" :rows="4" placeholder="准确记录专家确认的知识内容" @input="clearFieldError('confirmationStatement')" />
+          <el-form-item
+            label="确认结论"
+            prop="confirmationStatement"
+            :error="fieldErrors.confirmationStatement"
+            required
+          >
+            <el-input
+              v-model="form.confirmationStatement"
+              type="textarea"
+              :rows="4"
+              placeholder="准确记录专家确认的知识内容"
+              @input="clearFieldError('confirmationStatement')"
+            />
           </el-form-item>
-          <el-form-item label="本次确认依据" prop="supportReason" :error="fieldErrors.supportReason" required>
-            <el-input v-model="form.supportReason" type="textarea" :rows="3" placeholder="简要说明本次人工判断的依据，无需抄写已有 Evidence 内容" @input="clearFieldError('supportReason')" />
-            <p class="evidence-form__help">当前冻结的 C25 契约要求保留非空确认依据；这里只记录本次判断依据，不重复录入系统已知的确认人资料。</p>
+          <el-form-item
+            label="本次确认依据"
+            prop="supportReason"
+            :error="fieldErrors.supportReason"
+            required
+          >
+            <el-input
+              v-model="form.supportReason"
+              type="textarea"
+              :rows="3"
+              placeholder="简要说明本次人工判断的依据，无需抄写已有证据内容"
+              @input="clearFieldError('supportReason')"
+            />
+            <p class="evidence-form__help">
+              当前冻结的 C25
+              契约要求保留非空确认依据；这里只记录本次判断依据，不重复录入系统已知的确认人资料。
+            </p>
           </el-form-item>
-          <el-form-item label="来源说明（可选）"><el-input v-model="form.sourceNote" placeholder="例如 现场评审会议" /></el-form-item>
+          <el-form-item label="来源说明（可选）"
+            ><el-input v-model="form.sourceNote" placeholder="例如 现场评审会议"
+          /></el-form-item>
         </section>
       </el-form>
 
       <section class="evidence-confirmation-impact">
         <el-icon><InfoFilled /></el-icon>
-        <div><small>保存后的知识影响</small><strong>新增人工确认证据</strong><p>知识状态保持当前状态；后续必须由明确操作推进。</p></div>
+        <div>
+          <small>保存后的知识影响</small><strong>新增人工确认证据</strong>
+          <p>知识状态保持当前状态；后续必须由明确操作推进。</p>
+        </div>
         <KnowledgeStatusBadge :status="subject.knowledgeStatus" />
       </section>
 
       <footer class="evidence-drawer__footer">
         <el-button @click="overlayStore.requestDrawerClose()">取消</el-button>
-        <el-button type="primary" :icon="UserFilled" :loading="saving" :disabled="!canSave" @click="save">保存人工确认</el-button>
+        <el-button
+          type="primary"
+          :icon="UserFilled"
+          :loading="saving"
+          :disabled="!canSave"
+          @click="save"
+          >保存人工确认</el-button
+        >
       </footer>
     </template>
   </div>

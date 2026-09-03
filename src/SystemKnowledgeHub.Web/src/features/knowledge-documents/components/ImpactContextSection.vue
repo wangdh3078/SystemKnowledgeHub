@@ -14,10 +14,11 @@ import type {
   ImpactTarget,
   ImpactTargetType,
 } from '../api/impactContracts'
+import SkhPagination from '../../../components/data-display/SkhPagination.vue'
 
 const props = defineProps<{ documentId: number }>()
 const router = useRouter()
-const pageSize = 20
+const pageSize = ref(20)
 const page = ref(1)
 const impact = ref<ImpactResponse | null>(null)
 const loading = ref(false)
@@ -98,13 +99,6 @@ const groups = computed(() => {
     .filter((group) => group.items.length > 0)
 })
 
-const visibleRange = computed(() => {
-  if (!impact.value || impact.value.total === 0) return '0 / 0'
-  const start = (impact.value.page - 1) * impact.value.pageSize + 1
-  const end = Math.min(impact.value.page * impact.value.pageSize, impact.value.total)
-  return `${start}–${end} / ${impact.value.total}`
-})
-
 function impactErrorMessage(reason: unknown): string {
   if (
     reason instanceof ApiError &&
@@ -128,7 +122,7 @@ async function load(): Promise<void> {
     const response = await getKnowledgeDocumentImpact(
       requestedId,
       requestedPage,
-      pageSize,
+      pageSize.value,
       controller.signal,
     )
     if (
@@ -158,8 +152,12 @@ function refresh(): void {
 }
 
 function changePage(nextPage: number): void {
-  if (nextPage === page.value) return
   page.value = nextPage
+  void load()
+}
+function changePageSize(nextPageSize: number): void {
+  pageSize.value = nextPageSize
+  page.value = 1
   void load()
 }
 
@@ -321,19 +319,15 @@ defineExpose({ refresh })
           </ul>
         </section>
       </div>
-      <footer v-if="impact.total > 0" class="impact-context-pagination skh-pagination">
-        <span aria-live="polite">当前 {{ visibleRange }}</span>
-        <el-pagination
-          v-if="impact.total > impact.pageSize"
-          background
-          layout="prev, pager, next"
-          :current-page="impact.page"
-          :page-size="impact.pageSize"
-          :total="impact.total"
-          aria-label="影响上下文分页"
-          @current-change="changePage"
-        />
-      </footer>
+      <SkhPagination
+        class="impact-context-pagination"
+        :total="impact.total"
+        :current-page="impact.page"
+        :page-size="impact.pageSize"
+        aria-label="影响上下文分页"
+        @current-change="changePage"
+        @size-change="changePageSize"
+      />
     </template>
   </section>
 </template>

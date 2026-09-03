@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Close } from '@element-plus/icons-vue'
 import { useOverlayStore } from '../../../app/stores/overlays'
 import EmptyState from '../../../components/feedback/EmptyState.vue'
 import ErrorState from '../../../components/feedback/ErrorState.vue'
 import LoadingState from '../../../components/feedback/LoadingState.vue'
+import SkhPagination from '../../../components/data-display/SkhPagination.vue'
 import DiscoverySectionNav from '../components/DiscoverySectionNav.vue'
 import { getDifference, getDifferenceEntries } from '../api/databaseDiscoveryApi'
 import type {
@@ -18,13 +19,13 @@ import type {
 } from '../api/databaseDiscoveryContracts'
 import '../database-discovery.css'
 const route = useRoute()
-const router = useRouter()
 const overlayStore = useOverlayStore()
 const id = computed(() => Number(route.params.id))
 const summary = ref<DifferenceSummary | null>(null)
 const entries = ref<readonly DifferenceEntry[]>([])
 const total = ref(0)
 const page = ref(1)
+const pageSize = ref(20)
 const state = ref<DifferenceState>('Changed')
 const entityKind = ref<DiscoveryEntityKind | ''>('')
 const schema = ref('')
@@ -59,6 +60,7 @@ async function load(): Promise<void> {
       id.value,
       state.value,
       page.value,
+      pageSize.value,
       entityKind.value,
       schema.value,
       search.value,
@@ -82,6 +84,11 @@ function selectState(value: DifferenceState): void {
   void load()
 }
 function applyFilters(): void {
+  page.value = 1
+  void load()
+}
+function pageSizeChanged(value: number): void {
+  pageSize.value = value
   page.value = 1
   void load()
 }
@@ -188,21 +195,14 @@ onBeforeUnmount(() => {
           <span>/</span>
           <RouterLink :to="{ name: 'database-discovery-differences' }">差异审查</RouterLink>
           <span>/</span>
-          <strong>Difference #{{ id }}</strong>
+          <strong>差异 #{{ id }}</strong>
         </nav>
         <h1>差异 #{{ id }}</h1>
         <p>审查结构变化；本页面不会应用或同步任何变更。</p>
       </div>
       <div class="skh-page-header__actions">
-        <el-button
-          v-if="summary"
-          @click="
-            router.push({
-              name: 'database-discovery-snapshot',
-              params: { id: String(summary.targetSnapshotId) },
-            })
-          "
-          >打开目标快照</el-button
+        <RouterLink class="el-button" :to="{ name: 'database-discovery-differences' }"
+          >← 返回差异列表</RouterLink
         >
       </div>
     </header>
@@ -379,17 +379,15 @@ onBeforeUnmount(() => {
           ></el-table-column
         >
       </el-table>
-      <footer v-if="total > 0" class="discovery-pagination skh-pagination">
-        <span>{{ (page - 1) * 50 + 1 }}–{{ Math.min(page * 50, total) }} / {{ total }}</span
-        ><el-pagination
-          v-model:current-page="page"
-          :page-size="50"
-          :total="total"
-          background
-          layout="prev,pager,next"
-          @current-change="load"
-        />
-      </footer>
+      <SkhPagination
+        v-model:current-page="page"
+        v-model:page-size="pageSize"
+        class="discovery-pagination"
+        :total="total"
+        aria-label="差异条目分页"
+        @current-change="load"
+        @size-change="pageSizeChanged"
+      />
       <p v-if="error" class="discovery-inline-error" role="alert">刷新失败：{{ error }}</p>
     </section>
     <Teleport v-if="differenceDrawerOpen && selected" defer to="#drawer-feature-content">

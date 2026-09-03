@@ -233,6 +233,7 @@ export interface RegisterDatabaseColumnResponse {
 
 export interface UpdateDatabaseObjectKnowledgeRequest {
   readonly businessDescription?: string | null
+  readonly estimatedRows: number | null
   readonly accessMode: DatabaseAccessMode
   readonly businessKeyColumns?: readonly string[] | null
   readonly actor: ActorContext
@@ -242,6 +243,7 @@ export interface UpdateDatabaseObjectKnowledgeRequest {
 export interface DatabaseObjectKnowledgeResponse {
   readonly id: number
   readonly businessDescription: string | null
+  readonly estimatedRows: number | null
   readonly accessMode: DatabaseAccessMode
   readonly businessKeyColumns: readonly string[]
   readonly knowledgeStatus: KnowledgeStatus
@@ -362,11 +364,12 @@ function readDatabaseObjectType(value: unknown, field: string): DatabaseObjectTy
 function readDatabaseAccessMode(value: unknown, field: string): DatabaseAccessMode {
   const accessMode = readString(value, field)
   if (
-    accessMode === 'Read'
-    || accessMode === 'Write'
-    || accessMode === 'ReadWrite'
-    || accessMode === 'Unknown'
-  ) return accessMode
+    accessMode === 'Read' ||
+    accessMode === 'Write' ||
+    accessMode === 'ReadWrite' ||
+    accessMode === 'Unknown'
+  )
+    return accessMode
   throw new Error(`${field} has an unsupported access mode`)
 }
 
@@ -393,42 +396,64 @@ function readDatabaseSourceContext(value: unknown, field: string): DatabaseSourc
 export function decodeDatabaseObjectsList(value: unknown): DatabaseObjectsListResponse {
   const root = readObject(value, 'databaseObjectsList')
   const browseContext = readObject(root.browseContext, 'browseContext')
-  const system = browseContext.system === null
-    ? null
-    : readSystemContext(browseContext.system, 'browseContext.system')
+  const system =
+    browseContext.system === null
+      ? null
+      : readSystemContext(browseContext.system, 'browseContext.system')
 
   return {
     browseContext: {
       system,
-      databaseSources: readArray(browseContext.databaseSources, 'browseContext.databaseSources')
-        .map((item, index) => readDatabaseSourceContext(item, `browseContext.databaseSources[${index}]`)),
+      databaseSources: readArray(
+        browseContext.databaseSources,
+        'browseContext.databaseSources',
+      ).map((item, index) =>
+        readDatabaseSourceContext(item, `browseContext.databaseSources[${index}]`),
+      ),
       schemas: readStringArray(browseContext.schemas, 'browseContext.schemas'),
     },
     items: readArray(root.items, 'items').map((value, index) => {
       const item = readObject(value, `items[${index}]`)
-      const matchedColumn = item.matchedColumn === null
-        ? null
-        : (() => {
-            const column = readObject(item.matchedColumn, `items[${index}].matchedColumn`)
-            return {
-              id: readId(column.id, `items[${index}].matchedColumn.id`),
-              columnName: readString(column.columnName, `items[${index}].matchedColumn.columnName`),
-            }
-          })()
+      const matchedColumn =
+        item.matchedColumn === null
+          ? null
+          : (() => {
+              const column = readObject(item.matchedColumn, `items[${index}].matchedColumn`)
+              return {
+                id: readId(column.id, `items[${index}].matchedColumn.id`),
+                columnName: readString(
+                  column.columnName,
+                  `items[${index}].matchedColumn.columnName`,
+                ),
+              }
+            })()
       return {
         id: readId(item.id, `items[${index}].id`),
-        databaseSource: readDatabaseSourceContext(item.databaseSource, `items[${index}].databaseSource`),
+        databaseSource: readDatabaseSourceContext(
+          item.databaseSource,
+          `items[${index}].databaseSource`,
+        ),
         schema: readString(item.schema, `items[${index}].schema`),
         objectName: readString(item.objectName, `items[${index}].objectName`),
         objectType: readDatabaseObjectType(item.objectType, `items[${index}].objectType`),
-        businessDescription: readNullableString(item.businessDescription, `items[${index}].businessDescription`),
-        estimatedRows: item.estimatedRows === null
-          ? null
-          : readInteger(item.estimatedRows, `items[${index}].estimatedRows`),
+        businessDescription: readNullableString(
+          item.businessDescription,
+          `items[${index}].businessDescription`,
+        ),
+        estimatedRows:
+          item.estimatedRows === null
+            ? null
+            : readInteger(item.estimatedRows, `items[${index}].estimatedRows`),
         accessMode: readDatabaseAccessMode(item.accessMode, `items[${index}].accessMode`),
-        relatedFunctionCount: readInteger(item.relatedFunctionCount, `items[${index}].relatedFunctionCount`),
+        relatedFunctionCount: readInteger(
+          item.relatedFunctionCount,
+          `items[${index}].relatedFunctionCount`,
+        ),
         unknownCount: readInteger(item.unknownCount, `items[${index}].unknownCount`),
-        knowledgeStatus: readKnowledgeStatus(item.knowledgeStatus, `items[${index}].knowledgeStatus`),
+        knowledgeStatus: readKnowledgeStatus(
+          item.knowledgeStatus,
+          `items[${index}].knowledgeStatus`,
+        ),
         matchedColumn,
       }
     }),
@@ -503,20 +528,14 @@ export function decodeDatabaseObjectDetail(value: unknown): DatabaseObjectDetail
         'overview.businessDescription',
       ),
       accessMode,
-      knowledgeStatus: readKnowledgeStatus(
-        overview.knowledgeStatus,
-        'overview.knowledgeStatus',
-      ),
+      knowledgeStatus: readKnowledgeStatus(overview.knowledgeStatus, 'overview.knowledgeStatus'),
     },
     metadata: {
       estimatedRows:
         metadata.estimatedRows === null
           ? null
           : readInteger(metadata.estimatedRows, 'metadata.estimatedRows'),
-      primaryKeyColumns: readStringArray(
-        metadata.primaryKeyColumns,
-        'metadata.primaryKeyColumns',
-      ),
+      primaryKeyColumns: readStringArray(metadata.primaryKeyColumns, 'metadata.primaryKeyColumns'),
       businessKeyColumns: readStringArray(
         metadata.businessKeyColumns,
         'metadata.businessKeyColumns',
@@ -594,11 +613,7 @@ export function decodeDatabaseColumnDetail(value: unknown): DatabaseColumnDetail
       dataType: readString(metadata.dataType, 'databaseMetadata.dataType'),
       nullable: readBoolean(metadata.nullable, 'databaseMetadata.nullable'),
       defaultValue: readNullableString(metadata.defaultValue, 'databaseMetadata.defaultValue'),
-      ordinalPosition: readInteger(
-        metadata.ordinalPosition,
-        'databaseMetadata.ordinalPosition',
-        1,
-      ),
+      ordinalPosition: readInteger(metadata.ordinalPosition, 'databaseMetadata.ordinalPosition', 1),
     },
     businessKnowledge: {
       description: readNullableString(knowledge.description, 'businessKnowledge.description'),
@@ -669,6 +684,8 @@ export function decodeDatabaseObjectKnowledge(value: unknown): DatabaseObjectKno
   return {
     id: readId(root.id, 'id'),
     businessDescription: readNullableString(root.businessDescription, 'businessDescription'),
+    estimatedRows:
+      root.estimatedRows === null ? null : readInteger(root.estimatedRows, 'estimatedRows'),
     accessMode: readDatabaseAccessMode(root.accessMode, 'accessMode'),
     businessKeyColumns: readStringArray(root.businessKeyColumns, 'businessKeyColumns'),
     knowledgeStatus: readKnowledgeStatus(root.knowledgeStatus, 'knowledgeStatus'),
@@ -686,7 +703,15 @@ export function decodeDatabaseColumnKnowledge(value: unknown): DatabaseColumnKno
   }
 }
 
-function readKnownValueWrite(value: unknown, field: string): { readonly id: number; readonly value: string; readonly meaning: string; readonly sortOrder: number } {
+function readKnownValueWrite(
+  value: unknown,
+  field: string,
+): {
+  readonly id: number
+  readonly value: string
+  readonly meaning: string
+  readonly sortOrder: number
+} {
   const item = readObject(value, field)
   return {
     id: readId(item.id, `${field}.id`),
@@ -710,7 +735,8 @@ export function decodeRemoveColumnKnownValue(value: unknown): RemoveColumnKnownV
   return {
     columnId: readId(root.columnId, 'columnId'),
     knownValues: readArray(root.knownValues, 'knownValues').map((item, index) =>
-      readKnownValueWrite(item, `knownValues[${index}]`)),
+      readKnownValueWrite(item, `knownValues[${index}]`),
+    ),
     concurrencyToken: readString(root.concurrencyToken, 'concurrencyToken'),
   }
 }

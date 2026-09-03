@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { ArrowRight, Coin, Delete, Plus, Search } from '@element-plus/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
 import KnowledgeStatusBadge from '../../../components/data-display/KnowledgeStatusBadge.vue'
+import SkhPagination from '../../../components/data-display/SkhPagination.vue'
 import EmptyState from '../../../components/feedback/EmptyState.vue'
 import ErrorState from '../../../components/feedback/ErrorState.vue'
 import LoadingState from '../../../components/feedback/LoadingState.vue'
@@ -35,6 +36,7 @@ const {
   keyword,
   sort,
   page,
+  pageSize,
   loading,
   error,
   data,
@@ -43,14 +45,16 @@ const {
   clearFilters,
 } = useDatabaseObjectsList()
 
-const hasFilters = computed(() => Boolean(
-  systemId.value
-  || databaseSourceId.value
-  || schema.value
-  || objectType.value
-  || knowledgeStatus.value
-  || keyword.value,
-))
+const hasFilters = computed(() =>
+  Boolean(
+    systemId.value ||
+    databaseSourceId.value ||
+    schema.value ||
+    objectType.value ||
+    knowledgeStatus.value ||
+    keyword.value,
+  ),
+)
 
 let keywordTimer: ReturnType<typeof setTimeout> | null = null
 watch(keyword, () => {
@@ -63,11 +67,22 @@ function objectTypeLabel(value: DatabaseObjectType): string {
 }
 
 function accessModeLabel(value: string): string {
-  return ({ Read: '只读', Write: '只写', ReadWrite: '读 / 写', Unknown: '待确认' } as Record<string, string>)[value] ?? value
+  return (
+    (
+      { Read: '只读', Write: '只写', ReadWrite: '读 / 写', Unknown: '待确认' } as Record<
+        string,
+        string
+      >
+    )[value] ?? value
+  )
 }
 
 function formatRows(value: number | null): string {
-  return value === null ? '—' : new Intl.NumberFormat('zh-CN', { notation: 'compact', maximumFractionDigits: 1 }).format(value)
+  return value === null
+    ? '—'
+    : new Intl.NumberFormat('zh-CN', { notation: 'compact', maximumFractionDigits: 1 }).format(
+        value,
+      )
 }
 
 function applyRouteQuery(): void {
@@ -76,11 +91,15 @@ function applyRouteQuery(): void {
   schema.value = typeof route.query.schema === 'string' ? route.query.schema : ''
 }
 
-function updateRouteAndLoad(next: { systemId?: number; databaseSourceId?: number; schema?: string } = {}): void {
+function updateRouteAndLoad(
+  next: { systemId?: number; databaseSourceId?: number; schema?: string } = {},
+): void {
   void router.replace({
     query: {
       ...(next.systemId === undefined ? {} : { systemId: String(next.systemId) }),
-      ...(next.databaseSourceId === undefined ? {} : { databaseSourceId: String(next.databaseSourceId) }),
+      ...(next.databaseSourceId === undefined
+        ? {}
+        : { databaseSourceId: String(next.databaseSourceId) }),
       ...(next.schema ? { schema: next.schema } : {}),
     },
   })
@@ -118,17 +137,21 @@ function handleFilterChange(): void {
   resetPageAndLoad()
 }
 
-function handleSortChange(change: { prop: string; order: 'ascending' | 'descending' | null }): void {
+function handleSortChange(change: {
+  prop: string
+  order: 'ascending' | 'descending' | null
+}): void {
   const direction = change.order === 'ascending' ? 'asc' : 'desc'
-  const field = change.prop === 'schema'
-    ? 'schema'
-    : change.prop === 'estimatedRows'
-      ? 'estimatedRows'
-      : change.prop === 'knowledgeStatus'
-        ? 'knowledgeStatus'
-        : change.prop === 'unknownCount'
-          ? 'unknownCount'
-          : 'objectName'
+  const field =
+    change.prop === 'schema'
+      ? 'schema'
+      : change.prop === 'estimatedRows'
+        ? 'estimatedRows'
+        : change.prop === 'knowledgeStatus'
+          ? 'knowledgeStatus'
+          : change.prop === 'unknownCount'
+            ? 'unknownCount'
+            : 'objectName'
   sort.value = `${field}:${direction}` as DatabaseObjectsSort
   resetPageAndLoad()
 }
@@ -136,6 +159,11 @@ function handleSortChange(change: { prop: string; order: 'ascending' | 'descendi
 function handlePageChange(nextPage: number): void {
   page.value = nextPage
   void load()
+}
+
+function handlePageSizeChange(nextPageSize: number): void {
+  pageSize.value = nextPageSize
+  resetPageAndLoad()
 }
 
 function openObject(row: DatabaseObjectListItem): void {
@@ -150,7 +178,9 @@ function startCreate(): void {
 function requestSourceDelete(source: DatabaseSourceContext): void {
   if (!actorStore.canEdit || !source.canDelete) return
   openDeleteDialog(overlayStore, {
-    objectTypeLabel: '数据库来源', actionLabel: '删除数据库源', displayName: source.name,
+    objectTypeLabel: '数据库来源',
+    actionLabel: '删除数据库源',
+    displayName: source.name,
     concurrencyToken: source.concurrencyToken,
     execute: () => deleteDatabaseSource(source.id, source.concurrencyToken),
     onDeleted: async () => {
@@ -192,13 +222,22 @@ onMounted(() => {
   <div class="database-objects-list-page skh-page">
     <header class="database-objects-list-page__header skh-page-header">
       <div>
-        <div class="page-eyebrow"><el-icon><Coin /></el-icon>数据库知识</div>
+        <div class="page-eyebrow">
+          <el-icon><Coin /></el-icon>数据库知识
+        </div>
         <h1>数据库对象</h1>
-        <p>按数据库来源与 Schema 浏览 Table、View 和关联字段。</p>
+        <p>按数据库来源与架构（Schema）浏览表、视图和关联字段。</p>
       </div>
       <div class="database-objects-list-page__header-actions skh-page-header__actions">
         <span v-if="data">共 {{ data.total }} 个对象</span>
-        <el-button v-if="actorStore.canEdit" class="skh-page-primary-action" type="primary" :icon="Plus" @click="startCreate">新增数据库对象</el-button>
+        <el-button
+          v-if="actorStore.canEdit"
+          class="skh-page-primary-action"
+          type="primary"
+          :icon="Plus"
+          @click="startCreate"
+          >新增数据库对象</el-button
+        >
       </div>
     </header>
 
@@ -216,7 +255,12 @@ onMounted(() => {
           aria-label="筛选系统"
           @update:model-value="selectSystem"
         >
-          <el-option v-for="item in systemOptions" :key="item.id" :label="item.name" :value="item.id" />
+          <el-option
+            v-for="item in systemOptions"
+            :key="item.id"
+            :label="item.name"
+            :value="item.id"
+          />
         </el-select>
         <p v-if="systemOptionsError" class="database-browser__error">{{ systemOptionsError }}</p>
 
@@ -240,9 +284,26 @@ onMounted(() => {
               :class="{ 'database-browser__node--active': databaseSourceId === source.id }"
               type="button"
               @click="selectSource(source.id)"
-            ><span><strong>{{ source.name }}</strong><small>{{ source.engine }}</small></span></button>
-            <el-tooltip v-if="actorStore.canEdit && source.canDelete" content="删除数据库源" placement="right">
-              <el-button class="skh-icon-action" text circle type="danger" :icon="Delete" aria-label="删除数据库源" @click="requestSourceDelete(source)" />
+            >
+              <span
+                ><strong>{{ source.name }}</strong
+                ><small>{{ source.engine }}</small></span
+              >
+            </button>
+            <el-tooltip
+              v-if="actorStore.canEdit && source.canDelete"
+              content="删除数据库源"
+              placement="right"
+            >
+              <el-button
+                class="skh-icon-action"
+                text
+                circle
+                type="danger"
+                :icon="Delete"
+                aria-label="删除数据库源"
+                @click="requestSourceDelete(source)"
+              />
             </el-tooltip>
           </div>
         </div>
@@ -254,7 +315,9 @@ onMounted(() => {
             :class="{ 'database-browser__node--active': !schema }"
             type="button"
             @click="selectSchema('')"
-          >全部 Schema</button>
+          >
+            全部 Schema
+          </button>
           <button
             v-for="item in data?.browseContext.schemas ?? []"
             :key="item"
@@ -262,7 +325,9 @@ onMounted(() => {
             :class="{ 'database-browser__node--active': schema === item }"
             type="button"
             @click="selectSchema(item)"
-          >{{ item }}</button>
+          >
+            {{ item }}
+          </button>
         </div>
       </aside>
 
@@ -275,16 +340,28 @@ onMounted(() => {
             placeholder="搜索表、视图、字段或业务说明"
             aria-label="搜索数据库对象"
           />
-          <el-select v-model="objectType" clearable placeholder="对象类型：全部" @change="handleFilterChange">
+          <el-select
+            v-model="objectType"
+            clearable
+            placeholder="对象类型：全部"
+            @change="handleFilterChange"
+          >
             <el-option label="表" value="Table" />
             <el-option label="视图" value="View" />
           </el-select>
-          <el-select v-model="knowledgeStatus" clearable placeholder="知识状态：全部" @change="handleFilterChange">
+          <el-select
+            v-model="knowledgeStatus"
+            clearable
+            placeholder="知识状态：全部"
+            @change="handleFilterChange"
+          >
             <el-option label="未知" value="Unknown" />
             <el-option label="推断" value="Inferred" />
             <el-option label="已确认" value="Confirmed" />
           </el-select>
-          <el-button v-if="hasFilters" text type="primary" @click="clearFilters">清除筛选</el-button>
+          <el-button v-if="hasFilters" text type="primary" @click="clearFilters"
+            >清除筛选</el-button
+          >
         </section>
 
         <LoadingState v-if="loading && !data" message="正在读取数据库对象…" />
@@ -310,48 +387,90 @@ onMounted(() => {
           >
             <el-table-column prop="objectName" label="对象名称" min-width="156" sortable="custom">
               <template #default="scope">
-                <button class="technical-text skh-table-link" type="button" @click.stop="openObject(scope.row)">{{ scope.row.schema }}.{{ scope.row.objectName }}</button>
-                <small v-if="scope.row.matchedColumn" class="database-objects-table__matched">字段命中：{{ scope.row.matchedColumn.columnName }}</small>
+                <button
+                  class="technical-text skh-table-link"
+                  type="button"
+                  @click.stop="openObject(scope.row)"
+                >
+                  {{ scope.row.schema }}.{{ scope.row.objectName }}
+                </button>
+                <small v-if="scope.row.matchedColumn" class="database-objects-table__matched"
+                  >字段命中：{{ scope.row.matchedColumn.columnName }}</small
+                >
               </template>
             </el-table-column>
             <el-table-column prop="schema" label="架构（Schema）" width="110" sortable="custom">
-              <template #default="scope"><span class="technical-text">{{ scope.row.schema }}</span></template>
+              <template #default="scope"
+                ><span class="technical-text">{{ scope.row.schema }}</span></template
+              >
             </el-table-column>
             <el-table-column label="数据库来源" min-width="132">
-              <template #default="scope"><span>{{ scope.row.databaseSource.name }}</span></template>
+              <template #default="scope"
+                ><span>{{ scope.row.databaseSource.name }}</span></template
+              >
             </el-table-column>
             <el-table-column prop="objectType" label="类型" width="76">
               <template #default="scope">{{ objectTypeLabel(scope.row.objectType) }}</template>
             </el-table-column>
-            <el-table-column prop="businessDescription" label="业务说明" min-width="190" show-overflow-tooltip>
-              <template #default="scope"><span :class="{ 'text-muted': !scope.row.businessDescription }">{{ scope.row.businessDescription ?? '尚未记录' }}</span></template>
+            <el-table-column
+              prop="businessDescription"
+              label="业务说明"
+              min-width="190"
+              show-overflow-tooltip
+            >
+              <template #default="scope"
+                ><span :class="{ 'text-muted': !scope.row.businessDescription }">{{
+                  scope.row.businessDescription ?? '尚未记录'
+                }}</span></template
+              >
             </el-table-column>
-            <el-table-column prop="estimatedRows" label="估算行数" width="92" align="right" sortable="custom">
+            <el-table-column
+              prop="estimatedRows"
+              label="估算行数"
+              width="92"
+              align="right"
+              sortable="custom"
+            >
               <template #default="scope">{{ formatRows(scope.row.estimatedRows) }}</template>
             </el-table-column>
             <el-table-column label="读写方式" width="88">
               <template #default="scope">{{ accessModeLabel(scope.row.accessMode) }}</template>
             </el-table-column>
-            <el-table-column prop="relatedFunctionCount" label="关联功能" width="82" align="center" />
-            <el-table-column prop="unknownCount" label="待确认" width="72" align="center" sortable="custom" />
+            <el-table-column
+              prop="relatedFunctionCount"
+              label="关联功能"
+              width="82"
+              align="center"
+            />
+            <el-table-column
+              prop="unknownCount"
+              label="待确认"
+              width="72"
+              align="center"
+              sortable="custom"
+            />
             <el-table-column prop="knowledgeStatus" label="知识状态" width="94" sortable="custom">
-              <template #default="scope"><KnowledgeStatusBadge :status="scope.row.knowledgeStatus" /></template>
+              <template #default="scope"
+                ><KnowledgeStatusBadge :status="scope.row.knowledgeStatus"
+              /></template>
             </el-table-column>
             <el-table-column width="34" align="right">
-              <template #default><el-icon class="database-objects-table__next" title="查看对象详情"><ArrowRight /></el-icon></template>
+              <template #default
+                ><el-icon class="database-objects-table__next" title="查看对象详情"
+                  ><ArrowRight /></el-icon
+              ></template>
             </el-table-column>
           </el-table>
-          <footer v-if="data && data.total > 0" class="database-objects-pagination skh-pagination skh-pagination--split">
-            <span>{{ (data.page - 1) * data.pageSize + 1 }}–{{ Math.min(data.page * data.pageSize, data.total) }} / {{ data.total }}</span>
-            <el-pagination
-              background
-              layout="prev, pager, next"
-              :current-page="data.page"
-              :page-size="data.pageSize"
-              :total="data.total"
-              @current-change="handlePageChange"
-            />
-          </footer>
+          <SkhPagination
+            v-if="data"
+            class="database-objects-pagination skh-pagination--split"
+            :total="data.total"
+            :current-page="data.page"
+            :page-size="data.pageSize"
+            aria-label="数据库对象列表分页"
+            @current-change="handlePageChange"
+            @size-change="handlePageSizeChange"
+          />
           <p v-if="error && data" class="database-objects-inline-error">刷新失败：{{ error }}</p>
         </section>
       </section>

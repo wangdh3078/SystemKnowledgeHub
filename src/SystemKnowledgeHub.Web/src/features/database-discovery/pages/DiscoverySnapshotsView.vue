@@ -7,6 +7,7 @@ import { useActorStore } from '../../../app/stores/actor'
 import EmptyState from '../../../components/feedback/EmptyState.vue'
 import ErrorState from '../../../components/feedback/ErrorState.vue'
 import LoadingState from '../../../components/feedback/LoadingState.vue'
+import SkhPagination from '../../../components/data-display/SkhPagination.vue'
 import { getRunFilterOptions, listSnapshots } from '../api/databaseDiscoveryApi'
 import type { RunFilterOptions, SnapshotHistoryItem } from '../api/databaseDiscoveryContracts'
 import DiscoverySectionNav from '../components/DiscoverySectionNav.vue'
@@ -205,18 +206,15 @@ onBeforeUnmount(() => {
           </template>
         </el-table-column>
       </el-table>
-      <footer v-if="total > 0" class="discovery-pagination skh-pagination">
-        <el-pagination
-          v-model:current-page="page"
-          v-model:page-size="pageSize"
-          :total="total"
-          :page-sizes="[20, 50, 100]"
-          background
-          layout="total, sizes, prev, pager, next, jumper"
-          @current-change="load"
-          @size-change="handlePageSizeChange"
-        />
-      </footer>
+      <SkhPagination
+        v-model:current-page="page"
+        v-model:page-size="pageSize"
+        class="discovery-pagination"
+        :total="total"
+        aria-label="发现快照分页"
+        @current-change="load"
+        @size-change="handlePageSizeChange"
+      />
       <p v-if="error" class="discovery-inline-error" role="alert">刷新失败：{{ error }}</p>
     </section>
   </main>

@@ -4,6 +4,7 @@ import { Plus, Search } from '@element-plus/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
 import { parseSafeApiId } from '../../../api/contracts/id'
 import KnowledgeStatusBadge from '../../../components/data-display/KnowledgeStatusBadge.vue'
+import SkhPagination from '../../../components/data-display/SkhPagination.vue'
 import EmptyState from '../../../components/feedback/EmptyState.vue'
 import ErrorState from '../../../components/feedback/ErrorState.vue'
 import LoadingState from '../../../components/feedback/LoadingState.vue'
@@ -35,6 +36,7 @@ const {
   hasUnknownItems,
   sort,
   page,
+  pageSize,
   loading,
   error,
   data,
@@ -58,14 +60,16 @@ const rewriteStatusOptions: readonly { readonly value: RewriteStatus; readonly l
   { value: 'Remove', label: rewriteStatusLabels.Remove },
   { value: 'Unknown', label: rewriteStatusLabels.Unknown },
 ]
-const hasFilters = computed(() => Boolean(
-  keyword.value
-  || systemId.value
-  || functionType.value
-  || rewriteStatus.value
-  || knowledgeStatus.value
-  || hasUnknownItems.value !== undefined,
-))
+const hasFilters = computed(() =>
+  Boolean(
+    keyword.value ||
+    systemId.value ||
+    functionType.value ||
+    rewriteStatus.value ||
+    knowledgeStatus.value ||
+    hasUnknownItems.value !== undefined,
+  ),
+)
 let keywordTimer: ReturnType<typeof setTimeout> | null = null
 
 watch(keyword, () => {
@@ -73,13 +77,23 @@ watch(keyword, () => {
   keywordTimer = setTimeout(resetPageAndLoad, 280)
 })
 
-function handleSortChange(change: { prop: string; order: 'ascending' | 'descending' | null }): void {
+function handleSortChange(change: {
+  prop: string
+  order: 'ascending' | 'descending' | null
+}): void {
   const ascending = change.order === 'ascending'
-  const nextSort: BusinessFunctionsSort = change.prop === 'name'
-    ? ascending ? 'name:asc' : 'name:desc'
-    : change.prop === 'knowledgeStatus'
-      ? ascending ? 'knowledgeStatus:asc' : 'knowledgeStatus:desc'
-      : ascending ? 'updatedAt:asc' : 'updatedAt:desc'
+  const nextSort: BusinessFunctionsSort =
+    change.prop === 'name'
+      ? ascending
+        ? 'name:asc'
+        : 'name:desc'
+      : change.prop === 'knowledgeStatus'
+        ? ascending
+          ? 'knowledgeStatus:asc'
+          : 'knowledgeStatus:desc'
+        : ascending
+          ? 'updatedAt:asc'
+          : 'updatedAt:desc'
   sort.value = nextSort
   resetPageAndLoad()
 }
@@ -99,6 +113,11 @@ function handleRowClick(row: BusinessFunctionSummary): void {
 function handlePageChange(nextPage: number): void {
   page.value = nextPage
   void load()
+}
+
+function handlePageSizeChange(nextPageSize: number): void {
+  pageSize.value = nextPageSize
+  resetPageAndLoad()
 }
 
 function openCreate(): void {
@@ -129,27 +148,81 @@ onMounted(() => {
       </div>
       <div class="business-functions-page__header-actions skh-page-header__actions">
         <span v-if="data">共 {{ data.total }} 个业务功能</span>
-        <el-button v-if="actorStore.canEdit" class="skh-page-primary-action" type="primary" :icon="Plus" @click="openCreate">新增业务功能</el-button>
+        <el-button
+          v-if="actorStore.canEdit"
+          class="skh-page-primary-action"
+          type="primary"
+          :icon="Plus"
+          @click="openCreate"
+          >新增业务功能</el-button
+        >
       </div>
     </header>
 
     <section class="business-functions-filter skh-filter-bar" aria-label="业务功能筛选">
-      <el-input v-model="keyword" clearable :prefix-icon="Search" placeholder="搜索功能名称或用途" aria-label="搜索业务功能" />
-      <el-select v-model="systemId" placeholder="系统：全部" clearable filterable @change="resetPageAndLoad">
-        <el-option v-for="system in systemOptions" :key="system.id" :label="system.name" :value="system.id" />
+      <el-input
+        v-model="keyword"
+        clearable
+        :prefix-icon="Search"
+        placeholder="搜索功能名称或用途"
+        aria-label="搜索业务功能"
+      />
+      <el-select
+        v-model="systemId"
+        placeholder="系统：全部"
+        clearable
+        filterable
+        @change="resetPageAndLoad"
+      >
+        <el-option
+          v-for="system in systemOptions"
+          :key="system.id"
+          :label="system.name"
+          :value="system.id"
+        />
       </el-select>
-      <el-select v-model="functionType" placeholder="功能类型：全部" clearable @change="resetPageAndLoad">
-        <el-option v-for="item in functionTypeOptions" :key="item.value" :label="item.label" :value="item.value" />
+      <el-select
+        v-model="functionType"
+        placeholder="功能类型：全部"
+        clearable
+        @change="resetPageAndLoad"
+      >
+        <el-option
+          v-for="item in functionTypeOptions"
+          :key="item.value"
+          :label="item.label"
+          :value="item.value"
+        />
       </el-select>
-      <el-select v-model="rewriteStatus" placeholder="改写状态：全部" clearable @change="resetPageAndLoad">
-        <el-option v-for="item in rewriteStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
+      <el-select
+        v-model="rewriteStatus"
+        placeholder="改写状态：全部"
+        clearable
+        @change="resetPageAndLoad"
+      >
+        <el-option
+          v-for="item in rewriteStatusOptions"
+          :key="item.value"
+          :label="item.label"
+          :value="item.value"
+        />
       </el-select>
-      <el-select v-model="knowledgeStatus" placeholder="知识状态：全部" clearable @change="resetPageAndLoad">
+      <el-select
+        v-model="knowledgeStatus"
+        placeholder="知识状态：全部"
+        clearable
+        @change="resetPageAndLoad"
+      >
         <el-option label="未知" value="Unknown" />
         <el-option label="推断" value="Inferred" />
         <el-option label="已确认" value="Confirmed" />
       </el-select>
-      <el-select v-model="hasUnknownItems" placeholder="待确认事项：全部" clearable @change="resetPageAndLoad">
+      <el-select
+        v-model="hasUnknownItems"
+        placeholder="待确认事项：全部"
+        clearable
+        @change="resetPageAndLoad"
+      >
         <el-option label="有待确认事项" :value="true" />
         <el-option label="无待确认事项" :value="false" />
       </el-select>
@@ -157,7 +230,12 @@ onMounted(() => {
     </section>
 
     <LoadingState v-if="loading && !data" message="正在读取业务功能列表…" />
-    <ErrorState v-else-if="error && !data" title="业务功能列表加载失败" :message="error" @retry="load" />
+    <ErrorState
+      v-else-if="error && !data"
+      title="业务功能列表加载失败"
+      :message="error"
+      @retry="load"
+    />
     <section v-else class="business-functions-table-section skh-table-section" :aria-busy="loading">
       <EmptyState
         v-if="data && data.items.length === 0"
@@ -173,23 +251,66 @@ onMounted(() => {
         @sort-change="handleSortChange"
       >
         <el-table-column prop="name" label="功能名称" min-width="185" sortable="custom">
-          <template #default="scope"><button class="technical-text function-name skh-table-link" type="button" @click.stop="openDetail(scope.row.id)">{{ scope.row.name }}</button></template>
+          <template #default="scope"
+            ><button
+              class="technical-text function-name skh-table-link"
+              type="button"
+              @click.stop="openDetail(scope.row.id)"
+            >
+              {{ scope.row.name }}
+            </button></template
+          >
         </el-table-column>
-        <el-table-column label="系统" width="88"><template #default="scope"><strong class="technical-text">{{ scope.row.system.name }}</strong></template></el-table-column>
-        <el-table-column prop="functionType" label="类型" width="108"><template #default="scope">{{ functionTypeLabels[scope.row.functionType] ?? scope.row.functionType }}</template></el-table-column>
-        <el-table-column prop="purpose" label="用途" min-width="230" show-overflow-tooltip><template #default="scope"><span :class="{ 'text-muted': !scope.row.purpose }">{{ scope.row.purpose ?? '尚未记录' }}</span></template></el-table-column>
+        <el-table-column label="系统" width="88"
+          ><template #default="scope"
+            ><strong class="technical-text">{{ scope.row.system.name }}</strong></template
+          ></el-table-column
+        >
+        <el-table-column prop="functionType" label="类型" width="108"
+          ><template #default="scope">{{
+            functionTypeLabels[scope.row.functionType] ?? scope.row.functionType
+          }}</template></el-table-column
+        >
+        <el-table-column prop="purpose" label="用途" min-width="230" show-overflow-tooltip
+          ><template #default="scope"
+            ><span :class="{ 'text-muted': !scope.row.purpose }">{{
+              scope.row.purpose ?? '尚未记录'
+            }}</span></template
+          ></el-table-column
+        >
         <el-table-column prop="relatedDataCount" label="关联数据" width="78" align="center" />
         <el-table-column prop="ruleCount" label="业务规则" width="78" align="center" />
         <el-table-column prop="unknownCount" label="待确认事项" width="90" align="center" />
-        <el-table-column prop="rewriteStatus" label="改写状态" width="88"><template #default="scope"><span class="rewrite-status" :class="`rewrite-status--${scope.row.rewriteStatus.toLowerCase()}`">{{ formatRewriteStatus(scope.row.rewriteStatus) }}</span></template></el-table-column>
-        <el-table-column prop="knowledgeStatus" label="知识状态" width="92" sortable="custom"><template #default="scope"><KnowledgeStatusBadge :status="scope.row.knowledgeStatus" /></template></el-table-column>
-        <el-table-column prop="updatedAt" label="更新于" width="156" sortable="custom"><template #default="scope">{{ formatDateTime(scope.row.updatedAt) }}</template></el-table-column>
+        <el-table-column prop="rewriteStatus" label="改写状态" width="88"
+          ><template #default="scope"
+            ><span
+              class="rewrite-status"
+              :class="`rewrite-status--${scope.row.rewriteStatus.toLowerCase()}`"
+              >{{ formatRewriteStatus(scope.row.rewriteStatus) }}</span
+            ></template
+          ></el-table-column
+        >
+        <el-table-column prop="knowledgeStatus" label="知识状态" width="92" sortable="custom"
+          ><template #default="scope"
+            ><KnowledgeStatusBadge :status="scope.row.knowledgeStatus" /></template
+        ></el-table-column>
+        <el-table-column prop="updatedAt" label="更新于" width="156" sortable="custom"
+          ><template #default="scope">{{
+            formatDateTime(scope.row.updatedAt)
+          }}</template></el-table-column
+        >
       </el-table>
 
-      <footer v-if="data && data.total > 0" class="business-functions-pagination skh-pagination">
-        <span>{{ (data.page - 1) * data.pageSize + 1 }}–{{ Math.min(data.page * data.pageSize, data.total) }} / {{ data.total }}</span>
-        <el-pagination background layout="prev, pager, next" :current-page="data.page" :page-size="data.pageSize" :total="data.total" @current-change="handlePageChange" />
-      </footer>
+      <SkhPagination
+        v-if="data"
+        class="business-functions-pagination"
+        :total="data.total"
+        :current-page="data.page"
+        :page-size="data.pageSize"
+        aria-label="业务功能列表分页"
+        @current-change="handlePageChange"
+        @size-change="handlePageSizeChange"
+      />
       <p v-if="error && data" class="business-functions-inline-error">刷新失败：{{ error }}</p>
     </section>
 

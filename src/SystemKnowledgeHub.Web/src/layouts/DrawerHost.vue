@@ -18,6 +18,7 @@ const hasTeleportedFeature = computed(() =>
     'attachment-administration',
     'database-discovery-snapshot-object',
     'database-discovery-difference-entry',
+    'database-discovery-sync-plan',
   ].includes(overlayStore.currentDrawer?.kind ?? ''),
 )
 const largeDrawerKinds = new Set([
@@ -31,6 +32,7 @@ const largeDrawerKinds = new Set([
   'edit-database-object',
   'database-discovery-snapshot-object',
   'database-discovery-difference-entry',
+  'database-discovery-sync-plan',
 ])
 const drawerSize = computed(() =>
   largeDrawerKinds.has(overlayStore.currentDrawer?.kind ?? '')

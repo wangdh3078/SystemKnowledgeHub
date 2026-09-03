@@ -16,9 +16,16 @@ public sealed class DatabaseKnowledgeService(
     KnowledgeHubDbContext dbContext,
     ConcurrencyTokenCodec concurrencyTokenCodec)
 {
+    private const long MaximumJavaScriptSafeInteger = 9_007_199_254_740_991;
+
     private static readonly string[] SensitiveMarkers =
     [
-        "password", "pwd=", "secret", "api key", "apikey", "token=",
+        "password",
+        "pwd=",
+        "secret",
+        "api key",
+        "apikey",
+        "token=",
     ];
 
     public async Task<CreateDatabaseSourceResult> CreateDatabaseSource(
@@ -281,6 +288,10 @@ public sealed class DatabaseKnowledgeService(
         var errors = new Dictionary<string, string[]>();
         var businessKeyColumns = NormalizeIdentifiers(request.BusinessKeyColumns, "businessKeyColumns", errors);
         if (!ApiIdParser.IsSafePositive(request.DatabaseObjectId)) errors["id"] = ["数据库对象必须是有效 ID。"];
+        if (request.EstimatedRows is < 0 or > MaximumJavaScriptSafeInteger)
+        {
+            errors["estimatedRows"] = ["估算行数必须为空或 0 至 9007199254740991 之间的整数。"];
+        }
         if (!Enum.TryParse<DatabaseAccessMode>(request.AccessMode, false, out var accessMode) || accessMode.ToString() != request.AccessMode)
         {
             errors["accessMode"] = ["读写方式值无效。"];
@@ -308,6 +319,7 @@ public sealed class DatabaseKnowledgeService(
         }
 
         databaseObject.BusinessDescription = NormalizeOptional(request.BusinessDescription);
+        databaseObject.EstimatedRows = request.EstimatedRows;
         databaseObject.AccessMode = accessMode;
         databaseObject.BusinessKeyColumnsJson = businessKeyColumns.Length == 0 ? null : JsonSerializer.Serialize(businessKeyColumns);
         databaseObject.UpdatedAt = DateTimeOffset.UtcNow;
@@ -319,6 +331,7 @@ public sealed class DatabaseKnowledgeService(
             new DatabaseObjectKnowledgeResponse(
                 databaseObject.Id,
                 databaseObject.BusinessDescription,
+                databaseObject.EstimatedRows,
                 databaseObject.AccessMode.ToString(),
                 businessKeyColumns,
                 databaseObject.KnowledgeStatus.ToString(),

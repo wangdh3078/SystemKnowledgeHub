@@ -26,16 +26,26 @@ import attachmentDetailSource from '../features/attachment-administration/compon
 import unknownItemDetailSource from '../features/unknown-items/pages/UnknownItemDetailView.vue?raw'
 import appSidebarSource from '../layouts/AppSidebar.vue?raw'
 
-const uiFoundationSource = readFileSync(resolve(process.cwd(), 'src/styles/ui-foundation.css'), 'utf8')
-const unknownItemsStylesSource = readFileSync(resolve(process.cwd(), 'src/features/unknown-items/unknown-items.css'), 'utf8')
-const databaseKnowledgeStylesSource = readFileSync(resolve(process.cwd(), 'src/features/database-knowledge/database-knowledge.css'), 'utf8')
+const uiFoundationSource = readFileSync(
+  resolve(process.cwd(), 'src/styles/ui-foundation.css'),
+  'utf8',
+)
+const unknownItemsStylesSource = readFileSync(
+  resolve(process.cwd(), 'src/features/unknown-items/unknown-items.css'),
+  'utf8',
+)
+const databaseKnowledgeStylesSource = readFileSync(
+  resolve(process.cwd(), 'src/features/database-knowledge/database-knowledge.css'),
+  'utf8',
+)
 
 function readFeatureStyles(directory: string): Readonly<Record<string, string>> {
   const styles: Record<string, string> = {}
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
     const path = join(directory, entry.name)
     if (entry.isDirectory()) Object.assign(styles, readFeatureStyles(path))
-    else if (entry.isFile() && entry.name.endsWith('.css')) styles[path] = readFileSync(path, 'utf8')
+    else if (entry.isFile() && entry.name.endsWith('.css'))
+      styles[path] = readFileSync(path, 'utf8')
   }
   return styles
 }
@@ -43,8 +53,9 @@ function readFeatureStyles(directory: string): Readonly<Record<string, string>> 
 const featureStyles = readFeatureStyles(resolve(process.cwd(), 'src/features'))
 
 function primaryActionOpening(source: string, label: string): string {
-  const match = source.match(new RegExp(`<el-button[^>]*skh-page-primary-action[^>]*>${label}`))
-    ?? source.match(new RegExp(`<el-button[^>]*skh-page-primary-action[^>]*>[\\s\\S]{0,80}${label}`))
+  const match =
+    source.match(new RegExp(`<el-button[^>]*skh-page-primary-action[^>]*>${label}`)) ??
+    source.match(new RegExp(`<el-button[^>]*skh-page-primary-action[^>]*>[\\s\\S]{0,80}${label}`))
   expect(match, `${label} should use the shared page action`).not.toBeNull()
   return match?.[0] ?? ''
 }
@@ -74,8 +85,12 @@ describe('shared UI consistency contracts', () => {
   })
 
   it('defines an exact shared computed-style contract without feature overrides', () => {
-    expect(uiFoundationSource).toMatch(/\.el-button\.skh-page-primary-action\s*\{[^}]*height:\s*36px;[^}]*padding:\s*0 16px;[^}]*font-size:\s*13px;[^}]*font-weight:\s*650;/su)
-    expect(uiFoundationSource).toMatch(/\.el-button\.skh-section-action\s*\{[^}]*height:\s*32px;[^}]*padding:\s*0 12px;[^}]*font-size:\s*12px;[^}]*font-weight:\s*620;/su)
+    expect(uiFoundationSource).toMatch(
+      /\.el-button\.skh-page-primary-action\s*\{[^}]*height:\s*36px;[^}]*padding:\s*0 16px;[^}]*font-size:\s*13px;[^}]*font-weight:\s*650;/su,
+    )
+    expect(uiFoundationSource).toMatch(
+      /\.el-button\.skh-section-action\s*\{[^}]*height:\s*32px;[^}]*padding:\s*0 12px;[^}]*font-size:\s*12px;[^}]*font-weight:\s*620;/su,
+    )
     expect(uiFoundationSource).toContain("[class*='el-icon'] + span")
     expect(uiFoundationSource).toContain('margin-left: 6px;')
     expect(uiFoundationSource).toContain('--el-button-disabled-bg-color: #a9a6ed;')
@@ -90,15 +105,25 @@ describe('shared UI consistency contracts', () => {
   it('keeps descriptive text selectors from recoloring action labels and icons', () => {
     expect(unknownItemsStylesSource).toContain('.unknown-list-header>div>span')
     expect(unknownItemsStylesSource).not.toContain('.unknown-list-header span')
-    expect(databaseKnowledgeStylesSource).toContain('.database-object-evidence-section__heading > div:first-child > span')
-    expect(databaseKnowledgeStylesSource).not.toMatch(/\.database-object-evidence-section__heading\s+span/u)
+    expect(databaseKnowledgeStylesSource).toContain(
+      '.database-object-evidence-section__heading > div:first-child > span',
+    )
+    expect(databaseKnowledgeStylesSource).not.toMatch(
+      /\.database-object-evidence-section__heading\s+span/u,
+    )
 
     expect(uiFoundationSource).toContain('.el-button.skh-page-primary-action > span')
     expect(uiFoundationSource).toContain('.el-button.skh-evidence-action > span')
     expect(uiFoundationSource).toContain('.el-button.skh-human-confirmation-action > span')
-    expect(uiFoundationSource).toMatch(/\.el-button\.skh-page-primary-action\s*\{[^}]*background-color:\s*var\(--color-primary\);[^}]*color:\s*#ffffff;/su)
-    expect(uiFoundationSource).toMatch(/\.el-button\.skh-evidence-action\s*\{[^}]*background-color:\s*var\(--color-primary\);[^}]*color:\s*#ffffff;/su)
-    expect(uiFoundationSource).toMatch(/\.el-button\.skh-human-confirmation-action\s*\{[^}]*background-color:\s*var\(--color-surface\);[^}]*color:\s*var\(--color-primary\);/su)
+    expect(uiFoundationSource).toMatch(
+      /\.el-button\.skh-page-primary-action\s*\{[^}]*background-color:\s*var\(--color-primary\);[^}]*color:\s*#ffffff;/su,
+    )
+    expect(uiFoundationSource).toMatch(
+      /\.el-button\.skh-evidence-action\s*\{[^}]*background-color:\s*var\(--color-primary\);[^}]*color:\s*#ffffff;/su,
+    )
+    expect(uiFoundationSource).toMatch(
+      /\.el-button\.skh-human-confirmation-action\s*\{[^}]*background-color:\s*var\(--color-surface\);[^}]*color:\s*var\(--color-primary\);/su,
+    )
   })
 
   it('keeps Evidence primary and HumanConfirmation outline contracts consistent', () => {
@@ -115,7 +140,7 @@ describe('shared UI consistency contracts', () => {
     expect(knowledgeDocumentDetailSource).toContain('skh-human-confirmation-action')
     expect(statusProgressionSource).toContain('skh-human-confirmation-action')
     expect(columnDetailSource).toContain('skh-section-action skh-evidence-action')
-    expect(columnDetailSource).toContain('>添加证据</el-button>')
+    expect(columnDetailSource).toContain('>添加证据</el-button')
 
     for (const source of [databaseObjectDetailSource, knowledgeDocumentDetailSource]) {
       expect(source.indexOf('skh-evidence-action')).toBeLessThan(
@@ -123,8 +148,12 @@ describe('shared UI consistency contracts', () => {
       )
     }
 
-    expect(uiFoundationSource).toMatch(/\.el-button\.skh-page-primary-action:focus-visible,[^{]*\.el-button\.skh-evidence-action:focus-visible\s*\{[^}]*background:\s*var\(--color-primary-hover\);[^}]*color:\s*#ffffff;/su)
-    expect(uiFoundationSource).toMatch(/\.el-button\.skh-human-confirmation-action:focus-visible\s*\{[^}]*background:\s*var\(--color-primary-soft\);[^}]*color:\s*var\(--color-primary-hover\);/su)
+    expect(uiFoundationSource).toMatch(
+      /\.el-button\.skh-page-primary-action:focus-visible,[^{]*\.el-button\.skh-evidence-action:focus-visible\s*\{[^}]*background:\s*var\(--color-primary-hover\);[^}]*color:\s*#ffffff;/su,
+    )
+    expect(uiFoundationSource).toMatch(
+      /\.el-button\.skh-human-confirmation-action:focus-visible\s*\{[^}]*background:\s*var\(--color-primary-soft\);[^}]*color:\s*var\(--color-primary-hover\);/su,
+    )
   })
 
   it('keeps primary user-facing labels in Simplified Chinese while preserving technical keywords', () => {
@@ -173,7 +202,9 @@ describe('shared UI consistency contracts', () => {
       slots: { default: '删除' },
     })
 
-    expect(primaryDisabled.classes()).toEqual(expect.arrayContaining(['el-button--primary', 'is-disabled']))
+    expect(primaryDisabled.classes()).toEqual(
+      expect.arrayContaining(['el-button--primary', 'is-disabled']),
+    )
     expect(secondary.classes()).toContain('is-plain')
     expect(danger.classes()).toEqual(expect.arrayContaining(['el-button--danger', 'is-plain']))
   })
