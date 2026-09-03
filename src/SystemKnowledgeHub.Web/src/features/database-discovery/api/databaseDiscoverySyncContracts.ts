@@ -127,6 +127,10 @@ export interface SyncPreviewAction {
   readonly before: SyncStructure | null
   readonly after: SyncStructure | null
   readonly summary: string
+  readonly objectSchemaName: string | null
+  readonly objectName: string | null
+  readonly objectType: string | null
+  readonly objectDatabaseComment: string | null
 }
 export interface SyncPreview {
   readonly planId: number
@@ -184,6 +188,8 @@ const str = (value: unknown, field: string): string => {
 }
 const nullableStr = (value: unknown, field: string): string | null =>
   value === null ? null : str(value, field)
+const optionalNullableStr = (value: unknown, field: string): string | null =>
+  value === undefined || value === null ? null : str(value, field)
 const bool = (value: unknown, field: string): boolean => {
   if (typeof value !== 'boolean') throw new Error(`${field} must be a boolean`)
   return value
@@ -320,6 +326,13 @@ const preview = (value: unknown, field: string): SyncPreview | null => {
         before: structure(a.before, 'before'),
         after: structure(a.after, 'after'),
         summary: str(a.summary, 'summary'),
+        objectSchemaName: optionalNullableStr(a.objectSchemaName, 'objectSchemaName'),
+        objectName: optionalNullableStr(a.objectName, 'objectName'),
+        objectType: optionalNullableStr(a.objectType, 'objectType'),
+        objectDatabaseComment: optionalNullableStr(
+          a.objectDatabaseComment,
+          'objectDatabaseComment',
+        ),
       }
     }),
     warnings: strings(r.warnings, `${field}.warnings`),

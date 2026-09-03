@@ -32,7 +32,7 @@ import type {
   SyncSelection,
 } from '../api/databaseDiscoverySyncContracts'
 import DiscoverySectionNav from '../components/DiscoverySectionNav.vue'
-import SyncPlanDrawer from '../components/SyncPlanDrawer.vue'
+import SyncPlanDialog from '../components/SyncPlanDialog.vue'
 import {
   reconciliationReason,
   reconciliationStatusHelp,
@@ -85,8 +85,8 @@ const selectedObjectCount = computed(
   () => selected.value.filter((item) => objectActionTypes.has(item.actionType)).length,
 )
 const selectedColumnCount = computed(() => selected.value.length - selectedObjectCount.value)
-const syncPlanDrawerOpen = computed(
-  () => overlayStore.currentDrawer?.kind === 'database-discovery-sync-plan',
+const syncPlanDialogOpen = computed(
+  () => overlayStore.currentDialog?.kind === 'database-discovery-sync-plan',
 )
 
 const selectionKey = (selection: SyncSelection): string =>
@@ -368,7 +368,7 @@ async function createAndPreview(): Promise<void> {
     plan = await previewSyncPlan(plan)
     activePlan.value = plan
     confirmationChecked.value = false
-    overlayStore.openDrawer({ kind: 'database-discovery-sync-plan', id: plan.id, mode: 'edit' })
+    overlayStore.openDialog({ kind: 'database-discovery-sync-plan', id: plan.id, mode: 'edit' })
     plansPage.value = 1
     await loadPlanHistory()
     ElMessage.success('同步计划预览已生成，请核对后显式确认。')
@@ -422,14 +422,14 @@ async function applyPlan(): Promise<void> {
 function openPlan(plan: SyncPlan): void {
   activePlan.value = plan
   confirmationChecked.value = false
-  overlayStore.openDrawer({
+  overlayStore.openDialog({
     kind: 'database-discovery-sync-plan',
     id: plan.id,
     mode: actorStore.canEdit ? 'edit' : 'read',
   })
 }
-function closePlanDrawer(): void {
-  overlayStore.closeDrawer()
+function closePlanDialog(): void {
+  overlayStore.closeDialog()
 }
 
 async function loadPlanHistory(): Promise<void> {
@@ -469,7 +469,7 @@ onMounted(initialize)
 onBeforeUnmount(() => {
   controller.abort()
   plansController.abort()
-  if (syncPlanDrawerOpen.value) overlayStore.closeDrawer()
+  if (syncPlanDialogOpen.value) overlayStore.closeDialog()
 })
 </script>
 
@@ -796,13 +796,13 @@ onBeforeUnmount(() => {
         @size-change="plansPageSizeChanged"
       />
     </section>
-    <Teleport v-if="syncPlanDrawerOpen && activePlan" defer to="#drawer-feature-content">
-      <SyncPlanDrawer
+    <Teleport v-if="syncPlanDialogOpen && activePlan" defer to="#dialog-feature-content">
+      <SyncPlanDialog
         v-model:confirmation-checked="confirmationChecked"
         :plan="activePlan"
         :can-edit="actorStore.canEdit"
         :mutating="mutating"
-        @close="closePlanDrawer"
+        @close="closePlanDialog"
         @confirm="confirmPlan"
         @apply="applyPlan"
       />

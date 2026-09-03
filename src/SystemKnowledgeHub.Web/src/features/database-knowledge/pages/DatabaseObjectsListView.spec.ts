@@ -39,13 +39,15 @@ const currentUser: CurrentUserProfile = {
 const data: DatabaseObjectsListResponse = {
   browseContext: {
     system: { id: 12, name: 'MES' },
-    databaseSources: [{
-      id: 9,
-      name: 'MES Oracle',
-      engine: 'Oracle',
-      concurrencyToken: 'source-token',
-      canDelete: true,
-    }],
+    databaseSources: [
+      {
+        id: 9,
+        name: 'MES Oracle',
+        engine: 'Oracle',
+        concurrencyToken: 'source-token',
+        canDelete: true,
+      },
+    ],
     schemas: ['MES'],
   },
   items: [],
@@ -70,7 +72,7 @@ const stubs = {
   LoadingState: { template: '<div />' },
 }
 
-function mockList(): void {
+function mockList(listData: DatabaseObjectsListResponse = data): void {
   vi.mocked(useDatabaseObjectsList).mockReturnValue({
     systemId: ref<number | undefined>(),
     databaseSourceId: ref<number | undefined>(),
@@ -83,7 +85,7 @@ function mockList(): void {
     pageSize: ref(20),
     loading: ref(false),
     error: ref<string | null>(null),
-    data: ref(data),
+    data: ref(listData),
     load: vi.fn().mockResolvedValue(undefined),
     resetPageAndLoad: vi.fn(),
     clearFilters: vi.fn(),
@@ -121,9 +123,21 @@ describe('DatabaseObjectsListView write-action visibility', () => {
     expect(wrapper.find('button[aria-label="删除数据库源"]').exists()).toBe(false)
   })
 
-  it.each<AccessLevel>(['Editor', 'Administrator'])('shows the create entry to %s', async (accessLevel) => {
-    const wrapper = await mountFor(accessLevel)
+  it.each<AccessLevel>(['Editor', 'Administrator'])(
+    'shows the create entry to %s',
+    async (accessLevel) => {
+      const wrapper = await mountFor(accessLevel)
 
-    expect(wrapper.text()).toContain('新增数据库对象')
+      expect(wrapper.text()).toContain('新增数据库对象')
+    },
+  )
+
+  it('uses the shared pagination at the right-aligned object-list footer', async () => {
+    mockList({ ...data, total: 21 })
+    const wrapper = await mountFor('Viewer')
+
+    const pagination = wrapper.get('.database-objects-pagination')
+    expect(pagination.classes()).not.toContain('skh-pagination--split')
+    expect(pagination.attributes('aria-label')).toBe('数据库对象列表分页')
   })
 })

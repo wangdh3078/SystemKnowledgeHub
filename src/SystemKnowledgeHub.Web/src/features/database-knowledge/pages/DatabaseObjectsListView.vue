@@ -463,7 +463,7 @@ onMounted(() => {
           </el-table>
           <SkhPagination
             v-if="data"
-            class="database-objects-pagination skh-pagination--split"
+            class="database-objects-pagination"
             :total="data.total"
             :current-page="data.page"
             :page-size="data.pageSize"

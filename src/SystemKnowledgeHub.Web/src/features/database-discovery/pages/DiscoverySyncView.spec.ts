@@ -2,6 +2,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useActorStore } from '../../../app/stores/actor'
+import { useOverlayStore } from '../../../app/stores/overlays'
 import type { AccessLevel, CurrentUserProfile } from '../../users/api/userContracts'
 import type {
   ReconciliationCandidate,
@@ -273,6 +274,10 @@ const plan: SyncPlan = {
           defaultValue: null,
         },
         summary: '创建数据库对象',
+        objectSchemaName: 'APP',
+        objectName: 'CUSTOMERS',
+        objectType: 'Table',
+        objectDatabaseComment: null,
       },
     ],
   },
@@ -475,6 +480,8 @@ describe('DiscoverySyncView object-group reconciliation', () => {
     expect(actions).toHaveLength(4)
     expect(actions).toContainEqual(requiredParent)
     expect(actions).toContainEqual(selectionFor(columnActions[2]!))
+    expect(useOverlayStore().currentDialog?.kind).toBe('database-discovery-sync-plan')
+    expect(useOverlayStore().currentDrawer).toBeNull()
   })
 
   it('changes the parent to indeterminate after deselecting one child', async () => {
@@ -618,6 +625,8 @@ describe('DiscoverySyncView object-group reconciliation', () => {
         .findAll('button')
         .find((item) => item.text() === '查看计划')!
         .trigger('click')
+      expect(useOverlayStore().currentDialog?.kind).toBe('database-discovery-sync-plan')
+      expect(useOverlayStore().currentDrawer).toBeNull()
       expect(view.text()).toContain('预览校验值')
       expect(view.text()).toContain('确认当前预览')
       const confirmation = view

@@ -28,24 +28,27 @@ const hasFeatureDialog = computed(
     overlayStore.currentDialog?.kind === 'knowledge-role-management' ||
     overlayStore.currentDialog?.kind === 'restore-knowledge-document-revision' ||
     overlayStore.currentDialog?.kind === 'delete-root' ||
+    overlayStore.currentDialog?.kind === 'database-discovery-sync-plan' ||
     overlayStore.currentDialog?.kind === 'attachment-preview',
 )
 const dialogWidth = computed(() =>
   overlayStore.currentDialog?.kind === 'global-search'
     ? '980px'
-    : overlayStore.currentDialog?.kind === 'attachment-preview'
-      ? '92vw'
-      : overlayStore.currentDialog?.kind === 'change-knowledge-status'
-        ? '620px'
-        : overlayStore.currentDialog?.kind === 'database-discovery-connection-secret'
-          ? '460px'
-          : overlayStore.currentDialog?.kind === 'restore-knowledge-document-revision'
-            ? '680px'
-            : overlayStore.currentDialog?.kind === 'delete-root'
-              ? '520px'
-              : hasFeatureDialog.value
-                ? '780px'
-                : '460px',
+    : overlayStore.currentDialog?.kind === 'database-discovery-sync-plan'
+      ? 'min(1080px, 90vw)'
+      : overlayStore.currentDialog?.kind === 'attachment-preview'
+        ? '92vw'
+        : overlayStore.currentDialog?.kind === 'change-knowledge-status'
+          ? '620px'
+          : overlayStore.currentDialog?.kind === 'database-discovery-connection-secret'
+            ? '460px'
+            : overlayStore.currentDialog?.kind === 'restore-knowledge-document-revision'
+              ? '680px'
+              : overlayStore.currentDialog?.kind === 'delete-root'
+                ? '520px'
+                : hasFeatureDialog.value
+                  ? '780px'
+                  : '460px',
 )
 const dialogTitle = computed(() =>
   overlayStore.currentDialog?.kind === 'attachment-preview' ? '附件只读预览' : undefined,
@@ -88,6 +91,8 @@ function handleAutoFocus(): void {
         'knowledge-document-restore-host':
           overlayStore.currentDialog?.kind === 'restore-knowledge-document-revision',
         'attachment-preview-host': overlayStore.currentDialog?.kind === 'attachment-preview',
+        'database-discovery-sync-plan-host':
+          overlayStore.currentDialog?.kind === 'database-discovery-sync-plan',
       },
     ]"
     @opened="handleOpened"

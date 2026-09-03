@@ -174,7 +174,11 @@ public sealed record DatabaseDiscoverySyncPreviewActionResponse(
     long? ExpectedParentTargetVersion,
     DatabaseDiscoverySyncStructureResponse? Before,
     DatabaseDiscoverySyncStructureResponse? After,
-    string Summary);
+    string Summary,
+    string? ObjectSchemaName,
+    string? ObjectName,
+    string? ObjectType,
+    string? ObjectDatabaseComment);
 
 public sealed record DatabaseDiscoverySyncPreviewCounts(
     int CreateObjects,

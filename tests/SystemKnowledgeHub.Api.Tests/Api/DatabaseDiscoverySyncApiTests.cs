@@ -85,6 +85,16 @@ public sealed class DatabaseDiscoverySyncApiTests
         Assert.NotNull(previewed.Preview);
         Assert.Equal(2, previewed.Preview!.Counts.CreateObjects);
         Assert.Equal(4, previewed.Preview.Counts.CreateColumns);
+        Assert.All(previewed.Preview.Actions, action =>
+        {
+            Assert.False(string.IsNullOrWhiteSpace(action.ObjectSchemaName));
+            Assert.False(string.IsNullOrWhiteSpace(action.ObjectName));
+            Assert.False(string.IsNullOrWhiteSpace(action.ObjectType));
+        });
+        Assert.Contains(previewed.Preview.Actions, action =>
+            action.EntityKind == DatabaseDiscoveryEntityKind.Column
+            && action.ObjectSchemaName == "APP_OWNER"
+            && action.ObjectName == "CUSTOMERS");
         var samePreview = await Preview(editor, previewed);
         Assert.Equal(previewed.Preview.PreviewHash, samePreview.Preview!.PreviewHash);
         var confirmed = await Confirm(editor, samePreview);

@@ -1194,6 +1194,9 @@ public sealed class DatabaseDiscoverySyncService(
                 var targetId = selection.TargetId ?? binding?.DatabaseObjectId;
                 if (targetId is not null) objects.TryGetValue(targetId.Value, out target);
                 var schemaLogical = source?.SchemaLogicalIdentity ?? binding?.SchemaLogicalIdentity ?? string.Empty;
+                var objectStructure = source is null
+                    ? target is null ? null : ObjectStructure(target)
+                    : ObjectStructure(context, source);
                 previews.Add(new(
                     selection.ActionType,
                     DatabaseDiscoveryEntityKind.DatabaseObject,
@@ -1207,7 +1210,11 @@ public sealed class DatabaseDiscoverySyncService(
                     null,
                     target is null ? null : ObjectStructure(target),
                     source is null ? null : ObjectStructure(context, source),
-                    ActionSummary(selection.ActionType)));
+                    ActionSummary(selection.ActionType),
+                    objectStructure?.SchemaName,
+                    objectStructure?.Name,
+                    objectStructure?.ObjectType,
+                    objectStructure?.DatabaseComment));
                 continue;
             }
 
@@ -1217,6 +1224,8 @@ public sealed class DatabaseDiscoverySyncService(
             var columnTargetId = selection.TargetId ?? columnBinding?.DatabaseColumnId;
             if (columnTargetId is not null) columns.TryGetValue(columnTargetId.Value, out columnTarget);
             var parentLogical = columnSource?.ParentObjectLogicalIdentity ?? columnBinding?.ParentObjectLogicalIdentity;
+            CanonicalDatabaseObject? parentSource = null;
+            if (parentLogical is not null) snapshotObjects.TryGetValue(parentLogical, out parentSource);
             DatabaseObjectDiscoveryBinding? parentBinding = null;
             DatabaseObject? parentTarget = null;
             if (parentLogical is not null && objectBindings.TryGetValue(parentLogical, out parentBinding))
@@ -1248,7 +1257,11 @@ public sealed class DatabaseDiscoverySyncService(
                 parentTarget?.Version,
                 columnTarget is null ? null : ColumnStructure(columnTarget),
                 columnSource is null ? null : ColumnStructure(columnSource),
-                ActionSummary(selection.ActionType)));
+                ActionSummary(selection.ActionType),
+                parentSource?.SchemaName ?? parentTarget?.SchemaName,
+                parentSource?.Name ?? parentTarget?.ObjectName,
+                parentSource?.ObjectType.ToString() ?? parentTarget?.ObjectType.ToString(),
+                parentSource?.DatabaseComment ?? parentTarget?.DatabaseComment));
         }
 
         var collision = await ValidatePlanCollisions(context, previews, cancellationToken);
@@ -1258,7 +1271,7 @@ public sealed class DatabaseDiscoverySyncService(
         var hashPayload = new PreviewHashPayload(
             1, context.Profile.Id, context.Profile.DatabaseSourceId, context.Profile.ConfigurationRevision, context.SnapshotEntity.Id,
             context.SnapshotEntity.ContentSha256, context.SnapshotEntity.ScopeGenerationId,
-            context.SnapshotEntity.IdentityAlgorithmVersion, ordered);
+            context.SnapshotEntity.IdentityAlgorithmVersion, ordered.Select(HashAction).ToArray());
         var canonical = JsonSerializer.Serialize(hashPayload, JsonOptions);
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical))).ToLowerInvariant();
         var warnings = context.Snapshot.ForeignKeys.Count + context.Snapshot.UniqueConstraints.Count
@@ -1883,6 +1896,36 @@ public sealed class DatabaseDiscoverySyncService(
         string TargetSnapshotHash,
         long ScopeGenerationId,
         int IdentityAlgorithmVersion,
-        IReadOnlyList<DatabaseDiscoverySyncPreviewActionResponse> Actions);
+        IReadOnlyList<PreviewHashActionPayload> Actions);
+
+    private sealed record PreviewHashActionPayload(
+        DatabaseDiscoverySyncActionType ActionType,
+        DatabaseDiscoveryEntityKind EntityKind,
+        string SchemaLogicalIdentity,
+        string LogicalIdentity,
+        string? ParentLogicalIdentity,
+        long? TargetId,
+        long? ExpectedTargetVersion,
+        long? ExpectedBindingVersion,
+        long? ExpectedParentTargetId,
+        long? ExpectedParentTargetVersion,
+        DatabaseDiscoverySyncStructureResponse? Before,
+        DatabaseDiscoverySyncStructureResponse? After,
+        string Summary);
+
+    private static PreviewHashActionPayload HashAction(DatabaseDiscoverySyncPreviewActionResponse action) => new(
+        action.ActionType,
+        action.EntityKind,
+        action.SchemaLogicalIdentity,
+        action.LogicalIdentity,
+        action.ParentLogicalIdentity,
+        action.TargetId,
+        action.ExpectedTargetVersion,
+        action.ExpectedBindingVersion,
+        action.ExpectedParentTargetId,
+        action.ExpectedParentTargetVersion,
+        action.Before,
+        action.After,
+        action.Summary);
 
 }
