@@ -10,6 +10,66 @@ namespace SystemKnowledgeHub.Api.Features.Portal.Application;
 
 public sealed class PortalTargetResolver(KnowledgeHubDbContext dbContext)
 {
+    public async Task<IReadOnlyDictionary<PortalTargetKey, PortalTargetIdentity>> ResolveAdminIdentitiesAsync(
+        IEnumerable<PortalTargetKey> targetKeys,
+        CancellationToken cancellationToken)
+    {
+        var keys = targetKeys.Where(key => ApiIdParser.IsSafePositive(key.Id)).Distinct().ToArray();
+        var resolved = new Dictionary<PortalTargetKey, PortalTargetIdentity>();
+
+        var systemIds = Ids(keys, PortalTargetType.System);
+        var systems = await dbContext.Systems.AsNoTracking()
+            .Where(item => systemIds.Contains(item.Id))
+            .Select(item => new { item.Id, item.Name, item.DisplayName })
+            .ToListAsync(cancellationToken);
+        foreach (var item in systems)
+            Add(resolved, PortalTargetType.System, item.Id, Display(item.DisplayName, item.Name));
+
+        var businessFunctionIds = Ids(keys, PortalTargetType.BusinessFunction);
+        var functions = await dbContext.BusinessFunctions.AsNoTracking()
+            .Where(item => businessFunctionIds.Contains(item.Id)
+                && dbContext.Systems.Any(system => system.Id == item.SystemId))
+            .Select(item => new { item.Id, item.Name, item.DisplayName })
+            .ToListAsync(cancellationToken);
+        foreach (var item in functions)
+            Add(resolved, PortalTargetType.BusinessFunction, item.Id, Display(item.DisplayName, item.Name));
+
+        var databaseObjectIds = Ids(keys, PortalTargetType.DatabaseObject);
+        var objects = await dbContext.DatabaseObjects.AsNoTracking()
+            .Where(item => databaseObjectIds.Contains(item.Id)
+                && dbContext.DatabaseSources.Any(source => source.Id == item.DatabaseSourceId
+                    && dbContext.Systems.Any(system => system.Id == source.SystemId)))
+            .Select(item => new { item.Id, item.SchemaName, item.ObjectName })
+            .ToListAsync(cancellationToken);
+        foreach (var item in objects)
+            Add(resolved, PortalTargetType.DatabaseObject, item.Id, $"{item.SchemaName}.{item.ObjectName}");
+
+        var knowledgeDocumentIds = Ids(keys, PortalTargetType.KnowledgeDocument);
+        var documents = await dbContext.KnowledgeDocuments.AsNoTracking()
+            .Where(item => knowledgeDocumentIds.Contains(item.Id))
+            .Select(item => new { item.Id, item.Title })
+            .ToListAsync(cancellationToken);
+        foreach (var item in documents)
+            Add(resolved, PortalTargetType.KnowledgeDocument, item.Id, item.Title);
+
+        var integrationIds = Ids(keys, PortalTargetType.Integration);
+        var integrations = await dbContext.Integrations.AsNoTracking()
+            .Where(item => integrationIds.Contains(item.Id)
+                && (item.SourceSystemId == null || dbContext.Systems.Any(system => system.Id == item.SourceSystemId))
+                && (item.TargetSystemId == null || dbContext.Systems.Any(system => system.Id == item.TargetSystemId))
+                && (item.DatabaseSourceId == null || dbContext.DatabaseSources.Any(source => source.Id == item.DatabaseSourceId
+                    && dbContext.Systems.Any(system => system.Id == source.SystemId)))
+                && (item.DatabaseObjectId == null || dbContext.DatabaseObjects.Any(databaseObject => databaseObject.Id == item.DatabaseObjectId
+                    && dbContext.DatabaseSources.Any(source => source.Id == databaseObject.DatabaseSourceId
+                        && dbContext.Systems.Any(system => system.Id == source.SystemId)))))
+            .Select(item => new { item.Id, item.Name })
+            .ToListAsync(cancellationToken);
+        foreach (var item in integrations)
+            Add(resolved, PortalTargetType.Integration, item.Id, item.Name);
+
+        return resolved;
+    }
+
     public async Task<IReadOnlyDictionary<PortalTargetKey, PortalTargetIdentity>> ResolveEligibleIdentitiesAsync(
         IEnumerable<PortalTargetKey> targetKeys,
         CancellationToken cancellationToken)

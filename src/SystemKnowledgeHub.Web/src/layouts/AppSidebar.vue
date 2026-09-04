@@ -40,10 +40,7 @@ function isVisible(item: (typeof navigationItems)[number]): boolean {
     </button>
 
     <nav class="app-sidebar__navigation">
-      <template
-        v-for="item in navigationItems.filter(isVisible)"
-        :key="item.key"
-      >
+      <template v-for="item in navigationItems.filter(isVisible)" :key="item.key">
         <span v-if="item.groupLabel" class="app-sidebar__group-label">{{ item.groupLabel }}</span>
         <button
           class="app-sidebar__item"

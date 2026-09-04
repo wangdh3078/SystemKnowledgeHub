@@ -1,6 +1,6 @@
 # System Knowledge Hub — Project File Map
 
-本文件描述当前仓库中主要目录和文件的职责。范围为 Bootstrap 基础设施、**VS-01～VS-15**、UX 稳定化、Post-MVP **U01～U04**、**INFRA-CONFIG-R01** 运行时配置基础、PORTAL-B01 以及 Database Discovery Oracle/PostgreSQL/SQL Server Provider；不把 `bin/`、`obj/`、`node_modules/`、`dist/`、lock 文件、运行时 SQLite 数据、普通 Migration 生成文件逐项列入。
+本文件描述当前仓库中主要目录和文件的职责。范围为 Bootstrap 基础设施、**VS-01～VS-15**、UX 稳定化、Post-MVP **U01～U04**、**INFRA-CONFIG-R01** 运行时配置基础、PORTAL-B01～B02 以及 Database Discovery Oracle/PostgreSQL/SQL Server Provider；不把 `bin/`、`obj/`、`node_modules/`、`dist/`、lock 文件、运行时 SQLite 数据、普通 Migration 生成文件逐项列入。
 
 ## Documentation placement
 
@@ -195,7 +195,7 @@ Search 第一版采用 SQLite 受限 `LIKE` 投影；未创建 FTS5 virtual tabl
 
 以上 `...` 均指 `src/SystemKnowledgeHub.Api/Features/Traceability/`。
 
-### 1.16 Portal composition and anonymous read — PORTAL-B01
+### 1.16 Portal composition, anonymous read, and Admin composition — PORTAL-B01 / PORTAL-B02
 
 | 路径 | 一句话职责 | Feature / Vertical Slice | 为什么需要 |
 | --- | --- | --- | --- |
@@ -204,6 +204,8 @@ Search 第一版采用 SQLite 受限 `LIKE` 投影；未创建 FTS5 virtual tabl
 | `.../Application/PortalCompositionValidator.cs`、`PortalLimits.cs` | 校验 page/section compatibility、node cycle/depth/subtree move/order 和冻结 hard limits。 | Internal Knowledge Portal / PORTAL-B01 | 为当前 fail-closed reads 及后续 B02 transactional writes提供单一服务器规则边界。 |
 | `.../Application/PortalTargetResolver.cs`、`PortalQueries.cs`、`Models/PortalModels.cs` | 批量解析五类 current eligible target，构造 flat tree、canonical breadcrumb 和 closed-discriminator sanitized page sections。 | Internal Knowledge Portal / PORTAL-B01 | 避免 Admin DTO/raw entity/N+1，并让失效 target 或 unsupported projection 整页 fail closed。 |
 | `.../Api/PortalController.cs` | 仅暴露匿名 GET `/api/portal/tree` 与 `/api/portal/pages/{id}`。 | Internal Knowledge Portal / PORTAL-B01 | 在不降低全局 Viewer/Admin authorization 的情况下建立专用 published-only read boundary。 |
+| `.../Application/AdminPortalService.cs`、`AdminPortalQueries.cs`、`PortalPublicationReadiness.cs`、`Models/AdminPortalModels.cs` | 实现 Administrator whole-page composition、tree mutation/publication、五类 target picker、Admin inventory/preview 与中文发布阻塞检查。 | Admin Knowledge Composition / PORTAL-B02 | 复用 B01 resolver/sanitizer，保持 opaque concurrency、原子 sibling reorder、fail-closed reference health 与 canonical knowledge write isolation。 |
+| `.../Api/AdminPortalController.cs` | 暴露 Administrator-only、antiforgery-protected `/api/admin/portal/**` 页面、树、预览、发布及 picker API。 | Admin Knowledge Composition / PORTAL-B02 | 将管理写边界与匿名 GET-only Portal 明确隔离，不引入 generic CRUD/PATCH endpoint。 |
 | `src/SystemKnowledgeHub.Api/Persistence/Migrations/20260903142533_AddPortalCompositionFoundation.cs` | additive-only 创建三张 Portal composition 表、约束和索引。 | Internal Knowledge Portal / PORTAL-B01 | 让 Portal 具备可回滚 persistence foundation，且不修改/回填既有知识表。 |
 
 以上 `...` 均指 `src/SystemKnowledgeHub.Api/Features/Portal/`。
@@ -495,6 +497,16 @@ Search 第一版采用 SQLite 受限 `LIKE` 投影；未创建 FTS5 virtual tabl
 
 以上 `...` 均指 `src/SystemKnowledgeHub.Web/src/`。
 
+### 2.20 Admin Knowledge Composition UX — PORTAL-B02
+
+| 路径 | 一句话职责 | Feature / Vertical Slice | 为什么需要 |
+| --- | --- | --- | --- |
+| `.../features/portal-management/api/portalManagementContracts.ts`、`portalManagementApi.ts` | 严格解码 Admin Portal 页面、树、readiness、preview 与五类 target picker，并调用 typed `/api/admin/portal/**`。 | Admin Knowledge Composition / PORTAL-B02 | 让管理端 fail closed 消费 safe DTO、opaque token 与标准错误，不暴露 raw entity/version/audit FK。 |
+| `.../features/portal-management/pages/PortalManagementView.vue`、`components/PortalTargetPickerDialog.vue`、`PortalPreviewDialog.vue`、`portal-management.css` | 提供 Page Tree、whole-page section 编排、受控知识选择、发布检查、阅读型预览及 Page/Node 独立发布工作流。 | Admin Knowledge Composition / PORTAL-B02 | 形成桌面知识编排工作台，支持 dirty guard、紧凑排序、多 placement 可见性与 1366/1440/1920 响应式布局。 |
+| `.../app/router/routes.ts`、`navigation.ts`、`layouts/AppSidebar.vue` | 注册 `/portal-management` 并仅向 Administrator 展示“知识门户管理”入口。 | Admin Knowledge Composition / PORTAL-B02 | 保持前端统一无权限体验，同时由后端 Administrator policy 作为最终 authority。 |
+
+以上 `...` 均指 `src/SystemKnowledgeHub.Web/src/`。
+
 ## 3. Tests
 
 ### 3.1 Backend tests
@@ -527,6 +539,7 @@ Search 第一版采用 SQLite 受限 `LIKE` 投影；未创建 FTS5 virtual tabl
 | `.../Api/TraceabilityApiTests.cs` | 以真实 SQLite/HTTP 覆盖三种 root、coverage 边界、生命周期、trust、Supersedes、cycle、limits、排序、授权、fail-closed、只读不变量、query plan 与 fan-out payload。 | Traceability / TRACE-B01 | 保护派生 trace 的语义正确性、bounded-query safety 与 canonical write isolation。 |
 | `.../Api/ImpactApiTests.cs` | 以真实 SQLite/HTTP 覆盖七种 allowed path、forbidden path、五类 target、分页排序、distinct meaning、授权、fail-closed、只读、mutation refresh 与 query plan。 | Traceability / TRACE-B03 | 保护 bounded Impact semantics、API safety、canonical truth 与现有索引策略。 |
 | `.../Api/PortalAnonymousReadApiTests.cs`、`Application/PortalCompositionValidatorTests.cs`、`Application/PortalQueryPerformanceTests.cs` | 覆盖五类 target、publication/lifecycle/soft-delete、匿名授权隔离、sanitization、breadcrumb、2000/2001、30/31、5/6、depth/cycle/subtree 和固定 query count。 | Internal Knowledge Portal / PORTAL-B01 | 保护 Portal published-only fail-closed contract、hard limits 和 page-oriented bulk query。 |
+| `.../Api/AdminPortalApiTests.cs` | 以真实 task-owned SQLite/HTTP 覆盖 Administrator/antiforgery、页面与章节 whole replacement、五类 picker、preview/readiness、发布、树 move/reorder/publication、并发、limits、失效引用和 canonical knowledge/relation isolation。 | Admin Knowledge Composition / PORTAL-B02 | 保护 Admin composition 的高风险写入/发布边界、原子性和 B01 anonymous visibility contract。 |
 | `.../Persistence/PortalCompositionMigrationTests.cs` | 覆盖 fresh/upgrade/rollback、三表 additive scope、CHECK/FK/RESTRICT 与 root/non-root/section unique indexes。 | Internal Knowledge Portal / PORTAL-B01 | 证明 migration chain 不改写 canonical knowledge，且 SQLite 三值逻辑不会绕过 ExplicitReference shape。 |
 | `.../Application/RuntimeConfigurationOptionsTests.cs` | 覆盖 Cookie、password hasher、SQLite、CORS、Serilog 配置的有效/无效边界与 Host wiring。 | Runtime configuration / INFRA-CONFIG-R01 | 证明部署调参有 typed/fail-fast validation，且 password hashing 不能降到安全下限以下。 |
 | `.../Application/DatabaseDiscoveryOptionsTests.cs` | 覆盖 Discovery 默认 timeout/2000ms polling/lease/heartbeat/limits、SQL Server certificate trust 默认关闭与无效组合。 | Database Discovery configuration / INFRA-CONFIG-R01 / DBDISC-SQLSERVER-B01 | 防止集中配置改变 worker 恢复语义、接受不安全运行参数或默认跳过 SQL Server 证书验证。 |
@@ -563,6 +576,7 @@ Search 第一版采用 SQLite 受限 `LIKE` 投影；未创建 FTS5 virtual tabl
 | `.../src/features/knowledge-documents/components/ImpactContextSection.spec.ts`、`pages/KnowledgeDocumentDetailView.spec.ts` | 覆盖三类 root 文案、空/错/重试、分页、导航、竞态、关系 mutation refresh 与详情层级。 | Traceability / TRACE-B03 | 证明独立状态、authoritative refresh 和 UI placement 不回归 B02/R06。 |
 | `.../src/features/database-discovery/pages/ConnectionProfilesView.spec.ts`、`api/databaseDiscoveryContracts.spec.ts` | 覆盖 SQL Server Profile 表单的 DatabaseName/ServiceName 切换、1433 默认端口、engine source 筛选及严格 Provider 解码。 | Database Discovery / DBDISC-SQLSERVER-B01 | 保护第三 Provider 的人工配置入口且不引入 raw connection string 或 vendor-specific review UI。 |
 | `.../src/features/database-discovery/pages/DiscoverySyncView.spec.ts`、`components/DiscoverySectionNav.spec.ts` | 覆盖角色能力、筛选/分页、selection、preview/confirm/apply、错误状态、计划历史与第五导航入口。 | Database Discovery / DBDISC-B04 / DBDISC-SQLSERVER-B01 | 保护 Viewer 只读、Editor/Administrator 明确写入及三 Provider 的完整人工同步交互。 |
+| `.../src/features/portal-management/api/portalManagementApi.spec.ts`、`portalManagementSurface.spec.ts`、`src/layouts/AppSidebar.attachments.spec.ts` | 覆盖 Admin Portal strict API、树/页面/章节/picker/preview/publish UX、dirty/conflict/broken-reference 状态、分页/响应式结构，以及 Administrator-only 导航。 | Admin Knowledge Composition / PORTAL-B02 | 保护管理工作台的受控组合、非法投影不可选、opaque concurrency 和角色可见性。 |
 | `.../src/features/runtime-capabilities/api/attachmentRuntimeCapabilities.spec.ts` | 覆盖 safe capability 严格 decoder、去重校验、request cache 与失败后重试。 | Runtime capabilities / INFRA-CONFIG-R01 | 防止客户端静默接受 malformed runtime policy 或缓存永久失败。 |
 | `.../src/features/knowledge-documents/components/KnowledgeDocumentAttachmentArea.spec.ts`、`editor/KnowledgeDocumentEditor.spec.ts` | 覆盖普通附件/图片 capability 加载、动态 accept/提示/预检查、失败状态与既有上传行为。 | Attachment frontend / INFRA-CONFIG-R01 | 证明前端不再维护第二份部署 allowlist，且后端仍是最终 authority。 |
 | `.../src/test/setup.ts` | 提供 Vitest/Vue Test Utils 的公共测试初始化。 | Frontend test foundation | 保持测试环境最小一致。 |
@@ -641,6 +655,7 @@ Search 第一版采用 SQLite 受限 `LIKE` 投影；未创建 FTS5 virtual tabl
 | `docs/reports/TRACE_B03_BOUNDED_IMPACT_CONTEXT_VERIFICATION_REPORT.md` | 记录 fixed Impact path、API/UI、刷新、自动化、浏览器、SQLite 与 repository DB protection 的最终验证。 | Traceability / TRACE-B03 | 为 Bounded Impact Context 与 PHASE-TRACE-VERIFY readiness 提供可复核证据。 |
 | `docs/design/PORTAL_A01_INTERNAL_KNOWLEDGE_PORTAL_ARCHITECTURE_DECISION.md` 与 `docs/reports/PORTAL_A01_INTERNAL_KNOWLEDGE_PORTAL_ARCHITECTURE_FREEZE_REPORT.md` | 冻结并验证同应用、同部署的匿名只读 Portal，以及 Admin Page Tree、Primary Target、Composite Page、Section 编排、Preview/Publish/Unpublish、sanitization、search、attachment 与 trace 边界。 | Internal Knowledge Portal / Admin Knowledge Composition / PORTAL-A01 | 是 PORTAL-B01～VERIFY 的直接架构与合同依据；任何实现不得复制知识事实或放宽现有 Admin 授权。 |
 | `docs/reports/PORTAL_B01_COMPOSITION_PERSISTENCE_ANONYMOUS_READ_FOUNDATION_VERIFICATION_REPORT.md` | 记录 Portal 三表持久化、tree integrity、controlled resolver、publication/lifecycle、anonymous APIs、sanitization、limits、migration/runtime/security 与 repository data protection 证据。 | Internal Knowledge Portal / PORTAL-B01 | 为 B01 完成状态和 PORTAL-B02 readiness 提供可复核证据。 |
+| `docs/reports/PORTAL_B02_ADMIN_KNOWLEDGE_COMPOSITION_MANAGEMENT_VERIFICATION_REPORT.md` | 记录 Administrator Portal API、Page Tree、Composite Page、target picker、preview/readiness、Page/Node publication、自动化、浏览器与 repository data protection 证据。 | Admin Knowledge Composition / PORTAL-B02 | 为 B02 完成状态及 PORTAL-B03 readiness 提供可复核证据，并确认未复制 canonical knowledge、未修改 KnowledgeRelation。 |
 | `docs/INDEX.md` | 提供当前 canonical 设计、计划、规格、标准与验证文档的简洁入口。 | Repository documentation | 避免 README 与超大 File Map 承担重复导航职责。 |
 | `docs/reports/REPO_CLEAN_A01_WORKSPACE_AUDIT_REPORT.md`、`docs/planning/REPO_CLEAN_B01_SAFE_CLEANUP_PLAN.md` 与 `docs/reports/REPO_CLEAN_B01_SAFE_WORKSPACE_CLEANUP_VERIFICATION_REPORT.md` | 记录仓库工作区审计、获批清理边界、执行与验证结果。 | Repository maintenance / REPO-CLEAN-A01～B01 | 让清理操作、保护项、跳过项与后续人工决定可审计。 |
 | `docs/reports/SEC_01_OIDC_AUTHENTICATION_FOUNDATION_VERIFICATION_REPORT.md` 至 `docs/reports/SEC_04_SECURITY_ROLLOUT_VERIFICATION_REPORT.md` | 记录 OIDC 认证、后端访问控制、前端登录访问 UX 与安全 rollout 的验证结果。 | Security / SEC-01～SEC-04 | 保留安全阶段的连续验证历史。 |

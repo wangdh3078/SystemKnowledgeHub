@@ -56,7 +56,10 @@ async function mountSidebar(accessLevel: 'Administrator' | 'Editor' | 'Viewer') 
 describe('AppSidebar attachment administration visibility', () => {
   it('shows the attachment governance entry only to administrators', async () => {
     expect((await mountSidebar('Administrator')).text()).toContain('附件管理')
+    expect((await mountSidebar('Administrator')).text()).toContain('知识门户管理')
     expect((await mountSidebar('Editor')).text()).not.toContain('附件管理')
+    expect((await mountSidebar('Editor')).text()).not.toContain('知识门户管理')
     expect((await mountSidebar('Viewer')).text()).not.toContain('附件管理')
+    expect((await mountSidebar('Viewer')).text()).not.toContain('知识门户管理')
   })
 })

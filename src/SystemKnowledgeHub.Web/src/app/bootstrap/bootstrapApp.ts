@@ -17,6 +17,7 @@ import {
   ElIcon,
   ElInput,
   ElInputNumber,
+  ElLoading,
   ElOption,
   ElPagination,
   ElRadio,
@@ -29,6 +30,7 @@ import {
   ElSwitch,
   ElTag,
   ElTooltip,
+  ElTree,
 } from 'element-plus'
 import 'element-plus/es/components/button/style/css'
 import 'element-plus/es/components/alert/style/css'
@@ -48,6 +50,7 @@ import 'element-plus/es/components/form-item/style/css'
 import 'element-plus/es/components/icon/style/css'
 import 'element-plus/es/components/input/style/css'
 import 'element-plus/es/components/input-number/style/css'
+import 'element-plus/es/components/loading/style/css'
 import 'element-plus/es/components/message/style/css'
 import 'element-plus/es/components/message-box/style/css'
 import 'element-plus/es/components/option/style/css'
@@ -62,6 +65,7 @@ import 'element-plus/es/components/table-column/style/css'
 import 'element-plus/es/components/switch/style/css'
 import 'element-plus/es/components/tag/style/css'
 import 'element-plus/es/components/tooltip/style/css'
+import 'element-plus/es/components/tree/style/css'
 import { createPinia } from 'pinia'
 import { createApp } from 'vue'
 import App from '../../App.vue'
@@ -111,6 +115,7 @@ export async function bootstrapApp(): Promise<void> {
   app.use(ElIcon)
   app.use(ElInput)
   app.use(ElInputNumber)
+  app.use(ElLoading)
   app.use(ElOption)
   app.use(ElPagination)
   app.use(ElRadio)
@@ -123,6 +128,7 @@ export async function bootstrapApp(): Promise<void> {
   app.use(ElSwitch)
   app.use(ElTag)
   app.use(ElTooltip)
+  app.use(ElTree)
   await router.isReady()
   app.mount('#app')
 }

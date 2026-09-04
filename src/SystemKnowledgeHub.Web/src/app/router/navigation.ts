@@ -1,6 +1,7 @@
 import type { Component } from 'vue'
 import {
   Coin,
+  Collection,
   DataBoard,
   Document,
   Files,
@@ -18,6 +19,7 @@ export type NavigationKey =
   | 'database'
   | 'knowledge-documents'
   | 'unknown-items'
+  | 'portal-management'
   | 'users'
   | 'attachments'
   | 'database-discovery'
@@ -35,6 +37,7 @@ export interface NavigationItem {
     | 'database-objects-list'
     | 'knowledge-documents-list'
     | 'unknown-items-list'
+    | 'portal-management'
     | 'users-management'
     | 'attachment-administration'
     | 'database-discovery-runs'
@@ -80,11 +83,19 @@ export const navigationItems: readonly NavigationItem[] = [
     routeName: 'unknown-items-list',
   },
   {
+    key: 'portal-management',
+    label: '知识门户管理',
+    icon: Collection,
+    enabled: true,
+    groupLabel: '管理',
+    routeName: 'portal-management',
+    minimumAccessLevel: 'Administrator',
+  },
+  {
     key: 'users',
     label: '用户管理',
     icon: UserFilled,
     enabled: true,
-    groupLabel: '管理',
     routeName: 'users-management',
     minimumAccessLevel: 'Administrator',
   },

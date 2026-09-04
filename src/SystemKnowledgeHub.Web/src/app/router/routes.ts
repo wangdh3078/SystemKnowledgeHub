@@ -24,6 +24,7 @@ import DiscoverySnapshotView from '../../features/database-discovery/pages/Disco
 import DiscoveryDifferencesView from '../../features/database-discovery/pages/DiscoveryDifferencesView.vue'
 import DiscoveryDifferenceView from '../../features/database-discovery/pages/DiscoveryDifferenceView.vue'
 import DiscoverySyncView from '../../features/database-discovery/pages/DiscoverySyncView.vue'
+import PortalManagementView from '../../features/portal-management/pages/PortalManagementView.vue'
 
 export const routes: readonly RouteRecordRaw[] = [
   {
@@ -260,6 +261,18 @@ export const routes: readonly RouteRecordRaw[] = [
       layout: 'app-shell',
       navigationKey: 'database-discovery',
       hasContextRail: false,
+    },
+  },
+  {
+    path: '/portal-management',
+    name: 'portal-management',
+    component: PortalManagementView,
+    meta: {
+      title: '知识门户管理',
+      layout: 'app-shell',
+      navigationKey: 'portal-management',
+      hasContextRail: false,
+      minimumAccessLevel: 'Administrator',
     },
   },
   {

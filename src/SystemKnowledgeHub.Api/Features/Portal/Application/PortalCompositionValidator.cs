@@ -74,10 +74,11 @@ public sealed class PortalCompositionValidator(KnowledgeHubDbContext dbContext)
 
     public async Task<IReadOnlyDictionary<string, string[]>> ValidateNodePlacementAsync(
         PortalPageNode candidate,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool isNew = false)
     {
         var errors = new Dictionary<string, string[]>();
-        if (candidate.Id < 1 || candidate.Id > ApiIdParser.JavaScriptMaxSafeInteger)
+        if ((!isNew && candidate.Id < 1) || candidate.Id > ApiIdParser.JavaScriptMaxSafeInteger)
             errors["id"] = ["ID 必须是 JavaScript 安全范围内的正整数。"];
         if (string.IsNullOrWhiteSpace(candidate.Title) || candidate.Title.Trim().Length > 200)
             errors["title"] = ["节点标题必须为 1 至 200 个字符。"];
@@ -100,8 +101,14 @@ public sealed class PortalCompositionValidator(KnowledgeHubDbContext dbContext)
             && node.SortOrder == candidate.SortOrder))
             errors["sortOrder"] = ["同级节点顺序必须唯一。"];
 
-        if (candidate.ParentId is not null && nodes.All(node => node.Id != candidate.ParentId))
-            errors["parentId"] = ["父节点不存在。"];
+        if (candidate.ParentId is not null)
+        {
+            var parent = nodes.SingleOrDefault(node => node.Id == candidate.ParentId);
+            if (parent is null)
+                errors["parentId"] = ["父节点不存在。"];
+            else if (parent.NodeKind != PortalPageNodeKind.Folder)
+                errors["parentId"] = ["只有目录节点可以包含子节点。"];
+        }
 
         var byId = nodes.ToDictionary(node => node.Id);
         var ancestors = new HashSet<long>();

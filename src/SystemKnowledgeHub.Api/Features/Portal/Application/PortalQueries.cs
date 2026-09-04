@@ -47,6 +47,19 @@ public sealed class PortalQueries(
             .OrderBy(path => path, PortalNodePathComparer.Instance)
             .First();
 
+        return await ProjectPageAsync(page, canonicalPath, cancellationToken);
+    }
+
+    public async Task<PortalPageResult> GetAdminPreviewPageAsync(
+        PortalPage page,
+        CancellationToken cancellationToken) =>
+        await ProjectPageAsync(page, [], cancellationToken);
+
+    private async Task<PortalPageResult> ProjectPageAsync(
+        PortalPage page,
+        IReadOnlyList<PortalPageNode> canonicalPath,
+        CancellationToken cancellationToken)
+    {
         var targetKeys = GetTargetKeys(page).ToArray();
         var structureIds = page.Sections
             .Where(section => section.ProjectionKind == PortalPageProjectionKind.DatabaseStructure)
@@ -60,7 +73,7 @@ public sealed class PortalQueries(
             cancellationToken);
         if (targetKeys.Any(key => !targets.ContainsKey(key)))
         {
-            logger.LogWarning("Portal page {PortalPageId} failed closed because a projection target is unavailable.", pageId);
+            logger.LogWarning("Portal page {PortalPageId} failed closed because a projection target is unavailable.", page.Id);
             return new(PortalReadFailure.NotFound);
         }
 
@@ -71,7 +84,7 @@ public sealed class PortalQueries(
             if (!targets.TryGetValue(key, out var target)
                 || !TryCreateContent(section.ProjectionKind, target, out var content))
             {
-                logger.LogWarning("Portal page {PortalPageId} failed closed because section {PortalSectionId} cannot be projected.", pageId, section.Id);
+                logger.LogWarning("Portal page {PortalPageId} failed closed because section {PortalSectionId} cannot be projected.", page.Id, section.Id);
                 return new(PortalReadFailure.NotFound);
             }
             sections.Add(new(
