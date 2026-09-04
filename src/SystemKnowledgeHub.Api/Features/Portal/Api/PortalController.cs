@@ -12,6 +12,20 @@ namespace SystemKnowledgeHub.Api.Features.Portal.Api;
 [Route("api/portal")]
 public sealed class PortalController(PortalQueries queries) : ControllerBase
 {
+    [HttpGet("home")]
+    [ProducesResponseType<PortalHomeResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ApiErrorResponse>(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<ActionResult<PortalHomeResponse>> GetHome(CancellationToken cancellationToken)
+    {
+        var result = await queries.GetHomeAsync(cancellationToken);
+        return result.Failure switch
+        {
+            PortalReadFailure.None => Ok(result.Response),
+            PortalReadFailure.LimitExceeded => UnprocessableEntity(LimitExceeded()),
+            _ => throw new InvalidOperationException("Unsupported Portal home result."),
+        };
+    }
+
     [HttpGet("tree")]
     [ProducesResponseType<PortalTreeResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ApiErrorResponse>(StatusCodes.Status422UnprocessableEntity)]

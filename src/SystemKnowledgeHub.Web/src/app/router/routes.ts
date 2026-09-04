@@ -25,11 +25,32 @@ import DiscoveryDifferencesView from '../../features/database-discovery/pages/Di
 import DiscoveryDifferenceView from '../../features/database-discovery/pages/DiscoveryDifferenceView.vue'
 import DiscoverySyncView from '../../features/database-discovery/pages/DiscoverySyncView.vue'
 import PortalManagementView from '../../features/portal-management/pages/PortalManagementView.vue'
+import PortalHomeView from '../../features/portal-reading/pages/PortalHomeView.vue'
+import PortalPageView from '../../features/portal-reading/pages/PortalPageView.vue'
+import PortalNotFoundView from '../../features/portal-reading/pages/PortalNotFoundView.vue'
 
 export const routes: readonly RouteRecordRaw[] = [
   {
     path: '/',
     redirect: { name: 'dashboard' },
+  },
+  {
+    path: '/portal',
+    name: 'portal-home',
+    component: PortalHomeView,
+    meta: { title: '', layout: 'portal', navigationKey: null },
+  },
+  {
+    path: '/portal/pages/:id',
+    name: 'portal-page',
+    component: PortalPageView,
+    meta: { title: '知识页面', layout: 'portal', navigationKey: null },
+  },
+  {
+    path: '/portal/:pathMatch(.*)*',
+    name: 'portal-not-found',
+    component: PortalNotFoundView,
+    meta: { title: '页面未找到', layout: 'portal', navigationKey: null },
   },
   {
     path: '/dashboard',

@@ -2,6 +2,7 @@ namespace SystemKnowledgeHub.Api.Features.Portal.Application;
 
 public static class PortalLimits
 {
+    public const int MaximumRecentPages = 8;
     public const int MaximumTreeDepth = 10;
     public const int MaximumEffectiveTreeNodes = 2_000;
     public const int MaximumSectionsPerPage = 30;

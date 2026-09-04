@@ -36,6 +36,7 @@ public sealed record PortalResolvedDatabaseObject(
     long Id,
     string Title,
     string? Summary,
+    string? DatabaseComment,
     string SchemaName,
     string ObjectName,
     string ObjectType,
@@ -78,6 +79,24 @@ public sealed record PortalTreeNodeResponse(
     string Title,
     PortalPageNodeKind NodeKind,
     long? PageId);
+
+public sealed record PortalHomeResponse(
+    string PortalName,
+    IReadOnlyList<PortalHomeCategoryResponse> Categories,
+    IReadOnlyList<PortalRecentPageResponse> RecentPages);
+
+public sealed record PortalHomeCategoryResponse(
+    long NodeId,
+    string Title,
+    PortalPageNodeKind NodeKind,
+    long? PageId);
+
+public sealed record PortalRecentPageResponse(
+    long Id,
+    string Title,
+    PortalTargetIdentityResponse PrimaryTarget,
+    IReadOnlyList<PortalBreadcrumbItemResponse> Breadcrumb,
+    DateTimeOffset PublishedAt);
 
 public sealed record PortalPageResponse(
     long Id,
@@ -144,6 +163,7 @@ public sealed record PortalDatabaseObjectOverviewContentResponse(
     string ObjectName,
     string ObjectType,
     string? BusinessDescription,
+    string? DatabaseComment,
     long? EstimatedRows,
     string AccessMode,
     IReadOnlyList<string> BusinessKeyColumns) : PortalSectionContentResponse;
@@ -163,6 +183,7 @@ public sealed record PortalDatabaseStructureContentResponse(
     string ObjectName,
     string ObjectType,
     string? BusinessDescription,
+    string? DatabaseComment,
     long? EstimatedRows,
     string AccessMode,
     IReadOnlyList<string> BusinessKeyColumns,
@@ -185,6 +206,10 @@ public enum PortalReadFailure
 public sealed record PortalTreeResult(
     PortalReadFailure Failure,
     PortalTreeResponse? Response = null);
+
+public sealed record PortalHomeResult(
+    PortalReadFailure Failure,
+    PortalHomeResponse? Response = null);
 
 public sealed record PortalPageResult(
     PortalReadFailure Failure,

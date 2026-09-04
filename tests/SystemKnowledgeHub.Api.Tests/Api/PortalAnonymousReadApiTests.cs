@@ -94,6 +94,8 @@ public sealed class PortalAnonymousReadApiTests
         await using (var scope = factory.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<KnowledgeHubDbContext>();
+            var userId = await db.Users.Select(item => item.Id).FirstAsync();
+            var now = DateTimeOffset.UtcNow;
             switch (caseName)
             {
                 case "page":
@@ -280,6 +282,150 @@ public sealed class PortalAnonymousReadApiTests
         using var response = await factory.CreateClient().GetAsync($"/api/portal/pages/{fixture.PageId}");
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.Equal("Earlier root", json.RootElement.GetProperty("breadcrumb")[0].GetProperty("title").GetString());
+    }
+
+    [Fact]
+    public async Task Anonymous_home_returns_only_top_level_categories_and_safe_recent_pages()
+    {
+        using var factory = new BootstrapWebApplicationFactory();
+        var fixture = await SeedCompositePage(factory);
+
+        using var response = await factory.CreateClient().GetAsync("/api/portal/home");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync();
+        using var json = JsonDocument.Parse(body);
+
+        Assert.Equal("系统知识中心", json.RootElement.GetProperty("portalName").GetString());
+        var categories = json.RootElement.GetProperty("categories");
+        Assert.Equal(1, categories.GetArrayLength());
+        Assert.Equal("Portal root", categories[0].GetProperty("title").GetString());
+        Assert.Equal("Folder", categories[0].GetProperty("nodeKind").GetString());
+        Assert.Equal(1, json.RootElement.GetProperty("recentPages").GetArrayLength());
+        Assert.Equal(fixture.PageId, json.RootElement.GetProperty("recentPages")[0].GetProperty("id").GetInt64());
+        Assert.Equal("Portal root", json.RootElement.GetProperty("recentPages")[0]
+            .GetProperty("breadcrumb")[0].GetProperty("title").GetString());
+        Assert.DoesNotContain("Portal audit actor", body);
+        Assert.DoesNotContain("portal-secret", body);
+        Assert.DoesNotContain("concurrency", body, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Anonymous_home_limits_recent_pages_to_eight_and_orders_by_publish_time_then_id()
+    {
+        using var factory = new BootstrapWebApplicationFactory();
+        var fixture = await SeedCompositePage(factory);
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<KnowledgeHubDbContext>();
+            var userId = await db.Users.Select(item => item.Id).FirstAsync();
+            var baseline = DateTimeOffset.UtcNow.AddDays(1);
+            for (var index = 0; index < 9; index++)
+            {
+                var publishedAt = baseline.AddMinutes(index);
+                var page = new PortalPage
+                {
+                    Title = $"Recent {index}",
+                    PrimaryTargetType = PortalTargetType.System,
+                    PrimaryTargetId = fixture.SystemId,
+                    IsPublished = true,
+                    PublishedAt = publishedAt,
+                    PublishedByUserId = userId,
+                    PublishedByDisplayName = "Portal audit actor",
+                    CreatedAt = publishedAt,
+                    CreatedByUserId = userId,
+                    CreatedByDisplayName = "Portal audit actor",
+                    UpdatedAt = publishedAt,
+                    UpdatedByUserId = userId,
+                    UpdatedByDisplayName = "Portal audit actor",
+                    Version = 1,
+                    Sections =
+                    [
+                        new PortalPageSection
+                        {
+                            Heading = "Summary",
+                            SourceKind = PortalPageSectionSourceKind.PrimaryTarget,
+                            ProjectionKind = PortalPageProjectionKind.Summary,
+                            SortOrder = 0,
+                        },
+                    ],
+                };
+                db.PortalPages.Add(page);
+                await db.SaveChangesAsync();
+                var node = PublishedNode($"Recent {index}", PortalPageNodeKind.Page, index + 1, userId, publishedAt);
+                node.ParentId = fixture.RootNodeId;
+                node.PortalPageId = page.Id;
+                db.PortalPageNodes.Add(node);
+                await db.SaveChangesAsync();
+            }
+        }
+
+        using var response = await factory.CreateClient().GetAsync("/api/portal/home");
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var recent = json.RootElement.GetProperty("recentPages");
+        Assert.Equal(8, recent.GetArrayLength());
+        Assert.Equal(
+            Enumerable.Range(1, 8).Select(offset => $"Recent {9 - offset}").ToArray(),
+            recent.EnumerateArray().Select(item => item.GetProperty("title").GetString()).ToArray());
+    }
+
+    [Theory]
+    [InlineData("page-unpublished")]
+    [InlineData("node-unpublished")]
+    [InlineData("ancestor-unpublished")]
+    [InlineData("primary-target-deleted")]
+    [InlineData("document-draft")]
+    [InlineData("document-archived")]
+    [InlineData("explicit-target-deleted")]
+    public async Task Anonymous_home_excludes_pages_that_are_not_currently_readable(string caseName)
+    {
+        using var factory = new BootstrapWebApplicationFactory();
+        var fixture = await SeedCompositePage(factory);
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<KnowledgeHubDbContext>();
+            var userId = await db.Users.Select(item => item.Id).FirstAsync();
+            var now = DateTimeOffset.UtcNow;
+            switch (caseName)
+            {
+                case "page-unpublished":
+                    (await db.PortalPages.SingleAsync(item => item.Id == fixture.PageId)).IsPublished = false;
+                    break;
+                case "node-unpublished":
+                    (await db.PortalPageNodes.SingleAsync(item => item.Id == fixture.PageNodeId)).IsPublished = false;
+                    break;
+                case "ancestor-unpublished":
+                    (await db.PortalPageNodes.SingleAsync(item => item.Id == fixture.RootNodeId)).IsPublished = false;
+                    break;
+                case "primary-target-deleted":
+                    var system = await db.Systems.SingleAsync(item => item.Id == fixture.SystemId);
+                    system.IsDeleted = true;
+                    system.DeletedAt = now;
+                    system.DeletedByUserId = userId;
+                    system.DeletedByDisplayName = "Portal audit actor";
+                    break;
+                case "document-draft":
+                    (await db.KnowledgeDocuments.SingleAsync(item => item.Id == fixture.DocumentId)).LifecycleStatus = DocumentLifecycleStatus.Draft;
+                    break;
+                case "document-archived":
+                    (await db.KnowledgeDocuments.SingleAsync(item => item.Id == fixture.DocumentId)).LifecycleStatus = DocumentLifecycleStatus.Archived;
+                    break;
+                case "explicit-target-deleted":
+                    var document = await db.KnowledgeDocuments.SingleAsync(item => item.Id == fixture.DocumentId);
+                    document.IsDeleted = true;
+                    document.DeletedAt = now;
+                    document.DeletedByUserId = userId;
+                    document.DeletedByDisplayName = "Portal audit actor";
+                    break;
+                default:
+                    throw new InvalidOperationException();
+            }
+            await db.SaveChangesAsync();
+        }
+
+        using var response = await factory.CreateClient().GetAsync("/api/portal/home");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Empty(json.RootElement.GetProperty("recentPages").EnumerateArray());
     }
 
     private static async Task<PortalFixture> SeedCompositePage(

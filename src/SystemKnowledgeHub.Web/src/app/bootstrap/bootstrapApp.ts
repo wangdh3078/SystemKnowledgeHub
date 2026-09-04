@@ -95,7 +95,6 @@ export async function bootstrapApp(): Promise<void> {
   setApiSecurityErrorHandler((error, path) => {
     if (path !== '/current-user') actorStore.handleSecurityError(error)
   })
-  await actorStore.initialize()
   app.use(router)
   app.use(ElAlert)
   app.use(ElButton)

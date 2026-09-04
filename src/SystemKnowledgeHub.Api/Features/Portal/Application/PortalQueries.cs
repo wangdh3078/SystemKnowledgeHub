@@ -10,6 +10,61 @@ public sealed class PortalQueries(
     PortalTargetResolver targetResolver,
     ILogger<PortalQueries> logger)
 {
+    public async Task<PortalHomeResult> GetHomeAsync(CancellationToken cancellationToken)
+    {
+        var context = await LoadReadableTreeAsync(cancellationToken);
+        if (context.Failure != PortalReadFailure.None)
+            return new(context.Failure);
+
+        var categories = context.OrderedNodes
+            .Where(node => node.ParentId is null)
+            .Select(node => new PortalHomeCategoryResponse(
+                node.Id,
+                node.Title,
+                node.NodeKind,
+                node.PortalPageId))
+            .ToArray();
+
+        var recentPages = context.EligiblePages.Values
+            .Where(page => page.PublishedAt is not null)
+            .OrderByDescending(page => page.PublishedAt)
+            .ThenByDescending(page => page.Id)
+            .Take(PortalLimits.MaximumRecentPages)
+            .ToArray();
+        var primaryKeys = recentPages
+            .Select(page => new PortalTargetKey(page.PrimaryTargetType, page.PrimaryTargetId))
+            .Distinct()
+            .ToArray();
+        var primaryTargets = await targetResolver.ResolveEligibleIdentitiesAsync(
+            primaryKeys,
+            cancellationToken);
+        var byId = context.OrderedNodes.ToDictionary(node => node.Id);
+        var recent = recentPages
+            .Where(page => primaryTargets.ContainsKey(new(page.PrimaryTargetType, page.PrimaryTargetId)))
+            .Select(page =>
+            {
+                var primary = primaryTargets[new(page.PrimaryTargetType, page.PrimaryTargetId)];
+                var canonicalPath = context.OrderedNodes
+                    .Where(node => node.NodeKind == PortalPageNodeKind.Page && node.PortalPageId == page.Id)
+                    .Select(node => BuildPath(node, byId))
+                    .OrderBy(path => path, PortalNodePathComparer.Instance)
+                    .First();
+                return new PortalRecentPageResponse(
+                    page.Id,
+                    page.Title,
+                    new(primary.Type, primary.Id, primary.Title),
+                    canonicalPath.Take(canonicalPath.Count - 1)
+                        .Select(node => new PortalBreadcrumbItemResponse(node.Id, node.Title))
+                        .ToArray(),
+                    page.PublishedAt!.Value);
+            })
+            .ToArray();
+
+        return new(
+            PortalReadFailure.None,
+            new PortalHomeResponse("系统知识中心", categories, recent));
+    }
+
     public async Task<PortalTreeResult> GetTreeAsync(CancellationToken cancellationToken)
     {
         var context = await LoadReadableTreeAsync(cancellationToken);
@@ -298,6 +353,7 @@ public sealed class PortalQueries(
                     databaseObject.ObjectName,
                     databaseObject.ObjectType,
                     databaseObject.Summary,
+                    databaseObject.DatabaseComment,
                     databaseObject.EstimatedRows,
                     databaseObject.AccessMode,
                     databaseObject.BusinessKeyColumns,
@@ -319,6 +375,7 @@ public sealed class PortalQueries(
             databaseObject.ObjectName,
             databaseObject.ObjectType,
             databaseObject.Summary,
+            databaseObject.DatabaseComment,
             databaseObject.EstimatedRows,
             databaseObject.AccessMode,
             databaseObject.BusinessKeyColumns);
