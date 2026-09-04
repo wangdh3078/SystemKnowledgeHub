@@ -211,7 +211,7 @@ The first contract uses a closed compatibility matrix rather than a generic comp
 | `StructuredOverview` | PrimaryTarget / ExplicitReference | System, BusinessFunction, DatabaseObject, Integration |
 | `DatabaseStructure` | PrimaryTarget / ExplicitReference | DatabaseObject only |
 | `AttachmentList` | PrimaryTarget / ExplicitReference | KnowledgeDocument only |
-| `TrustSummary` | PrimaryTarget / ExplicitReference / Derived | Target/relations resolved by a bounded recipe |
+| `TrustSummary` | PrimaryTarget / ExplicitReference | One explicit v1 PortalTarget only; `Derived` is not supported in Portal v1 (see PORTAL-A01-AMEND-01) |
 | `RelatedKnowledge` | Derived only | Uses approved direct KnowledgeRelation groups |
 | `Traceability` | Derived only | KnowledgeDocument Requirement/Specification/TestCase only |
 
@@ -753,3 +753,27 @@ composition references canonical knowledge; it never copies or invents facts
 ```
 
 PORTAL-A01 is frozen. PORTAL-B01 may begin only under a separate instruction.
+
+## 43. PORTAL-A01-AMEND-01 — TrustSummary Source Compatibility
+
+**Amendment date:** 2026-09-04
+
+**Reason.** The original compatibility row allowed `Derived + TrustSummary` but did not define a unique bounded recipe. `KnowledgeStatus` belongs to each canonical target or relation, Evidence and HumanConfirmation remain independent facts, and revision confirmation coverage has an exact meaning only for one KnowledgeDocument. No approved contract defines a composite status, weakest/strongest/majority status, cross-target count total, inherited confirmation, or heterogeneous revision-coverage aggregation. Defining one during PORTAL-B04 would create new business semantics and a duplicate aggregate trust truth.
+
+**Previous rule:** `TrustSummary` allowed `PrimaryTarget / ExplicitReference / Derived`, with target or relations to be resolved by an unspecified bounded recipe.
+
+**New frozen rule:** Portal v1 `TrustSummary` represents the safe trust summary of exactly one explicit canonical target. It allows only `PrimaryTarget` and `ExplicitReference`. `Derived + TrustSummary` is an invalid combination.
+
+| SourceKind | TrustSummary target | Portal v1 status |
+| --- | --- | --- |
+| `PrimaryTarget` | `PortalPage.PrimaryTarget` | Allowed |
+| `ExplicitReference` | `PortalPageSection.ReferenceTarget` | Allowed |
+| `Derived` | None | Not supported; invalid combination |
+
+The safe projection contains the target type, safe target title, that target's `KnowledgeStatus`, direct Evidence count, and direct HumanConfirmation count. For a KnowledgeDocument it also contains the existing derived current-revision confirmation coverage state. For every other v1 PortalTarget, `confirmationCoverage` is `null`; Portal does not invent an equivalent state.
+
+TrustSummary must not traverse `KnowledgeRelation`, select related targets, aggregate or deduplicate multiple targets, sum trust counts across targets, calculate minimum/maximum/majority status, aggregate relation trust, aggregate trace-node trust, or inherit confirmation. Relationship and trace items may expose their own allowlisted per-item trust signals inside `RelatedKnowledge` or `Traceability`; they are not inputs to TrustSummary.
+
+Admin Knowledge Composition must not offer `Derived + TrustSummary`. Backend authoring validation returns `400 validation_error` for that combination. Portal read and Admin Preview fail closed if corrupt or legacy data contains it; they must not ignore or reinterpret the section.
+
+This amendment narrows only the compatibility matrix. It does not change `PortalPageProjectionKind`, `PortalPageSectionSourceKind`, Portal persistence, canonical trust facts, TRACE semantics, or database schema, and it requires no migration. PORTAL-B04 must implement the two allowed single-target forms through the shared Portal projection/sanitization path.
