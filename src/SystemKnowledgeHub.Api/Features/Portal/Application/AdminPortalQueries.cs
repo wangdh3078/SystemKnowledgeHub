@@ -109,8 +109,14 @@ public sealed class AdminPortalQueries(
             .Select(section =>
             {
                 AdminPortalTargetSummaryResponse? reference = null;
-                var healthy = PortalCompositionValidator.IsB01ReadableProjection(section.ProjectionKind);
+                var healthy = PortalCompositionValidator.IsReadableProjection(section.ProjectionKind);
                 var message = healthy ? "正常" : "当前版本暂不支持此章节。";
+                if (section.SourceKind == PortalPageSectionSourceKind.PrimaryTarget
+                    && !targets.ContainsKey(new(page.PrimaryTargetType, page.PrimaryTargetId)))
+                {
+                    healthy = false;
+                    message = "主知识对象已失效，需要重新选择。";
+                }
                 if (section.SourceKind == PortalPageSectionSourceKind.ExplicitReference)
                 {
                     var key = new PortalTargetKey(section.ReferenceTargetType!.Value, section.ReferenceTargetId!.Value);
@@ -196,7 +202,7 @@ public sealed class AdminPortalQueries(
                 else
                 {
                     pageTitle = page.Title;
-                    if (page.Sections.Any(section => !PortalCompositionValidator.IsB01ReadableProjection(section.ProjectionKind)))
+                    if (page.Sections.Any(section => !PortalCompositionValidator.IsReadableProjection(section.ProjectionKind)))
                         health = new("projection_unsupported", "页面存在当前版本暂不支持的章节。", false);
                     else if (PortalPublicationReadiness.GetTargetKeys(page).Any(key => !targets.ContainsKey(key)))
                         health = new("reference_missing", "页面存在失效引用。", false);
@@ -366,7 +372,7 @@ public sealed class AdminPortalQueries(
         PortalTargetKey key,
         IReadOnlyDictionary<PortalTargetKey, PortalTargetIdentity> targets) =>
         targets.TryGetValue(key, out var target)
-            ? new(key.Type, key.Id, target.Title, null, "可编排", null, null)
+            ? new(key.Type, key.Id, target.Title, null, "可编排", target.DocumentType, target.Lifecycle)
             : new(key.Type, key.Id, "引用已失效", null, "需要处理", null, null);
 
     private static IReadOnlyList<PortalPageNode> OrderNodes(IEnumerable<PortalPageNode> nodes)

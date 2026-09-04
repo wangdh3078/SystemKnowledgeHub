@@ -1,11 +1,19 @@
 using System.Text.Json.Serialization;
+using SystemKnowledgeHub.Api.Features.KnowledgeDocuments.Domain;
+using SystemKnowledgeHub.Api.Features.Relationships.Domain;
 using SystemKnowledgeHub.Api.Features.Portal.Domain;
+using SystemKnowledgeHub.Api.Shared.Domain;
 
 namespace SystemKnowledgeHub.Api.Features.Portal.Application.Models;
 
 public readonly record struct PortalTargetKey(PortalTargetType Type, long Id);
 
-public sealed record PortalTargetIdentity(PortalTargetType Type, long Id, string Title);
+public sealed record PortalTargetIdentity(
+    PortalTargetType Type,
+    long Id,
+    string Title,
+    string? DocumentType = null,
+    string? Lifecycle = null);
 
 public abstract record PortalResolvedTarget(PortalTargetType Type, long Id, string Title, string? Summary);
 
@@ -124,6 +132,10 @@ public sealed record PortalPageSectionResponse(
 [JsonDerivedType(typeof(PortalDatabaseObjectOverviewContentResponse), "DatabaseObjectOverview")]
 [JsonDerivedType(typeof(PortalIntegrationOverviewContentResponse), "IntegrationOverview")]
 [JsonDerivedType(typeof(PortalDatabaseStructureContentResponse), "DatabaseStructure")]
+[JsonDerivedType(typeof(PortalAttachmentListContentResponse), "AttachmentList")]
+[JsonDerivedType(typeof(PortalTrustSummaryContentResponse), "TrustSummary")]
+[JsonDerivedType(typeof(PortalRelatedKnowledgeContentResponse), "RelatedKnowledge")]
+[JsonDerivedType(typeof(PortalTraceabilityContentResponse), "Traceability")]
 public abstract record PortalSectionContentResponse;
 
 public sealed record PortalSummaryContentResponse(
@@ -136,7 +148,8 @@ public sealed record PortalKnowledgeDocumentBodyContentResponse(
     long DocumentId,
     string Title,
     string DocumentType,
-    string BodyMarkdown) : PortalSectionContentResponse;
+    string BodyMarkdown,
+    IReadOnlyList<long> ImageAttachmentIds) : PortalSectionContentResponse;
 
 public sealed record PortalSystemOverviewContentResponse(
     long SystemId,
@@ -196,6 +209,121 @@ public sealed record PortalDatabaseColumnResponse(
     bool Nullable,
     string? DatabaseComment);
 
+public sealed record PortalAttachmentListContentResponse(
+    long DocumentId,
+    IReadOnlyList<PortalAttachmentResponse> Attachments) : PortalSectionContentResponse;
+
+public sealed record PortalAttachmentResponse(
+    long AttachmentId,
+    string DisplayName,
+    string Kind,
+    string ContentType,
+    long SizeBytes,
+    string PreviewMode,
+    bool CanPreview,
+    bool CanDownload);
+
+public sealed record PortalAttachmentTextPreviewResponse(
+    string Mode,
+    string Text,
+    bool Truncated,
+    int ReturnedBytes,
+    int MaximumBytes);
+
+public sealed record PortalAttachmentCsvPreviewResponse(
+    string Mode,
+    IReadOnlyList<IReadOnlyList<string>> Rows,
+    bool Truncated,
+    IReadOnlyList<string> TruncationReasons,
+    int MaximumRows,
+    int MaximumColumns,
+    int MaximumCharacters);
+
+public sealed record PortalAttachmentSpreadsheetPreviewResponse(
+    string Mode,
+    IReadOnlyList<string> Sheets,
+    string SelectedSheet,
+    IReadOnlyList<PortalAttachmentSpreadsheetRowResponse> Rows,
+    bool Truncated,
+    IReadOnlyList<string> TruncationReasons,
+    int MaximumSheets,
+    int MaximumRows,
+    int MaximumColumns);
+
+public sealed record PortalAttachmentSpreadsheetRowResponse(int RowNumber, IReadOnlyList<string> Cells);
+
+public sealed record PortalTrustSummaryContentResponse(
+    PortalTargetType TargetType,
+    string TargetTitle,
+    KnowledgeStatus KnowledgeStatus,
+    int EvidenceCount,
+    int HumanConfirmationCount,
+    string? ConfirmationCoverage) : PortalSectionContentResponse;
+
+public sealed record PortalRelatedKnowledgeContentResponse(
+    IReadOnlyList<PortalRelatedKnowledgeGroupResponse> Groups) : PortalSectionContentResponse;
+
+public sealed record PortalRelatedKnowledgeGroupResponse(
+    RelationType RelationType,
+    string RelationLabel,
+    string Direction,
+    IReadOnlyList<PortalRelatedKnowledgeItemResponse> Items);
+
+public sealed record PortalRelatedKnowledgeItemResponse(
+    PortalTargetType TargetType,
+    string TargetTitle,
+    KnowledgeStatus KnowledgeStatus,
+    int EvidenceCount,
+    int HumanConfirmationCount,
+    KnowledgeStatus RelationKnowledgeStatus,
+    int RelationEvidenceCount,
+    int RelationHumanConfirmationCount,
+    long? PortalPageId);
+
+public sealed record PortalTraceabilityContentResponse(
+    PortalTraceNodeResponse Root,
+    IReadOnlyList<PortalTracePathResponse> Paths,
+    IReadOnlyList<string> MissingLinkCodes,
+    bool CycleDetected,
+    bool IsTruncated,
+    PortalTraceLimitsResponse Limits) : PortalSectionContentResponse;
+
+public sealed record PortalTracePathResponse(
+    string Kind,
+    IReadOnlyList<PortalTraceNodeResponse> Nodes,
+    IReadOnlyList<PortalTraceEdgeResponse> Edges);
+
+public sealed record PortalTraceNodeResponse(
+    DocumentType DocumentType,
+    string Title,
+    KnowledgeStatus KnowledgeStatus,
+    int EvidenceCount,
+    int HumanConfirmationCount,
+    string ConfirmationCoverage,
+    long? PortalPageId);
+
+public sealed record PortalTraceEdgeResponse(
+    RelationType RelationType,
+    KnowledgeStatus KnowledgeStatus,
+    int EvidenceCount,
+    int HumanConfirmationCount);
+
+public sealed record PortalTraceLimitsResponse(int MaxDepth, int MaxNodes, int MaxEdges);
+
+public sealed record PortalSearchResponse(
+    IReadOnlyList<PortalSearchItemResponse> Items,
+    int Page,
+    int PageSize,
+    int Total);
+
+public sealed record PortalSearchItemResponse(
+    long PageId,
+    string Title,
+    PortalTargetType PrimaryTargetType,
+    string PrimaryTargetTitle,
+    IReadOnlyList<PortalBreadcrumbItemResponse> Breadcrumb,
+    string Snippet);
+
 public enum PortalReadFailure
 {
     None,
@@ -214,3 +342,8 @@ public sealed record PortalHomeResult(
 public sealed record PortalPageResult(
     PortalReadFailure Failure,
     PortalPageResponse? Response = null);
+
+public sealed record PortalSearchResult(
+    PortalReadFailure Failure,
+    PortalSearchResponse? Response = null,
+    IReadOnlyDictionary<string, string[]>? FieldErrors = null);

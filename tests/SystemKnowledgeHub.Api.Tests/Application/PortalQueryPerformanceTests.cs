@@ -60,17 +60,25 @@ public sealed class PortalQueryPerformanceTests
         await db.SaveChangesAsync();
         var oneSectionPage = Page("One section", system.Id, user.Id, now, 1);
         var thirtySectionPage = Page("Thirty sections", system.Id, user.Id, now, 30);
-        db.PortalPages.AddRange(oneSectionPage, thirtySectionPage);
+        var oneTrustPage = Page("One trust section", system.Id, user.Id, now, 1, PortalPageProjectionKind.TrustSummary);
+        var thirtyTrustPage = Page("Thirty trust sections", system.Id, user.Id, now, 30, PortalPageProjectionKind.TrustSummary);
+        db.PortalPages.AddRange(oneSectionPage, thirtySectionPage, oneTrustPage, thirtyTrustPage);
         await db.SaveChangesAsync();
         var root = Node("Root", PortalPageNodeKind.Folder, null, null, 0, user.Id, now);
         db.PortalPageNodes.Add(root);
         await db.SaveChangesAsync();
         db.PortalPageNodes.AddRange(
             Node("One", PortalPageNodeKind.Page, root.Id, oneSectionPage.Id, 0, user.Id, now),
-            Node("Thirty", PortalPageNodeKind.Page, root.Id, thirtySectionPage.Id, 1, user.Id, now));
+            Node("Thirty", PortalPageNodeKind.Page, root.Id, thirtySectionPage.Id, 1, user.Id, now),
+            Node("One trust", PortalPageNodeKind.Page, root.Id, oneTrustPage.Id, 2, user.Id, now),
+            Node("Thirty trust", PortalPageNodeKind.Page, root.Id, thirtyTrustPage.Id, 3, user.Id, now));
         await db.SaveChangesAsync();
         var resolver = new PortalTargetResolver(db);
-        var queries = new PortalQueries(db, resolver, NullLogger<PortalQueries>.Instance);
+        var queries = new PortalQueries(
+            db,
+            resolver,
+            new PortalB04ProjectionService(db, resolver),
+            NullLogger<PortalQueries>.Instance);
 
         counter.Reset();
         var oneResult = await queries.GetPageAsync(oneSectionPage.Id, CancellationToken.None);
@@ -83,6 +91,22 @@ public sealed class PortalQueryPerformanceTests
         Assert.Equal(PortalReadFailure.None, thirtyResult.Failure);
         Assert.Equal(oneCount, thirtyCount);
         Assert.InRange(thirtyCount, 1, 25);
+
+        PortalQueries Queries() => new(
+            db,
+            resolver,
+            new PortalB04ProjectionService(db, resolver),
+            NullLogger<PortalQueries>.Instance);
+        counter.Reset();
+        var oneTrustResult = await Queries().GetPageAsync(oneTrustPage.Id, CancellationToken.None);
+        var oneTrustCount = counter.Count;
+        counter.Reset();
+        var thirtyTrustResult = await Queries().GetPageAsync(thirtyTrustPage.Id, CancellationToken.None);
+        var thirtyTrustCount = counter.Count;
+        Assert.Equal(PortalReadFailure.None, oneTrustResult.Failure);
+        Assert.Equal(PortalReadFailure.None, thirtyTrustResult.Failure);
+        Assert.Equal(oneTrustCount, thirtyTrustCount);
+        Assert.InRange(thirtyTrustCount, 1, 40);
     }
 
     private static PortalPage Page(
@@ -90,7 +114,8 @@ public sealed class PortalQueryPerformanceTests
         long systemId,
         long userId,
         DateTimeOffset now,
-        int sectionCount)
+        int sectionCount,
+        PortalPageProjectionKind projectionKind = PortalPageProjectionKind.Summary)
     {
         var page = new PortalPage
         {
@@ -112,9 +137,9 @@ public sealed class PortalQueryPerformanceTests
         page.Sections = Enumerable.Range(0, sectionCount).Select(index => new PortalPageSection
         {
             PortalPage = page,
-            Heading = $"Summary {index}",
+            Heading = $"Section {index}",
             SourceKind = PortalPageSectionSourceKind.PrimaryTarget,
-            ProjectionKind = PortalPageProjectionKind.Summary,
+            ProjectionKind = projectionKind,
             SortOrder = index,
         }).ToArray();
         return page;

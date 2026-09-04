@@ -37,6 +37,7 @@ export interface MarkdownAttachmentImageContext {
   readonly revisionNumber?: number
   readonly imageAttachmentIds: readonly number[]
   readonly transientImageUrls?: ReadonlyMap<number, string>
+  readonly resolveImageUrl?: (attachmentId: number) => string
 }
 
 interface MarkdownRenderEnvironment {
@@ -365,6 +366,7 @@ renderer.renderer.rules.image = (tokens, index, options, environment, self) => {
   try {
     resolvedSource =
       transientUrl ??
+      imageContext.resolveImageUrl?.(attachmentId) ??
       knowledgeDocumentImageContentUrl(
         imageContext.documentId,
         attachmentId,

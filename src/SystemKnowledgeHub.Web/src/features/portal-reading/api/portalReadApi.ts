@@ -4,9 +4,11 @@ import { normalizeApiError } from '../../../api/errors/normalizeApiError'
 import {
   decodePortalHome,
   decodePortalPage,
+  decodePortalSearch,
   decodePortalTree,
   type PortalHomeResponse,
   type PortalPageResponse,
+  type PortalSearchResponse,
   type PortalTreeResponse,
 } from './portalReadContracts'
 
@@ -50,7 +52,28 @@ export function createPortalReadClient(baseUrl: string, fetchImplementation: typ
     getPage(id: number, signal?: AbortSignal): Promise<PortalPageResponse> {
       return get(`/portal/pages/${id}`, decodePortalPage, signal)
     },
+    search(
+      query: string,
+      page = 1,
+      pageSize = 20,
+      signal?: AbortSignal,
+    ): Promise<PortalSearchResponse> {
+      const parameters = new URLSearchParams({
+        q: query,
+        page: String(page),
+        pageSize: String(pageSize),
+      })
+      return get(`/portal/search?${parameters.toString()}`, decodePortalSearch, signal)
+    },
   }
 }
 
 export const portalReadApi = createPortalReadClient(environment.apiBaseUrl)
+
+export function portalAttachmentUrl(
+  pageId: number,
+  attachmentId: number,
+  action: 'content' | 'download' | 'preview',
+): string {
+  return `${environment.apiBaseUrl}/portal/pages/${pageId}/attachments/${attachmentId}/${action}`
+}

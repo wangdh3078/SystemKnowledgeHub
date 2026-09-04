@@ -37,25 +37,28 @@ describe('PORTAL-B02 management surface', () => {
     expect(bootstrapSource).toContain('element-plus/es/components/loading/style/css')
   })
 
-  it('exposes only the four B01-supported projections and no Derived authoring', () => {
+  it('exposes all eight projections with constrained Derived authoring', () => {
     for (const projection of [
       'Summary',
       'KnowledgeDocumentBody',
       'StructuredOverview',
       'DatabaseStructure',
+      'AttachmentList',
+      'TrustSummary',
+      'RelatedKnowledge',
+      'Traceability',
     ]) {
       expect(managementSource).toContain(projection)
     }
-    for (const deferred of ['AttachmentList', 'TrustSummary', 'RelatedKnowledge', 'Traceability']) {
-      expect(managementSource).not.toContain(deferred)
-    }
-    expect(managementSource).not.toContain('value="Derived"')
+    expect(managementSource).toContain('value="Derived"')
+    expect(managementSource).toContain("projection === 'RelatedKnowledge'")
+    expect(managementSource).toContain("projection === 'Traceability'")
   })
 
-  it('renders preview through the existing safe Markdown component and local table overflow', () => {
-    expect(previewSource).toContain('KnowledgeDocumentMarkdown')
+  it('renders preview through the shared closed Portal renderer', () => {
+    expect(previewSource).toContain('PortalSectionRenderer')
     expect(previewSource).not.toContain('v-html')
-    expect(previewSource).toContain('portal-preview-table-wrap')
+    expect(previewSource).toContain('preview-mode')
     expect(previewSource).toContain('预览')
     expect(stylesSource).toContain('margin-top: 5vh')
     expect(stylesSource).toContain('max-height: 90vh')

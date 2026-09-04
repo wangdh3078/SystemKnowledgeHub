@@ -85,10 +85,8 @@ public sealed class AdminPortalService(
         }).ToArray();
         foreach (var pair in PortalCompositionValidator.ValidateSections(request.PrimaryTarget!.Type, candidateSections))
             errors[pair.Key] = pair.Value;
-        if (requestedSections.Any(item => item.SourceKind == PortalPageSectionSourceKind.Derived))
-            errors["sections.sourceKind"] = ["当前版本暂不支持派生章节。"];
-        if (requestedSections.Any(item => !PortalCompositionValidator.IsB01ReadableProjection(item.ProjectionKind)))
-            errors["sections.projectionKind"] = ["当前版本仅支持摘要、知识文档正文、结构化概览和数据库结构。"];
+        if (requestedSections.Any(item => !PortalCompositionValidator.IsReadableProjection(item.ProjectionKind)))
+            errors["sections.projectionKind"] = ["章节投影类型无效。"];
         if (errors.Count > 0) return Validation<AdminPortalPageDetailResponse>(errors);
 
         var targetKeys = new[] { new PortalTargetKey(request.PrimaryTarget.Type, request.PrimaryTarget.Id) }

@@ -1,3 +1,8 @@
+import {
+  decodePortalPage,
+  type PortalPageResponse,
+} from '../../portal-reading/api/portalReadContracts'
+
 export const portalTargetTypes = [
   'System',
   'BusinessFunction',
@@ -6,26 +11,24 @@ export const portalTargetTypes = [
   'Integration',
 ] as const
 export const portalNodeKinds = ['Folder', 'Page'] as const
-export const portalSourceKinds = ['PrimaryTarget', 'ExplicitReference'] as const
+export const portalSourceKinds = ['PrimaryTarget', 'ExplicitReference', 'Derived'] as const
 export const portalProjectionKinds = [
   'Summary',
   'KnowledgeDocumentBody',
   'StructuredOverview',
   'DatabaseStructure',
-] as const
-export const portalPersistedProjectionKinds = [
-  ...portalProjectionKinds,
   'AttachmentList',
   'TrustSummary',
   'RelatedKnowledge',
   'Traceability',
 ] as const
+export const portalPersistedProjectionKinds = portalProjectionKinds
 
 export type PortalTargetType = (typeof portalTargetTypes)[number]
 export type PortalNodeKind = (typeof portalNodeKinds)[number]
 export type PortalSourceKind = (typeof portalSourceKinds)[number]
 export type PortalProjectionKind = (typeof portalProjectionKinds)[number]
-export type PortalPersistedProjectionKind = (typeof portalPersistedProjectionKinds)[number]
+export type PortalPersistedProjectionKind = PortalProjectionKind
 
 export interface PortalTargetSummary {
   readonly type: PortalTargetType
@@ -131,16 +134,7 @@ export interface PortalPreviewSection {
   readonly content: Readonly<Record<string, unknown>>
 }
 
-export interface PortalPreviewPage {
-  readonly id: number
-  readonly title: string
-  readonly primaryTarget: {
-    readonly type: PortalTargetType
-    readonly id: number
-    readonly title: string
-  }
-  readonly sections: readonly PortalPreviewSection[]
-}
+export type PortalPreviewPage = PortalPageResponse
 
 export interface PortalPreview {
   readonly page: PortalPreviewPage | null
@@ -342,31 +336,7 @@ export function decodePortalPreview(value: unknown): PortalPreview {
   const root = object(value, 'preview')
   let page: PortalPreviewPage | null = null
   if (root.page !== null) {
-    const source = object(root.page, 'preview.page')
-    const primary = object(source.primaryTarget, 'preview.page.primaryTarget')
-    page = {
-      id: integer(source.id, 'preview.page.id', 1),
-      title: string(source.title, 'preview.page.title'),
-      primaryTarget: {
-        type: enumValue(primary.type, 'preview.page.primaryTarget.type', portalTargetTypes),
-        id: integer(primary.id, 'preview.page.primaryTarget.id', 1),
-        title: string(primary.title, 'preview.page.primaryTarget.title'),
-      },
-      sections: array(source.sections, 'preview.page.sections').map((value, index) => {
-        const item = object(value, `preview.page.sections[${index}]`)
-        return {
-          id: integer(item.id, 'preview.section.id', 1),
-          heading: string(item.heading, 'preview.section.heading'),
-          sourceKind: string(item.sourceKind, 'preview.section.sourceKind'),
-          projectionKind: enumValue(
-            item.projectionKind,
-            'preview.section.projectionKind',
-            portalProjectionKinds,
-          ),
-          content: object(item.content, 'preview.section.content'),
-        }
-      }),
-    }
+    page = decodePortalPage(root.page)
   }
   return { page, readiness: decodeReadiness(root.readiness) }
 }

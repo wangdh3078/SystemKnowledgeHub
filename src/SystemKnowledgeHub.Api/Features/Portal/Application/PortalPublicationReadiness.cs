@@ -24,7 +24,7 @@ public sealed class PortalPublicationReadiness(
         else
             blockers.Add(new("composition_invalid", "页面或章节配置无效，请修正后再发布。"));
 
-        if (page.Sections.All(section => PortalCompositionValidator.IsB01ReadableProjection(section.ProjectionKind)))
+        if (page.Sections.All(section => PortalCompositionValidator.IsReadableProjection(section.ProjectionKind)))
             checks.Add(new("projections_supported", "所有章节均可在当前门户中展示。"));
         else
             blockers.Add(new("projection_unsupported", "存在当前版本暂不支持的章节，请删除或更换章节类型。"));
@@ -55,7 +55,7 @@ public sealed class PortalPublicationReadiness(
             .ToArray();
         var documentStates = await dbContext.KnowledgeDocuments.AsNoTracking()
             .Where(document => documentIds.Contains(document.Id))
-            .Select(document => new { document.Id, document.Title, document.LifecycleStatus })
+            .Select(document => new { document.Id, document.Title, document.DocumentType, document.LifecycleStatus })
             .ToListAsync(cancellationToken);
         foreach (var document in documentStates.Where(document => document.LifecycleStatus != DocumentLifecycleStatus.Published))
         {
@@ -66,6 +66,17 @@ public sealed class PortalPublicationReadiness(
         }
         if (documentStates.All(document => document.LifecycleStatus == DocumentLifecycleStatus.Published))
             checks.Add(new("knowledge_documents_published", "引用的知识文档均已发布。"));
+
+        if (page.Sections.Any(section => section.ProjectionKind == PortalPageProjectionKind.Traceability))
+        {
+            var primaryDocument = documentStates.SingleOrDefault(document => document.Id == page.PrimaryTargetId);
+            if (page.PrimaryTargetType != PortalTargetType.KnowledgeDocument
+                || primaryDocument is null
+                || primaryDocument.DocumentType is not (DocumentType.Requirement or DocumentType.Specification or DocumentType.TestCase))
+                blockers.Add(new("traceability_target_invalid", "追溯区块仅支持需求、规格或测试用例知识文档作为主目标。"));
+            else
+                checks.Add(new("traceability_target_valid", "追溯区块主目标有效。"));
+        }
 
         var nodes = await dbContext.PortalPageNodes.AsNoTracking().ToListAsync(cancellationToken);
         var placements = nodes.Where(node => node.NodeKind == PortalPageNodeKind.Page && node.PortalPageId == page.Id).ToArray();

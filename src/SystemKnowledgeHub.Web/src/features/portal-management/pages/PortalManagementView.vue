@@ -75,10 +75,15 @@ const projectionLabels: Readonly<Record<PortalProjectionKind, string>> = {
   KnowledgeDocumentBody: '知识文档正文',
   StructuredOverview: '结构化概览',
   DatabaseStructure: '数据库结构',
+  AttachmentList: '附件',
+  TrustSummary: '可信依据',
+  RelatedKnowledge: '相关知识',
+  Traceability: '需求规格测试追溯',
 }
 const sourceLabels: Readonly<Record<PortalSourceKind, string>> = {
   PrimaryTarget: '主知识对象',
   ExplicitReference: '已有知识引用',
+  Derived: '自动派生',
 }
 const allTargetTypes: readonly PortalTargetType[] = [
   'System',
@@ -338,7 +343,8 @@ async function createPage(): Promise<void> {
 }
 
 function allowedTypesForProjection(projection: PortalProjectionKind): readonly PortalTargetType[] {
-  if (projection === 'KnowledgeDocumentBody') return ['KnowledgeDocument']
+  if (projection === 'KnowledgeDocumentBody' || projection === 'AttachmentList')
+    return ['KnowledgeDocument']
   if (projection === 'DatabaseStructure') return ['DatabaseObject']
   if (projection === 'StructuredOverview')
     return ['System', 'BusinessFunction', 'DatabaseObject', 'Integration']
@@ -353,13 +359,31 @@ function projectionLabel(projection: PortalPersistedProjectionKind): string {
 
 function projectionCompatible(
   projection: PortalPersistedProjectionKind,
+  sourceKind: PortalSourceKind,
   targetType: PortalTargetType | undefined,
 ): projection is PortalProjectionKind {
+  if (projection === 'RelatedKnowledge') return sourceKind === 'Derived'
+  if (projection === 'Traceability')
+    return (
+      sourceKind === 'Derived' &&
+      editorPrimary.value?.type === 'KnowledgeDocument' &&
+      ['Requirement', 'Specification', 'TestCase'].includes(editorPrimary.value.documentType ?? '')
+    )
   return (
+    sourceKind !== 'Derived' &&
     targetType !== undefined &&
     projection in projectionLabels &&
     allowedTypesForProjection(projection as PortalProjectionKind).includes(targetType)
   )
+}
+
+function handleProjectionChange(): void {
+  sectionDraft.referenceTarget = null
+  sectionDraft.sourceKind = ['RelatedKnowledge', 'Traceability'].includes(
+    sectionDraft.projectionKind,
+  )
+    ? 'Derived'
+    : 'PrimaryTarget'
 }
 
 function openSection(section?: EditableSection): void {
@@ -385,7 +409,7 @@ function saveSectionDraft(): void {
     sectionDraft.sourceKind === 'PrimaryTarget'
       ? editorPrimary.value?.type
       : sectionDraft.referenceTarget?.type
-  if (!projectionCompatible(sectionDraft.projectionKind, targetType))
+  if (!projectionCompatible(sectionDraft.projectionKind, sectionDraft.sourceKind, targetType))
     return void ElMessage.warning('章节类型与知识对象不兼容。')
   if (sectionDraft.sourceKind === 'ExplicitReference' && !sectionDraft.referenceTarget)
     return void ElMessage.warning('请选择已有知识。')
@@ -968,9 +992,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
         ><el-form-item label="章节标题"
           ><el-input v-model="sectionDraft.heading" maxlength="200" /></el-form-item
         ><el-form-item label="展示内容"
-          ><el-select
-            v-model="sectionDraft.projectionKind"
-            @change="sectionDraft.referenceTarget = null"
+          ><el-select v-model="sectionDraft.projectionKind" @change="handleProjectionChange"
             ><el-option
               v-for="(label, value) in projectionLabels"
               :key="value"
@@ -980,8 +1002,19 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
           ><el-radio-group
             v-model="sectionDraft.sourceKind"
             @change="sectionDraft.referenceTarget = null"
-            ><el-radio value="PrimaryTarget">主知识对象</el-radio
-            ><el-radio value="ExplicitReference">选择已有知识</el-radio></el-radio-group
+            ><el-radio
+              v-if="!['RelatedKnowledge', 'Traceability'].includes(sectionDraft.projectionKind)"
+              value="PrimaryTarget"
+              >主知识对象</el-radio
+            ><el-radio
+              v-if="!['RelatedKnowledge', 'Traceability'].includes(sectionDraft.projectionKind)"
+              value="ExplicitReference"
+              >选择已有知识</el-radio
+            ><el-radio
+              v-if="['RelatedKnowledge', 'Traceability'].includes(sectionDraft.projectionKind)"
+              value="Derived"
+              >自动派生</el-radio
+            ></el-radio-group
           ></el-form-item
         ><el-form-item v-if="sectionDraft.sourceKind === 'PrimaryTarget'" label="使用对象"
           ><p>
@@ -991,7 +1024,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
                 : '未选择主知识对象'
             }}
           </p></el-form-item
-        ><el-form-item v-else label="引用知识"
+        ><el-form-item v-else-if="sectionDraft.sourceKind === 'ExplicitReference'" label="引用知识"
           ><div class="portal-dialog-target">
             <span>{{
               sectionDraft.referenceTarget
@@ -1009,6 +1042,8 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
               >选择已有知识</el-button
             >
           </div></el-form-item
+        ><el-form-item v-else label="派生来源"
+          ><p>根据页面主知识对象及规范关系自动生成，不复制知识事实。</p></el-form-item
         ></el-form
       ><template #footer
         ><el-button @click="sectionDialogOpen = false">取消</el-button

@@ -27,6 +27,7 @@ import DiscoverySyncView from '../../features/database-discovery/pages/Discovery
 import PortalManagementView from '../../features/portal-management/pages/PortalManagementView.vue'
 import PortalHomeView from '../../features/portal-reading/pages/PortalHomeView.vue'
 import PortalPageView from '../../features/portal-reading/pages/PortalPageView.vue'
+import PortalSearchView from '../../features/portal-reading/pages/PortalSearchView.vue'
 import PortalNotFoundView from '../../features/portal-reading/pages/PortalNotFoundView.vue'
 
 export const routes: readonly RouteRecordRaw[] = [
@@ -39,6 +40,12 @@ export const routes: readonly RouteRecordRaw[] = [
     name: 'portal-home',
     component: PortalHomeView,
     meta: { title: '', layout: 'portal', navigationKey: null },
+  },
+  {
+    path: '/portal/search',
+    name: 'portal-search',
+    component: PortalSearchView,
+    meta: { title: '搜索知识', layout: 'portal', navigationKey: null },
   },
   {
     path: '/portal/pages/:id',

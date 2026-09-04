@@ -47,10 +47,15 @@ public sealed class PortalTargetResolver(KnowledgeHubDbContext dbContext)
         var knowledgeDocumentIds = Ids(keys, PortalTargetType.KnowledgeDocument);
         var documents = await dbContext.KnowledgeDocuments.AsNoTracking()
             .Where(item => knowledgeDocumentIds.Contains(item.Id))
-            .Select(item => new { item.Id, item.Title })
+            .Select(item => new { item.Id, item.Title, item.DocumentType, item.LifecycleStatus })
             .ToListAsync(cancellationToken);
         foreach (var item in documents)
-            Add(resolved, PortalTargetType.KnowledgeDocument, item.Id, item.Title);
+            resolved[new(PortalTargetType.KnowledgeDocument, item.Id)] = new(
+                PortalTargetType.KnowledgeDocument,
+                item.Id,
+                item.Title,
+                item.DocumentType.ToString(),
+                item.LifecycleStatus.ToString());
 
         var integrationIds = Ids(keys, PortalTargetType.Integration);
         var integrations = await dbContext.Integrations.AsNoTracking()
@@ -108,10 +113,15 @@ public sealed class PortalTargetResolver(KnowledgeHubDbContext dbContext)
         var documents = await dbContext.KnowledgeDocuments.AsNoTracking()
             .Where(item => knowledgeDocumentIds.Contains(item.Id)
                 && item.LifecycleStatus == DocumentLifecycleStatus.Published)
-            .Select(item => new { item.Id, item.Title })
+            .Select(item => new { item.Id, item.Title, item.DocumentType, item.LifecycleStatus })
             .ToListAsync(cancellationToken);
         foreach (var item in documents)
-            Add(resolved, PortalTargetType.KnowledgeDocument, item.Id, item.Title);
+            resolved[new(PortalTargetType.KnowledgeDocument, item.Id)] = new(
+                PortalTargetType.KnowledgeDocument,
+                item.Id,
+                item.Title,
+                item.DocumentType.ToString(),
+                item.LifecycleStatus.ToString());
 
         var integrationIds = Ids(keys, PortalTargetType.Integration);
         var integrations = await dbContext.Integrations.AsNoTracking()

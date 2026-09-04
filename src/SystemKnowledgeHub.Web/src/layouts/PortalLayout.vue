@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ArrowLeft, ArrowRight, Close, Menu } from '@element-plus/icons-vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { parseSafeApiId } from '../api/contracts/id'
 import PortalTreeNavigation from '../features/portal-reading/components/PortalTreeNavigation.vue'
 import { portalReadApi } from '../features/portal-reading/api/portalReadApi'
@@ -9,6 +9,8 @@ import type { PortalTreeNode } from '../features/portal-reading/api/portalReadCo
 import '../features/portal-reading/portal-reading.css'
 
 const route = useRoute()
+const router = useRouter()
+const searchQuery = ref(typeof route.query.q === 'string' ? route.query.q : '')
 const treeItems = ref<readonly PortalTreeNode[]>([])
 const treeLoading = ref(true)
 const treeFailed = ref(false)
@@ -76,6 +78,15 @@ function handleKeydown(event: KeyboardEvent): void {
   if (event.key === 'Escape' && narrowTreeOpen.value) closeNarrowTree()
 }
 
+function submitSearch(): void {
+  const query = searchQuery.value.trim()
+  if (!query) return
+  void router.push({
+    name: 'portal-search',
+    query: { q: query.slice(0, 100), page: 1, pageSize: 20 },
+  })
+}
+
 watch(activePageId, expandActivePath)
 onMounted(() => {
   document.addEventListener('keydown', handleKeydown)
@@ -93,6 +104,15 @@ onBeforeUnmount(() => {
       <RouterLink class="portal-header__brand" :to="{ name: 'portal-home' }"
         >系统知识中心</RouterLink
       >
+      <form class="portal-header__search" role="search" @submit.prevent="submitSearch">
+        <input
+          v-model="searchQuery"
+          maxlength="100"
+          aria-label="搜索知识"
+          placeholder="搜索知识..."
+        />
+        <button type="submit">搜索</button>
+      </form>
     </header>
     <div class="portal-layout__body" :class="{ 'is-tree-collapsed': treeCollapsed }">
       <aside class="portal-sidebar" aria-label="知识目录侧栏">

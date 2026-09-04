@@ -78,6 +78,11 @@ onBeforeUnmount(() => request?.abort())
         >{{ page.primaryTarget.title }}
       </p>
     </header>
-    <PortalSectionRenderer v-for="section in page.sections" :key="section.id" :section="section" />
+    <PortalSectionRenderer
+      v-for="section in page.sections"
+      :key="section.id"
+      :section="section"
+      :page-id="page.id"
+    />
   </article>
 </template>

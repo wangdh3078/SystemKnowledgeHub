@@ -65,7 +65,7 @@ public sealed class PortalCompositionValidator(KnowledgeHubDbContext dbContext)
                 PortalPageSectionSourceKind.ExplicitReference => section.ReferenceTargetType,
                 _ => null,
             };
-            if (!IsProjectionCompatible(section.SourceKind, section.ProjectionKind, targetType))
+            if (!IsProjectionCompatible(primaryTargetType, section.SourceKind, section.ProjectionKind, targetType))
                 errors[$"{prefix}.projectionKind"] = ["区块投影与来源或目标类型不兼容。"];
         }
 
@@ -135,13 +135,11 @@ public sealed class PortalCompositionValidator(KnowledgeHubDbContext dbContext)
         return errors;
     }
 
-    public static bool IsB01ReadableProjection(PortalPageProjectionKind projectionKind) =>
-        projectionKind is PortalPageProjectionKind.Summary
-            or PortalPageProjectionKind.KnowledgeDocumentBody
-            or PortalPageProjectionKind.StructuredOverview
-            or PortalPageProjectionKind.DatabaseStructure;
+    public static bool IsReadableProjection(PortalPageProjectionKind projectionKind) =>
+        Enum.IsDefined(projectionKind);
 
     private static bool IsProjectionCompatible(
+        PortalTargetType primaryTargetType,
         PortalPageSectionSourceKind sourceKind,
         PortalPageProjectionKind projectionKind,
         PortalTargetType? targetType) => projectionKind switch
@@ -156,9 +154,12 @@ public sealed class PortalCompositionValidator(KnowledgeHubDbContext dbContext)
                 && targetType == PortalTargetType.DatabaseObject,
             PortalPageProjectionKind.AttachmentList => sourceKind is not PortalPageSectionSourceKind.Derived
                 && targetType == PortalTargetType.KnowledgeDocument,
-            PortalPageProjectionKind.TrustSummary => true,
+            PortalPageProjectionKind.TrustSummary => sourceKind is not PortalPageSectionSourceKind.Derived
+                && targetType is not null,
             PortalPageProjectionKind.RelatedKnowledge => sourceKind == PortalPageSectionSourceKind.Derived,
-            PortalPageProjectionKind.Traceability => sourceKind == PortalPageSectionSourceKind.Derived,
+            PortalPageProjectionKind.Traceability => sourceKind == PortalPageSectionSourceKind.Derived
+                && targetType is null
+                && primaryTargetType == PortalTargetType.KnowledgeDocument,
             _ => false,
         };
 

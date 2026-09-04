@@ -284,6 +284,7 @@ builder.Services.AddScoped<KnowledgeDocumentService>();
 builder.Services.AddScoped<KnowledgeDocumentDeleteService>();
 builder.Services.AddScoped<PortalCompositionValidator>();
 builder.Services.AddScoped<PortalTargetResolver>();
+builder.Services.AddScoped<PortalB04ProjectionService>();
 builder.Services.AddScoped<PortalQueries>();
 builder.Services.AddScoped<PortalPublicationReadiness>();
 builder.Services.AddScoped<AdminPortalQueries>();

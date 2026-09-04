@@ -33,7 +33,7 @@ describe('Portal read API', () => {
       headers: { Accept: 'application/json' },
       signal: undefined,
     })
-    expect(Object.keys(client)).toEqual(['getHome', 'getTree', 'getPage'])
+    expect(Object.keys(client)).toEqual(['getHome', 'getTree', 'getPage', 'search'])
   })
 
   it('strictly validates home limits and top-level categories', () => {

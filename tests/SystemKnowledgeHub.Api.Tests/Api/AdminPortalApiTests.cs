@@ -361,7 +361,7 @@ public sealed class AdminPortalApiTests
     }
 
     [Fact]
-    public async Task Section_validation_rejects_incompatible_derived_unsupported_and_limit_excess_without_partial_write()
+    public async Task Section_validation_rejects_incompatible_trust_derived_and_limit_excess_without_partial_write()
     {
         using var factory = new BootstrapWebApplicationFactory();
         var (documentId, _) = await SeedDocumentAndIntegration(factory, published: true);
@@ -374,8 +374,7 @@ public sealed class AdminPortalApiTests
         foreach (var section in new object[]
         {
             new { id = (long?)null, heading = "wrong target", sourceKind = "PrimaryTarget", referenceTarget = (object?)null, projectionKind = "KnowledgeDocumentBody", sortOrder = 0 },
-            new { id = (long?)null, heading = "derived", sourceKind = "Derived", referenceTarget = (object?)null, projectionKind = "RelatedKnowledge", sortOrder = 0 },
-            new { id = (long?)null, heading = "deferred", sourceKind = "ExplicitReference", referenceTarget = (object?)new { type = "KnowledgeDocument", id = documentId }, projectionKind = "AttachmentList", sortOrder = 0 },
+            new { id = (long?)null, heading = "trust cannot derive", sourceKind = "Derived", referenceTarget = (object?)null, projectionKind = "TrustSummary", sortOrder = 0 },
         })
         {
             using var response = await client.PutAsJsonAsync($"/api/admin/portal/pages/{pageId}", new
@@ -431,7 +430,39 @@ public sealed class AdminPortalApiTests
     }
 
     [Fact]
-    public async Task Archived_deleted_and_unsupported_targets_are_reported_as_safe_publication_blockers()
+    public async Task B04_sections_save_and_preview_through_the_shared_projection_builder()
+    {
+        using var factory = new BootstrapWebApplicationFactory();
+        var (documentId, _) = await SeedDocumentAndIntegration(factory, published: true);
+        var systemId = await FirstSystemId(factory);
+        using var client = factory.CreateAuthenticatedClient();
+        var page = await CreatePage(client, "B04 composition", systemId);
+        var pageId = page.GetProperty("id").GetInt64();
+        using var update = await client.PutAsJsonAsync($"/api/admin/portal/pages/{pageId}", new
+        {
+            title = "B04 composition",
+            primaryTarget = new { type = "System", id = systemId },
+            sections = new object[]
+            {
+                new { id = (long?)null, heading = "Attachments", sourceKind = "ExplicitReference", referenceTarget = (object)new { type = "KnowledgeDocument", id = documentId }, projectionKind = "AttachmentList", sortOrder = 0 },
+                new { id = (long?)null, heading = "Primary trust", sourceKind = "PrimaryTarget", referenceTarget = (object?)null, projectionKind = "TrustSummary", sortOrder = 1 },
+                new { id = (long?)null, heading = "Document trust", sourceKind = "ExplicitReference", referenceTarget = (object)new { type = "KnowledgeDocument", id = documentId }, projectionKind = "TrustSummary", sortOrder = 2 },
+                new { id = (long?)null, heading = "Related", sourceKind = "Derived", referenceTarget = (object?)null, projectionKind = "RelatedKnowledge", sortOrder = 3 },
+            },
+            concurrencyToken = page.GetProperty("concurrencyToken").GetString(),
+        });
+        Assert.Equal(HttpStatusCode.OK, update.StatusCode);
+        using var preview = await client.GetAsync($"/api/admin/portal/pages/{pageId}/preview");
+        Assert.Equal(HttpStatusCode.OK, preview.StatusCode);
+        var body = await preview.Content.ReadAsStringAsync();
+        Assert.Contains("AttachmentList", body);
+        Assert.Equal(4, body.Split("TrustSummary", StringSplitOptions.None).Length - 1);
+        Assert.Contains("RelatedKnowledge", body);
+        Assert.DoesNotContain("ProviderName", body, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Archived_and_deleted_targets_are_reported_as_safe_publication_blockers()
     {
         using var factory = new BootstrapWebApplicationFactory();
         var (documentId, _) = await SeedDocumentAndIntegration(factory, published: true);

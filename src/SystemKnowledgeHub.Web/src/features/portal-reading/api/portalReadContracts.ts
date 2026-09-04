@@ -11,11 +11,17 @@ export const portalProjectionKinds = [
   'KnowledgeDocumentBody',
   'StructuredOverview',
   'DatabaseStructure',
+  'AttachmentList',
+  'TrustSummary',
+  'RelatedKnowledge',
+  'Traceability',
 ] as const
+export const portalKnowledgeStatuses = ['Unknown', 'Inferred', 'Confirmed'] as const
 
 export type PortalTargetType = (typeof portalTargetTypes)[number]
 export type PortalNodeKind = (typeof portalNodeKinds)[number]
 export type PortalProjectionKind = (typeof portalProjectionKinds)[number]
+export type PortalKnowledgeStatus = (typeof portalKnowledgeStatuses)[number]
 
 export interface PortalTargetIdentity {
   readonly type: PortalTargetType
@@ -76,6 +82,7 @@ export interface PortalKnowledgeDocumentBodyContent {
   readonly title: string
   readonly documentType: string
   readonly bodyMarkdown: string
+  readonly imageAttachmentIds?: readonly number[]
 }
 
 export interface PortalSystemOverviewContent {
@@ -147,6 +154,85 @@ export interface PortalDatabaseStructureContent {
   readonly columns: readonly PortalDatabaseColumn[]
 }
 
+export interface PortalAttachment {
+  readonly attachmentId: number
+  readonly displayName: string
+  readonly kind: string
+  readonly contentType: string
+  readonly sizeBytes: number
+  readonly previewMode: string
+  readonly canPreview: boolean
+  readonly canDownload: boolean
+}
+export interface PortalAttachmentListContent {
+  readonly kind: 'AttachmentList'
+  readonly documentId: number
+  readonly attachments: readonly PortalAttachment[]
+}
+export interface PortalTrustSummaryContent {
+  readonly kind: 'TrustSummary'
+  readonly targetType: PortalTargetType
+  readonly targetTitle: string
+  readonly knowledgeStatus: PortalKnowledgeStatus
+  readonly evidenceCount: number
+  readonly humanConfirmationCount: number
+  readonly confirmationCoverage: string | null
+}
+export interface PortalRelatedKnowledgeItem {
+  readonly targetType: PortalTargetType
+  readonly targetTitle: string
+  readonly knowledgeStatus: PortalKnowledgeStatus
+  readonly evidenceCount: number
+  readonly humanConfirmationCount: number
+  readonly relationKnowledgeStatus: PortalKnowledgeStatus
+  readonly relationEvidenceCount: number
+  readonly relationHumanConfirmationCount: number
+  readonly portalPageId: number | null
+}
+export interface PortalRelatedKnowledgeGroup {
+  readonly relationType: string
+  readonly relationLabel: string
+  readonly direction: 'Incoming' | 'Outgoing'
+  readonly items: readonly PortalRelatedKnowledgeItem[]
+}
+export interface PortalRelatedKnowledgeContent {
+  readonly kind: 'RelatedKnowledge'
+  readonly groups: readonly PortalRelatedKnowledgeGroup[]
+}
+export interface PortalTraceNode {
+  readonly documentType: string
+  readonly title: string
+  readonly knowledgeStatus: PortalKnowledgeStatus
+  readonly evidenceCount: number
+  readonly humanConfirmationCount: number
+  readonly confirmationCoverage: string
+  readonly portalPageId: number | null
+}
+export interface PortalTraceEdge {
+  readonly relationType: string
+  readonly knowledgeStatus: PortalKnowledgeStatus
+  readonly evidenceCount: number
+  readonly humanConfirmationCount: number
+}
+export interface PortalTracePath {
+  readonly kind: string
+  readonly nodes: readonly PortalTraceNode[]
+  readonly edges: readonly PortalTraceEdge[]
+}
+export interface PortalTraceabilityContent {
+  readonly kind: 'Traceability'
+  readonly root: PortalTraceNode
+  readonly paths: readonly PortalTracePath[]
+  readonly missingLinkCodes: readonly string[]
+  readonly cycleDetected: boolean
+  readonly isTruncated: boolean
+  readonly limits: {
+    readonly maxDepth: number
+    readonly maxNodes: number
+    readonly maxEdges: number
+  }
+}
+
 export type PortalSectionContent =
   | PortalSummaryContent
   | PortalKnowledgeDocumentBodyContent
@@ -155,11 +241,15 @@ export type PortalSectionContent =
   | PortalDatabaseObjectOverviewContent
   | PortalIntegrationOverviewContent
   | PortalDatabaseStructureContent
+  | PortalAttachmentListContent
+  | PortalTrustSummaryContent
+  | PortalRelatedKnowledgeContent
+  | PortalTraceabilityContent
 
 export interface PortalPageSection {
   readonly id: number
   readonly heading: string
-  readonly sourceKind: 'PrimaryTarget' | 'ExplicitReference'
+  readonly sourceKind: 'PrimaryTarget' | 'ExplicitReference' | 'Derived'
   readonly projectionKind: PortalProjectionKind
   readonly content: PortalSectionContent
 }
@@ -170,6 +260,21 @@ export interface PortalPageResponse {
   readonly primaryTarget: PortalTargetIdentity
   readonly breadcrumb: readonly PortalBreadcrumbItem[]
   readonly sections: readonly PortalPageSection[]
+}
+
+export interface PortalSearchItem {
+  readonly pageId: number
+  readonly title: string
+  readonly primaryTargetType: PortalTargetType
+  readonly primaryTargetTitle: string
+  readonly breadcrumb: readonly PortalBreadcrumbItem[]
+  readonly snippet: string
+}
+export interface PortalSearchResponse {
+  readonly items: readonly PortalSearchItem[]
+  readonly page: number
+  readonly pageSize: number
+  readonly total: number
 }
 
 type JsonObject = Readonly<Record<string, unknown>>
@@ -307,6 +412,9 @@ function decodeContent(value: unknown, field: string): PortalSectionContent {
         title: string(item.title, `${field}.title`),
         documentType: string(item.documentType, `${field}.documentType`),
         bodyMarkdown: string(item.bodyMarkdown, `${field}.bodyMarkdown`),
+        imageAttachmentIds: array(item.imageAttachmentIds ?? [], `${field}.imageAttachmentIds`).map(
+          (value, index) => integer(value, `${field}.imageAttachmentIds[${index}]`, 1),
+        ),
       }
     case 'SystemOverview':
       return {
@@ -361,6 +469,152 @@ function decodeContent(value: unknown, field: string): PortalSectionContent {
         }),
       }
     }
+    case 'AttachmentList':
+      return {
+        kind,
+        documentId: integer(item.documentId, `${field}.documentId`, 1),
+        attachments: array(item.attachments, `${field}.attachments`).map((value, index) => {
+          const attachment = object(value, `${field}.attachments[${index}]`)
+          return {
+            attachmentId: integer(attachment.attachmentId, 'attachment.attachmentId', 1),
+            displayName: string(attachment.displayName, 'attachment.displayName'),
+            kind: string(attachment.kind, 'attachment.kind'),
+            contentType: string(attachment.contentType, 'attachment.contentType'),
+            sizeBytes: integer(attachment.sizeBytes, 'attachment.sizeBytes'),
+            previewMode: string(attachment.previewMode, 'attachment.previewMode'),
+            canPreview: boolean(attachment.canPreview, 'attachment.canPreview'),
+            canDownload: boolean(attachment.canDownload, 'attachment.canDownload'),
+          }
+        }),
+      }
+    case 'TrustSummary':
+      return {
+        kind,
+        targetType: enumValue(item.targetType, `${field}.targetType`, portalTargetTypes),
+        targetTitle: string(item.targetTitle, `${field}.targetTitle`),
+        knowledgeStatus: enumValue(
+          item.knowledgeStatus,
+          `${field}.knowledgeStatus`,
+          portalKnowledgeStatuses,
+        ),
+        evidenceCount: integer(item.evidenceCount, `${field}.evidenceCount`),
+        humanConfirmationCount: integer(
+          item.humanConfirmationCount,
+          `${field}.humanConfirmationCount`,
+        ),
+        confirmationCoverage: nullableString(
+          item.confirmationCoverage,
+          `${field}.confirmationCoverage`,
+        ),
+      }
+    case 'RelatedKnowledge':
+      return {
+        kind,
+        groups: array(item.groups, `${field}.groups`).map((value, groupIndex) => {
+          const group = object(value, `${field}.groups[${groupIndex}]`)
+          return {
+            relationType: string(group.relationType, 'related.group.relationType'),
+            relationLabel: string(group.relationLabel, 'related.group.relationLabel'),
+            direction: enumValue(group.direction, 'related.group.direction', [
+              'Incoming',
+              'Outgoing',
+            ] as const),
+            items: array(group.items, 'related.group.items').map((value, itemIndex) => {
+              const related = object(value, `related.group.items[${itemIndex}]`)
+              return {
+                targetType: enumValue(related.targetType, 'related.targetType', portalTargetTypes),
+                targetTitle: string(related.targetTitle, 'related.targetTitle'),
+                knowledgeStatus: enumValue(
+                  related.knowledgeStatus,
+                  'related.knowledgeStatus',
+                  portalKnowledgeStatuses,
+                ),
+                evidenceCount: integer(related.evidenceCount, 'related.evidenceCount'),
+                humanConfirmationCount: integer(
+                  related.humanConfirmationCount,
+                  'related.humanConfirmationCount',
+                ),
+                relationKnowledgeStatus: enumValue(
+                  related.relationKnowledgeStatus,
+                  'related.relationKnowledgeStatus',
+                  portalKnowledgeStatuses,
+                ),
+                relationEvidenceCount: integer(
+                  related.relationEvidenceCount,
+                  'related.relationEvidenceCount',
+                ),
+                relationHumanConfirmationCount: integer(
+                  related.relationHumanConfirmationCount,
+                  'related.relationHumanConfirmationCount',
+                ),
+                portalPageId: nullableInteger(related.portalPageId, 'related.portalPageId'),
+              }
+            }),
+          }
+        }),
+      }
+    case 'Traceability': {
+      const decodeNode = (value: unknown, nodeField: string): PortalTraceNode => {
+        const node = object(value, nodeField)
+        return {
+          documentType: string(node.documentType, `${nodeField}.documentType`),
+          title: string(node.title, `${nodeField}.title`),
+          knowledgeStatus: enumValue(
+            node.knowledgeStatus,
+            `${nodeField}.knowledgeStatus`,
+            portalKnowledgeStatuses,
+          ),
+          evidenceCount: integer(node.evidenceCount, `${nodeField}.evidenceCount`),
+          humanConfirmationCount: integer(
+            node.humanConfirmationCount,
+            `${nodeField}.humanConfirmationCount`,
+          ),
+          confirmationCoverage: string(
+            node.confirmationCoverage,
+            `${nodeField}.confirmationCoverage`,
+          ),
+          portalPageId: nullableInteger(node.portalPageId, `${nodeField}.portalPageId`),
+        }
+      }
+      const limits = object(item.limits, `${field}.limits`)
+      return {
+        kind,
+        root: decodeNode(item.root, `${field}.root`),
+        paths: array(item.paths, `${field}.paths`).map((value, pathIndex) => {
+          const path = object(value, `${field}.paths[${pathIndex}]`)
+          return {
+            kind: string(path.kind, 'trace.path.kind'),
+            nodes: array(path.nodes, 'trace.path.nodes').map((node, nodeIndex) =>
+              decodeNode(node, `trace.path.nodes[${nodeIndex}]`),
+            ),
+            edges: array(path.edges, 'trace.path.edges').map((value, edgeIndex) => {
+              const edge = object(value, `trace.path.edges[${edgeIndex}]`)
+              return {
+                relationType: string(edge.relationType, 'trace.edge.relationType'),
+                knowledgeStatus: enumValue(
+                  edge.knowledgeStatus,
+                  'trace.edge.knowledgeStatus',
+                  portalKnowledgeStatuses,
+                ),
+                evidenceCount: integer(edge.evidenceCount, 'trace.edge.evidenceCount'),
+                humanConfirmationCount: integer(
+                  edge.humanConfirmationCount,
+                  'trace.edge.humanConfirmationCount',
+                ),
+              }
+            }),
+          }
+        }),
+        missingLinkCodes: stringList(item.missingLinkCodes, `${field}.missingLinkCodes`),
+        cycleDetected: boolean(item.cycleDetected, `${field}.cycleDetected`),
+        isTruncated: boolean(item.isTruncated, `${field}.isTruncated`),
+        limits: {
+          maxDepth: integer(limits.maxDepth, 'trace.limits.maxDepth', 1),
+          maxNodes: integer(limits.maxNodes, 'trace.limits.maxNodes', 1),
+          maxEdges: integer(limits.maxEdges, 'trace.limits.maxEdges', 1),
+        },
+      }
+    }
     default:
       throw new Error(`${field}.kind has an unsupported value`)
   }
@@ -406,6 +660,10 @@ export function decodePortalPage(value: unknown): PortalPageResponse {
         (projectionKind === 'Summary' && content.kind !== 'Summary') ||
         (projectionKind === 'KnowledgeDocumentBody' && content.kind !== 'KnowledgeDocumentBody') ||
         (projectionKind === 'DatabaseStructure' && content.kind !== 'DatabaseStructure') ||
+        (projectionKind === 'AttachmentList' && content.kind !== 'AttachmentList') ||
+        (projectionKind === 'TrustSummary' && content.kind !== 'TrustSummary') ||
+        (projectionKind === 'RelatedKnowledge' && content.kind !== 'RelatedKnowledge') ||
+        (projectionKind === 'Traceability' && content.kind !== 'Traceability') ||
         (projectionKind === 'StructuredOverview' &&
           ![
             'SystemOverview',
@@ -421,10 +679,35 @@ export function decodePortalPage(value: unknown): PortalPageResponse {
         sourceKind: enumValue(item.sourceKind, 'portalPage.section.sourceKind', [
           'PrimaryTarget',
           'ExplicitReference',
+          'Derived',
         ] as const),
         projectionKind,
         content,
       }
     }),
+  }
+}
+
+export function decodePortalSearch(value: unknown): PortalSearchResponse {
+  const root = object(value, 'portalSearch')
+  return {
+    items: array(root.items, 'portalSearch.items').map((value, index) => {
+      const item = object(value, `portalSearch.items[${index}]`)
+      return {
+        pageId: integer(item.pageId, 'search.pageId', 1),
+        title: string(item.title, 'search.title'),
+        primaryTargetType: enumValue(
+          item.primaryTargetType,
+          'search.primaryTargetType',
+          portalTargetTypes,
+        ),
+        primaryTargetTitle: string(item.primaryTargetTitle, 'search.primaryTargetTitle'),
+        breadcrumb: decodeBreadcrumb(item.breadcrumb, 'search.breadcrumb'),
+        snippet: string(item.snippet, 'search.snippet'),
+      }
+    }),
+    page: integer(root.page, 'portalSearch.page', 1),
+    pageSize: integer(root.pageSize, 'portalSearch.pageSize', 1),
+    total: integer(root.total, 'portalSearch.total'),
   }
 }

@@ -1,6 +1,9 @@
 using Microsoft.EntityFrameworkCore;
+using SystemKnowledgeHub.Api.Features.Attachments.Domain;
+using SystemKnowledgeHub.Api.Features.KnowledgeDocuments.Domain;
 using SystemKnowledgeHub.Api.Features.Portal.Application.Models;
 using SystemKnowledgeHub.Api.Features.Portal.Domain;
+using SystemKnowledgeHub.Api.Features.Search.Application;
 using SystemKnowledgeHub.Api.Persistence;
 
 namespace SystemKnowledgeHub.Api.Features.Portal.Application;
@@ -8,6 +11,7 @@ namespace SystemKnowledgeHub.Api.Features.Portal.Application;
 public sealed class PortalQueries(
     KnowledgeHubDbContext dbContext,
     PortalTargetResolver targetResolver,
+    PortalB04ProjectionService b04Projections,
     ILogger<PortalQueries> logger)
 {
     public async Task<PortalHomeResult> GetHomeAsync(CancellationToken cancellationToken)
@@ -102,17 +106,112 @@ public sealed class PortalQueries(
             .OrderBy(path => path, PortalNodePathComparer.Instance)
             .First();
 
-        return await ProjectPageAsync(page, canonicalPath, cancellationToken);
+        return await ProjectPageAsync(page, canonicalPath, CreatePortalLinks(context), cancellationToken);
     }
 
     public async Task<PortalPageResult> GetAdminPreviewPageAsync(
         PortalPage page,
-        CancellationToken cancellationToken) =>
-        await ProjectPageAsync(page, [], cancellationToken);
+        CancellationToken cancellationToken)
+    {
+        var context = await LoadReadableTreeAsync(cancellationToken);
+        var links = context.Failure == PortalReadFailure.None
+            ? CreatePortalLinks(context)
+            : new Dictionary<PortalTargetKey, long>();
+        return await ProjectPageAsync(page, [], links, cancellationToken);
+    }
+
+    public async Task<PortalSearchResult> SearchAsync(
+        string query,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        var context = await LoadReadableTreeAsync(cancellationToken);
+        if (context.Failure != PortalReadFailure.None) return new(context.Failure);
+
+        var pages = context.EligiblePages.Values.ToArray();
+        var targetKeys = pages.SelectMany(GetTargetKeys).Distinct().ToArray();
+        var identities = await targetResolver.ResolveEligibleIdentitiesAsync(targetKeys, cancellationToken);
+        var documentIds = targetKeys.Where(item => item.Type == PortalTargetType.KnowledgeDocument)
+            .Select(item => item.Id).Distinct().ToArray();
+        var documents = await dbContext.KnowledgeDocuments.AsNoTracking()
+            .Where(item => documentIds.Contains(item.Id) && item.LifecycleStatus == DocumentLifecycleStatus.Published)
+            .Select(item => new { item.Id, item.Title, item.Summary, item.BodyMarkdown })
+            .ToDictionaryAsync(item => item.Id, cancellationToken);
+        var byNodeId = context.OrderedNodes.ToDictionary(node => node.Id);
+        var normalized = query.Trim();
+        var results = new List<(int Rank, PortalSearchItemResponse Item)>();
+        foreach (var portalPage in pages)
+        {
+            var primaryKey = new PortalTargetKey(portalPage.PrimaryTargetType, portalPage.PrimaryTargetId);
+            if (!identities.TryGetValue(primaryKey, out var primary)) continue;
+            var explicitKeys = portalPage.Sections
+                .Where(item => item.SourceKind == PortalPageSectionSourceKind.ExplicitReference)
+                .Select(item => new PortalTargetKey(item.ReferenceTargetType!.Value, item.ReferenceTargetId!.Value))
+                .Distinct().ToArray();
+            var targetTitles = explicitKeys.Prepend(primaryKey)
+                .Where(identities.ContainsKey).Select(item => identities[item].Title).ToArray();
+            var pageDocuments = explicitKeys.Prepend(primaryKey)
+                .Where(item => item.Type == PortalTargetType.KnowledgeDocument && documents.ContainsKey(item.Id))
+                .Select(item => documents[item.Id]).DistinctBy(item => item.Id).ToArray();
+            var documentText = string.Join(" ", pageDocuments.Select(item => $"{item.Title} {item.Summary} {KnowledgeDocumentSearchText.ToPlainText(item.BodyMarkdown)}"));
+            var rank = Rank(portalPage.Title, normalized, 0)
+                ?? targetTitles.Select(title => Rank(title, normalized, 3)).Where(value => value is not null).Min()
+                ?? Rank(documentText, normalized, 6);
+            if (rank is null) continue;
+            var placement = context.OrderedNodes
+                .Where(node => node.NodeKind == PortalPageNodeKind.Page && node.PortalPageId == portalPage.Id)
+                .Select(node => BuildPath(node, byNodeId)).OrderBy(path => path, PortalNodePathComparer.Instance).First();
+            var snippetDocument = pageDocuments.FirstOrDefault(item =>
+                ($"{item.Title} {item.Summary} {KnowledgeDocumentSearchText.ToPlainText(item.BodyMarkdown)}")
+                    .Contains(normalized, StringComparison.OrdinalIgnoreCase));
+            var snippet = snippetDocument is null
+                ? targetTitles.FirstOrDefault(title => title.Contains(normalized, StringComparison.OrdinalIgnoreCase)) ?? portalPage.Title
+                : KnowledgeDocumentSearchText.CreateSnippet(snippetDocument.Title, snippetDocument.Summary, snippetDocument.BodyMarkdown, normalized);
+            results.Add((rank.Value, new(
+                portalPage.Id,
+                portalPage.Title,
+                primary.Type,
+                primary.Title,
+                placement.Take(placement.Count - 1).Select(node => new PortalBreadcrumbItemResponse(node.Id, node.Title)).ToArray(),
+                snippet)));
+        }
+        var ordered = results.OrderBy(item => item.Rank).ThenBy(item => item.Item.Title, StringComparer.Ordinal).ThenBy(item => item.Item.PageId).ToArray();
+        var items = ordered.Skip((page - 1) * pageSize).Take(pageSize).Select(item => item.Item).ToArray();
+        return new(PortalReadFailure.None, new(items, page, pageSize, ordered.Length));
+    }
+
+    public async Task<long?> GetAuthorizedAttachmentDocumentIdAsync(
+        long pageId,
+        long attachmentId,
+        CancellationToken cancellationToken)
+    {
+        var context = await LoadReadableTreeAsync(cancellationToken);
+        if (context.Failure != PortalReadFailure.None || !context.EligiblePages.TryGetValue(pageId, out var page)) return null;
+        var allowedDocumentIds = GetTargetKeys(page)
+            .Where(item => item.Type == PortalTargetType.KnowledgeDocument)
+            .Select(item => item.Id).Distinct().ToArray();
+        if (allowedDocumentIds.Length == 0) return null;
+        return await (
+            from document in dbContext.KnowledgeDocuments.AsNoTracking()
+            join revision in dbContext.KnowledgeDocumentRevisions.AsNoTracking()
+                on new { document.Id, RevisionNumber = document.CurrentRevisionNumber }
+                equals new { Id = revision.KnowledgeDocumentId, revision.RevisionNumber }
+            join reference in dbContext.AttachmentReferences.AsNoTracking() on revision.Id equals reference.KnowledgeDocumentRevisionId
+            join attachment in dbContext.Attachments.AsNoTracking() on reference.AttachmentId equals attachment.Id
+            where allowedDocumentIds.Contains(document.Id)
+                && document.LifecycleStatus == DocumentLifecycleStatus.Published
+                && attachment.Id == attachmentId
+                && attachment.KnowledgeDocumentId == document.Id
+                && reference.KnowledgeDocumentId == document.Id
+                && attachment.StorageState == AttachmentStorageState.Ready
+            select (long?)document.Id).SingleOrDefaultAsync(cancellationToken);
+    }
 
     private async Task<PortalPageResult> ProjectPageAsync(
         PortalPage page,
         IReadOnlyList<PortalPageNode> canonicalPath,
+        IReadOnlyDictionary<PortalTargetKey, long> portalLinks,
         CancellationToken cancellationToken)
     {
         var targetKeys = GetTargetKeys(page).ToArray();
@@ -135,9 +234,27 @@ public sealed class PortalQueries(
         var sections = new List<PortalPageSectionResponse>(page.Sections.Count);
         foreach (var section in page.Sections.OrderBy(item => item.SortOrder).ThenBy(item => item.Id))
         {
-            var key = ResolveSectionTargetKey(page, section);
-            if (!targets.TryGetValue(key, out var target)
-                || !TryCreateContent(section.ProjectionKind, target, out var content))
+            PortalResolvedTarget? target = null;
+            if (section.SourceKind != PortalPageSectionSourceKind.Derived)
+            {
+                var key = ResolveSectionTargetKey(page, section);
+                if (!targets.TryGetValue(key, out target))
+                {
+                    logger.LogWarning("Portal page {PortalPageId} failed closed because section {PortalSectionId} target is unavailable.", page.Id, section.Id);
+                    return new(PortalReadFailure.NotFound);
+                }
+            }
+            PortalSectionContentResponse? content;
+            if (TryCreateContent(section.ProjectionKind, target, out content))
+            {
+                if (content is PortalKnowledgeDocumentBodyContentResponse body)
+                    content = body with { ImageAttachmentIds = await b04Projections.GetCurrentImageAttachmentIdsAsync(body.DocumentId, cancellationToken) };
+            }
+            else
+            {
+                content = await b04Projections.ProjectAsync(page, section, target, portalLinks, cancellationToken);
+            }
+            if (content is null)
             {
                 logger.LogWarning("Portal page {PortalPageId} failed closed because section {PortalSectionId} cannot be projected.", page.Id, section.Id);
                 return new(PortalReadFailure.NotFound);
@@ -147,7 +264,7 @@ public sealed class PortalQueries(
                 section.Heading,
                 section.SourceKind,
                 section.ProjectionKind,
-                content!));
+                content));
         }
 
         var primaryKey = new PortalTargetKey(page.PrimaryTargetType, page.PrimaryTargetId);
@@ -218,13 +335,13 @@ public sealed class PortalQueries(
         foreach (var page in pages)
         {
             if (PortalCompositionValidator.ValidatePage(page).Count == 0
-                && page.Sections.All(section => PortalCompositionValidator.IsB01ReadableProjection(section.ProjectionKind)))
+                && page.Sections.All(section => PortalCompositionValidator.IsReadableProjection(section.ProjectionKind)))
             {
                 structurallyValidPages.Add(page);
             }
             else
             {
-                logger.LogWarning("Portal page {PortalPageId} was excluded because its persisted composition is not B01-readable.", page.Id);
+                logger.LogWarning("Portal page {PortalPageId} was excluded because its persisted composition is not Portal-readable.", page.Id);
             }
         }
         var requiredKeys = structurallyValidPages.SelectMany(GetTargetKeys).Distinct().ToArray();
@@ -260,7 +377,7 @@ public sealed class PortalQueries(
         {
             PortalPageSectionSourceKind.PrimaryTarget => new(page.PrimaryTargetType, page.PrimaryTargetId),
             PortalPageSectionSourceKind.ExplicitReference => new(section.ReferenceTargetType!.Value, section.ReferenceTargetId!.Value),
-            _ => throw new InvalidOperationException("B01 does not execute derived Portal projections."),
+            _ => throw new InvalidOperationException("Derived Portal projections do not have a reference target."),
         };
 
     private static IReadOnlyList<PortalPageNode> OrderNodes(IEnumerable<PortalPageNode> nodes)
@@ -300,12 +417,12 @@ public sealed class PortalQueries(
 
     private static bool TryCreateContent(
         PortalPageProjectionKind projectionKind,
-        PortalResolvedTarget target,
+        PortalResolvedTarget? target,
         out PortalSectionContentResponse? content)
     {
         content = projectionKind switch
         {
-            PortalPageProjectionKind.Summary => new PortalSummaryContentResponse(
+            PortalPageProjectionKind.Summary when target is not null => new PortalSummaryContentResponse(
                 target.Type,
                 target.Id,
                 target.Title,
@@ -315,7 +432,8 @@ public sealed class PortalQueries(
                     document.Id,
                     document.Title,
                     document.DocumentType,
-                    document.BodyMarkdown),
+                    document.BodyMarkdown,
+                    []),
             PortalPageProjectionKind.StructuredOverview when target is PortalResolvedSystem system =>
                 new PortalSystemOverviewContentResponse(
                     system.Id,
@@ -379,6 +497,20 @@ public sealed class PortalQueries(
             databaseObject.EstimatedRows,
             databaseObject.AccessMode,
             databaseObject.BusinessKeyColumns);
+
+    private static IReadOnlyDictionary<PortalTargetKey, long> CreatePortalLinks(ReadableTreeContext context) =>
+        context.EligiblePages.Values
+            .OrderBy(page => page.Title, StringComparer.Ordinal)
+            .ThenBy(page => page.Id)
+            .GroupBy(page => new PortalTargetKey(page.PrimaryTargetType, page.PrimaryTargetId))
+            .ToDictionary(group => group.Key, group => group.First().Id);
+
+    private static int? Rank(string value, string query, int offset)
+    {
+        if (string.Equals(value, query, StringComparison.OrdinalIgnoreCase)) return offset;
+        if (value.StartsWith(query, StringComparison.OrdinalIgnoreCase)) return offset + 1;
+        return value.Contains(query, StringComparison.OrdinalIgnoreCase) ? offset + 2 : null;
+    }
 
     private sealed record ReadableTreeContext(
         PortalReadFailure Failure,
