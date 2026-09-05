@@ -46,4 +46,16 @@ describe('useDatabaseColumnDetail', () => {
     expect(wrapper.text()).toContain('STATE_FLAG')
     wrapper.unmount()
   })
+  it('late column A cannot replace B after the drawer selection changes', async () => {
+    let completeA!: (value: typeof detail) => void
+    vi.mocked(getDatabaseColumnDetail).mockImplementationOnce(() => new Promise(resolve => { completeA = resolve }))
+      .mockResolvedValueOnce({ ...detail, id: 124, databaseMetadata: { ...detail.databaseMetadata, columnName: 'CURRENT_B' } })
+    const wrapper = mount(Host, { props: { columnId: 123 } })
+    await wrapper.setProps({ columnId: 124 }); await flushPromises()
+    completeA(detail); await flushPromises()
+    expect(wrapper.text()).toContain('CURRENT_B')
+    expect(wrapper.text()).not.toContain('STATE_FLAG')
+    wrapper.unmount()
+  })
+
 })

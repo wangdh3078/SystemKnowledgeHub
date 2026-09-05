@@ -30,21 +30,34 @@ public sealed class LocalLoginService(
             return new LocalLoginResult(LocalLoginFailure.InvalidCredentials, null);
         }
 
-        var credential = await dbContext.LocalLoginCredentials
+        var snapshot = await dbContext.LocalLoginCredentials.AsNoTracking()
             .Include(item => item.User)
             .SingleOrDefaultAsync(item => item.NormalizedUsername == normalizedUsername, cancellationToken);
-        if (credential is null)
+        if (snapshot is null)
         {
             passwords.VerifyDummy(password);
             return new LocalLoginResult(LocalLoginFailure.InvalidCredentials, null);
         }
 
-        var verification = passwords.Verify(credential, credential.PasswordHash, password);
+        var verification = passwords.Verify(snapshot, snapshot.PasswordHash, password);
         var now = DateTimeOffset.UtcNow;
-        if (credential.LockedUntil is DateTimeOffset lockedUntil && lockedUntil > now)
+        if (snapshot.LockedUntil is DateTimeOffset lockedUntil && lockedUntil > now)
         {
             return new LocalLoginResult(LocalLoginFailure.InvalidCredentials, null);
         }
+
+        // Password verification stays outside the short write reservation. Re-read authoritative
+        // state inside it so independent requests cannot overwrite failure counts.
+        await using var transaction = await SqliteImmediateTransaction.BeginAsync(dbContext, cancellationToken);
+        var credential = await dbContext.LocalLoginCredentials.Include(item => item.User)
+            .SingleOrDefaultAsync(item => item.Id == snapshot.Id, cancellationToken);
+        if (credential is null || credential.PasswordHash != snapshot.PasswordHash
+            || credential.SessionVersion != snapshot.SessionVersion
+            || credential.NormalizedUsername != normalizedUsername)
+        {
+            return new LocalLoginResult(LocalLoginFailure.InvalidCredentials, null);
+        }
+        now = DateTimeOffset.UtcNow;
 
         if (verification is PasswordVerificationResult.Failed
             || !credential.IsActive
@@ -55,7 +68,13 @@ public sealed class LocalLoginService(
             {
                 RecordFailure(credential, now);
                 await dbContext.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
             }
+            return new LocalLoginResult(LocalLoginFailure.InvalidCredentials, null);
+        }
+
+        if (credential.LockedUntil is DateTimeOffset currentLock && currentLock > now)
+        {
             return new LocalLoginResult(LocalLoginFailure.InvalidCredentials, null);
         }
 
@@ -69,6 +88,7 @@ public sealed class LocalLoginService(
             credential.Version += 1;
         }
         await dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return new LocalLoginResult(
             LocalLoginFailure.None,
             principalBuilder.Create(AuthenticationClaims.LocalMethod, credential.Id, credential.SessionVersion, credential.User));
@@ -88,7 +108,10 @@ public sealed class LocalLoginService(
             credential.FailedLoginAttempts += 1;
         }
 
-        if (credential.FailedLoginAttempts >= policy.MaxFailedAttempts)
+        // Count failures already in flight when the lock was established, without
+        // extending it. Requests whose initial snapshot is locked exit before writing.
+        if (credential.FailedLoginAttempts >= policy.MaxFailedAttempts
+            && (credential.LockedUntil is null || credential.LockedUntil <= now))
         {
             credential.LockedUntil = now.AddMinutes(policy.DurationMinutes);
         }

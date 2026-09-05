@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using SystemKnowledgeHub.Api.Features.DatabaseDiscovery.Application.Models;
@@ -337,7 +338,8 @@ public sealed class DatabaseDiscoverySyncService(
         plan.Version++;
         AddAudit(plan, DatabaseDiscoverySyncAuditAction.SelectionChanged, actor, now,
             new { actionCount = actions.Count });
-        await dbContext.SaveChangesAsync(cancellationToken);
+        if (!await SavePlanChanges(cancellationToken))
+            return new(null, null, DatabaseDiscoverySyncFailure.StalePlan, "ConcurrencyConflict");
         return new(await ToResponse(plan, cancellationToken), null, DatabaseDiscoverySyncFailure.None);
     }
 
@@ -399,7 +401,8 @@ public sealed class DatabaseDiscoverySyncService(
         plan.Version++;
         AddAudit(plan, DatabaseDiscoverySyncAuditAction.PreviewGenerated, actor, now,
             new { previewHash = plan.PreviewHash, actionCount = actions.Count });
-        await dbContext.SaveChangesAsync(cancellationToken);
+        if (!await SavePlanChanges(cancellationToken))
+            return new(null, null, DatabaseDiscoverySyncFailure.StalePlan, "ConcurrencyConflict");
         return new(await ToResponse(plan, cancellationToken), null, DatabaseDiscoverySyncFailure.None);
     }
 
@@ -433,7 +436,8 @@ public sealed class DatabaseDiscoverySyncService(
         plan.Version++;
         AddAudit(plan, DatabaseDiscoverySyncAuditAction.PlanConfirmed, actor, now,
             new { previewHash = plan.PreviewHash });
-        await dbContext.SaveChangesAsync(cancellationToken);
+        if (!await SavePlanChanges(cancellationToken))
+            return new(null, null, DatabaseDiscoverySyncFailure.StalePlan, "ConcurrencyConflict");
         return new(await ToResponse(plan, cancellationToken), null, DatabaseDiscoverySyncFailure.None);
     }
 
@@ -469,7 +473,8 @@ public sealed class DatabaseDiscoverySyncService(
             || context.SnapshotEntity.ScopeGenerationId != plan.ScopeGenerationId
             || context.SnapshotEntity.IdentityAlgorithmVersion != plan.IdentityAlgorithmVersion)
         {
-            await SupersedeInTransaction(plan, actor, "LatestSnapshotChanged", cancellationToken);
+            if (!await SupersedeInTransaction(plan, actor, "LatestSnapshotChanged", cancellationToken))
+                return new(null, null, DatabaseDiscoverySyncFailure.StalePlan, "ConcurrencyConflict");
             await transaction.CommitAsync(cancellationToken);
             return new(null, null, DatabaseDiscoverySyncFailure.LatestSnapshotChanged, "LatestSnapshotChanged");
         }
@@ -480,7 +485,8 @@ public sealed class DatabaseDiscoverySyncService(
             || fresh.Response is null
             || !FixedEquals(fresh.Response.PreviewHash, plan.PreviewHash))
         {
-            await SupersedeInTransaction(plan, actor, fresh.ReasonCode ?? "PreviewChanged", cancellationToken);
+            if (!await SupersedeInTransaction(plan, actor, fresh.ReasonCode ?? "PreviewChanged", cancellationToken))
+                return new(null, null, DatabaseDiscoverySyncFailure.StalePlan, "ConcurrencyConflict");
             await transaction.CommitAsync(cancellationToken);
             return new(null, fresh.FieldErrors, DatabaseDiscoverySyncFailure.StalePlan, fresh.ReasonCode ?? "PreviewChanged");
         }
@@ -519,7 +525,10 @@ public sealed class DatabaseDiscoverySyncService(
         {
             return new(null, null, DatabaseDiscoverySyncFailure.StalePlan, "ConcurrencyConflict");
         }
-        catch (DbUpdateException)
+        catch (DbUpdateException exception) when (
+            exception.InnerException is SqliteException { SqliteExtendedErrorCode: 2067 }
+            && exception.Entries.Any(entry => entry.Entity is DatabaseObject or DatabaseColumn
+                or DatabaseObjectDiscoveryBinding or DatabaseColumnDiscoveryBinding))
         {
             return new(null, null, DatabaseDiscoverySyncFailure.UnsupportedIdentifierCollision, "DatabaseConstraintConflict");
         }
@@ -1417,12 +1426,12 @@ public sealed class DatabaseDiscoverySyncService(
         string reasonCode,
         CancellationToken cancellationToken)
     {
-        await SupersedeInTransaction(plan, actor, reasonCode, cancellationToken);
-        await dbContext.SaveChangesAsync(cancellationToken);
+        if (!await SupersedeInTransaction(plan, actor, reasonCode, cancellationToken))
+            return new(null, null, DatabaseDiscoverySyncFailure.StalePlan, "ConcurrencyConflict");
         return new(null, null, DatabaseDiscoverySyncFailure.LatestSnapshotChanged, reasonCode);
     }
 
-    private async Task SupersedeInTransaction(
+    private async Task<bool> SupersedeInTransaction(
         DatabaseDiscoverySyncPlan plan,
         DatabaseDiscoverySyncActor actor,
         string reasonCode,
@@ -1434,7 +1443,21 @@ public sealed class DatabaseDiscoverySyncService(
         plan.Version++;
         AddAudit(plan, DatabaseDiscoverySyncAuditAction.PlanSuperseded, actor, now, new { reasonCode },
             DatabaseConnectionAuditOutcome.Superseded, reasonCode);
-        await dbContext.SaveChangesAsync(cancellationToken);
+        return await SavePlanChanges(cancellationToken);
+    }
+
+    private async Task<bool> SavePlanChanges(CancellationToken cancellationToken)
+    {
+        try
+        {
+            // EF's SaveChanges transaction rolls back both the plan and its audit event.
+            await dbContext.SaveChangesAsync(cancellationToken);
+            return true;
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return false;
+        }
     }
 
     private void AddAudit(

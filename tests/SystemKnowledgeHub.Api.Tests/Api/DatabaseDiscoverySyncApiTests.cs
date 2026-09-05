@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using SystemKnowledgeHub.Api.Features.DatabaseDiscovery.Application.Models;
 using SystemKnowledgeHub.Api.Features.DatabaseDiscovery.Domain;
@@ -18,6 +19,106 @@ namespace SystemKnowledgeHub.Api.Tests.Api;
 public sealed class DatabaseDiscoverySyncApiTests
 {
     private static readonly JsonSerializerOptions JsonOptions = CreateJsonOptions();
+
+    [Theory]
+    [InlineData("actions")]
+    [InlineData("preview")]
+    [InlineData("confirm")]
+    [InlineData("supersede")]
+    public async Task Save_race_returns_sanitized_409_and_rolls_back_plan_and_audit(string operation)
+    {
+        var interceptor = new PlanSaveRaceInterceptor();
+        using var factory = new DatabaseDiscoveryWebApplicationFactory { SaveInterceptor = interceptor };
+        using var client = factory.CreateAuthenticatedClient();
+        var profile = await SetSecret(client, await CreateProfile(factory, client), "STABILITY_TEST_SECRET");
+        var run = await WaitForTerminal(client, (await Trigger(client, profile)).Id);
+        var reconciliation = await Reconcile(client, profile.Id);
+        var item = reconciliation.Items.First(x => x.SuggestedAction == DatabaseDiscoverySyncActionType.CreateDatabaseObject);
+        var actions = new object[] { new { actionType = "CreateDatabaseObject", logicalIdentity = item.LogicalIdentity, targetId = (long?)null } };
+        var plan = await Preview(client, await CreatePlan(client, profile.Id, run.SnapshotId!.Value, actions));
+        if (operation == "supersede")
+            await WaitForTerminal(client, (await Trigger(client, await GetProfile(client, profile.Id))).Id);
+        string before;
+        int audits;
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<KnowledgeHubDbContext>();
+            var stored = await db.DatabaseDiscoverySyncPlans.AsNoTracking().SingleAsync(x => x.Id == plan.Id);
+            before = stored.SelectionJson + stored.PreviewPayloadJson + stored.Status + stored.ConfirmedPreviewHash;
+            audits = await db.DatabaseDiscoverySyncAuditEvents.CountAsync(x => x.PlanId == plan.Id);
+        }
+        interceptor.BeforeSave = async () =>
+        {
+            await using var scope = factory.Services.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<KnowledgeHubDbContext>();
+            await db.DatabaseDiscoverySyncPlans.Where(x => x.Id == plan.Id)
+                .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.Version, x => x.Version + 1));
+        };
+        using var response = operation switch
+        {
+            "actions" => await client.PutAsJsonAsync($"/api/database-discovery/sync-plans/{plan.Id}/actions", new { actions, concurrencyToken = plan.ConcurrencyToken }),
+            "confirm" => await client.PostAsJsonAsync($"/api/database-discovery/sync-plans/{plan.Id}/confirm", new { previewHash = plan.Preview!.PreviewHash, concurrencyToken = plan.ConcurrencyToken }),
+            _ => await client.PostAsJsonAsync($"/api/database-discovery/sync-plans/{plan.Id}/preview", new { concurrencyToken = plan.ConcurrencyToken }),
+        };
+        Assert.True(interceptor.Triggered);
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("ConcurrencyConflict", body.GetProperty("code").GetString());
+        Assert.Equal("同步计划或目标数据已变化，请重新预览。", body.GetProperty("message").GetString());
+        await using var verification = factory.Services.CreateAsyncScope();
+        var context = verification.ServiceProvider.GetRequiredService<KnowledgeHubDbContext>();
+        var after = await context.DatabaseDiscoverySyncPlans.AsNoTracking().SingleAsync(x => x.Id == plan.Id);
+        Assert.Equal(before, after.SelectionJson + after.PreviewPayloadJson + after.Status + after.ConfirmedPreviewHash);
+        Assert.Equal(audits, await context.DatabaseDiscoverySyncAuditEvents.CountAsync(x => x.PlanId == plan.Id));
+        Assert.False(await context.DatabaseDiscoverySyncApplyResults.AnyAsync(x => x.PlanId == plan.Id));
+        using var stale = await client.PostAsJsonAsync($"/api/database-discovery/sync-plans/{plan.Id}/preview", new { concurrencyToken = plan.ConcurrencyToken });
+        Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode);
+    }
+
+    [Fact]
+    public async Task Non_concurrency_save_failure_is_not_misreported_as_a_stale_plan()
+    {
+        var interceptor = new PlanSaveRaceInterceptor();
+        using var factory = new DatabaseDiscoveryWebApplicationFactory { SaveInterceptor = interceptor };
+        using var client = factory.CreateAuthenticatedClient();
+        var profile = await SetSecret(client, await CreateProfile(factory, client), "STABILITY_TEST_SECRET");
+        var run = await WaitForTerminal(client, (await Trigger(client, profile)).Id);
+        var reconciliation = await Reconcile(client, profile.Id);
+        var item = reconciliation.Items.First(x => x.SuggestedAction == DatabaseDiscoverySyncActionType.CreateDatabaseObject);
+        var actions = new object[] { new { actionType = "CreateDatabaseObject", logicalIdentity = item.LogicalIdentity, targetId = (long?)null } };
+        var plan = await CreatePlan(client, profile.Id, run.SnapshotId!.Value, actions);
+        interceptor.BeforeSave = () => throw new DbUpdateException("Controlled non-concurrency constraint failure");
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<KnowledgeHubDbContext>();
+        var auditCount = await db.DatabaseDiscoverySyncAuditEvents.CountAsync(x => x.PlanId == plan.Id);
+        var service = scope.ServiceProvider.GetRequiredService<SystemKnowledgeHub.Api.Features.DatabaseDiscovery.Application.DatabaseDiscoverySyncService>();
+        await Assert.ThrowsAsync<DbUpdateException>(() => service.Preview(plan.Id, plan.ConcurrencyToken,
+            new DatabaseDiscoverySyncActor(1, "Test actor", "Administrator"), CancellationToken.None));
+        var stored = await db.DatabaseDiscoverySyncPlans.AsNoTracking().SingleAsync(x => x.Id == plan.Id);
+        Assert.Null(stored.PreviewHash);
+        Assert.Equal(1, stored.Version);
+        Assert.Equal(auditCount, await db.DatabaseDiscoverySyncAuditEvents.CountAsync(x => x.PlanId == plan.Id));
+    }
+
+    private sealed class PlanSaveRaceInterceptor : Microsoft.EntityFrameworkCore.Diagnostics.SaveChangesInterceptor
+    {
+        public Func<Task>? BeforeSave { get; set; }
+        public bool Triggered { get; private set; }
+        public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            Microsoft.EntityFrameworkCore.Diagnostics.DbContextEventData eventData,
+            InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        {
+            if (BeforeSave is not null && eventData.Context!.ChangeTracker.Entries<DatabaseDiscoverySyncPlan>()
+                .Any(x => x.State == EntityState.Modified))
+            {
+                var race = BeforeSave;
+                BeforeSave = null;
+                Triggered = true;
+                await race();
+            }
+            return result;
+        }
+    }
 
     [Fact]
     public async Task Manual_sync_create_update_missing_reappeared_is_explicit_atomic_and_preserves_human_knowledge()

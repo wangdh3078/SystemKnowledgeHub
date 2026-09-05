@@ -15,6 +15,7 @@ vi.mock('../../../app/stores/overlays', () => ({
   useOverlayStore: () => overlayState,
 }))
 vi.mock('vue-router', () => ({
+  onBeforeRouteUpdate: vi.fn(), onBeforeRouteLeave: vi.fn(),
   useRoute: () => ({ params: { id: '45' }, query: {} }),
   useRouter: () => routerState,
 }))
@@ -147,7 +148,7 @@ describe('DatabaseObjectDetailView object-level trust closure', () => {
     const wrapper = mount(DatabaseObjectDetailView, { global: { stubs } })
     await flushPromises()
 
-    expect(getEvidenceList).toHaveBeenCalledWith('DatabaseObject', 45)
+    expect(getEvidenceList).toHaveBeenCalledWith('DatabaseObject', 45, expect.any(AbortSignal))
     expect(wrapper.text()).toContain('1 条对象级证据')
     expect(wrapper.text()).toContain('字段证据继续在对应字段详情中独立维护')
     expect(wrapper.get('[data-test="progression"]').text()).toBe('DatabaseObject|1|1|Inferred')

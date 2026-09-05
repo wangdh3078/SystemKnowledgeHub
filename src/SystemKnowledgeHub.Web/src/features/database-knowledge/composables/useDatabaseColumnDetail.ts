@@ -12,20 +12,24 @@ export function useDatabaseColumnDetail(columnId: Ref<number | null>) {
 
   async function load(id: number): Promise<void> {
     activeRequest?.abort()
-    activeRequest = new AbortController()
+    const controller = new AbortController()
+    activeRequest = controller
+    const current = () => activeRequest === controller && !controller.signal.aborted && columnId.value === id
     loading.value = true
-    errorMessage.value = null
     detail.value = null
+    errorMessage.value = null
 
     try {
-      detail.value = await getDatabaseColumnDetail(id, activeRequest.signal)
+      const response = await getDatabaseColumnDetail(id, controller.signal)
+      if (current() && response.id === id) detail.value = response
     } catch (error: unknown) {
+      if (!current()) return
       if (error instanceof DOMException && error.name === 'AbortError') {
         return
       }
       errorMessage.value = error instanceof Error ? error.message : '字段详情加载失败。'
     } finally {
-      loading.value = false
+      if (current()) loading.value = false
     }
   }
 
@@ -34,13 +38,14 @@ export function useDatabaseColumnDetail(columnId: Ref<number | null>) {
     (id) => {
       if (id === null) {
         activeRequest?.abort()
+        loading.value = false
         detail.value = null
         errorMessage.value = null
         return
       }
       void load(id)
     },
-    { immediate: true },
+    { immediate: true, flush: 'sync' },
   )
 
   onBeforeUnmount(() => activeRequest?.abort())

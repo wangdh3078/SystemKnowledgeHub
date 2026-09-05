@@ -23,7 +23,7 @@ export interface BusinessFunctionOverviewValues {
   readonly rewriteStatus: RewriteStatus
 }
 
-export function useBusinessFunctionDetail() {
+export function useBusinessFunctionDetail(getSelectedId?: () => number | null) {
   const detail = ref<BusinessFunctionDetailResponse | null>(null)
   const loading = ref(false)
   const error = ref<string | null>(null)
@@ -34,23 +34,41 @@ export function useBusinessFunctionDetail() {
   const processSaveError = ref<string | null>(null)
   const processConflict = ref(false)
   let requestController: AbortController | null = null
+  let requestGeneration = 0
+  let selectedId: number | null = null
+  const isSelected = (id: number) => selectedId === id && (!getSelectedId || getSelectedId() === id)
 
   async function load(id: number): Promise<boolean> {
     requestController?.abort()
-    requestController = new AbortController()
-    loading.value = detail.value === null
+    const controller = new AbortController()
+    requestController = controller
+    const generation = ++requestGeneration
+    selectedId = id
+    detail.value = null
+    overviewSaving.value = false
+    overviewSaveError.value = null
+    overviewConflict.value = false
+    processSaving.value = false
+    processSaveError.value = null
+    processConflict.value = false
+    loading.value = true
     error.value = null
+    const current = () =>
+      generation === requestGeneration && isSelected(id) && !controller.signal.aborted
     try {
-      detail.value = await getBusinessFunctionDetail(id, requestController.signal)
+      const response = await getBusinessFunctionDetail(id, controller.signal)
+      if (!current() || response.id !== id) return false
+      detail.value = response
       overviewConflict.value = false
       processConflict.value = false
       return true
     } catch (caught: unknown) {
-      if (caught instanceof DOMException && caught.name === 'AbortError') return false
+      if (!current() || (caught instanceof DOMException && caught.name === 'AbortError'))
+        return false
       error.value = caught instanceof Error ? caught.message : '业务功能详情加载失败。'
       return false
     } finally {
-      loading.value = false
+      if (current()) loading.value = false
     }
   }
 
@@ -58,19 +76,28 @@ export function useBusinessFunctionDetail() {
     values: BusinessFunctionOverviewValues,
     actor: ActorContext,
   ): Promise<boolean> {
-    if (!detail.value) return false
+    if (!detail.value || loading.value || !isSelected(detail.value.id)) return false
+    const target = detail.value
+    const generation = requestGeneration
     overviewSaving.value = true
     overviewSaveError.value = null
     overviewConflict.value = false
     try {
-      await updateBusinessFunctionOverview(detail.value.id, {
+      await updateBusinessFunctionOverview(target.id, {
         ...values,
         actor,
-        concurrencyToken: detail.value.concurrencyToken,
+        concurrencyToken: target.concurrencyToken,
       })
-      return await load(detail.value.id)
+      return await (generation === requestGeneration && isSelected(target.id)
+        ? load(target.id)
+        : Promise.resolve(false))
     } catch (caught: unknown) {
-      if (caught instanceof ApiError && caught.status === 409 && caught.response.code === 'conflict') {
+      if (generation !== requestGeneration || !isSelected(target.id)) return false
+      if (
+        caught instanceof ApiError &&
+        caught.status === 409 &&
+        caught.response.code === 'conflict'
+      ) {
         overviewConflict.value = true
         overviewSaveError.value = caught.message
       } else {
@@ -78,7 +105,7 @@ export function useBusinessFunctionDetail() {
       }
       return false
     } finally {
-      overviewSaving.value = false
+      if (generation === requestGeneration) overviewSaving.value = false
     }
   }
 
@@ -86,19 +113,28 @@ export function useBusinessFunctionDetail() {
     steps: readonly BusinessProcessStepInput[],
     actor: ActorContext,
   ): Promise<boolean> {
-    if (!detail.value) return false
+    if (!detail.value || loading.value || !isSelected(detail.value.id)) return false
+    const target = detail.value
+    const generation = requestGeneration
     processSaving.value = true
     processSaveError.value = null
     processConflict.value = false
     try {
-      await replaceBusinessProcessSteps(detail.value.id, {
+      await replaceBusinessProcessSteps(target.id, {
         steps,
         actor,
-        concurrencyToken: detail.value.concurrencyToken,
+        concurrencyToken: target.concurrencyToken,
       })
-      return await load(detail.value.id)
+      return await (generation === requestGeneration && isSelected(target.id)
+        ? load(target.id)
+        : Promise.resolve(false))
     } catch (caught: unknown) {
-      if (caught instanceof ApiError && caught.status === 409 && caught.response.code === 'conflict') {
+      if (generation !== requestGeneration || !isSelected(target.id)) return false
+      if (
+        caught instanceof ApiError &&
+        caught.status === 409 &&
+        caught.response.code === 'conflict'
+      ) {
         processConflict.value = true
         processSaveError.value = caught.message
       } else {
@@ -106,7 +142,7 @@ export function useBusinessFunctionDetail() {
       }
       return false
     } finally {
-      processSaving.value = false
+      if (generation === requestGeneration) processSaving.value = false
     }
   }
 
@@ -120,7 +156,10 @@ export function useBusinessFunctionDetail() {
     processConflict.value = false
   }
 
-  onBeforeUnmount(() => requestController?.abort())
+  onBeforeUnmount(() => {
+    requestGeneration++
+    requestController?.abort()
+  })
   return {
     detail,
     loading,

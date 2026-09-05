@@ -24,7 +24,7 @@ function decodeObject<T>(payload: unknown): T {
 
 export const unknownItemsApi = {
   list: (params: UnknownItemsListParams) => apiClient.get(`/unknown-items${queryString(params)}`, { decode: decodeObject<UnknownItemsListResponse> }),
-  detail: (id: ApiId) => apiClient.get(`/unknown-items/${id}`, { decode: decodeObject<UnknownItemDetailResponse> }),
+  detail: (id: ApiId, signal?: AbortSignal) => apiClient.get(`/unknown-items/${id}`, { signal, decode: decodeObject<UnknownItemDetailResponse> }),
   create: (input: CreateUnknownItemInput) => apiClient.post('/unknown-items', input, { decode: decodeObject<CreateUnknownItemResponse> }),
   start: (id: ApiId, actor: PersonSnapshotInput, concurrencyToken: string) =>
     apiClient.post(`/unknown-items/${id}/start-investigation`, { actor, concurrencyToken }, { decode: decodeObject<WorkflowResponse> }),

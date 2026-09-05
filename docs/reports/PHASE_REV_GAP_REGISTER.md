@@ -17,6 +17,7 @@ PHASE-REV-VERIFY 的历史结果为 **PASS WITH FOLLOW-UPS**。本清单保留�
 | REV-GAP-009 | Low | OPEN / Deferred | Verification evidence | Restore rollback test未直接 assert `Version` rollback |
 | REV-GAP-010 | Medium | **CLOSED — REV-FIX-01** | Migration test fixture | pre-revision schema seed误用 current Evidence model，full backend suite留下 1项 deterministic failure |
 | REV-GAP-011 | Low | OPEN / Deferred | Test infrastructure | default parallel full backend run因 SQLite/WebApplicationFactory collection并发停滞 |
+| REV-GAP-012 | Low | OPEN / Deferred — STABILITY-R01 | Migration test scope | B04 test migrates to latest but expects only the five B04 tables; Portal foundation adds three legitimate tables. |
 
 ## REV-FIX-01 Closure Summary
 
@@ -154,3 +155,13 @@ PHASE-REV-VERIFY 的历史结果为 **PASS WITH FOLLOW-UPS**。本清单保留�
 - Vite dev viewport override期间的 `ResizeObserver loop` warning；四个 required viewport仍完成且无功能失败。
 
 处理这些 baseline需单独批准，PHASE-REV Verification不顺手修改。
+
+## REV-GAP-012 — B04 migration test scope drifts after Portal foundation
+
+- **Status / severity:** OPEN / Deferred; Low; recorded during STABILITY-R01 on 2026-09-05.
+- **Owner / area:** Backend migration-test maintenance.
+- **Reproduction:** `DatabaseDiscoverySyncMigrationTests.B04_migration_preserves_legacy_rows_backfills_technical_identity_and_adds_typed_sync_tables` calls parameterless `migrator.MigrateAsync()` and then asserts an exact five-table B04 delta.
+- **Actual:** Latest includes the approved `20260903142533_AddPortalCompositionFoundation`; the extra tables are `portal_page_nodes`, `portal_page_sections`, and `portal_pages`. The exact-table assertion fails. The test and migrations are unchanged from starting HEAD `0ba5eb6`.
+- **Impact:** The supplemental migration test is FAIL; it is not evidence of a schema/data regression caused by STABILITY-R01. No STABILITY-R01 schema/migration changes exist. A full backend suite must not be described as all passing while this remains open.
+- **Recommended follow-up:** Explicitly test the B04 migration boundary, and keep latest-chain preservation coverage separate. Do not remove legitimate Portal tables or weaken production migrations to satisfy an obsolete test expectation.
+- **Current scope:** Deferred, not opportunistically corrected. The affected Authentication/Evidence/Discovery Sync/authorization/soft-delete regression gate is recorded separately in `STABILITY_R01_CONCURRENCY_STALE_DETAIL_HISTORICAL_INTEGRITY_VERIFICATION_REPORT.md`.

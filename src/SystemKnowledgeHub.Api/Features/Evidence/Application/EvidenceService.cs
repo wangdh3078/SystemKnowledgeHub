@@ -313,12 +313,17 @@ public sealed class EvidenceService(
             return new EvidenceCommandResult(null, errors, EvidenceFailure.Validation);
         }
 
+        await using var transaction = await SqliteImmediateTransaction.BeginAsync(dbContext, cancellationToken);
         var item = await dbContext.Evidence.SingleOrDefaultAsync(
             evidence => evidence.Id == request.EvidenceId,
             cancellationToken);
         if (item is null)
         {
             return new EvidenceCommandResult(null, null, EvidenceFailure.NotFound);
+        }
+        if (await subjectResolver.Resolve(item.SubjectType, item.SubjectId, cancellationToken) is null)
+        {
+            return new EvidenceCommandResult(null, null, EvidenceFailure.SubjectNotFound);
         }
         if (item.Version != expectedVersion)
         {
@@ -345,6 +350,7 @@ public sealed class EvidenceService(
         }
 
         var detail = await queries.GetEvidenceDetail(item.Id, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return new EvidenceCommandResult(detail.Response, null, detail.Failure);
     }
 

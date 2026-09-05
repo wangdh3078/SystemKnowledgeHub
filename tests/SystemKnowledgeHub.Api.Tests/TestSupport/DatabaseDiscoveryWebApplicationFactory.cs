@@ -43,6 +43,7 @@ public sealed class DatabaseDiscoveryWebApplicationFactory : BootstrapWebApplica
     public int WorkerHeartbeatIntervalSeconds { get; set; } = 1;
     public int WorkerOverallTimeoutSeconds { get; set; } = 10;
     public int MaximumSyncPlanActions { get; set; } = 2_000;
+    public Microsoft.EntityFrameworkCore.Diagnostics.IInterceptor? SaveInterceptor { get; set; }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -50,7 +51,11 @@ public sealed class DatabaseDiscoveryWebApplicationFactory : BootstrapWebApplica
         builder.ConfigureServices(services =>
         {
             services.RemoveAll<DbContextOptions<KnowledgeHubDbContext>>();
-            services.AddDbContext<KnowledgeHubDbContext>(options => options.UseSqlite(databaseConnectionString));
+            services.AddDbContext<KnowledgeHubDbContext>(options =>
+            {
+                options.UseSqlite(databaseConnectionString);
+                if (SaveInterceptor is not null) options.AddInterceptors(SaveInterceptor);
+            });
             services.RemoveAll<IDatabaseConnectionTester>();
             services.AddSingleton(Tester);
             services.AddSingleton<IDatabaseConnectionTester>(provider =>

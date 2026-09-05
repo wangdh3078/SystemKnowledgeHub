@@ -8,7 +8,7 @@ import UnknownItemDetailView from './UnknownItemDetailView.vue'
 
 const route = { params: { id: '88' } }
 const router = { push: vi.fn() }
-vi.mock('vue-router', () => ({ useRoute: () => route, useRouter: () => router }))
+vi.mock('vue-router', () => ({ useRoute: () => route, useRouter: () => router, onBeforeRouteUpdate: vi.fn(), onBeforeRouteLeave: vi.fn() }))
 vi.mock('element-plus', () => ({ ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn() }, ElMessageBox: { confirm: vi.fn(), prompt: vi.fn() } }))
 vi.mock('../composables/useUnknownItemDetail', () => ({ useUnknownItemDetail: vi.fn() }))
 

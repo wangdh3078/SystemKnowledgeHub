@@ -2,7 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { Delete, EditPen } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { useRoute, useRouter } from 'vue-router'
+import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
 import { parseSafeApiId } from '../../../api/contracts/id'
 import { useActorStore } from '../../../app/stores/actor'
 import { useOverlayStore } from '../../../app/stores/overlays'
@@ -36,26 +36,26 @@ const {
   saveTechnology,
   saveLifecycle,
   clearSaveError,
-} = useSystemDetail()
+} = useSystemDetail(() => parseSafeApiId(route.params.id))
 const { view: knowledgeView, loading: knowledgeViewLoading, error: knowledgeViewError, load: loadKnowledgeView } = useSystemKnowledgeView()
 
 const systemId = computed(() => parseSafeApiId(route.params.id))
 const canEditOverview = computed(() =>
-  actorStore.canEdit && detail.value?.availableActions.includes('UpdateSystemOverview') === true,
+  actorStore.canEdit && detail.value?.id === parseSafeApiId(route.params.id) && detail.value?.availableActions.includes('UpdateSystemOverview') === true,
 )
 const canEditTechnology = computed(() =>
-  actorStore.canEdit && detail.value?.availableActions.includes('UpdateSystemTechnology') === true,
+  actorStore.canEdit && detail.value?.id === parseSafeApiId(route.params.id) && detail.value?.availableActions.includes('UpdateSystemTechnology') === true,
 )
 const canEditLifecycle = computed(() =>
-  actorStore.canEdit && detail.value?.availableActions.includes('UpdateSystemLifecycle') === true,
+  actorStore.canEdit && detail.value?.id === parseSafeApiId(route.params.id) && detail.value?.availableActions.includes('UpdateSystemLifecycle') === true,
 )
 const knowledgeTotal = computed(() => {
-  if (!detail.value) return 0
+  if (detail.value?.id !== parseSafeApiId(route.params.id) || !detail.value) return 0
   const summary = detail.value.knowledgeSummary
   return summary.confirmed + summary.inferred + summary.unknown
 })
 const knowledgePercent = computed(() => {
-  if (!detail.value || knowledgeTotal.value === 0) {
+  if (detail.value?.id !== parseSafeApiId(route.params.id) || !detail.value || knowledgeTotal.value === 0) {
     return { confirmed: 0, inferred: 0, unknown: 0 }
   }
   const summary = detail.value.knowledgeSummary
@@ -94,12 +94,12 @@ async function reloadAfterConflict(): Promise<void> {
 }
 
 function requestDelete(): void {
-  if (!detail.value?.canDelete) return
+  if (detail.value?.id !== parseSafeApiId(route.params.id) || !detail.value?.canDelete) return
   const current = detail.value
   openDeleteDialog(overlayStore, {
     objectTypeLabel: '系统', actionLabel: '删除系统', displayName: current.overview.name,
     concurrencyToken: current.concurrencyToken,
-    execute: () => deleteSystem(current.id, current.concurrencyToken),
+    execute: async () => { if (loading.value || detail.value?.id !== current.id || parseSafeApiId(route.params.id) !== current.id) throw new Error('当前对象已变化，请重新加载。'); await deleteSystem(current.id, current.concurrencyToken) },
     onDeleted: () => router.push({ name: 'systems-list' }),
     onRefresh: loadRoute,
     onUnavailable: () => router.push({ name: 'systems-list' }),
@@ -119,11 +119,19 @@ function openIntegration(id: number): void { void router.push({ name: 'integrati
 function openDocument(id: number): void { void router.push({ name: 'knowledge-document-detail', params: { id: String(id) } }) }
 function openUnknownItem(id: number): void { void router.push({ name: 'unknown-item-detail', params: { id: String(id) } }) }
 
-watch(() => route.params.id, () => void loadRoute())
+watch(() => route.params.id, () => void loadRoute(), { flush: 'sync' })
 watch(overviewEditing, (editing) => {
   if (editing) clearSaveError()
 })
 onMounted(() => void loadRoute())
+// Existing overlays belong to the current detail; preserve the dirty-drawer decision before navigation.
+async function closeDetailOverlays(): Promise<boolean> {
+  if (!await overlayStore.requestDrawerClose()) return false
+  overlayStore.closeDialog()
+  return true
+}
+onBeforeRouteUpdate(closeDetailOverlays)
+onBeforeRouteLeave(closeDetailOverlays)
 </script>
 
 <template>
@@ -140,7 +148,7 @@ onMounted(() => void loadRoute())
       :message="pageError"
       @retry="loadRoute"
     />
-    <template v-else-if="detail">
+    <template v-else-if="detail && detail.id === parseSafeApiId(route.params.id)">
       <header class="system-detail-header">
         <nav aria-label="面包屑"><button @click="router.push('/systems')">系统</button><b>/</b><span>{{ detail.overview.name }}</span></nav>
         <div class="system-detail-header__title">

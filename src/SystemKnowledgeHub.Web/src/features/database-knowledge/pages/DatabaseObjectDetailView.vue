@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Delete, DocumentChecked, EditPen, Search, UserFilled } from '@element-plus/icons-vue'
-import { useRoute, useRouter } from 'vue-router'
+import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
 import KnowledgeStatusBadge from '../../../components/data-display/KnowledgeStatusBadge.vue'
 import EmptyState from '../../../components/feedback/EmptyState.vue'
 import ErrorState from '../../../components/feedback/ErrorState.vue'
@@ -38,7 +38,7 @@ const {
   load,
   selectColumn,
   clearColumnSelection,
-} = useDatabaseObjectDetail()
+} = useDatabaseObjectDetail(() => parseSafeApiId(route.params.id))
 
 const databaseObjectId = computed(() => parseSafeApiId(route.params.id))
 const routeSelectedColumnId = computed(() => parseSafeApiId(route.query.selectedColumnId))
@@ -47,7 +47,7 @@ const humanConfirmationCount = computed(() => objectEvidence.value.filter(
 ).length)
 
 const filteredColumns = computed(() => {
-  if (!detail.value) return []
+  if (detail.value?.id !== databaseObjectId.value || !detail.value) return []
   const query = filterText.value.trim().toLocaleLowerCase()
   if (!query) return detail.value.columns
   return detail.value.columns.filter(
@@ -85,12 +85,12 @@ function rowClassName({ row }: { row: DatabaseColumnSummary }): string {
 }
 
 function openObjectKnowledgeEdit(): void {
-  if (!actorStore.canEdit || !detail.value) return
+  if (!actorStore.canEdit || detail.value?.id !== databaseObjectId.value || !detail.value) return
   overlayStore.openDrawer({ kind: 'edit-database-object', id: detail.value.id, mode: 'edit' })
 }
 
 function evidenceSubjectPayload() {
-  if (!detail.value) return null
+  if (detail.value?.id !== databaseObjectId.value || !detail.value) return null
   return {
     subject: { type: 'DatabaseObject', id: detail.value.id },
     title: detail.value.overview.qualifiedName,
@@ -117,7 +117,7 @@ function openEvidence(id: number): void {
 }
 
 function openRegisterColumn(): void {
-  if (!actorStore.canEdit || !detail.value) return
+  if (!actorStore.canEdit || detail.value?.id !== databaseObjectId.value || !detail.value) return
   const greatestOrdinal = Math.max(0, ...detail.value.columns.map((column) => column.ordinalPosition))
   overlayStore.openDialog({
     kind: 'register-database-column',
@@ -143,25 +143,35 @@ function evidenceChanged(): void {
   void loadRoute()
 }
 
+let evidenceRequest: AbortController | null = null
 async function loadObjectEvidence(id: number): Promise<void> {
+  evidenceRequest?.abort()
+  const controller = new AbortController()
+  evidenceRequest = controller
+  const current = () => evidenceRequest === controller && !controller.signal.aborted && databaseObjectId.value === id
+  objectEvidence.value = []
   evidenceLoading.value = true
   evidenceError.value = null
   try {
-    objectEvidence.value = (await getEvidenceList('DatabaseObject', id)).items
+    const response = await getEvidenceList('DatabaseObject', id, controller.signal)
+    if (current()) objectEvidence.value = response.items
   } catch (loadError: unknown) {
+    if (!current()) return
     objectEvidence.value = []
     evidenceError.value = loadError instanceof Error ? loadError.message : '数据库对象证据加载失败。'
   } finally {
-    evidenceLoading.value = false
+    if (current()) evidenceLoading.value = false
   }
 }
 
 async function loadRoute(): Promise<void> {
   if (databaseObjectId.value === null) return
+  const requestedId = databaseObjectId.value
   await Promise.all([
     load(databaseObjectId.value, routeSelectedColumnId.value),
     loadObjectEvidence(databaseObjectId.value),
   ])
+  if (requestedId !== databaseObjectId.value) return
   if (selectedColumnError.value) {
     const nextQuery = { ...route.query }
     delete nextQuery.selectedColumnId
@@ -170,12 +180,12 @@ async function loadRoute(): Promise<void> {
 }
 
 function requestDelete(): void {
-  if (!actorStore.canEdit || !detail.value?.canDelete) return
+  if (!actorStore.canEdit || detail.value?.id !== databaseObjectId.value || !detail.value?.canDelete) return
   const current = detail.value
   openDeleteDialog(overlayStore, {
     objectTypeLabel: '数据库对象', actionLabel: '删除数据库对象', displayName: current.overview.qualifiedName,
     concurrencyToken: current.concurrencyToken,
-    execute: () => deleteDatabaseObject(current.id, current.concurrencyToken),
+    execute: async () => { if (loading.value || detail.value?.id !== current.id || parseSafeApiId(route.params.id) !== current.id) throw new Error('当前对象已变化，请重新加载。'); await deleteDatabaseObject(current.id, current.concurrencyToken) },
     onDeleted: () => router.push({ name: 'database-objects-list', query: { databaseSourceId: String(current.databaseSource.id) } }),
     onRefresh: loadRoute,
     onUnavailable: () => router.push({ name: 'database-objects-list' }),
@@ -187,12 +197,12 @@ function openDatabaseBrowse(): void {
 }
 
 function openSystem(): void {
-  if (!detail.value) return
+  if (detail.value?.id !== databaseObjectId.value || !detail.value) return
   void router.push({ name: 'system-detail', params: { id: String(detail.value.system.id) } })
 }
 
 function openDatabaseSource(): void {
-  if (!detail.value) return
+  if (detail.value?.id !== databaseObjectId.value || !detail.value) return
   void router.push({
     name: 'database-objects-list',
     query: {
@@ -204,7 +214,7 @@ function openDatabaseSource(): void {
 
 watch([databaseObjectId, routeSelectedColumnId], () => {
   void loadRoute()
-})
+}, { flush: 'sync' })
 
 watch(
   () => overlayStore.currentDrawer,
@@ -227,11 +237,19 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  evidenceRequest?.abort()
   window.removeEventListener('database-object:changed', databaseObjectChanged)
   window.removeEventListener('database-column:changed', databaseObjectChanged)
   window.removeEventListener('knowledge-status:changed', knowledgeStatusChanged)
   window.removeEventListener('evidence:changed', evidenceChanged)
 })
+async function closeDetailOverlays(): Promise<boolean> {
+  if (!await overlayStore.requestDrawerClose()) return false
+  overlayStore.closeDialog()
+  return true
+}
+onBeforeRouteUpdate((to, from) => to.params.id === from.params.id ? true : closeDetailOverlays())
+onBeforeRouteLeave(closeDetailOverlays)
 </script>
 
 <template>
@@ -248,7 +266,7 @@ onBeforeUnmount(() => {
       :message="errorMessage"
       @retry="loadRoute"
     />
-    <template v-else-if="detail">
+    <template v-else-if="detail && detail.id === databaseObjectId">
       <header class="database-object-header">
         <nav class="database-breadcrumb" aria-label="面包屑">
           <button type="button" @click="openDatabaseBrowse">数据库</button><b>/</b

@@ -74,4 +74,26 @@ describe('useDatabaseObjectDetail', () => {
     expect(model.loading.value).toBe(false)
     expect(model.detail.value?.id).toBe(45)
   })
+  it('late A cannot open its selected-column drawer after B is current', async () => {
+    let completeA!: (value: typeof detail) => void
+    vi.mocked(getDatabaseObjectDetail).mockImplementationOnce(() => new Promise(resolve => { completeA = resolve }))
+      .mockResolvedValueOnce({ ...detail, id: 46 })
+    const model = useDatabaseObjectDetail()
+    const a = model.load(45, 123)
+    await model.load(46, null)
+    completeA(detail); await a
+    expect(model.detail.value?.id).toBe(46)
+    expect(model.selectedColumnId.value).toBeNull()
+    expect(useOverlayStore().currentDrawer).toBeNull()
+  })
+  it('B failure clears A and cannot reopen an A column action', async () => {
+    vi.mocked(getDatabaseObjectDetail).mockResolvedValueOnce(detail).mockRejectedValueOnce(new Error('B failed'))
+    const model = useDatabaseObjectDetail(); await model.load(45, null)
+    const pending = model.load(46, null)
+    expect(model.detail.value).toBeNull()
+    model.selectColumn(123); await pending
+    expect(useOverlayStore().currentDrawer).toBeNull()
+    expect(model.errorMessage.value).toBe('B failed')
+  })
+
 })

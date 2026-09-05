@@ -26,7 +26,7 @@ export interface SystemOverviewValues {
   readonly notes: string | null
 }
 
-export function useSystemDetail() {
+export function useSystemDetail(getSelectedId?: () => number | null) {
   const detail = ref<SystemDetailResponse | null>(null)
   const loading = ref(false)
   const pageError = ref<string | null>(null)
@@ -34,43 +34,59 @@ export function useSystemDetail() {
   const saveError = ref<string | null>(null)
   const concurrencyConflict = ref(false)
   let requestController: AbortController | null = null
+  let requestGeneration = 0
+  let selectedId: number | null = null
+  const isSelected = (id: number) => selectedId === id && (!getSelectedId || getSelectedId() === id)
 
-  async function load(systemId: number): Promise<boolean> {
+  async function load(id: number): Promise<boolean> {
     requestController?.abort()
-    requestController = new AbortController()
-    loading.value = detail.value === null
+    const controller = new AbortController()
+    requestController = controller
+    const generation = ++requestGeneration
+    selectedId = id
+    detail.value = null
+    saving.value = false
+    saveError.value = null
+    concurrencyConflict.value = false
+    loading.value = true
     pageError.value = null
-
+    const current = () =>
+      generation === requestGeneration && isSelected(id) && !controller.signal.aborted
     try {
-      detail.value = await getSystemDetail(systemId, requestController.signal)
+      const response = await getSystemDetail(id, controller.signal)
+      if (!current() || response.id !== id) return false
+      detail.value = response
       concurrencyConflict.value = false
       return true
-    } catch (error: unknown) {
-      if (error instanceof DOMException && error.name === 'AbortError') return false
-      pageError.value = error instanceof Error ? error.message : '系统详情加载失败。'
+    } catch (caught: unknown) {
+      if (!current() || (caught instanceof DOMException && caught.name === 'AbortError'))
+        return false
+      pageError.value = caught instanceof Error ? caught.message : '系统详情加载失败。'
       return false
     } finally {
-      loading.value = false
+      if (current()) loading.value = false
     }
   }
 
-  async function saveOverview(
-    values: SystemOverviewValues,
-    actor: ActorContext,
-  ): Promise<boolean> {
-    if (!detail.value) return false
+  async function saveOverview(values: SystemOverviewValues, actor: ActorContext): Promise<boolean> {
+    if (!detail.value || loading.value || !isSelected(detail.value.id)) return false
+    const target = detail.value
+    const generation = requestGeneration
     saving.value = true
     saveError.value = null
     concurrencyConflict.value = false
 
     try {
-      await updateSystemOverview(detail.value.id, {
+      await updateSystemOverview(target.id, {
         ...values,
         actor,
-        concurrencyToken: detail.value.concurrencyToken,
+        concurrencyToken: target.concurrencyToken,
       })
-      return await load(detail.value.id)
+      return await (generation === requestGeneration && isSelected(target.id)
+        ? load(target.id)
+        : Promise.resolve(false))
     } catch (error: unknown) {
+      if (generation !== requestGeneration || !isSelected(target.id)) return false
       if (error instanceof ApiError && error.status === 409 && error.response.code === 'conflict') {
         concurrencyConflict.value = true
         saveError.value = error.message
@@ -79,7 +95,7 @@ export function useSystemDetail() {
       }
       return false
     } finally {
-      saving.value = false
+      if (generation === requestGeneration) saving.value = false
     }
   }
 
@@ -87,23 +103,28 @@ export function useSystemDetail() {
     technologies: readonly string[],
     actor: ActorContext,
   ): Promise<boolean> {
-    if (!detail.value) return false
+    if (!detail.value || loading.value || !isSelected(detail.value.id)) return false
+    const target = detail.value
+    const generation = requestGeneration
     saving.value = true
     saveError.value = null
     concurrencyConflict.value = false
 
     try {
-      await updateSystemTechnology(detail.value.id, {
+      await updateSystemTechnology(target.id, {
         technologies,
         actor,
-        concurrencyToken: detail.value.concurrencyToken,
+        concurrencyToken: target.concurrencyToken,
       })
-      return await load(detail.value.id)
+      return await (generation === requestGeneration && isSelected(target.id)
+        ? load(target.id)
+        : Promise.resolve(false))
     } catch (error: unknown) {
+      if (generation !== requestGeneration || !isSelected(target.id)) return false
       setSaveError(error, '技术信息保存失败。')
       return false
     } finally {
-      saving.value = false
+      if (generation === requestGeneration) saving.value = false
     }
   }
 
@@ -111,23 +132,28 @@ export function useSystemDetail() {
     targetLifecycle: SystemLifecycle,
     actor: ActorContext,
   ): Promise<boolean> {
-    if (!detail.value) return false
+    if (!detail.value || loading.value || !isSelected(detail.value.id)) return false
+    const target = detail.value
+    const generation = requestGeneration
     saving.value = true
     saveError.value = null
     concurrencyConflict.value = false
 
     try {
-      await updateSystemLifecycle(detail.value.id, {
+      await updateSystemLifecycle(target.id, {
         targetLifecycle,
         actor,
-        concurrencyToken: detail.value.concurrencyToken,
+        concurrencyToken: target.concurrencyToken,
       })
-      return await load(detail.value.id)
+      return await (generation === requestGeneration && isSelected(target.id)
+        ? load(target.id)
+        : Promise.resolve(false))
     } catch (error: unknown) {
+      if (generation !== requestGeneration || !isSelected(target.id)) return false
       setSaveError(error, '生命周期保存失败。')
       return false
     } finally {
-      saving.value = false
+      if (generation === requestGeneration) saving.value = false
     }
   }
 
@@ -146,7 +172,10 @@ export function useSystemDetail() {
     concurrencyConflict.value = false
   }
 
-  onBeforeUnmount(() => requestController?.abort())
+  onBeforeUnmount(() => {
+    requestGeneration++
+    requestController?.abort()
+  })
 
   return {
     detail,

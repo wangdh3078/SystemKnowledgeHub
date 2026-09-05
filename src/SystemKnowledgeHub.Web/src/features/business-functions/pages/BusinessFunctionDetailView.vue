@@ -2,7 +2,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { ArrowRight, Connection, Delete, Document, DocumentChecked, EditPen, Link, Plus, QuestionFilled } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { useRoute, useRouter } from 'vue-router'
+import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
 import { parseSafeApiId } from '../../../api/contracts/id'
 import { useActorStore } from '../../../app/stores/actor'
 import { useOverlayStore } from '../../../app/stores/overlays'
@@ -56,17 +56,17 @@ const {
   saveProcess,
   clearOverviewError,
   clearProcessError,
-} = useBusinessFunctionDetail()
+} = useBusinessFunctionDetail(() => parseSafeApiId(route.params.id))
 const functionId = computed(() => parseSafeApiId(route.params.id))
 const canEditOverview = computed(() =>
-  actorStore.canEdit && detail.value?.availableActions.includes('UpdateBusinessFunctionOverview') === true,
+  actorStore.canEdit && detail.value?.id === parseSafeApiId(route.params.id) && detail.value?.availableActions.includes('UpdateBusinessFunctionOverview') === true,
 )
 const canEditProcess = computed(() =>
-  actorStore.canEdit && detail.value?.availableActions.includes('ReplaceBusinessProcessSteps') === true,
+  actorStore.canEdit && detail.value?.id === parseSafeApiId(route.params.id) && detail.value?.availableActions.includes('ReplaceBusinessProcessSteps') === true,
 )
-const canAddEvidence = computed(() => actorStore.canEdit && detail.value?.availableActions.includes('AddEvidence') === true)
-const canAddRelationship = computed(() => actorStore.canEdit && detail.value?.availableActions.includes('AddKnowledgeRelation') === true)
-const canChangeKnowledgeStatus = computed(() => actorStore.canEdit && detail.value?.availableActions.includes('ChangeKnowledgeStatus') === true)
+const canAddEvidence = computed(() => actorStore.canEdit && detail.value?.id === parseSafeApiId(route.params.id) && detail.value?.availableActions.includes('AddEvidence') === true)
+const canAddRelationship = computed(() => actorStore.canEdit && detail.value?.id === parseSafeApiId(route.params.id) && detail.value?.availableActions.includes('AddKnowledgeRelation') === true)
+const canChangeKnowledgeStatus = computed(() => actorStore.canEdit && detail.value?.id === parseSafeApiId(route.params.id) && detail.value?.availableActions.includes('ChangeKnowledgeStatus') === true)
 const humanConfirmationCount = computed(() =>
   detail.value?.evidence.filter((item) => item.evidenceType === 'HumanConfirmation').length ?? 0,
 )
@@ -119,7 +119,7 @@ function handleIntegrationRow(row: BusinessFunctionDetailResponse['integrations'
 }
 
 function openAddRelationship(): void {
-  if (!detail.value) return
+  if (detail.value?.id !== parseSafeApiId(route.params.id) || !detail.value) return
   overlayStore.openDrawer({
     kind: 'add-relationship',
     id: detail.value.id,
@@ -134,7 +134,7 @@ function openAddRelationship(): void {
 }
 
 function openAddEvidence(): void {
-  if (!detail.value) return
+  if (detail.value?.id !== parseSafeApiId(route.params.id) || !detail.value) return
   overlayStore.openDrawer({
     kind: 'add-evidence',
     id: detail.value.id,
@@ -153,7 +153,7 @@ function openEvidence(id: number): void {
 }
 
 function createUnknownItem(): void {
-  if (!detail.value) return
+  if (detail.value?.id !== parseSafeApiId(route.params.id) || !detail.value) return
   overlayStore.openDialog({
     kind: 'create-unknown-item', id: null, mode: 'create',
     payload: {
@@ -166,12 +166,12 @@ function createUnknownItem(): void {
 }
 
 function requestDelete(): void {
-  if (!detail.value?.canDelete) return
+  if (detail.value?.id !== parseSafeApiId(route.params.id) || !detail.value?.canDelete) return
   const current = detail.value
   openDeleteDialog(overlayStore, {
     objectTypeLabel: '业务功能', actionLabel: '删除业务功能', displayName: current.header.name,
     concurrencyToken: current.concurrencyToken,
-    execute: () => deleteBusinessFunction(current.id, current.concurrencyToken),
+    execute: async () => { if (loading.value || detail.value?.id !== current.id || parseSafeApiId(route.params.id) !== current.id) throw new Error('当前对象已变化，请重新加载。'); await deleteBusinessFunction(current.id, current.concurrencyToken) },
     onDeleted: () => router.push({ name: 'business-functions-list' }),
     onRefresh: loadRoute,
     onUnavailable: () => router.push({ name: 'business-functions-list' }),
@@ -186,7 +186,7 @@ function reloadRelationships(): void {
   void loadRoute()
 }
 
-watch(() => route.params.id, () => void loadRoute())
+watch(() => route.params.id, () => void loadRoute(), { flush: 'sync' })
 onMounted(() => {
   void loadRoute()
   window.addEventListener('evidence:changed', reloadEvidence)
@@ -198,6 +198,14 @@ onUnmounted(() => {
   window.removeEventListener('relationship:changed', reloadRelationships)
   window.removeEventListener('knowledge-status:changed', reloadRelationships)
 })
+// Existing overlays belong to the current detail; preserve the dirty-drawer decision before navigation.
+async function closeDetailOverlays(): Promise<boolean> {
+  if (!await overlayStore.requestDrawerClose()) return false
+  overlayStore.closeDialog()
+  return true
+}
+onBeforeRouteUpdate(closeDetailOverlays)
+onBeforeRouteLeave(closeDetailOverlays)
 </script>
 
 <template>
@@ -205,7 +213,7 @@ onUnmounted(() => {
     <ErrorState v-if="functionId === null" title="业务功能地址无效" message="请从业务功能列表重新进入。" />
     <LoadingState v-else-if="loading && !detail" message="正在读取业务功能详情…" />
     <ErrorState v-else-if="error && !detail" title="业务功能详情加载失败" :message="error" @retry="loadRoute" />
-    <template v-else-if="detail">
+    <template v-else-if="detail && detail.id === parseSafeApiId(route.params.id)">
       <header class="business-function-detail-header">
         <nav aria-label="面包屑">
           <button @click="router.push({ name: 'business-functions-list' })">业务功能</button><b>/</b>

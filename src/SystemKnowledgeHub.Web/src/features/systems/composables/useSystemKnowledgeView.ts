@@ -10,16 +10,21 @@ export function useSystemKnowledgeView() {
 
   async function load(systemId: number): Promise<void> {
     request?.abort()
-    request = new AbortController()
+    const controller = new AbortController()
+    request = controller
+    const current = () => request === controller && !controller.signal.aborted
     loading.value = true
+    view.value = null
     error.value = null
     try {
-      view.value = await getSystemKnowledgeView(systemId, request.signal)
+      const response = await getSystemKnowledgeView(systemId, controller.signal)
+      if (current()) view.value = response
     } catch (reason: unknown) {
+      if (!current()) return
       if (reason instanceof DOMException && reason.name === 'AbortError') return
       error.value = reason instanceof Error ? reason.message : '统一知识视图加载失败。'
     } finally {
-      loading.value = false
+      if (current()) loading.value = false
     }
   }
 

@@ -2,7 +2,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { Check, DocumentAdd, Lock, Plus, Refresh, Search, VideoPlay } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { useRoute, useRouter } from 'vue-router'
+import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
 import { parseSafeApiId } from '../../../api/contracts/id'
 import { useActorStore } from '../../../app/stores/actor'
 import { useOverlayStore } from '../../../app/stores/overlays'
@@ -29,9 +29,9 @@ const draftTargetKey = ref(''); const draftAction = ref<'AddColumnKnownValue' | 
 const draftValue = ref(''); const draftMeaning = ref(''); const draftDescription = ref('')
 const draftRuleName=ref('');const draftRuleDescription=ref('');const draftRuleCondition=ref('');const draftRuleResult=ref('');const draftRuleInputData=ref('[]')
 const draftIntegrationBase=ref<IntegrationOverviewInput|null>(null);const draftIntegrationName=ref('');const draftIntegrationPurpose=ref('')
-const { detail, loading, saving, error, load, run, person } = useUnknownItemDetail()
+const { detail, loading, saving, error, load, run, person } = useUnknownItemDetail(() => parseSafeApiId(route.params.id))
 const statusSteps = ['Open', 'Investigating', 'ConclusionConfirmed', 'Closed'] as const
-const can = (action: string) => actorStore.canEdit && detail.value?.availableActions.includes(action) === true
+const can = (action: string) => actorStore.canEdit && detail.value?.id === parseSafeApiId(route.params.id) && detail.value?.availableActions.includes(action) === true
 const evidenceTypeLabel = (value: string) => evidenceTypeLabels[value as EvidenceType] ?? value
 const columnTargets = computed(() => detail.value?.relatedObjects.filter(item => item.target.type === 'DatabaseColumn') ?? [])
 const ruleTargets = computed(() => detail.value?.relatedObjects.filter(item => item.target.type === 'BusinessRule') ?? [])
@@ -52,26 +52,55 @@ const selectedTarget = computed(() => editableTargets.value.find(item => `${item
 const latestKnowledgeApplyActivity = computed(() => detail.value?.activity.find(item => item.type === 'KnowledgeUpdateApplied') ?? null)
 async function reload(): Promise<void> {
   if (itemId.value !== null) {
-    await load(itemId.value); resolutionText.value = detail.value?.resolution?.conclusion ?? ''
+    if (!await load(itemId.value)) return
+    resolutionText.value = detail.value?.resolution?.conclusion ?? ''
     if (!draftTargetKey.value && editableTargets.value[0]) draftTargetKey.value = `${editableTargets.value[0].target.type}:${editableTargets.value[0].target.id}`
     await loadSelectedDraftTarget()
   }
 }
 function integrationInput(value:Awaited<ReturnType<typeof integrationsApi.detail>>):IntegrationOverviewInput{const endpoint:Record<string,string|null>=value.header.integrationType==='HttpApi'?{url:value.endpoint.url,method:value.endpoint.method}:value.header.integrationType==='RabbitMq'?{exchange:value.endpoint.exchange,topic:value.endpoint.topic,queue:value.endpoint.queue}:value.header.integrationType==='FileExchange'?{filePath:value.endpoint.filePath}:{};return{name:value.header.name,integrationType:value.header.integrationType,sourceParty:value.sourceParty,targetParty:value.targetParty,flowDirection:value.flowDirection,purpose:value.purpose,endpoint,databaseSourceId:value.databaseSourceId,databaseObjectId:value.databaseObjectId}}
-async function loadSelectedDraftTarget():Promise<void>{if(selectedTarget.value?.target.type==='BusinessRule'){const rule=await businessRulesApi.detail(selectedTarget.value.target.id);draftAction.value='UpdateBusinessRule';draftRuleName.value=rule.header.name;draftRuleDescription.value=rule.description;draftRuleCondition.value=rule.condition??'';draftRuleResult.value=rule.result??'';draftRuleInputData.value=JSON.stringify(rule.inputData,null,2);return}if(selectedTarget.value?.target.type==='Integration'){const integration=integrationInput(await integrationsApi.detail(selectedTarget.value.target.id));draftIntegrationBase.value=integration;draftIntegrationName.value=integration.name;draftIntegrationPurpose.value=integration.purpose??''}}
+async function loadSelectedDraftTarget(): Promise<void> {
+  const subject = detail.value
+  const target = selectedTarget.value
+  draftIntegrationBase.value = null
+  if (!subject || subject.id !== itemId.value || !target) return
+  const current = () => detail.value === subject && itemId.value === subject.id && selectedTarget.value === target
+  try {
+    if (target.target.type === 'BusinessRule') {
+      const rule = await businessRulesApi.detail(target.target.id)
+      if (!current()) return
+      draftAction.value = 'UpdateBusinessRule'
+      draftRuleName.value = rule.header.name
+      draftRuleDescription.value = rule.description
+      draftRuleCondition.value = rule.condition ?? ''
+      draftRuleResult.value = rule.result ?? ''
+      draftRuleInputData.value = JSON.stringify(rule.inputData, null, 2)
+    } else if (target.target.type === 'Integration') {
+      const integration = integrationInput(await integrationsApi.detail(target.target.id))
+      if (!current()) return
+      draftIntegrationBase.value = integration
+      draftIntegrationName.value = integration.name
+      draftIntegrationPurpose.value = integration.purpose ?? ''
+    }
+  } catch (cause: unknown) {
+    if (current()) error.value = cause instanceof Error ? cause.message : '更新目标加载失败。'
+  }
+}
 function parseRuleInputData():BusinessRuleInputData[]|null{try{const value:unknown=JSON.parse(draftRuleInputData.value);if(!Array.isArray(value))return null;const rows:BusinessRuleInputData[]=[];for(const item of value){if(typeof item!=='object'||item===null||Array.isArray(item))return null;const row=item as Record<string,unknown>;if(typeof row.name!=='string'||!row.name.trim()||(row.description!==null&&row.description!==undefined&&typeof row.description!=='string'))return null;rows.push({name:row.name.trim(),description:typeof row.description==='string'&&row.description.trim()?row.description.trim():null})}return rows}catch{return null}}
 async function start(): Promise<void> {
-  if (!detail.value) return
+  if (detail.value?.id !== parseSafeApiId(route.params.id) || !detail.value) return
   if (await run(() => unknownItemsApi.start(detail.value!.id, person(actorStore.displayName, '调查人'), detail.value!.concurrencyToken))) ElMessage.success('已开始调查。')
 }
 async function addFinding(): Promise<void> {
-  if (!detail.value) return
+  if (detail.value?.id !== parseSafeApiId(route.params.id) || !detail.value) return
   if (!findingText.value.trim()) { findingError.value = '请先记录调查发现。'; return }
   findingError.value = null
   if (await run(() => unknownItemsApi.addFinding(detail.value!.id, findingText.value.trim(), person(actorStore.displayName, '调查人'), detail.value!.concurrencyToken))) { findingText.value = ''; ElMessage.success('调查发现已记录。') }
 }
 async function saveResolution(): Promise<void> {
-  if (!detail.value || !resolutionText.value.trim()) return
+  if (detail.value?.id !== parseSafeApiId(route.params.id) || !detail.value || !resolutionText.value.trim()) return
+  const subject = detail.value
+  const draftTarget = selectedTarget.value
   const drafts: KnowledgeUpdateDraft[] = []
   if (selectedTarget.value?.target.type === 'DatabaseColumn') {
     const column = await getDatabaseColumnDetail(selectedTarget.value.target.id)
@@ -88,8 +117,9 @@ async function saveResolution(): Promise<void> {
   } else if(selectedTarget.value?.target.type==='BusinessRule'){
     const rule=await businessRulesApi.detail(selectedTarget.value.target.id);const inputData=parseRuleInputData();if(inputData===null){ElMessage.error('输入数据必须是由 name / description 组成的 JSON 数组。');return}const before={name:rule.header.name,description:rule.description,condition:rule.condition,result:rule.result,inputData:rule.inputData};const after={name:draftRuleName.value.trim(),description:draftRuleDescription.value.trim(),condition:draftRuleCondition.value.trim()||null,result:draftRuleResult.value.trim()||null,inputData};if(after.name&&after.description)drafts.push({id:null,target:{type:'BusinessRule',id:rule.id},subjectDetailKey:null,applyAction:'UpdateBusinessRule',changeSummary:'更新业务规则定义',before,after,knowledgeStatusBefore:null,knowledgeStatusAfter:null})
   } else if(selectedTarget.value?.target.type==='Integration'&&draftIntegrationBase.value){const before=draftIntegrationBase.value;const after={...before,name:draftIntegrationName.value.trim(),purpose:draftIntegrationPurpose.value.trim()||null};if(after.name)drafts.push({id:null,target:{type:'Integration',id:selectedTarget.value.target.id},subjectDetailKey:null,applyAction:'UpdateIntegration',changeSummary:'更新集成关系概览',before,after,knowledgeStatusBefore:null,knowledgeStatusAfter:null})}
-  if (await run(() => unknownItemsApi.saveResolution(detail.value!.id, resolutionText.value.trim(), drafts,
-    person(actorStore.displayName, '调查人'), detail.value!.concurrencyToken))) {
+  if (detail.value !== subject || itemId.value !== subject.id || selectedTarget.value !== draftTarget) return
+  if (await run(() => unknownItemsApi.saveResolution(subject.id, resolutionText.value.trim(), drafts,
+    person(actorStore.displayName, '调查人'), subject.concurrencyToken))) {
     draftValue.value = ''; draftMeaning.value = ''; draftDescription.value = ''
     ElMessage.success('结论草稿与知识更新预览已保存；正式知识尚未改变。')
   }
@@ -120,63 +150,86 @@ function updateTargetIdentity(update: KnowledgeUpdate): HistoricalTargetIdentity
   return update.targetIdentity ?? relatedIdentity(targetDisplay(update), update.target)
 }
 async function applyUpdate(update: KnowledgeUpdate): Promise<void> {
-  if (!detail.value || update.status !== 'Proposed') return
+  if (detail.value?.id !== parseSafeApiId(route.params.id) || !detail.value || update.status !== 'Proposed') return
+  const subject = detail.value
   const proposed = record(update.after); if (!proposed) { ElMessage.error('知识更新预览结构无效。'); return }
   try { await ElMessageBox.confirm(`将修改正式知识：${targetDisplay(update)}\n${update.changeSummary}\n应用后不会自动确认结论或关闭事项。`, '确认应用知识更新', { confirmButtonText: '应用知识更新', cancelButtonText: '取消', type: 'warning' }) } catch { return }
+  if (detail.value !== subject || itemId.value !== subject.id) return
   const applier = person(actorStore.displayName, '知识更新执行人')
   const action = updateAction(update)
   let task: () => Promise<unknown>
   if (action === 'AddColumnKnownValue') {
     const column = await getDatabaseColumnDetail(update.target.id)
-    task = () => unknownItemsApi.applyColumnKnownValue(detail.value!.id, update.id, { columnId: update.target.id,
+    task = () => unknownItemsApi.applyColumnKnownValue(subject.id, update.id, { columnId: update.target.id,
       value: text(proposed.value), meaning: text(proposed.meaning), sortOrder: 0, knowledgeStatusChange: null,
-      applier, concurrencyToken: detail.value!.concurrencyToken, targetConcurrencyToken: column.concurrencyToken })
+      applier, concurrencyToken: subject.concurrencyToken, targetConcurrencyToken: column.concurrencyToken })
   } else if (action === 'UpdateDatabaseColumnKnowledge') {
     const column = await getDatabaseColumnDetail(update.target.id)
-    task = () => unknownItemsApi.applyColumnKnowledge(detail.value!.id, update.id, { columnId: update.target.id,
+    task = () => unknownItemsApi.applyColumnKnowledge(subject.id, update.id, { columnId: update.target.id,
       businessDescription: text(proposed.businessDescription), knowledgeStatusChange: null, applier,
-      concurrencyToken: detail.value!.concurrencyToken, targetConcurrencyToken: column.concurrencyToken })
+      concurrencyToken: subject.concurrencyToken, targetConcurrencyToken: column.concurrencyToken })
   } else if (action === 'UpdateBusinessFunction') {
     const fn = await getBusinessFunctionDetail(update.target.id)
-    task = () => unknownItemsApi.applyBusinessFunction(detail.value!.id, update.id, { businessFunctionId: update.target.id,
-      overview: proposed, knowledgeStatusChange: null, applier, concurrencyToken: detail.value!.concurrencyToken,
+    task = () => unknownItemsApi.applyBusinessFunction(subject.id, update.id, { businessFunctionId: update.target.id,
+      overview: proposed, knowledgeStatusChange: null, applier, concurrencyToken: subject.concurrencyToken,
       targetConcurrencyToken: fn.concurrencyToken })
   } else if(action==='UpdateBusinessRule'){
     const rule=await businessRulesApi.detail(update.target.id)
-    task=()=>unknownItemsApi.applyBusinessRule(detail.value!.id,update.id,{businessRuleId:update.target.id,rule:proposed,knowledgeStatusChange:null,applier,concurrencyToken:detail.value!.concurrencyToken,targetConcurrencyToken:rule.concurrencyToken})
+    task=()=>unknownItemsApi.applyBusinessRule(subject.id,update.id,{businessRuleId:update.target.id,rule:proposed,knowledgeStatusChange:null,applier,concurrencyToken:subject.concurrencyToken,targetConcurrencyToken:rule.concurrencyToken})
   } else if(action==='UpdateIntegration'){
     const integration=integrationSnapshot(proposed);if(!integration){ElMessage.error('集成关系更新预览结构无效。');return}const current=await integrationsApi.detail(update.target.id)
-    task=()=>unknownItemsApi.applyIntegration(detail.value!.id,update.id,{integrationId:update.target.id,integration,knowledgeStatusChange:null,applier,concurrencyToken:detail.value!.concurrencyToken,targetConcurrencyToken:current.concurrencyToken})
+    task=()=>unknownItemsApi.applyIntegration(subject.id,update.id,{integrationId:update.target.id,integration,knowledgeStatusChange:null,applier,concurrencyToken:subject.concurrencyToken,targetConcurrencyToken:current.concurrencyToken})
   } else { ElMessage.warning('该目标 Feature 尚未落地，当前不能应用此更新。'); return }
+  if (detail.value !== subject || itemId.value !== subject.id) return
   if (await run(task)) ElMessage.success('知识更新已原子应用；结论仍需单独确认。')
 }
 async function confirmConclusion(): Promise<void> {
-  if (!detail.value) return
+  if (detail.value?.id !== parseSafeApiId(route.params.id) || !detail.value) return
+  const subject = detail.value
   try { await ElMessageBox.confirm('确认当前调查结论成立？此操作不会应用知识更新，也不会自动关闭事项。', '确认调查结论', { confirmButtonText: '确认结论', cancelButtonText: '取消', type: 'warning' }) } catch { return }
-  if (await run(() => unknownItemsApi.confirmConclusion(detail.value!.id, person(actorStore.displayName, '结论确认人'), detail.value!.concurrencyToken))) ElMessage.success('结论已确认，事项仍保持开放以供关闭。')
+  if (detail.value !== subject || itemId.value !== subject.id) return
+  if (await run(() => unknownItemsApi.confirmConclusion(subject.id, person(actorStore.displayName, '结论确认人'), subject.concurrencyToken))) ElMessage.success('结论已确认，事项仍保持开放以供关闭。')
 }
 async function closeItem(): Promise<void> {
-  if (!detail.value) return
+  if (detail.value?.id !== parseSafeApiId(route.params.id) || !detail.value) return
+  const subject = detail.value
   try { await ElMessageBox.confirm('关闭后事项进入只读状态；已应用知识不会再次改变。', '关闭待确认事项', { confirmButtonText: '关闭事项', cancelButtonText: '取消', type: 'warning' }) } catch { return }
-  if (await run(() => unknownItemsApi.close(detail.value!.id, '结论与知识更新已核对。', person(actorStore.displayName, '调查人'), detail.value!.concurrencyToken))) ElMessage.success('待确认事项已关闭。')
+  if (detail.value !== subject || itemId.value !== subject.id) return
+  if (await run(() => unknownItemsApi.close(subject.id, '结论与知识更新已核对。', person(actorStore.displayName, '调查人'), subject.concurrencyToken))) ElMessage.success('待确认事项已关闭。')
 }
 async function reopenItem(): Promise<void> {
-  if (!detail.value) return
+  if (detail.value?.id !== parseSafeApiId(route.params.id) || !detail.value) return
+  const subject = detail.value
   let result: { value: string }
   try { result = await ElMessageBox.prompt('重新打开不会回滚已应用知识。请说明继续调查的原因。', '重新打开待确认事项', { confirmButtonText: '重新打开', cancelButtonText: '取消', inputValidator: value => value.trim().length > 0 || '必须填写重新打开原因' }) } catch { return }
-  if (await run(() => unknownItemsApi.reopen(detail.value!.id, result.value.trim(), person(actorStore.displayName, '调查人'), detail.value!.concurrencyToken))) ElMessage.success('事项已重新进入调查中；历史知识更新完整保留。')
+  if (detail.value !== subject || itemId.value !== subject.id) return
+  if (await run(() => unknownItemsApi.reopen(subject.id, result.value.trim(), person(actorStore.displayName, '调查人'), subject.concurrencyToken))) ElMessage.success('事项已重新进入调查中；历史知识更新完整保留。')
 }
 function addEvidence(finding?: Finding): void {
-  if (!detail.value) return
+  if (detail.value?.id !== parseSafeApiId(route.params.id) || !detail.value) return
   const subject = finding ? { type: 'Finding' as const, id: finding.id } : { type: 'UnknownItem' as const, id: detail.value.id }
   overlays.openDrawer({ kind: 'add-investigation-evidence', id: subject.id, mode: 'create', payload: {
     subject, title: finding ? `调查发现 · ${finding.content}` : `${detail.value.itemCode} · ${detail.value.question.text}`,
     knowledgeStatus: 'Unknown', subjectDetailKey: null, unknownItemId: detail.value.id, concurrencyToken: detail.value.concurrencyToken,
   } })
 }
-watch(() => route.params.id, () => void reload())
+watch(() => route.params.id, () => {
+  findingText.value = ''; findingError.value = null; resolutionText.value = ''
+  draftTargetKey.value = ''; draftValue.value = ''; draftMeaning.value = ''; draftDescription.value = ''
+  draftRuleName.value = ''; draftRuleDescription.value = ''; draftRuleCondition.value = ''; draftRuleResult.value = ''; draftRuleInputData.value = '[]'
+  draftIntegrationBase.value = null; draftIntegrationName.value = ''; draftIntegrationPurpose.value = ''
+  void reload()
+}, { flush: 'sync' })
 onMounted(() => { void reload(); window.addEventListener('unknown-item:changed', reload) })
 onUnmounted(() => window.removeEventListener('unknown-item:changed', reload))
+// Existing overlays belong to the current detail; preserve the dirty-drawer decision before navigation.
+async function closeDetailOverlays(): Promise<boolean> {
+  if (!await overlays.requestDrawerClose()) return false
+  overlays.closeDialog()
+  return true
+}
+onBeforeRouteUpdate(closeDetailOverlays)
+onBeforeRouteLeave(closeDetailOverlays)
 </script>
 
 <template>
@@ -184,7 +237,7 @@ onUnmounted(() => window.removeEventListener('unknown-item:changed', reload))
     <ErrorState v-if="itemId === null" title="待确认事项地址无效" message="请从列表重新进入。" />
     <LoadingState v-else-if="loading && !detail" message="正在读取调查上下文…" />
     <ErrorState v-else-if="error && !detail" title="详情加载失败" :message="error" @retry="reload" />
-    <template v-else-if="detail">
+    <template v-else-if="detail && detail.id === parseSafeApiId(route.params.id)">
       <header class="unknown-detail-header"><nav><button @click="router.push({ name: 'unknown-items-list' })">待确认事项</button><b>/</b><span class="technical-text">{{ detail.itemCode }}</span></nav><div><span :class="`priority priority--${detail.question.priority.toLowerCase()}`">{{ priorityLabels[detail.question.priority] }}优先级</span><span :class="`unknown-status unknown-status--${detail.question.status.toLowerCase()}`">{{ unknownItemStatusLabels[detail.question.status] }}</span><el-button v-if="can('StartInvestigation')" type="primary" :icon="VideoPlay" :loading="saving" @click="start">开始调查</el-button><el-button v-if="can('CloseUnknownItem')" type="primary" :icon="Lock" :loading="saving" @click="closeItem">关闭待确认事项</el-button><el-button v-if="can('ReopenUnknownItem')" type="primary" plain :icon="Refresh" :loading="saving" @click="reopenItem">重新打开</el-button></div><h1>{{ detail.question.text }}</h1><p>{{ detail.question.context ?? '尚未补充问题上下文。' }}</p><small>所属系统 <HistoricalTargetLabel v-if="systemIdentity" :identity="systemIdentity" /> · 更新于 {{ formatDateTime(detail.question.updatedAt) }}</small></header>
 
       <section class="workflow-progression" aria-label="事项状态"><div v-for="(step, index) in statusSteps" :key="step" :class="{ active: step === detail.question.status, done: statusSteps.indexOf(detail.question.status) > index }"><b>{{ index + 1 }}</b><span>{{ unknownItemStatusLabels[step] }}</span></div></section>
