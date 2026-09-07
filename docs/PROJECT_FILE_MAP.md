@@ -709,8 +709,8 @@
 
 | 路径 | 职责 | 边界 |
 | --- | --- | --- |
-| `docs/design/HC_A01_HUMAN_CONFIRMATION_IMMUTABILITY_WITHDRAWAL_REPLACEMENT_DECISION.md` | 冻结 HC 不可变事实、撤销/替代、有效支持和历史隐私；列出当前源码消费点与 HC-B01 验收。 | 仅 supersede HC 的通用 C24；普通 Evidence correction 不变，后续 additive migration 尚未实施。 |
-| `docs/reports/HC_A01_HUMAN_CONFIRMATION_CORRECTION_LIFECYCLE_DECISION_REPORT.md` | 记录 authority、十五项合同、projection/schema/security 审查及 #10 design closure。 | HC-B01 READY；不代表运行时已修复。 |
+| `docs/design/HC_A01_HUMAN_CONFIRMATION_IMMUTABILITY_WITHDRAWAL_REPLACEMENT_DECISION.md` | 冻结 HC 不可变事实、撤销/替代、有效支持和历史隐私；列出当前源码消费点与 HC-B01 验收。 | 仅 supersede HC 的通用 C24；普通 Evidence correction 不变。设计阶段未执行迁移；additive migration 已由 HC-B01 实施。 |
+| `docs/reports/HC_A01_HUMAN_CONFIRMATION_CORRECTION_LIFECYCLE_DECISION_REPORT.md` | 记录 authority、十五项合同、projection/schema/security 审查及 #10 design closure。 | 保留 HC-A01 的 design-only 阶段结论；运行时实施和最终验收已由 HC-B01 完成，见下方实施报告。 |
 
 ## HC-B01 verification
 

@@ -4,8 +4,8 @@
 - Authoritative baseline: `51b50064d05466c3ba376cc79fa3e722b5d843df` (`docs: freeze human confirmation correction lifecycle`)
 - Branch: `main`
 - Authority: HC-A01 decision/report, C23/C24/C25/Q16, U04, REV/TRACE/PORTAL-B04, DELETE-A01, REL-EVIDENCE-A01, STABILITY-R01/R01-R01/R02 and repository AGENTS.md.
-- Overall: **HC-B01 FAIL — final acceptance incomplete**, pending the native browser 200% zoom check. This is not a claim that the verified API behavior failed.
-- Delivery: no success commit or push while an applicable required check remains incomplete.
+- Overall: **HC-B01 PASS / COMPLETE** — final acceptance closed by HC-B01-CLOSEOUT-R01 on 2026-09-08 using the existing implementation evidence and current AGENTS verification policy.
+- Delivery: **HC-B01 implementation DELIVERED TO MAIN**, commit `dcb5fa675f1930de1758627294f6ed8514effab7` (`调整代码`). This closeout does not rewrite that implementation commit.
 
 ## Implementation
 
@@ -93,7 +93,7 @@ Actual UI checks completed:
 8. Viewer on an Active HC: effective status/facts visible, zero withdrawal buttons. Task actor role was restored afterwards.
 9. Portal current trust shows 1 then 0 after withdrawal/reload; no history/actor audit is displayed. Anonymous and Admin Preview JSON contain none of the prohibited lifecycle/provider fields.
 
-Responsive: Chrome actual viewports **1366×768**, **1440×900**, **1920×1080** were visually checked; document overflow checks were false. Long audit text wraps and close/submit buttons remain reachable. **960×540** (the CSS layout space equivalent to 1920×1080 at 200%) also passed drawer/dialog reflow checks. Native browser 200% zoom itself is **not yet verified**: shortcuts did not change zoom; opening browser appearance settings was rejected by browser URL security policy. No workaround to that policy was attempted. User assistance to set native zoom was requested. On continuation, the Chrome verification tab was no longer present, so no native zoom result could be recovered. Equivalent viewport coverage is not misreported as completion of that required native-zoom check.
+Historical browser evidence (retained; not a current required matrix): Chrome actual viewports **1366×768**, **1440×900**, **1920×1080** were visually checked; document overflow checks were false. Long audit text wraps and close/submit buttons remain reachable. **960×540** (the CSS layout space equivalent to 1920×1080 at 200%) also passed drawer/dialog reflow checks. Native browser 200% zoom itself **was not completed or verified**: shortcuts did not change zoom; opening browser appearance settings was rejected by browser URL security policy. No workaround to that policy was attempted. User assistance to set native zoom was requested. On continuation, the Chrome verification tab was no longer present, so no native zoom result could be recovered. Equivalent viewport coverage is not evidence that native zoom was verified. The then-requested native-zoom gate is superseded by the closeout policy below; it is no longer a required check.
 
 ## DBSAFE, cleanup, delivery
 
@@ -104,8 +104,8 @@ Repository database was inspected only by existence/size/mtime/SHA-256; never SQ
 - Final recorded baseline comparison: identical existence, size, nanosecond mtime and SHA-256; WAL/SHM absent.
 - Runtime fixture FK check: zero violations; five HC records, four withdrawn and one direct replacement; both revision-2 records have null replacement links.
 - Cleanup: PASS. Agent-owned API/Vite and test processes stopped; no listeners on 5191/5192. Removed the isolated browser database, keys, attachments, credentials, logs, test results, baseline file, canceled concurrency database directory and 60 positively identified canceled-run fixture directories. No user process or repository runtime data was removed.
-- Existing unrelated user work is retained and excluded: DBDISC_FINAL_R01 report and its document-index row.
-- Git delivery: not performed while required native zoom verification is incomplete; no SHA is claimed.
+- During original HC-B01 verification, unrelated DBDISC_FINAL_R01 work and its index row were preserved outside the HC-B01 scope. They were subsequently included in the user-provided delivery commit; this closeout does not change or reclassify them.
+- HC-B01 implementation: **DELIVERED TO MAIN** in `dcb5fa675f1930de1758627294f6ed8514effab7`. The original verification ended without a task commit while the former zoom gate was pending; this historical delivery hold no longer describes the current state.
 
 ## Required status
 
@@ -141,20 +141,31 @@ Repository database was inspected only by existence/size/mtime/SHA-256; never SQ
 | BACKEND REGRESSION | PASS |
 | FRONTEND REGRESSION | PASS |
 | BROWSER E2E | PASS |
-| RESPONSIVE | FAIL — native 200% zoom not verified; viewport reflow checks passed |
+| DEFAULT DESKTOP BROWSER UI CHECK | PASS — existing browser UI evidence |
+| BROWSER ZOOM | NOT APPLICABLE — prohibited by AGENTS verification policy |
 | REPOSITORY DATA PROTECTION | PASS |
 | CLEANUP | PASS |
 
 REV-GAP-012: **OPEN / DEFERRED**.
 
-ORIGINAL STABILITY FINDING #10: implementation present; final HC-B01 acceptance pending. Do not claim design + implementation closure before all required gates pass.
+ORIGINAL STABILITY FINDING #10: **CLOSED — DESIGN + IMPLEMENTATION**.
 
-ORIGINAL STABILITY FINDINGS #1–#9: existing CLOSED status unchanged. #10 is not marked CLOSED by this incomplete acceptance.
+ORIGINAL STABILITY FINDINGS #1–#10: **CLOSED** (prior R01/R01-R01/R02 evidence plus HC-A01 and HC-B01).
 
-HC-B01: **NOT COMPLETE**.
+HC-B01: **PASS / COMPLETE**.
 
-STABILITY HARDENING: final HC-B01 acceptance pending.
+STABILITY HARDENING: **COMPLETE**.
 
-PORTAL-VERIFY: **READY AFTER REV-GAP-012 DISPOSITION** also remains conditional on completing HC-B01 acceptance; no PORTAL-VERIFY was run.
+PORTAL-VERIFY: **READY AFTER REV-GAP-012 DISPOSITION**. Portal B04 and UI R01/R01-R01 are complete; no PORTAL-VERIFY was run.
 
 No HC-B02, REV-GAP-012 fix or Analysis Workspace was started.
+
+## HC-B01-CLOSEOUT-R01 — final acceptance follow-up
+
+2026-09-08; authoritative main `dcb5fa675f1930de1758627294f6ed8514effab7`. **HC-B01-CLOSEOUT-R01 PASS**.
+
+**Native Browser Zoom: NOT APPLICABLE. AGENTS VERIFICATION POLICY: APPLIED.** Current root [AGENTS.md](../../AGENTS.md), sections 8–9, explicitly prohibits browser zoom validation and excludes it from required verification and PASS/FAIL gates, including 125%, 150%, 175%, 200% and every other percentage. Under this user-authorized closeout, that repository-wide policy supersedes the old task's native-zoom gate. No browser zoom, equivalent-viewport substitute or responsive workaround is required or requested. The original incomplete attempt remains recorded above; no native 200% result or responsive-matrix certification is claimed.
+
+The existing 263/263 backend and 341/341 affected frontend PASS evidence, type-check, ESLint, Vite/Release builds, Prettier, EF no-pending-model-changes, NuGet scan, Browser E2E, DBSAFE and cleanup results are preserved. These are historical results corresponding to the delivered HC-B01 implementation, not newly executed checks. The supplemental whole-frontend failures also remain historical facts. HC-B01 closure is independent of **REV-GAP-012 OPEN / DEFERRED**.
+
+This closeout changes documentation/status only. Verification is document consistency review and `git diff --check`; no product code, migration or tests changed, and no test suite, browser, runtime or database operation was run. DOCUMENT_INDEX is synchronized; PROJECT_FILE_MAP's two stale future-implementation descriptions are clarified. HC-B01 and stability hardening are COMPLETE. REV-GAP-012, PORTAL-VERIFY and Analysis Workspace were not started.
