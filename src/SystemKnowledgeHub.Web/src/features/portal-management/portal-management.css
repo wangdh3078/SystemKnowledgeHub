@@ -31,7 +31,7 @@
   background: var(--el-fill-color-extra-light);
 }
 .portal-tree-panel > header {
-  padding: 16px 14px 10px;
+  padding: 8px 12px 8px;
 }
 .portal-tree-panel > header div,
 .portal-page-library > header {
@@ -46,15 +46,14 @@
   font-weight: 400;
 }
 .portal-tree-panel .el-tree {
-  flex: 1;
-  min-height: 180px;
+  min-height: 80px;
   padding: 4px 6px 12px;
   overflow: auto;
   background: transparent;
 }
 .portal-tree-node {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto 28px;
+  grid-template-columns: 16px minmax(0, 1fr) auto 28px;
   width: 100%;
   align-items: center;
   gap: 5px;
@@ -140,7 +139,7 @@
 .portal-composer {
   position: relative;
   min-width: 0;
-  padding: 22px 24px 76px;
+  padding: 18px 24px;
   overflow: auto;
 }
 .portal-composer-empty {
@@ -164,8 +163,8 @@
   gap: 16px;
 }
 .portal-composer__titlebar h2 {
-  margin: 7px 0 0;
-  font-size: 25px;
+  margin: 0;
+  font-size: 22px;
 }
 .portal-composer__titlebar > div:last-child {
   display: flex;
@@ -191,9 +190,8 @@
   grid-template-columns: 1fr auto;
   align-items: center;
   gap: 3px 10px;
-  padding: 9px 12px;
-  border: 1px solid var(--el-border-color);
-  border-radius: 7px;
+  padding: 0 0 0 12px;
+  border-left: 1px solid var(--el-border-color-light);
 }
 .portal-primary-target > span,
 .portal-primary-target > small {
@@ -213,14 +211,14 @@
   align-items: center;
   justify-content: space-between;
   gap: 18px;
-  padding: 12px 14px;
+  padding: 8px 12px;
   border-left: 3px solid var(--el-color-success);
   border-radius: 6px;
-  background: var(--el-color-success-light-9);
+  background: var(--el-fill-color-extra-light);
 }
 .portal-readiness--warning {
   border-left-color: var(--el-color-warning);
-  background: var(--el-color-warning-light-9);
+  background: var(--el-fill-color-extra-light);
 }
 .portal-readiness p {
   margin: 3px 0 0;
@@ -233,7 +231,7 @@
 }
 .portal-sections,
 .portal-placements {
-  margin-top: 24px;
+  margin-top: 18px;
 }
 .portal-sections h3,
 .portal-placements h3 {
@@ -252,7 +250,7 @@
   grid-template-columns: 26px minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
-  min-height: 64px;
+  min-height: 56px;
   padding: 8px 4px;
   border-bottom: 1px solid var(--el-border-color-lighter);
 }
@@ -307,19 +305,16 @@
   color: var(--el-text-color-secondary);
 }
 .portal-composer__footer {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
+  margin-top: 20px;
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 16px;
-  padding: 12px 24px;
+  padding: 12px 0 0;
   border-top: 1px solid var(--el-border-color-light);
-  background: color-mix(in srgb, var(--el-bg-color) 94%, transparent);
+  background: var(--el-bg-color);
 }
-.portal-composer__footer span {
+.portal-composer__footer > span {
   color: var(--el-text-color-secondary);
 }
 .portal-dialog-target {
@@ -471,11 +466,6 @@
   .portal-composer__titlebar > div:last-child {
     flex-wrap: wrap;
   }
-  .portal-composer__footer {
-    position: sticky;
-    bottom: 0;
-    margin: 24px -16px -76px;
-  }
 }
 
 @media (max-width: 620px) {
@@ -496,4 +486,40 @@
     padding-right: 4px;
     padding-left: 4px;
   }
+}
+
+.portal-management .el-button + .el-button {
+  margin-left: 0;
+}
+.portal-management .el-button.is-disabled {
+  color: var(--el-text-color-regular);
+  background-color: var(--el-fill-color-light);
+  border-color: var(--el-border-color-light);
+}
+.portal-management .el-button.is-text.is-disabled {
+  background-color: transparent;
+  border-color: transparent;
+}
+.portal-tree-panel .el-tree-node__content {
+  height: 36px;
+  border-radius: var(--el-border-radius-base);
+}
+.portal-tree-panel .el-tree-node.is-current > .el-tree-node__content {
+  background: var(--el-color-primary-light-9);
+}
+.portal-tree-node .portal-state {
+  background: transparent;
+  font-size: 11px;
+  padding: 0 3px;
+}
+.portal-tree-node .el-button {
+  width: 28px;
+  padding: 0;
+}
+.portal-page-library > header span {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+.portal-section-row__actions .el-button {
+  padding: 6px 8px;
 }

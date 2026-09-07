@@ -31,7 +31,7 @@ const tree = computed<readonly PortalDisplayNode[]>(() => {
 
 <template>
   <nav class="portal-tree-navigation" aria-label="知识目录">
-    <p v-if="tree.length === 0" class="portal-tree-empty">暂无已发布知识</p>
+    <p v-if="tree.length === 0" class="portal-tree-empty">暂无目录</p>
     <PortalTreeBranch
       v-else
       :nodes="tree"

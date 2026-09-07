@@ -40,9 +40,8 @@ onBeforeUnmount(() => request?.abort())
 <template>
   <div class="portal-home">
     <header class="portal-home__hero">
-      <p class="portal-eyebrow">Knowledge Portal</p>
       <h1>系统知识中心</h1>
-      <p>浏览已发布的系统、业务、数据库和知识文档。</p>
+      <p>浏览已经整理并发布的系统、业务、数据库和知识文档。</p>
     </header>
 
     <div v-if="loading" class="portal-loading" aria-live="polite">
@@ -56,52 +55,68 @@ onBeforeUnmount(() => request?.abort())
       <button type="button" @click="loadHome">重试</button>
     </section>
     <template v-else-if="home">
-      <section class="portal-home__section" aria-labelledby="portal-home-categories">
-        <div class="portal-home__section-heading">
-          <div>
-            <p class="portal-eyebrow">目录</p>
-            <h2 id="portal-home-categories">知识目录</h2>
-          </div>
-        </div>
-        <p v-if="home.categories.length === 0" class="portal-empty">暂无已发布知识</p>
-        <ul v-else class="portal-category-list">
-          <li v-for="category in home.categories" :key="category.nodeId">
-            <RouterLink
-              v-if="category.nodeKind === 'Page'"
-              :to="{ name: 'portal-page', params: { id: category.pageId } }"
-            >
-              <el-icon><Document /></el-icon><span>{{ category.title }}</span
-              ><el-icon><ArrowRight /></el-icon>
-            </RouterLink>
-            <div v-else>
-              <el-icon><Collection /></el-icon><span>{{ category.title }}</span
-              ><small>从目录展开浏览</small>
+      <section
+        v-if="home.categories.length === 0 && home.recentPages.length === 0"
+        class="portal-home__empty"
+        aria-live="polite"
+      >
+        <h2>暂无已发布知识</h2>
+        <p>知识内容发布后会自动显示在这里。</p>
+      </section>
+      <template v-else>
+        <section class="portal-home__section" aria-labelledby="portal-home-categories">
+          <div class="portal-home__section-heading">
+            <div>
+              <h2 id="portal-home-categories">知识目录</h2>
             </div>
-          </li>
-        </ul>
-      </section>
-
-      <section class="portal-home__section" aria-labelledby="portal-home-recent">
-        <div class="portal-home__section-heading">
-          <div>
-            <p class="portal-eyebrow">最近更新</p>
-            <h2 id="portal-home-recent">最近发布</h2>
           </div>
-        </div>
-        <p v-if="home.recentPages.length === 0" class="portal-empty">暂无已发布知识</p>
-        <ul v-else class="portal-recent-list">
-          <li v-for="page in home.recentPages" :key="page.id">
-            <RouterLink :to="{ name: 'portal-page', params: { id: page.id } }">
-              <div>
-                <span class="portal-type-badge">{{ targetLabels[page.primaryTarget.type] }}</span>
-                <h3>{{ page.title }}</h3>
-                <p>{{ [...page.breadcrumb.map((item) => item.title), page.title].join(' / ') }}</p>
+          <p v-if="home.categories.length === 0" class="portal-home__empty-text">暂无已发布知识</p>
+          <ul v-else class="portal-category-list">
+            <li v-for="category in home.categories" :key="category.nodeId">
+              <RouterLink
+                v-if="category.nodeKind === 'Page'"
+                :to="{ name: 'portal-page', params: { id: category.pageId } }"
+              >
+                <el-icon><Document /></el-icon><span>{{ category.title }}</span
+                ><el-icon><ArrowRight /></el-icon>
+              </RouterLink>
+              <div v-else>
+                <el-icon><Collection /></el-icon><span>{{ category.title }}</span
+                ><small>从目录展开浏览</small>
               </div>
-              <el-icon><ArrowRight /></el-icon>
-            </RouterLink>
-          </li>
-        </ul>
-      </section>
+            </li>
+          </ul>
+        </section>
+
+        <section class="portal-home__section" aria-labelledby="portal-home-recent">
+          <div class="portal-home__section-heading">
+            <div>
+              <h2 id="portal-home-recent">最近发布</h2>
+            </div>
+          </div>
+          <p v-if="home.recentPages.length === 0" class="portal-home__empty-text">
+            暂无最近发布内容
+          </p>
+          <ul v-else class="portal-recent-list">
+            <li v-for="page in home.recentPages" :key="page.id">
+              <RouterLink :to="{ name: 'portal-page', params: { id: page.id } }">
+                <div>
+                  <h3>{{ page.title }}</h3>
+                  <p>
+                    {{
+                      [
+                        targetLabels[page.primaryTarget.type],
+                        ...page.breadcrumb.map((item) => item.title),
+                      ].join(' · ')
+                    }}
+                  </p>
+                </div>
+                <time :datetime="page.publishedAt">{{ page.publishedAt.slice(0, 10) }}</time>
+              </RouterLink>
+            </li>
+          </ul>
+        </section>
+      </template>
     </template>
   </div>
 </template>

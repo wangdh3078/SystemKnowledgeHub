@@ -4,6 +4,8 @@ import { onBeforeRouteLeave } from 'vue-router'
 import {
   ArrowDown,
   DocumentAdd,
+  Document,
+  Folder,
   FolderAdd,
   MoreFilled,
   Plus,
@@ -62,6 +64,12 @@ interface EditableSection {
 }
 type PickerPurpose = 'new-page' | 'primary-target' | 'section-reference'
 type PickerHost = 'new-page' | 'section' | null
+
+const knowledgeStatusLabels: Readonly<Record<string, string>> = {
+  Unknown: '未知',
+  Inferred: '推断',
+  Confirmed: '已确认',
+}
 
 const targetLabels: Readonly<Record<PortalTargetType, string>> = {
   System: '系统',
@@ -687,6 +695,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
               class="portal-tree-node"
               :class="{ 'portal-tree-node--broken': !data.health.isHealthy }"
             >
+              <el-icon><Folder v-if="data.nodeKind === 'Folder'" /><Document v-else /></el-icon>
               <span class="portal-tree-node__title">{{ data.title }}</span>
               <span
                 class="portal-state"
@@ -788,13 +797,13 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
           <header class="portal-composer__titlebar">
             <div>
               <div class="portal-composer__status">
+                <h2>{{ selectedPage.title }}</h2>
                 <span
                   class="portal-state"
                   :class="selectedPage.isPublished ? 'portal-state--published' : ''"
-                  >页面{{ selectedPage.publicationLabel }}</span
+                  >{{ selectedPage.publicationLabel }}</span
                 ><span v-if="dirty" class="portal-dirty">未保存</span>
               </div>
-              <h2>{{ selectedPage.title }}</h2>
             </div>
             <div>
               <el-button @click="showPreview">预览</el-button
@@ -827,7 +836,9 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
             <div class="portal-primary-target">
               <span>主知识对象</span
               ><strong>{{ targetLabels[editorPrimary!.type] }} · {{ editorPrimary!.title }}</strong
-              ><small>{{ editorPrimary!.context || '当前 canonical 知识' }}</small
+              ><small
+                >{{ editorPrimary!.context || '当前知识对象' }} ·
+                {{ knowledgeStatusLabels[editorPrimary!.status] ?? editorPrimary!.status }}</small
               ><el-button
                 v-if="canEdit"
                 type="primary"

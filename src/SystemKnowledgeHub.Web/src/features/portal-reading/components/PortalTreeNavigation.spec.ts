@@ -34,7 +34,7 @@ describe('PortalTreeNavigation', () => {
     const wrapper = mount(PortalTreeNavigation, {
       props: { items: [], expandedNodeIds: new Set<number>(), activePageId: null },
     })
-    expect(wrapper.text()).toBe('暂无已发布知识')
+    expect(wrapper.text()).toBe('暂无目录')
     expect(wrapper.text()).not.toContain('管理')
   })
 })

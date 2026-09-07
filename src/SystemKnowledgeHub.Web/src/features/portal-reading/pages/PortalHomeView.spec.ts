@@ -39,9 +39,10 @@ describe('PortalHomeView', () => {
       ],
     })
     const wrapper = await mountHome()
-    expect(wrapper.text()).toContain('浏览已发布的系统、业务、数据库和知识文档。')
+    expect(wrapper.text()).toContain('浏览已经整理并发布的系统、业务、数据库和知识文档。')
     expect(wrapper.text()).toContain('MES')
     expect(wrapper.text()).toContain('Lot Track In')
+    expect(wrapper.get('time').text()).toBe('2026-09-04')
     expect(wrapper.get('.portal-recent-list a').attributes('href')).toBe('/portal/pages/9')
     expect(wrapper.text()).not.toMatch(/管理|登录|用户/u)
   })
@@ -49,7 +50,9 @@ describe('PortalHomeView', () => {
   it('renders the exact empty state without an authoring call to action', async () => {
     getHome.mockResolvedValue({ portalName: '系统知识中心', categories: [], recentPages: [] })
     const wrapper = await mountHome()
-    expect(wrapper.findAll('.portal-empty')).toHaveLength(2)
+    expect(wrapper.findAll('.portal-home__empty')).toHaveLength(1)
+    expect(wrapper.text().match(/暂无已发布知识/gu)).toHaveLength(1)
+    expect(wrapper.find('.portal-recent-list').exists()).toBe(false)
     expect(wrapper.text()).toContain('暂无已发布知识')
     expect(wrapper.find('button').exists()).toBe(false)
   })
