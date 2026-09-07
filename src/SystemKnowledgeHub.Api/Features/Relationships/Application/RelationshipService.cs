@@ -91,10 +91,18 @@ public sealed class RelationshipService(
         {
             return new(null, new Dictionary<string, string[]> { ["id"] = ["Relationship ID 无效。"] }, RelationshipFailure.Validation);
         }
+        await using var transaction = await SqliteImmediateTransaction.BeginAsync(dbContext, cancellationToken);
         var item = await dbContext.KnowledgeRelations.SingleOrDefaultAsync(x => x.Id == relationshipId, cancellationToken);
         if (item is null) return new(null, null, RelationshipFailure.NotFound);
+        if (await dbContext.Evidence.AnyAsync(e =>
+            e.SubjectType == EvidenceSubjectType.KnowledgeRelation && e.SubjectId == item.Id, cancellationToken))
+        {
+            return new(null, null, RelationshipFailure.BusinessRuleViolation,
+                "无法删除，仍存在依赖项：该关系已有知识依据或人工确认，不能直接移除。");
+        }
         dbContext.KnowledgeRelations.Remove(item);
         await dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return new(null, null, RelationshipFailure.None);
     }
 

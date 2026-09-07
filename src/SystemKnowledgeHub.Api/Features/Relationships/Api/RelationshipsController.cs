@@ -86,6 +86,7 @@ public sealed class RelationshipsController(RelationshipQueries queries, Relatio
             RelationshipFailure.None => Ok(new { }),
             RelationshipFailure.Validation => BadRequest(new ApiErrorResponse("validation_error", "请求内容无效。", result.FieldErrors, null)),
             RelationshipFailure.NotFound => NotFound(Error("not_found", "未找到指定关系。")),
+            RelationshipFailure.BusinessRuleViolation => UnprocessableEntity(Error("business_rule_violation", result.Message!)),
             _ => throw new InvalidOperationException("Unsupported relationship delete result."),
         };
     }
