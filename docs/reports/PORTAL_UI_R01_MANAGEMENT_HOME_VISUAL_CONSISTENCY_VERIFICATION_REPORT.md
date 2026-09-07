@@ -29,3 +29,11 @@
 | NO FUNCTIONAL CONTRACT CHANGE | PASS |
 
 **PORTAL-UI-R01 COMPLETE**。交付结果以提交/push 输出为准。
+
+## PORTAL-UI-R01-R01 follow-up
+
+**PASS** — 2026-09-07。仅调整首页 CSS：正文靠左保留 24px 间距与阅读宽度上限，收紧 Hero/section；目录入口按内容宽度排列，Recent 使用较紧凑行距和有界宽度；首页搜索限制为 360px 并清除继承的表单底部间距，使其垂直居中。Hover 只改变轻微背景，键盘 `focus-visible` 保留系统主色 1px 描边。
+
+Home + PortalLayout focused tests **5/5 PASS**，type-check、build、格式与 diff 检查 PASS。一次默认桌面浏览器检查使用真实 Home/Layout 和临时数据 fixture：正文对齐、目录/Recent 密度、搜索居中及原查询路由提交正常；鼠标点击无 outline，Tab 焦点细描边清晰。Fixture 仅为焦点检查阻止 Recent 跳转，未改产品链接/路由。未运行后端或打开数据库；验证服务及 fixture 已清理。无 Management、API、搜索逻辑、publication、数据合同或 sidebar 行为修改。
+
+HOME CONTENT DENSITY / MAIN ALIGNMENT / DIRECTORY ENTRY DENSITY / RECENT LIST / FOCUS STATE / SEARCH REGRESSION / FOCUSED TEST / TYPE CHECK / BUILD / DEFAULT BROWSER CHECK：全部 PASS。
