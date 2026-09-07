@@ -702,3 +702,10 @@
 | `tests/SystemKnowledgeHub.Api.Tests/Api/SearchHardeningApiTests.cs` | literal/rank/current/边界回归和 520+ fixture SQL LIMIT 证据。 | 保持 uncapped Total。 |
 | `tests/SystemKnowledgeHub.Api.Tests/Application/DatabaseDiscoveryDiagnosticsTests.cs`、`TestSupport/SafeDiagnosticLogger.cs` | 阶段、cause、canary 与安全日志断言；现有 Run/Connection/Provider 测试同步扩展。 | 不用真实数据库 Secret。 |
 | `docs/reports/STABILITY_R02_SEARCH_BOUNDED_QUERY_DISCOVERY_DIAGNOSTICS_VERIFICATION_REPORT.md` | #7/#8/#9 实现、回归、DBSAFE 和清理证据。 | 原始 #1–#9 CLOSED；HC-A01 READY。 |
+
+### HC-A01 architecture decision
+
+| 路径 | 职责 | 边界 |
+| --- | --- | --- |
+| `docs/design/HC_A01_HUMAN_CONFIRMATION_IMMUTABILITY_WITHDRAWAL_REPLACEMENT_DECISION.md` | 冻结 HC 不可变事实、撤销/替代、有效支持和历史隐私；列出当前源码消费点与 HC-B01 验收。 | 仅 supersede HC 的通用 C24；普通 Evidence correction 不变，后续 additive migration 尚未实施。 |
+| `docs/reports/HC_A01_HUMAN_CONFIRMATION_CORRECTION_LIFECYCLE_DECISION_REPORT.md` | 记录 authority、十五项合同、projection/schema/security 审查及 #10 design closure。 | HC-B01 READY；不代表运行时已修复。 |
