@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { isEffectiveEvidence } from '../../evidence/api/evidenceContracts'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Delete, DocumentChecked, EditPen, Search, UserFilled } from '@element-plus/icons-vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
@@ -42,9 +43,12 @@ const {
 
 const databaseObjectId = computed(() => parseSafeApiId(route.params.id))
 const routeSelectedColumnId = computed(() => parseSafeApiId(route.query.selectedColumnId))
-const humanConfirmationCount = computed(() => objectEvidence.value.filter(
-  (item) => item.evidenceType === 'HumanConfirmation',
-).length)
+const humanConfirmationCount = computed(
+  () =>
+    objectEvidence.value.filter(
+      (item) => item.evidenceType === 'HumanConfirmation' && isEffectiveEvidence(item),
+    ).length,
+)
 
 const filteredColumns = computed(() => {
   if (detail.value?.id !== databaseObjectId.value || !detail.value) return []
@@ -60,7 +64,9 @@ const filteredColumns = computed(() => {
 
 function formatRows(value: number | null): string {
   if (value === null) return '—'
-  return new Intl.NumberFormat('zh-CN', { notation: 'compact', maximumFractionDigits: 1 }).format(value)
+  return new Intl.NumberFormat('zh-CN', { notation: 'compact', maximumFractionDigits: 1 }).format(
+    value,
+  )
 }
 
 function accessModeLabel(value: string): string {
@@ -118,12 +124,18 @@ function openEvidence(id: number): void {
 
 function openRegisterColumn(): void {
   if (!actorStore.canEdit || detail.value?.id !== databaseObjectId.value || !detail.value) return
-  const greatestOrdinal = Math.max(0, ...detail.value.columns.map((column) => column.ordinalPosition))
+  const greatestOrdinal = Math.max(
+    0,
+    ...detail.value.columns.map((column) => column.ordinalPosition),
+  )
   overlayStore.openDialog({
     kind: 'register-database-column',
     id: detail.value.id,
     mode: 'create',
-    payload: { concurrencyToken: detail.value.concurrencyToken, nextOrdinalPosition: greatestOrdinal + 1 },
+    payload: {
+      concurrencyToken: detail.value.concurrencyToken,
+      nextOrdinalPosition: greatestOrdinal + 1,
+    },
   })
 }
 
@@ -148,7 +160,8 @@ async function loadObjectEvidence(id: number): Promise<void> {
   evidenceRequest?.abort()
   const controller = new AbortController()
   evidenceRequest = controller
-  const current = () => evidenceRequest === controller && !controller.signal.aborted && databaseObjectId.value === id
+  const current = () =>
+    evidenceRequest === controller && !controller.signal.aborted && databaseObjectId.value === id
   objectEvidence.value = []
   evidenceLoading.value = true
   evidenceError.value = null
@@ -158,7 +171,8 @@ async function loadObjectEvidence(id: number): Promise<void> {
   } catch (loadError: unknown) {
     if (!current()) return
     objectEvidence.value = []
-    evidenceError.value = loadError instanceof Error ? loadError.message : '数据库对象证据加载失败。'
+    evidenceError.value =
+      loadError instanceof Error ? loadError.message : '数据库对象证据加载失败。'
   } finally {
     if (current()) evidenceLoading.value = false
   }
@@ -180,13 +194,32 @@ async function loadRoute(): Promise<void> {
 }
 
 function requestDelete(): void {
-  if (!actorStore.canEdit || detail.value?.id !== databaseObjectId.value || !detail.value?.canDelete) return
+  if (
+    !actorStore.canEdit ||
+    detail.value?.id !== databaseObjectId.value ||
+    !detail.value?.canDelete
+  )
+    return
   const current = detail.value
   openDeleteDialog(overlayStore, {
-    objectTypeLabel: '数据库对象', actionLabel: '删除数据库对象', displayName: current.overview.qualifiedName,
+    objectTypeLabel: '数据库对象',
+    actionLabel: '删除数据库对象',
+    displayName: current.overview.qualifiedName,
     concurrencyToken: current.concurrencyToken,
-    execute: async () => { if (loading.value || detail.value?.id !== current.id || parseSafeApiId(route.params.id) !== current.id) throw new Error('当前对象已变化，请重新加载。'); await deleteDatabaseObject(current.id, current.concurrencyToken) },
-    onDeleted: () => router.push({ name: 'database-objects-list', query: { databaseSourceId: String(current.databaseSource.id) } }),
+    execute: async () => {
+      if (
+        loading.value ||
+        detail.value?.id !== current.id ||
+        parseSafeApiId(route.params.id) !== current.id
+      )
+        throw new Error('当前对象已变化，请重新加载。')
+      await deleteDatabaseObject(current.id, current.concurrencyToken)
+    },
+    onDeleted: () =>
+      router.push({
+        name: 'database-objects-list',
+        query: { databaseSourceId: String(current.databaseSource.id) },
+      }),
     onRefresh: loadRoute,
     onUnavailable: () => router.push({ name: 'database-objects-list' }),
   })
@@ -212,9 +245,13 @@ function openDatabaseSource(): void {
   })
 }
 
-watch([databaseObjectId, routeSelectedColumnId], () => {
-  void loadRoute()
-}, { flush: 'sync' })
+watch(
+  [databaseObjectId, routeSelectedColumnId],
+  () => {
+    void loadRoute()
+  },
+  { flush: 'sync' },
+)
 
 watch(
   () => overlayStore.currentDrawer,
@@ -244,11 +281,11 @@ onBeforeUnmount(() => {
   window.removeEventListener('evidence:changed', evidenceChanged)
 })
 async function closeDetailOverlays(): Promise<boolean> {
-  if (!await overlayStore.requestDrawerClose()) return false
+  if (!(await overlayStore.requestDrawerClose())) return false
   overlayStore.closeDialog()
   return true
 }
-onBeforeRouteUpdate((to, from) => to.params.id === from.params.id ? true : closeDetailOverlays())
+onBeforeRouteUpdate((to, from) => (to.params.id === from.params.id ? true : closeDetailOverlays()))
 onBeforeRouteLeave(closeDetailOverlays)
 </script>
 
@@ -271,8 +308,9 @@ onBeforeRouteLeave(closeDetailOverlays)
         <nav class="database-breadcrumb" aria-label="面包屑">
           <button type="button" @click="openDatabaseBrowse">数据库</button><b>/</b
           ><button type="button" @click="openSystem">{{ detail.system.name }}</button><b>/</b
-          ><button type="button" @click="openDatabaseSource">{{ detail.databaseSource.name }}</button><b>/</b
-          ><strong class="technical-text">{{ detail.overview.qualifiedName }}</strong>
+          ><button type="button" @click="openDatabaseSource">
+            {{ detail.databaseSource.name }}</button
+          ><b>/</b><strong class="technical-text">{{ detail.overview.qualifiedName }}</strong>
         </nav>
         <div class="database-object-header__title">
           <div>
@@ -280,8 +318,22 @@ onBeforeRouteLeave(closeDetailOverlays)
             <p>{{ detail.overview.businessDescription ?? '尚未记录业务说明' }}</p>
           </div>
           <div class="database-object-header__actions">
-            <el-button v-if="actorStore.canEdit && detail.canDelete" type="danger" plain :icon="Delete" @click="requestDelete">删除数据库对象</el-button>
-            <el-button v-if="actorStore.canEdit" text type="primary" :icon="EditPen" @click="openObjectKnowledgeEdit">编辑</el-button>
+            <el-button
+              v-if="actorStore.canEdit && detail.canDelete"
+              type="danger"
+              plain
+              :icon="Delete"
+              @click="requestDelete"
+              >删除数据库对象</el-button
+            >
+            <el-button
+              v-if="actorStore.canEdit"
+              text
+              type="primary"
+              :icon="EditPen"
+              @click="openObjectKnowledgeEdit"
+              >编辑</el-button
+            >
           </div>
         </div>
         <div class="database-object-header__tags">
@@ -294,44 +346,86 @@ onBeforeRouteLeave(closeDetailOverlays)
       <div v-if="selectedColumnError" class="database-inline-notice">{{ selectedColumnError }}</div>
 
       <section class="database-metadata-strip" aria-label="数据库元数据摘要">
-        <div><span>估算行数</span><strong>{{ formatRows(detail.metadata.estimatedRows) }}</strong></div>
-        <div><span>访问方式</span><strong>{{ accessModeLabel(detail.overview.accessMode) }}</strong></div>
-        <div><span>数据库来源</span><strong>{{ detail.databaseSource.name }}</strong></div>
+        <div>
+          <span>估算行数</span><strong>{{ formatRows(detail.metadata.estimatedRows) }}</strong>
+        </div>
+        <div>
+          <span>访问方式</span><strong>{{ accessModeLabel(detail.overview.accessMode) }}</strong>
+        </div>
+        <div>
+          <span>数据库来源</span><strong>{{ detail.databaseSource.name }}</strong>
+        </div>
         <div>
           <span>主键</span>
-          <strong class="technical-text">{{ detail.metadata.primaryKeyColumns.join(' · ') || '—' }}</strong>
+          <strong class="technical-text">{{
+            detail.metadata.primaryKeyColumns.join(' · ') || '—'
+          }}</strong>
         </div>
         <div>
           <span>业务唯一键</span>
-          <strong class="technical-text">{{ detail.metadata.businessKeyColumns.join(' · ') || '—' }}</strong>
+          <strong class="technical-text">{{
+            detail.metadata.businessKeyColumns.join(' · ') || '—'
+          }}</strong>
         </div>
       </section>
 
-      <section class="database-object-evidence-section" aria-labelledby="database-object-evidence-title">
+      <section
+        class="database-object-evidence-section"
+        aria-labelledby="database-object-evidence-title"
+      >
         <div class="database-object-evidence-section__heading">
           <div>
             <h2 id="database-object-evidence-title">证据与人工确认</h2>
             <span>{{ objectEvidence.length }} 条对象级证据</span>
           </div>
           <div v-if="actorStore.canEdit" class="database-object-evidence-section__actions">
-            <el-button class="skh-section-action skh-evidence-action" type="primary" :icon="DocumentChecked" @click="openAddEvidence">添加证据</el-button>
-            <el-button class="skh-section-action skh-human-confirmation-action" plain :icon="UserFilled" @click="openAddHumanConfirmation">添加人工确认</el-button>
+            <el-button
+              class="skh-section-action skh-evidence-action"
+              type="primary"
+              :icon="DocumentChecked"
+              @click="openAddEvidence"
+              >添加证据</el-button
+            >
+            <el-button
+              class="skh-section-action skh-human-confirmation-action"
+              plain
+              :icon="UserFilled"
+              @click="openAddHumanConfirmation"
+              >添加人工确认</el-button
+            >
           </div>
         </div>
-        <p class="database-object-evidence-section__scope">这里只显示并维护当前表或视图的对象级证据；字段证据继续在对应字段详情中独立维护。</p>
+        <p class="database-object-evidence-section__scope">
+          这里只显示并维护当前表或视图的对象级证据；字段证据继续在对应字段详情中独立维护。
+        </p>
         <LoadingState v-if="evidenceLoading" message="正在读取数据库对象证据…" />
         <div v-else-if="evidenceError" class="database-inline-notice database-inline-notice--error">
           {{ evidenceError }}
           <el-button text type="primary" @click="loadObjectEvidence(detail.id)">重试</el-button>
         </div>
         <div v-else-if="objectEvidence.length" class="database-object-evidence-list">
-          <button v-for="item in objectEvidence" :key="item.id" type="button" @click="openEvidence(item.id)">
+          <button
+            v-for="item in objectEvidence"
+            :key="item.id"
+            type="button"
+            @click="openEvidence(item.id)"
+          >
             <el-icon><DocumentChecked /></el-icon>
-            <span><small>{{ evidenceTypeLabels[item.evidenceType] }}</small><strong>{{ item.sourceTitle }}</strong></span>
+            <span
+              ><small>{{ evidenceTypeLabels[item.evidenceType] }}</small
+              ><strong
+                >{{ item.sourceTitle
+                }}<span v-if="!isEffectiveEvidence(item)"> · 已撤销</span></strong
+              ></span
+            >
             <p>{{ item.supportReason }}</p>
           </button>
         </div>
-        <EmptyState v-else title="尚无对象级证据" description="添加可定位的证据或人工确认，为当前表或视图的知识状态提供依据。" />
+        <EmptyState
+          v-else
+          title="尚无对象级证据"
+          description="添加可定位的证据或人工确认，为当前表或视图的知识状态提供依据。"
+        />
       </section>
 
       <KnowledgeStatusProgressionPanel
@@ -340,15 +434,29 @@ onBeforeRouteLeave(closeDetailOverlays)
         :title="detail.overview.qualifiedName"
         :status="detail.overview.knowledgeStatus"
         :concurrency-token="detail.concurrencyToken"
-        :evidence-count="objectEvidence.length"
+        :evidence-count="objectEvidence.filter(isEffectiveEvidence).length"
         :human-confirmation-count="humanConfirmationCount"
-        :can-change="actorStore.canEdit && detail.availableActions.includes('ChangeKnowledgeStatus')"
+        :can-change="
+          actorStore.canEdit && detail.availableActions.includes('ChangeKnowledgeStatus')
+        "
       />
 
       <section class="database-columns-section" aria-labelledby="columns-title">
         <div class="database-columns-section__toolbar">
-          <div><h2 id="columns-title">字段</h2><span>{{ detail.columns.length }} 个字段</span></div>
-          <div class="database-columns-section__actions"><el-input v-model="filterText" clearable placeholder="筛选字段" :prefix-icon="Search" /><el-button v-if="actorStore.canEdit" type="primary" plain @click="openRegisterColumn">登记字段</el-button></div>
+          <div>
+            <h2 id="columns-title">字段</h2>
+            <span>{{ detail.columns.length }} 个字段</span>
+          </div>
+          <div class="database-columns-section__actions">
+            <el-input
+              v-model="filterText"
+              clearable
+              placeholder="筛选字段"
+              :prefix-icon="Search"
+            /><el-button v-if="actorStore.canEdit" type="primary" plain @click="openRegisterColumn"
+              >登记字段</el-button
+            >
+          </div>
         </div>
 
         <EmptyState v-if="detail.columns.length === 0" />
@@ -366,7 +474,9 @@ onBeforeRouteLeave(closeDetailOverlays)
             </template>
           </el-table-column>
           <el-table-column prop="dataType" label="数据类型" width="108">
-            <template #default="scope"><code>{{ scope.row.dataType }}</code></template>
+            <template #default="scope"
+              ><code>{{ scope.row.dataType }}</code></template
+            >
           </el-table-column>
           <el-table-column prop="nullable" label="允许为空" width="76">
             <template #default="scope">{{ scope.row.nullable ? '是' : '否' }}</template>
@@ -385,7 +495,10 @@ onBeforeRouteLeave(closeDetailOverlays)
           </el-table-column>
           <el-table-column label="证据" width="108">
             <template #default="scope">
-              <span class="evidence-cell" :class="{ 'evidence-cell--empty': scope.row.evidenceCount === 0 }">
+              <span
+                class="evidence-cell"
+                :class="{ 'evidence-cell--empty': scope.row.evidenceCount === 0 }"
+              >
                 <el-icon><DocumentChecked /></el-icon>
                 {{ scope.row.evidenceCount }} 条证据
               </span>
@@ -393,7 +506,10 @@ onBeforeRouteLeave(closeDetailOverlays)
           </el-table-column>
         </el-table>
 
-        <div v-if="detail.columns.length > 0 && filteredColumns.length === 0" class="table-filter-empty">
+        <div
+          v-if="detail.columns.length > 0 && filteredColumns.length === 0"
+          class="table-filter-empty"
+        >
           没有匹配“{{ filterText }}”的字段。
         </div>
       </section>
@@ -405,10 +521,11 @@ onBeforeRouteLeave(closeDetailOverlays)
       <RegisterDatabaseColumnDialog
         :database-object-id="detail.id"
         :concurrency-token="detail.concurrencyToken"
-        :next-ordinal-position="Math.max(0, ...detail.columns.map((column) => column.ordinalPosition)) + 1"
+        :next-ordinal-position="
+          Math.max(0, ...detail.columns.map((column) => column.ordinalPosition)) + 1
+        "
         @registered="handleColumnRegistered"
       />
-
     </template>
   </div>
 </template>

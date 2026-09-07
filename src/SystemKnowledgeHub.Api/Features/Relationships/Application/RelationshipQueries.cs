@@ -82,10 +82,10 @@ public sealed class RelationshipQueries(
 
         var evidenceRows = await dbContext.Evidence.AsNoTracking()
             .Where(e => e.SubjectType == EvidenceSubjectType.KnowledgeRelation && e.SubjectId == id)
-            .Select(e => new { e.Id, e.EvidenceType, e.SourceTitle, e.ProvidedAt })
+            .Select(e => new { e.Id, e.EvidenceType, e.SourceTitle, e.ProvidedAt, e.WithdrawnAt })
             .ToArrayAsync(cancellationToken);
         var evidence = evidenceRows.OrderByDescending(e => e.ProvidedAt)
-            .Select(e => new RelationshipEvidenceResponse(e.Id, e.EvidenceType.ToString(), e.SourceTitle))
+            .Select(e => new RelationshipEvidenceResponse(e.Id, e.EvidenceType.ToString(), e.SourceTitle, e.WithdrawnAt != null))
             .ToArray();
 
         return new(new RelationshipDetailResponse(

@@ -159,7 +159,7 @@ public sealed record UnknownItemQuestionResponse(
     DateTimeOffset UpdatedAt);
 
 public sealed record FindingResponse(long Id, string Content, PersonSnapshotResponse RecordedBy);
-public sealed record InvestigationEvidenceResponse(long Id, UnknownTargetResponse Subject, string EvidenceType, string SourceTitle);
+public sealed record InvestigationEvidenceResponse(long Id, UnknownTargetResponse Subject, string EvidenceType, string SourceTitle, bool IsWithdrawn = false);
 public sealed record ResolutionResponse(long Id, string Conclusion, PersonSnapshotResponse? ConfirmedBy, DateTimeOffset? ConfirmedAt);
 
 public sealed record KnowledgeUpdateResponse(

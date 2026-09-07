@@ -228,7 +228,7 @@ public sealed class KnowledgeStatusService(
             return Conflict("内容已被其他操作修改，请重新加载后重试。");
         }
 
-        var relatedEvidence = await dbContext.Evidence.AsNoTracking()
+        var relatedEvidence = await dbContext.Evidence.AsNoTracking().Where(SystemKnowledgeHub.Api.Features.Evidence.Application.EffectiveEvidence.Predicate)
             .Where(item => item.SubjectType == evidenceSubjectType && item.SubjectId == request.Target!.Id)
             .Select(item => new
             {

@@ -171,6 +171,7 @@ public sealed class BusinessFunctionQueries(
                 item.EvidenceType,
                 item.SourceTitle,
                 item.ProvidedAt,
+                item.WithdrawnAt,
             })
             .ToArrayAsync(cancellationToken);
         var evidence = evidenceRows
@@ -178,7 +179,7 @@ public sealed class BusinessFunctionQueries(
             .Select(item => new EvidenceSummaryResponse(
                 item.Id,
                 item.EvidenceType.ToString(),
-                item.SourceTitle))
+                item.SourceTitle, item.WithdrawnAt != null))
             .ToArray();
 
         var relations = await dbContext.KnowledgeRelations.AsNoTracking()
@@ -186,7 +187,7 @@ public sealed class BusinessFunctionQueries(
                 || (item.TargetType == KnowledgeTargetType.BusinessFunction && item.TargetId == businessFunctionId))
             .ToArrayAsync(cancellationToken);
         var relationIds = relations.Select(item => item.Id).ToArray();
-        var evidenceCounts = await dbContext.Evidence.AsNoTracking()
+        var evidenceCounts = await dbContext.Evidence.AsNoTracking().Where(SystemKnowledgeHub.Api.Features.Evidence.Application.EffectiveEvidence.Predicate)
             .Where(item => item.SubjectType == EvidenceSubjectType.KnowledgeRelation && relationIds.Contains(item.SubjectId))
             .GroupBy(item => item.SubjectId)
             .Select(group => new { RelationshipId = group.Key, Count = group.Count() })
@@ -216,7 +217,7 @@ public sealed class BusinessFunctionQueries(
             }
             if (outgoing && relation.RelationType == RelationType.AppliesRule && otherType == KnowledgeTargetType.BusinessRule)
             {
-                var evidenceCount = await dbContext.Evidence.AsNoTracking().CountAsync(item =>
+                var evidenceCount = await dbContext.Evidence.AsNoTracking().Where(SystemKnowledgeHub.Api.Features.Evidence.Application.EffectiveEvidence.Predicate).CountAsync(item =>
                     item.SubjectType == EvidenceSubjectType.BusinessRule && item.SubjectId == otherId, cancellationToken);
                 businessRules.Add(new BusinessRuleSummaryResponse(relation.Id, otherId, other.Title,
                     other.KnowledgeStatus, evidenceCount));

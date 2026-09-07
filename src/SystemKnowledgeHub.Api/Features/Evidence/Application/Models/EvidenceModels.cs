@@ -62,7 +62,8 @@ public sealed record AddHumanConfirmationCommand(
     DateTimeOffset? ConfirmedAt,
     string ConfirmationStatement,
     string SupportReason,
-    string? SourceNote);
+    string? SourceNote,
+    long? ReplacesHumanConfirmationId = null);
 
 /// <summary>Evidence 详情中被其支持的知识目标投影。</summary>
 public sealed record EvidenceTargetResponse(string Type, long Id);
@@ -97,7 +98,8 @@ public sealed record EvidenceDetailResponse(
     string? Confidence,
     PersonSnapshotResponse Provider,
     EvidenceSubjectContextResponse? SubjectContext,
-    IReadOnlyList<string> AvailableActions);
+    IReadOnlyList<string> AvailableActions,
+    HumanConfirmationLifecycleResponse? HumanConfirmationLifecycle = null);
 
 /// <summary>某一知识对象的 Evidence 摘要投影，用于详情页展示其支持依据与人工确认记录。</summary>
 /// <remarks>该投影不包含可编辑并发令牌；状态推进仍由独立的显式 KnowledgeStatus 操作执行。</remarks>
@@ -110,7 +112,8 @@ public sealed record EvidenceListItemResponse(
     JsonElement? SourceLocator,
     string? Summary,
     string SupportReason,
-    PersonSnapshotResponse Provider);
+    PersonSnapshotResponse Provider,
+    HumanConfirmationLifecycleResponse? HumanConfirmationLifecycle = null);
 
 /// <summary>按明确 Subject 返回的 Evidence 摘要集合。</summary>
 public sealed record EvidenceListResponse(
@@ -137,6 +140,10 @@ public sealed record EvidenceSubjectContext(string Title, KnowledgeStatus Knowle
 public enum EvidenceFailure
 {
     None,
+    HumanConfirmationImmutable,
+    InvalidState,
+    ReplacementInvalid,
+    ReplacementConflict,
     Validation,
     NotFound,
     /// <summary>Subject 不存在或当前不能作为 Evidence 目标。</summary>
@@ -170,3 +177,11 @@ public sealed record EvidenceListQueryResult(
     EvidenceListResponse? Response,
     IReadOnlyDictionary<string, string[]>? FieldErrors,
     EvidenceFailure Failure);
+
+public sealed record WithdrawHumanConfirmationCommand(long EvidenceId, long CurrentUserId, string? Reason, string? ConcurrencyToken);
+public sealed record WithdrawHumanConfirmationResponse(long Id, string EvidenceType, string Status,
+    DateTimeOffset WithdrawnAt, string WithdrawnByDisplayName, string WithdrawalReason,
+    string ConcurrencyToken, bool KnowledgeStatusChanged);
+public sealed record HumanConfirmationLifecycleResponse(string Status, DateTimeOffset? WithdrawnAt,
+    string? WithdrawnByDisplayName, string? WithdrawalReason,
+    long? ReplacesHumanConfirmationId, long? ReplacedByHumanConfirmationId);

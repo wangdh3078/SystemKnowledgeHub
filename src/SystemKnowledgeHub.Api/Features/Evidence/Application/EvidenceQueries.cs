@@ -77,9 +77,14 @@ public sealed class EvidenceQueries(
                 item.ProviderExternalKey,
                 item.ProviderSource,
                 item.ProviderNote,
+                item.WithdrawnAt, item.WithdrawnByDisplayName, item.WithdrawalReason, item.ReplacesHumanConfirmationId,
             })
             .ToListAsync(cancellationToken);
 
+        var ids = items.Select(item => item.Id).ToArray();
+        var replacements = await dbContext.Evidence.AsNoTracking()
+            .Where(e => e.ReplacesHumanConfirmationId != null && ids.Contains(e.ReplacesHumanConfirmationId.Value))
+            .ToDictionaryAsync(e => e.ReplacesHumanConfirmationId!.Value, e => (long?)e.Id, cancellationToken);
         return new EvidenceListQueryResult(
             new EvidenceListResponse(subject, items.Select(item => new EvidenceListItemResponse(
                 item.Id,
@@ -97,7 +102,10 @@ public sealed class EvidenceQueries(
                     item.ProviderTeam,
                     item.ProviderExternalKey,
                     item.ProviderSource,
-                    item.ProviderNote)))
+                    item.ProviderNote),
+                item.EvidenceType != EvidenceType.HumanConfirmation ? null : new HumanConfirmationLifecycleResponse(
+                    item.WithdrawnAt is null ? "Active" : "Withdrawn", item.WithdrawnAt, item.WithdrawnByDisplayName,
+                    item.WithdrawalReason, item.ReplacesHumanConfirmationId, replacements.GetValueOrDefault(item.Id))))
                 .ToList()),
             null,
             EvidenceFailure.None);
@@ -136,6 +144,8 @@ public sealed class EvidenceQueries(
             ? null
             : JsonSerializer.Deserialize<JsonElement>(item.SourceLocatorJson);
 
+        var replacedBy = await dbContext.Evidence.AsNoTracking()
+            .Where(e => e.ReplacesHumanConfirmationId == item.Id).Select(e => (long?)e.Id).SingleOrDefaultAsync(cancellationToken);
         return new EvidenceDetailQueryResult(
             new EvidenceDetailResponse(
                 item.Id,
@@ -162,14 +172,19 @@ public sealed class EvidenceQueries(
                 subjectContext is null ? null : new EvidenceSubjectContextResponse(
                     subjectContext.Title,
                     subjectContext.KnowledgeStatus.ToString()),
-                subject.IsDeleted ? [] : item.SubjectType == EvidenceSubjectType.KnowledgeRelation
+                item.EvidenceType == EvidenceType.HumanConfirmation
+                    ? item.WithdrawnAt is null ? new[] { "WithdrawHumanConfirmation" } : Array.Empty<string>()
+                    : subject.IsDeleted ? [] : item.SubjectType == EvidenceSubjectType.KnowledgeRelation
                     ? new[] { "UpdateEvidence", "ChangeRelationKnowledgeStatus" }
                     : (item.SubjectType is EvidenceSubjectType.System
                     or EvidenceSubjectType.BusinessFunction
                     or EvidenceSubjectType.DatabaseObject
                     or EvidenceSubjectType.DatabaseColumn)
                     ? new[] { "UpdateEvidence", "ChangeKnowledgeStatus" }
-                    : new[] { "UpdateEvidence" }),
+                    : new[] { "UpdateEvidence" },
+                item.EvidenceType != EvidenceType.HumanConfirmation ? null : new HumanConfirmationLifecycleResponse(
+                    item.WithdrawnAt is null ? "Active" : "Withdrawn", item.WithdrawnAt, item.WithdrawnByDisplayName,
+                    item.WithdrawalReason, item.ReplacesHumanConfirmationId, replacedBy)),
             EvidenceFailure.None);
     }
 }

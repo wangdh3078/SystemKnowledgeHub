@@ -18,6 +18,11 @@ public sealed class EvidenceConfiguration : IEntityTypeConfiguration<EvidenceEnt
             table.HasCheckConstraint("ck_evidence_confidence", "confidence IS NULL OR confidence IN ('High','Medium','Low')");
             table.HasCheckConstraint("ck_evidence_source_locator", "source_reference IS NOT NULL OR source_locator_json IS NOT NULL");
             table.HasCheckConstraint("ck_evidence_source_locator_json", "source_locator_json IS NULL OR (json_valid(source_locator_json) AND json_type(source_locator_json) = 'object')");
+            table.HasCheckConstraint("ck_evidence_withdrawal_complete", "(withdrawn_at IS NULL AND withdrawn_by_user_id IS NULL AND withdrawn_by_display_name IS NULL AND withdrawal_reason IS NULL) OR (withdrawn_at IS NOT NULL AND withdrawn_by_user_id IS NOT NULL AND withdrawn_by_display_name IS NOT NULL AND withdrawal_reason IS NOT NULL)");
+            table.HasCheckConstraint("ck_evidence_withdrawal_name", "withdrawn_by_display_name IS NULL OR length(trim(withdrawn_by_display_name)) > 0");
+            table.HasCheckConstraint("ck_evidence_withdrawal_reason", "withdrawal_reason IS NULL OR (length(trim(withdrawal_reason)) BETWEEN 1 AND 1000 AND withdrawal_reason = trim(withdrawal_reason))");
+            table.HasCheckConstraint("ck_evidence_hc_lifecycle", "evidence_type = 'HumanConfirmation' OR (withdrawn_at IS NULL AND withdrawn_by_user_id IS NULL AND withdrawn_by_display_name IS NULL AND withdrawal_reason IS NULL AND replaces_evidence_id IS NULL)");
+            table.HasCheckConstraint("ck_evidence_replacement_self", "replaces_evidence_id IS NULL OR replaces_evidence_id <> id");
             table.HasCheckConstraint("ck_evidence_version", "version >= 1");
         });
 
@@ -52,6 +57,15 @@ public sealed class EvidenceConfiguration : IEntityTypeConfiguration<EvidenceEnt
         builder.HasIndex(entity => new { entity.SubjectType, entity.SubjectId, entity.SubjectDetailKey });
         builder.HasIndex(entity => new { entity.EvidenceType, entity.ProvidedAt }).IsDescending(false, true);
         builder.HasIndex(entity => entity.SourceReference);
+        builder.Property(entity => entity.WithdrawnAt).HasColumnName("withdrawn_at");
+        builder.Property(entity => entity.WithdrawnByUserId).HasColumnName("withdrawn_by_user_id");
+        builder.Property(entity => entity.WithdrawnByDisplayName).HasColumnName("withdrawn_by_display_name");
+        builder.Property(entity => entity.WithdrawalReason).HasColumnName("withdrawal_reason").HasMaxLength(1000);
+        builder.Property(entity => entity.ReplacesHumanConfirmationId).HasColumnName("replaces_evidence_id");
+        builder.HasIndex(entity => entity.WithdrawnByUserId);
+        builder.HasIndex(entity => entity.ReplacesHumanConfirmationId).IsUnique().HasFilter("replaces_evidence_id IS NOT NULL");
+        builder.HasOne<UserEntity>().WithMany().HasForeignKey(entity => entity.WithdrawnByUserId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<EvidenceEntity>().WithMany().HasForeignKey(entity => entity.ReplacesHumanConfirmationId).OnDelete(DeleteBehavior.Restrict);
         builder.HasIndex(entity => entity.ProviderUserId);
         builder.HasIndex(entity => entity.ProviderKnowledgeRoleId);
 

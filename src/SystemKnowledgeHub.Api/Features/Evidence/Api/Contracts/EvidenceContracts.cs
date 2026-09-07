@@ -99,4 +99,11 @@ public sealed record AddHumanConfirmationRequest(
     DateTimeOffset? ConfirmedAt,
     string? ConfirmationStatement,
     string? SupportReason,
-    string? SourceNote);
+    string? SourceNote,
+    long? ReplacesHumanConfirmationId = null);
+
+public sealed record WithdrawHumanConfirmationRequest(string? Reason, string? ConcurrencyToken)
+{
+    [System.Text.Json.Serialization.JsonExtensionData]
+    public Dictionary<string, JsonElement>? ExtraFields { get; init; }
+}

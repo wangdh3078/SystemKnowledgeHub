@@ -21,7 +21,7 @@ public sealed record IntegrationContractFieldsResponse(long Id, IReadOnlyList<In
 public sealed record IntegrationContractFieldResponse(int Order, string FieldName, string? DataType, bool Required, string? Description, string? SampleValue);
 public sealed record IntegrationHeaderResponse(string Name, string IntegrationType, string KnowledgeStatus);
 public sealed record IntegrationRelationshipResponse(long RelationshipId, long Id, string Name, string RelationType);
-public sealed record IntegrationEvidenceResponse(long Id, string EvidenceType, string SourceTitle);
+public sealed record IntegrationEvidenceResponse(long Id, string EvidenceType, string SourceTitle, bool IsWithdrawn = false);
 public sealed record IntegrationUnknownItemResponse(long Id, string Question, string Status);
 public sealed record IntegrationContextRailResponse(IReadOnlyList<string> ParticipantSystems, int RelatedFunctionCount, int RelatedDataCount, int OpenUnknownCount, IReadOnlyList<string> ContractGaps);
 public sealed record IntegrationDetailResponse(long Id, string ConcurrencyToken, IntegrationHeaderResponse Header,

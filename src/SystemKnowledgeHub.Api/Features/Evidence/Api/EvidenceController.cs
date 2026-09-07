@@ -69,6 +69,8 @@ public sealed class EvidenceController(
         {
             EvidenceFailure.None => Ok(result.Response),
             EvidenceFailure.NotFound => NotFound(NotFoundError(id)),
+            EvidenceFailure.HumanConfirmationImmutable => UnprocessableEntity(new ApiErrorResponse("invalid_state",
+                "人工确认属于历史确认记录，不能直接编辑；如需纠正，请先撤销原确认后重新记录。", null, new { resourceType = "Evidence", resourceId = id })),
             EvidenceFailure.SubjectNotFound => UnprocessableEntity(ReferenceInvalidError()),
             _ => throw new InvalidOperationException("Unsupported Evidence detail result."),
         };
@@ -157,6 +159,8 @@ public sealed class EvidenceController(
             EvidenceFailure.None => Ok(result.Response),
             EvidenceFailure.Validation => BadRequest(ValidationError(result.FieldErrors!)),
             EvidenceFailure.NotFound => NotFound(NotFoundError(id)),
+            EvidenceFailure.HumanConfirmationImmutable => UnprocessableEntity(new ApiErrorResponse("invalid_state",
+                "人工确认属于历史确认记录，不能直接编辑；如需纠正，请先撤销原确认后重新记录。", null, new { resourceType = "Evidence", resourceId = id })),
             EvidenceFailure.SubjectNotFound => UnprocessableEntity(ReferenceInvalidError()),
             EvidenceFailure.Conflict => Conflict(new ApiErrorResponse(
                 "conflict",
@@ -203,7 +207,8 @@ public sealed class EvidenceController(
                 request.ConfirmedAt,
                 request.ConfirmationStatement ?? string.Empty,
                 request.SupportReason ?? string.Empty,
-                request.SourceNote),
+                request.SourceNote,
+                request.ReplacesHumanConfirmationId),
             cancellationToken);
 
         return result.Failure switch
@@ -211,6 +216,9 @@ public sealed class EvidenceController(
             EvidenceFailure.None => StatusCode(StatusCodes.Status201Created, result.Response),
             EvidenceFailure.Validation => BadRequest(ValidationError(result.FieldErrors!)),
             EvidenceFailure.SubjectNotFound => UnprocessableEntity(ReferenceInvalidError()),
+            EvidenceFailure.InvalidState => UnprocessableEntity(new ApiErrorResponse("invalid_state", "原人工确认尚未撤销，不能建立替代确认。", null, null)),
+            EvidenceFailure.ReplacementInvalid => UnprocessableEntity(new ApiErrorResponse("reference_invalid", "替代确认的目标、细分位置或修订不兼容。", null, null)),
+            EvidenceFailure.ReplacementConflict => Conflict(new ApiErrorResponse("conflict", "该人工确认已有替代记录，请重新加载。", null, null)),
             EvidenceFailure.CurrentUserNotFound => NotFound(CurrentUserErrorResponse(
                 "identity_unmapped",
                 "当前登录身份尚未绑定系统用户。",
@@ -242,6 +250,31 @@ public sealed class EvidenceController(
                     currentRevisionNumber = result.CurrentRevisionNumber,
                 })),
             _ => throw new InvalidOperationException("Unsupported Add Human Confirmation result."),
+        };
+    }
+
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = SystemKnowledgeHub.Api.Shared.Security.AccessPolicies.Editor)]
+    [HttpPost("human-confirmations/{id:long}/withdraw")]
+    public async Task<IActionResult> WithdrawHumanConfirmation(long id,
+        [FromBody] WithdrawHumanConfirmationRequest request, CancellationToken cancellationToken)
+    {
+        if (request.ExtraFields is { Count: > 0 })
+            return BadRequest(ValidationError(new Dictionary<string, string[]> { ["request"] = ["撤销请求只允许 reason 和 concurrencyToken 字段。"] }));
+        var currentUser = await currentUserContext.ResolveAsync(cancellationToken);
+        if (currentUser.Status != CurrentUserResolutionStatus.Available)
+            return CurrentUserError(currentUser.Status).Result!;
+        var result = await service.WithdrawHumanConfirmation(new(id, currentUser.CurrentUser!.Id,
+            request.Reason, request.ConcurrencyToken), cancellationToken);
+        return result.Failure switch
+        {
+            EvidenceFailure.None => Ok(result.Response),
+            EvidenceFailure.Validation => BadRequest(ValidationError(result.FieldErrors!)),
+            EvidenceFailure.NotFound => NotFound(NotFoundError(id)),
+            EvidenceFailure.InvalidState => UnprocessableEntity(new ApiErrorResponse("invalid_state", "仅尚未撤销的人工确认可以执行撤销。", null, null)),
+            EvidenceFailure.Conflict => Conflict(new ApiErrorResponse("conflict", "人工确认已被其他操作修改，请重新加载后重试。", null, null)),
+            EvidenceFailure.CurrentUserNotFound => StatusCode(403, CurrentUserErrorResponse("identity_unmapped", "当前登录身份尚未绑定系统用户。", "unmapped")),
+            EvidenceFailure.CurrentUserInactive => StatusCode(403, CurrentUserErrorResponse("account_inactive", "当前用户已停用。", "inactive")),
+            _ => throw new InvalidOperationException("Unsupported withdrawal result."),
         };
     }
 

@@ -98,6 +98,8 @@ function mountDrawer() {
         title: '知识文章 · 确认上下文文档',
         knowledgeStatus: 'Confirmed',
         subjectRevisionNumber: 2,
+        replacesHumanConfirmationId: 40,
+        replacementRevisionNumber: 2,
       },
     },
     global: { components },
@@ -153,6 +155,7 @@ describe('AddHumanConfirmationDrawer revision context', () => {
       expect.objectContaining({
         subject: { type: 'KnowledgeDocument', id: 7 },
         subjectRevisionNumber: 2,
+        replacesHumanConfirmationId: 40,
         confirmationStatement: '确认当前文档内容正确。',
         supportReason: '专家已复核当前展示的完整内容。',
       }),
@@ -207,6 +210,7 @@ describe('AddHumanConfirmationDrawer revision context', () => {
     expect(addHumanConfirmation).toHaveBeenLastCalledWith(
       expect.objectContaining({
         subjectRevisionNumber: 3,
+        replacesHumanConfirmationId: null,
         confirmationStatement: '确认当前文档内容正确。',
         supportReason: '专家已复核当前展示的完整内容。',
       }),

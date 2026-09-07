@@ -56,7 +56,7 @@ public sealed record RelationshipEndpointResponse(
     string Title,
     string SystemContext);
 
-public sealed record RelationshipEvidenceResponse(long Id, string EvidenceType, string SourceTitle);
+public sealed record RelationshipEvidenceResponse(long Id, string EvidenceType, string SourceTitle, bool IsWithdrawn = false);
 public sealed record RelationshipPersonContextResponse(string DisplayName, string? RoleOrIdentity, DateTimeOffset OccurredAt);
 
 public sealed record RelationshipDetailResponse(

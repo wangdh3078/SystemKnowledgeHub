@@ -185,6 +185,14 @@ public sealed class TraceabilityApiTests : IClassFixture<BootstrapWebApplication
         Assert.Equal(1, edge.GetProperty("humanConfirmationCount").GetInt32());
         Assert.True(response.GetProperty("coverage").GetProperty("hasSpecification").GetBoolean());
 
+        var withdrawn = await HumanConfirmationLifecycleApiTests.Add(_client,"KnowledgeDocument",requirement.Id,revision:2);
+        using var withdrawal = await HumanConfirmationLifecycleApiTests.Withdraw(_client,withdrawn,"exclude only this HC");
+        Assert.Equal(HttpStatusCode.OK,withdrawal.StatusCode);
+        var afterWithdrawal=(await GetTrace(requirement.Id)).GetProperty("root");
+        Assert.Equal(2,afterWithdrawal.GetProperty("evidenceCount").GetInt32());
+        Assert.Equal(1,afterWithdrawal.GetProperty("humanConfirmationCount").GetInt32());
+        Assert.Equal("ChangedSinceConfirmation",afterWithdrawal.GetProperty("confirmationCoverage").GetProperty("state").GetString());
+
         var legacy = await AddDocument(DocumentType.Requirement, "Legacy confirmation root");
         await AddEvidence(EvidenceSubjectType.KnowledgeDocument, legacy.Id, EvidenceType.HumanConfirmation);
         Assert.Equal("LegacyConfirmationUnknown",

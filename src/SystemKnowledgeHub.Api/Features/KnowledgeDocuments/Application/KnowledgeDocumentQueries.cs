@@ -209,7 +209,7 @@ public sealed class KnowledgeDocumentQueries(
         KnowledgeDocument item,
         CancellationToken cancellationToken)
     {
-        var confirmation = await dbContext.Evidence.AsNoTracking()
+        var confirmation = await dbContext.Evidence.AsNoTracking().Where(SystemKnowledgeHub.Api.Features.Evidence.Application.EffectiveEvidence.Predicate)
             .Where(evidence => evidence.EvidenceType == EvidenceType.HumanConfirmation
                 && evidence.SubjectType == EvidenceSubjectType.KnowledgeDocument
                 && evidence.SubjectId == item.Id)

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using SystemKnowledgeHub.Api.Features.Evidence.Application.Models;
 using SystemKnowledgeHub.Api.Features.Evidence.Domain;
@@ -136,6 +137,8 @@ public sealed class EvidenceService(
         {
             errors["knowledgeRoleId"] = ["知识身份 ID 必须是 JavaScript 安全范围内的正整数。"];
         }
+        if (request.ReplacesHumanConfirmationId.HasValue && !ApiIdParser.IsSafePositive(request.ReplacesHumanConfirmationId.Value))
+            errors["replacesHumanConfirmationId"] = ["替代确认 ID 无效。"];
         if (errors.Count > 0)
         {
             return new EvidenceCommandResult(null, errors, EvidenceFailure.Validation);
@@ -247,6 +250,22 @@ public sealed class EvidenceService(
             return new EvidenceCommandResult(null, null, EvidenceFailure.SubjectNotFound);
         }
 
+        if (request.ReplacesHumanConfirmationId is long oldId)
+        {
+            var old = await dbContext.Evidence.AsNoTracking().SingleOrDefaultAsync(e => e.Id == oldId, cancellationToken);
+            if (old is null || old.EvidenceType != EvidenceType.HumanConfirmation)
+                return new(null, null, EvidenceFailure.ReplacementInvalid);
+            if (old.WithdrawnAt is null) return new(null, null, EvidenceFailure.InvalidState);
+            if (old.SubjectType != subjectType || old.SubjectId != request.Subject.Id
+                || !string.Equals(NormalizeOptional(old.SubjectDetailKey), NormalizeOptional(request.SubjectDetailKey), StringComparison.Ordinal)
+                || (subjectType == EvidenceSubjectType.KnowledgeDocument
+                    && (old.KnowledgeDocumentRevisionNumberSnapshot is null
+                        || old.KnowledgeDocumentRevisionNumberSnapshot != knowledgeDocumentRevisionNumberSnapshot)))
+                return new(null, null, EvidenceFailure.ReplacementInvalid);
+            if (await dbContext.Evidence.AnyAsync(e => e.ReplacesHumanConfirmationId == oldId, cancellationToken))
+                return new(null, null, EvidenceFailure.ReplacementConflict);
+        }
+
         var locatorJson = JsonSerializer.Serialize(new
         {
             confirmationMethod = request.ConfirmationMethod,
@@ -276,13 +295,20 @@ public sealed class EvidenceService(
             null,
             provider,
             timestamp);
+        item.ReplacesHumanConfirmationId = request.ReplacesHumanConfirmationId;
         item.ProviderUserId = currentUser.Id;
         item.ProviderKnowledgeRoleId = selectedRole?.Id;
         item.ProviderEmployeeNo = NormalizeOptional(currentUser.EmployeeNo);
         item.ProviderJobTitle = NormalizeOptional(currentUser.JobTitle);
         item.KnowledgeDocumentRevisionNumberSnapshot = knowledgeDocumentRevisionNumberSnapshot;
         dbContext.Evidence.Add(item);
-        await dbContext.SaveChangesAsync(cancellationToken);
+        try { await dbContext.SaveChangesAsync(cancellationToken); }
+        catch (DbUpdateException exception) when (exception.InnerException is SqliteException
+            { SqliteExtendedErrorCode: 2067 } sqlite
+            && sqlite.Message.Contains("evidence.replaces_evidence_id", StringComparison.Ordinal))
+        {
+            return new(null, null, EvidenceFailure.ReplacementConflict);
+        }
         await transaction.CommitAsync(cancellationToken);
 
         return new EvidenceCommandResult(
@@ -300,6 +326,11 @@ public sealed class EvidenceService(
         UpdateEvidenceCommand request,
         CancellationToken cancellationToken)
     {
+        await using var transaction = await SqliteImmediateTransaction.BeginAsync(dbContext, cancellationToken);
+        var item = await dbContext.Evidence.SingleOrDefaultAsync(e => e.Id == request.EvidenceId, cancellationToken);
+        if (item is null) return new(null, null, EvidenceFailure.NotFound);
+        if (item.EvidenceType == EvidenceType.HumanConfirmation)
+            return new(null, null, EvidenceFailure.HumanConfirmationImmutable);
         var errors = new Dictionary<string, string[]>();
         if (string.IsNullOrWhiteSpace(request.SourceTitle)) errors["sourceTitle"] = ["来源标题不能为空。"];
         if (string.IsNullOrWhiteSpace(request.SupportReason)) errors["supportReason"] = ["请说明该证据为什么支持当前知识。"];
@@ -313,14 +344,6 @@ public sealed class EvidenceService(
             return new EvidenceCommandResult(null, errors, EvidenceFailure.Validation);
         }
 
-        await using var transaction = await SqliteImmediateTransaction.BeginAsync(dbContext, cancellationToken);
-        var item = await dbContext.Evidence.SingleOrDefaultAsync(
-            evidence => evidence.Id == request.EvidenceId,
-            cancellationToken);
-        if (item is null)
-        {
-            return new EvidenceCommandResult(null, null, EvidenceFailure.NotFound);
-        }
         if (await subjectResolver.Resolve(item.SubjectType, item.SubjectId, cancellationToken) is null)
         {
             return new EvidenceCommandResult(null, null, EvidenceFailure.SubjectNotFound);
@@ -352,6 +375,39 @@ public sealed class EvidenceService(
         var detail = await queries.GetEvidenceDetail(item.Id, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return new EvidenceCommandResult(detail.Response, null, detail.Failure);
+    }
+
+    public async Task<EvidenceCommandResult> WithdrawHumanConfirmation(
+        WithdrawHumanConfirmationCommand request, CancellationToken cancellationToken)
+    {
+        var reason = request.Reason?.Trim();
+        var errors = new Dictionary<string, string[]>();
+        if (!ApiIdParser.IsSafePositive(request.EvidenceId)) errors["id"] = ["人工确认 ID 无效。"];
+        if (string.IsNullOrWhiteSpace(reason) || reason.Length > 1000) errors["reason"] = ["撤销原因须为 1～1000 个字符。"];
+        if (!concurrencyTokenCodec.TryDecode(request.ConcurrencyToken ?? string.Empty, out var version))
+            errors["concurrencyToken"] = ["并发标记无效，请重新加载后重试。"];
+        if (errors.Count > 0) return new(null, errors, EvidenceFailure.Validation);
+        await using var transaction = await SqliteImmediateTransaction.BeginAsync(dbContext, cancellationToken);
+        var item = await dbContext.Evidence.SingleOrDefaultAsync(e => e.Id == request.EvidenceId, cancellationToken);
+        if (item is null) return new(null, null, EvidenceFailure.NotFound);
+        if (item.EvidenceType != EvidenceType.HumanConfirmation) return new(null, null, EvidenceFailure.InvalidState);
+        if (item.Version != version) return new(null, null, EvidenceFailure.Conflict);
+        if (item.WithdrawnAt is not null) return new(null, null, EvidenceFailure.InvalidState);
+        var actor = await dbContext.Users.AsNoTracking().SingleOrDefaultAsync(u => u.Id == request.CurrentUserId, cancellationToken);
+        if (actor is null) return new(null, null, EvidenceFailure.CurrentUserNotFound);
+        if (!actor.IsActive) return new(null, null, EvidenceFailure.CurrentUserInactive);
+        var now = DateTimeOffset.UtcNow;
+        item.WithdrawnAt = now;
+        item.WithdrawnByUserId = actor.Id;
+        item.WithdrawnByDisplayName = actor.DisplayName;
+        item.WithdrawalReason = reason;
+        item.UpdatedAt = now;
+        item.Version++;
+        try { await dbContext.SaveChangesAsync(cancellationToken); }
+        catch (DbUpdateConcurrencyException) { return new(null, null, EvidenceFailure.Conflict); }
+        await transaction.CommitAsync(cancellationToken);
+        return new(new WithdrawHumanConfirmationResponse(item.Id, "HumanConfirmation", "Withdrawn", now,
+            actor.DisplayName, reason!, concurrencyTokenCodec.Encode(item.Version), false), null, EvidenceFailure.None);
     }
 
     private static EvidenceEntity CreateEvidence(

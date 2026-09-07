@@ -34,6 +34,11 @@ public sealed class Evidence
     public long? KnowledgeDocumentRevisionNumberSnapshot { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
+    public DateTimeOffset? WithdrawnAt { get; set; }
+    public long? WithdrawnByUserId { get; set; }
+    public string? WithdrawnByDisplayName { get; set; }
+    public string? WithdrawalReason { get; set; }
+    public long? ReplacesHumanConfirmationId { get; set; }
     public long Version { get; set; } = 1;
 }
 

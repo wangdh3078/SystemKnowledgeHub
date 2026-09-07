@@ -94,16 +94,18 @@
 
 以上 `...` 均指 `src/SystemKnowledgeHub.Api/Features/BusinessFunctions/`。
 
-### 1.7 Evidence — VS-06 + U04
+### 1.7 Evidence — VS-06 + U04 + HC-B01
 
 | 路径 | 一句话职责 | Feature / Vertical Slice | 为什么需要 |
 | --- | --- | --- | --- |
-| `.../Domain/Evidence.cs` | 定义 canonical Evidence、受控类型、Subject 绑定、primitive 提供人快照与并发版本。 | Evidence / VS-06 + U04 | 持久化“为什么相信这条知识”，并让 HumanConfirmation 保存 immutable User/KnowledgeRole snapshot；不建立导航或通用 Snapshot 框架。 |
-| `.../Persistence/EvidenceConfiguration.cs` | 映射 `evidence` 表、JSON/enum CHECK、Subject/来源索引，以及 U04 User/KnowledgeRole RESTRICT 引用与索引。 | Evidence / VS-06 + U04 | 落实冻结 SQLite Schema 与批准的 additive amendment。 |
+| `.../Domain/Evidence.cs` | 定义 canonical Evidence、Subject 绑定、不可变确认事实、五个 nullable 撤销/替代字段与并发版本。 | Evidence / VS-06 + U04 | 持久化“为什么相信这条知识”，并让 HumanConfirmation 保存 immutable User/KnowledgeRole snapshot；不建立导航或通用 Snapshot 框架。 |
+| `.../Persistence/EvidenceConfiguration.cs` | 映射 `evidence` 表、JSON/enum CHECK、Subject/来源索引，以及 User/KnowledgeRole RESTRICT 引用；HC-B01 增加撤销四字段 CHECK、自引用 RESTRICT FK 和唯一直接替代索引。 | Evidence / VS-06 + U04 | 落实冻结 SQLite Schema 与批准的 additive amendment。 |
 | `.../Application/EvidenceSubjectResolver.cs` | 对已落地 SubjectType（含 KnowledgeRelation）做显式存在性与上下文解析。 | Evidence / VS-06 + VS-08 | 保护受控多态边界，不演变为 Generic Knowledge Resolver。 |
-| `.../Application/EvidenceQueries.cs`、`EvidenceService.cs` 与 `Models/EvidenceModels.cs` | 实现 Q16 以及 C23～C25，并在 C25 事务内重读 canonical User、解析 KnowledgeRole、生成 snapshot。 | Evidence / VS-06 + U04 | 保证 Update 只纠正允许字段，且保存 Evidence/人工确认不自动改变知识状态。 |
+| `.../Application/EvidenceQueries.cs`、`EvidenceService.cs` 与 `Models/EvidenceModels.cs` | 实现历史 Q16、普通 Evidence C24、不可变 HumanConfirmation、事务内撤销审计和 C25 单一替代链接；C25 重读 canonical User/KnowledgeRole。 | Evidence / VS-06 + U04 | 保证 Update 只纠正允许字段，且保存 Evidence/人工确认不自动改变知识状态。 |
 | `.../Api/EvidenceController.cs` 与 `Api/Contracts/EvidenceContracts.cs` | 实现 Evidence 新增、详情、纠正和人工确认的 canonical routes/contracts，并让 C25 使用 `ICurrentUserContext`。 | Evidence / VS-06 + U04 | 保持原 route/response，删除 client confirmer 输入且复用 U03 Current User 错误语义。 |
 | `src/SystemKnowledgeHub.Api/Persistence/Migrations/20260821221206_AddHumanConfirmationCurrentUserSnapshot.cs` | 为 `evidence` 增加四个 nullable snapshot/reference columns、两个 RESTRICT FK 与两个索引。 | Evidence / U04 | additive 支撑新 C25，同时保留历史 Evidence 的 null reference 与旧 provider 字段。 |
+
+| `.../Application/EffectiveEvidence.cs` | 定义可由 EF 翻译的普通 Evidence 或 Active HC 条件。 | Evidence / HC-B01 | 当前支持投影统一过滤，历史读取与删除依赖保持全量。 |
 
 以上 `...` 均指 `src/SystemKnowledgeHub.Api/Features/Evidence/`。
 
@@ -351,13 +353,13 @@
 
 以上 `...` 均指 `src/SystemKnowledgeHub.Web/src/features/business-functions/`。
 
-### 2.8 Evidence — VS-06 + U04
+### 2.8 Evidence — VS-06 + U04 + HC-B01
 
 | 路径 | 一句话职责 | Feature / Vertical Slice | 为什么需要 |
 | --- | --- | --- | --- |
 | `.../api/evidenceContracts.ts`、`evidenceApi.ts` | 定义、解码并调用 Q16/C23～C25 contract；U04 C25 只提交确认事实和可选 `knowledgeRoleId`。 | Evidence / VS-06 + U04 | 将外部 JSON 安全收窄，只访问 canonical routes，并保留 Confirmation Method legacy fallback。 |
 | `.../components/AddEvidenceDrawer.vue` | 在固定 Subject 上收集普通 Evidence 最小必要信息与提供人快照。 | Evidence / VS-06 | 实现 DR-08，不将证据保存与知识状态推进混合。 |
-| `.../components/EvidenceDetailDrawer.vue` | 呈现 DR-09 Evidence 来源、支持理由、提供人和允许纠正项，并以 locator-first/provider_source-fallback 显示确认方式。 | Evidence / VS-06 + U04 | 支持 Q16/C24、保持 EvidenceType/Subject 不可变，并兼容历史 HumanConfirmation。 |
+| `.../components/EvidenceDetailDrawer.vue` | 呈现 DR-09 Evidence 来源、支持理由、提供人和允许纠正项，并以 locator-first/provider_source-fallback 显示确认方式。 | Evidence / VS-06 + U04 | 支持普通 C24；HumanConfirmation 只允许撤销和独立重新确认，并显示审计与直接替代链接。 |
 | `.../components/AddHumanConfirmationDrawer.vue` | 继续以 DR-10 收集确认事实，只读展示 `actorStore.currentUser`，按 0/1/multiple Active Role 规则提交。 | Evidence / U04 | 身份 snapshot 由服务端生成；缺失操作者禁用保存，Role 422 后刷新 profile 且不静默重试。 |
 | `.../components/EvidenceDrawerContent.vue`、`evidence.css` | 将三类 Evidence 状态接入全局单 Drawer Host 并实现 Golden 局部样式。 | Evidence / VS-06 | 复用已冻结 Overlay 模式，避免堆叠 Drawer 或新视觉体系。 |
 
@@ -709,3 +711,7 @@
 | --- | --- | --- |
 | `docs/design/HC_A01_HUMAN_CONFIRMATION_IMMUTABILITY_WITHDRAWAL_REPLACEMENT_DECISION.md` | 冻结 HC 不可变事实、撤销/替代、有效支持和历史隐私；列出当前源码消费点与 HC-B01 验收。 | 仅 supersede HC 的通用 C24；普通 Evidence correction 不变，后续 additive migration 尚未实施。 |
 | `docs/reports/HC_A01_HUMAN_CONFIRMATION_CORRECTION_LIFECYCLE_DECISION_REPORT.md` | 记录 authority、十五项合同、projection/schema/security 审查及 #10 design closure。 | HC-B01 READY；不代表运行时已修复。 |
+
+## HC-B01 verification
+
+`tests/SystemKnowledgeHub.Api.Tests/Api/HumanConfirmationLifecycleApiTests.cs`、`HumanConfirmationConcurrencyApiTests.cs` 与 `Persistence/HumanConfirmationLifecycleMigrationTests.cs` 验证不可变事实、撤销、替代链、独立连接竞争及迁移无损保留；既有 Trace、Portal、调查、历史边界测试补充 effective / historical 分界。结果见 `docs/reports/HC_B01_HUMAN_CONFIRMATION_WITHDRAWAL_REPLACEMENT_IMPLEMENTATION_VERIFICATION_REPORT.md`。

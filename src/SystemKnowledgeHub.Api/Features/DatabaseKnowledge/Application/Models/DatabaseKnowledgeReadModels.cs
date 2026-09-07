@@ -125,7 +125,8 @@ public sealed record ColumnEvidenceSummary(
     long Id,
     string EvidenceType,
     string SourceTitle,
-    string SupportReason);
+    string SupportReason,
+    bool IsWithdrawn = false);
 
 public sealed record RelatedObjectSummary(string Type, long Id, string Title);
 

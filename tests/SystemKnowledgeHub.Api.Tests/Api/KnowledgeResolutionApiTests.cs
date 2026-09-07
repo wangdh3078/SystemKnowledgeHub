@@ -127,6 +127,27 @@ public sealed class KnowledgeResolutionApiTests : IClassFixture<BootstrapWebAppl
         Assert.Equal("Investigating", detail.GetProperty("question").GetProperty("status").GetString());
     }
 
+    [Fact]
+    public async Task Withdrawn_confirmation_cannot_support_conclusion_and_does_not_undo_completed_work()
+    {
+        var value="HC-B01-"+Guid.NewGuid().ToString("N")[..8];
+        var flow=await PrepareColumnKnownValueFlow(value,"meaning");
+        using(var scope=_factory.Services.CreateScope())
+        {var db=scope.ServiceProvider.GetRequiredService<KnowledgeHubDbContext>();db.Evidence.RemoveRange(await db.Evidence.Where(e=>e.SubjectType==SystemKnowledgeHub.Api.Features.Evidence.Domain.EvidenceSubjectType.UnknownItem&&e.SubjectId==flow.Id).ToListAsync());await db.SaveChangesAsync();}
+        var hc=await HumanConfirmationLifecycleApiTests.Add(_client,"UnknownItem",flow.Id);
+        using var applied=await _client.PostAsJsonAsync($"/api/unknown-items/{flow.Id}/knowledge-updates/{flow.UpdateId}/apply-column-known-value",new {columnId=123,value,meaning="meaning",sortOrder=90,knowledgeStatusChange=(object?)null,applier=Person("apply"),concurrencyToken=flow.Token,targetConcurrencyToken=await GetColumnToken()});
+        Assert.Equal(HttpStatusCode.OK,applied.StatusCode);var token=(await applied.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("concurrencyToken").GetString();
+        using var withdrawal=await HumanConfirmationLifecycleApiTests.Withdraw(_client,hc,"withdraw support");Assert.Equal(HttpStatusCode.OK,withdrawal.StatusCode);
+        using var blocked=await _client.PostAsJsonAsync($"/api/unknown-items/{flow.Id}/confirm-conclusion",new {confirmer=Person("confirm"),concurrencyToken=token});Assert.Equal(HttpStatusCode.UnprocessableEntity,blocked.StatusCode);
+        var active=await HumanConfirmationLifecycleApiTests.Add(_client,"UnknownItem",flow.Id);
+        using var confirmed=await _client.PostAsJsonAsync($"/api/unknown-items/{flow.Id}/confirm-conclusion",new {confirmer=Person("confirm"),concurrencyToken=token});Assert.Equal(HttpStatusCode.OK,confirmed.StatusCode);
+        using var finalWithdrawal=await HumanConfirmationLifecycleApiTests.Withdraw(_client,active,"after completed conclusion");Assert.Equal(HttpStatusCode.OK,finalWithdrawal.StatusCode);
+        using var finalScope=_factory.Services.CreateScope();var finalDb=finalScope.ServiceProvider.GetRequiredService<KnowledgeHubDbContext>();
+        Assert.Equal(UnknownItemStatus.ConclusionConfirmed,(await finalDb.UnknownItems.SingleAsync(i=>i.Id==flow.Id)).Status);
+        Assert.Equal(KnowledgeUpdateStatus.Applied,(await finalDb.KnowledgeUpdates.SingleAsync(i=>i.Id==flow.UpdateId)).Status);
+        Assert.True(await finalDb.ColumnKnownValues.AnyAsync(v=>v.DatabaseColumnId==123&&v.ValueText==value));
+    }
+
     private async Task<(long Id, long UpdateId, string Token)> PrepareColumnKnownValueFlow(string value, string meaning)
     {
         using var createResponse = await _client.PostAsJsonAsync("/api/unknown-items", new

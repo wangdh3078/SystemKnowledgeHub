@@ -122,7 +122,7 @@ public sealed class RelationshipService(
         if (item.Version != expectedVersion) return new(null, null, RelationshipFailure.Conflict);
         if (!await EndpointsRemainValid(item, cancellationToken)) return new(null, null, RelationshipFailure.ReferenceInvalid, "关系端点不存在或组合已失效。");
 
-        var evidence = await dbContext.Evidence.AsNoTracking()
+        var evidence = await dbContext.Evidence.AsNoTracking().Where(SystemKnowledgeHub.Api.Features.Evidence.Application.EffectiveEvidence.Predicate)
             .Where(e => e.SubjectType == EvidenceSubjectType.KnowledgeRelation && e.SubjectId == item.Id)
             .Select(e => new { e.EvidenceType, e.SourceReference, e.SourceLocatorJson, e.ProviderName, e.ProviderRole, e.ProvidedAt })
             .ToArrayAsync(cancellationToken);

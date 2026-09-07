@@ -1,12 +1,18 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { getEvidenceDetail } from '../api/evidenceApi'
+import { getEvidenceDetail, withdrawHumanConfirmation } from '../api/evidenceApi'
 import type { EvidenceDetailResponse } from '../api/evidenceContracts'
 import EvidenceDetailDrawer from './EvidenceDetailDrawer.vue'
 
+const actor = vi.hoisted(() => ({ canEdit: true }))
+vi.mock('../../../app/stores/actor', () => ({ useActorStore: () => actor }))
 vi.mock('element-plus', () => ({ ElMessage: { success: vi.fn() } }))
-vi.mock('../api/evidenceApi', () => ({ getEvidenceDetail: vi.fn(), updateEvidence: vi.fn() }))
+vi.mock('../api/evidenceApi', () => ({
+  getEvidenceDetail: vi.fn(),
+  updateEvidence: vi.fn(),
+  withdrawHumanConfirmation: vi.fn(),
+}))
 
 const deletedEvidence: EvidenceDetailResponse = {
   id: 41,
@@ -44,6 +50,8 @@ const deletedEvidence: EvidenceDetailResponse = {
 describe('EvidenceDetailDrawer historical subject', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
+    actor.canEdit = true
+    vi.mocked(withdrawHumanConfirmation).mockReset()
     vi.mocked(getEvidenceDetail).mockReset()
     vi.mocked(getEvidenceDetail).mockResolvedValue(deletedEvidence)
   })
@@ -106,5 +114,94 @@ describe('EvidenceDetailDrawer historical subject', () => {
     expect(wrapper.text()).toContain('确认时间')
     expect(wrapper.text()).toContain('确认修订')
     expect(wrapper.findAll('.el-tag')).toHaveLength(0)
+  })
+})
+
+describe('HumanConfirmation lifecycle controls', () => {
+  const active = {
+    ...deletedEvidence,
+    evidenceType: 'HumanConfirmation' as const,
+    humanConfirmationLifecycle: {
+      status: 'Active' as const,
+      withdrawnAt: null,
+      withdrawnByDisplayName: null,
+      withdrawalReason: null,
+      replacesHumanConfirmationId: null,
+      replacedByHumanConfirmationId: null,
+    },
+  }
+  function render() {
+    return mount(EvidenceDetailDrawer, {
+      props: { evidenceId: 41 },
+      global: {
+        components: {
+          ElButton: { template: '<button><slot /></button>' },
+          ElDialog: {
+            props: ['modelValue'],
+            template: '<div v-if="modelValue"><slot /><slot name="footer" /></div>',
+          },
+          ElInput: {
+            props: ['modelValue'],
+            emits: ['update:modelValue'],
+            template:
+              '<textarea :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />',
+          },
+        },
+        stubs: { KnowledgeStatusBadge: true },
+      },
+    })
+  }
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    actor.canEdit = true
+    vi.mocked(getEvidenceDetail).mockResolvedValue(active)
+  })
+  it('allows withdrawal on a deleted subject but never editing or reconfirmation', async () => {
+    const wrapper = render()
+    await flushPromises()
+    expect(wrapper.text()).toContain('撤销确认')
+    expect(wrapper.text()).not.toContain('纠正记录')
+    expect(wrapper.text()).not.toContain('重新确认')
+    wrapper.unmount()
+  })
+  it('hides withdrawal for Viewer', async () => {
+    actor.canEdit = false
+    const wrapper = render()
+    await flushPromises()
+    expect(wrapper.text()).not.toContain('撤销确认')
+    wrapper.unmount()
+  })
+  it('submits only trimmed reason and token then preserves original facts with withdrawal audit', async () => {
+    const wrapper = render()
+    await flushPromises()
+    await wrapper
+      .findAll('button')
+      .find((b) => b.text() === '撤销确认')!
+      .trigger('click')
+    await wrapper.find('textarea').setValue('  原确认结论存在业务口径错误  ')
+    vi.mocked(withdrawHumanConfirmation).mockResolvedValue({ id: 41 })
+    vi.mocked(getEvidenceDetail).mockResolvedValue({
+      ...active,
+      humanConfirmationLifecycle: {
+        ...active.humanConfirmationLifecycle,
+        status: 'Withdrawn',
+        withdrawnAt: '2026-09-07T01:00:00Z',
+        withdrawnByDisplayName: '撤销人',
+        withdrawalReason: '原确认结论存在业务口径错误',
+      },
+    })
+    await wrapper
+      .findAll('button')
+      .find((b) => b.text() === '确认撤销')!
+      .trigger('click')
+    await flushPromises()
+    expect(withdrawHumanConfirmation).toHaveBeenCalledWith(41, {
+      reason: '原确认结论存在业务口径错误',
+      concurrencyToken: 'evidence-token',
+    })
+    expect(wrapper.text()).toContain('已撤销')
+    expect(wrapper.text()).toContain('保留历史事实')
+    expect(wrapper.text()).not.toContain('撤销确认')
+    wrapper.unmount()
   })
 })

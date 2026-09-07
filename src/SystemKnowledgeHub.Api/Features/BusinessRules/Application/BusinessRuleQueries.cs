@@ -52,10 +52,10 @@ public sealed class BusinessRuleQueries(KnowledgeHubDbContext dbContext,
 
         var evidenceRows = await dbContext.Evidence.AsNoTracking()
             .Where(item => item.SubjectType == EvidenceSubjectType.BusinessRule && item.SubjectId == id)
-            .Select(item => new { item.Id, item.EvidenceType, item.SourceTitle, item.ProvidedAt })
+            .Select(item => new { item.Id, item.EvidenceType, item.SourceTitle, item.ProvidedAt, item.WithdrawnAt })
             .ToArrayAsync(cancellationToken);
         var evidence = evidenceRows.OrderByDescending(item => item.ProvidedAt)
-            .Select(item => new BusinessRuleEvidenceResponse(item.Id, item.EvidenceType.ToString(), item.SourceTitle))
+            .Select(item => new BusinessRuleEvidenceResponse(item.Id, item.EvidenceType.ToString(), item.SourceTitle, item.WithdrawnAt != null))
             .ToArray();
         var unknownItems = await dbContext.UnknownItemTargets.AsNoTracking()
             .Where(item => item.TargetType == KnowledgeTargetType.BusinessRule && item.TargetId == id

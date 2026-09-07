@@ -24,7 +24,7 @@ public sealed class SystemKnowledgeViewQueries(
         var databaseObjects = dbContext.DatabaseObjects.AsNoTracking().Where(item => item.DatabaseSource.SystemId == systemId);
         var businessRules = dbContext.BusinessRules.AsNoTracking().Where(item => item.SystemId == systemId);
         var integrations = dbContext.Integrations.AsNoTracking().Where(item => item.SourceSystemId == systemId || item.TargetSystemId == systemId);
-        var evidence = dbContext.Evidence.AsNoTracking().Where(item => item.SubjectType == EvidenceSubjectType.System && item.SubjectId == systemId);
+        var evidence = dbContext.Evidence.AsNoTracking().Where(SystemKnowledgeHub.Api.Features.Evidence.Application.EffectiveEvidence.Predicate).Where(item => item.SubjectType == EvidenceSubjectType.System && item.SubjectId == systemId);
         var openUnknownItems = dbContext.UnknownItems.AsNoTracking().Where(item => item.SystemId == systemId && item.Status != UnknownItemStatus.Closed);
         var systemRelations = dbContext.KnowledgeRelations.AsNoTracking().Where(item =>
             item.SourceType == KnowledgeTargetType.System && item.SourceId == systemId

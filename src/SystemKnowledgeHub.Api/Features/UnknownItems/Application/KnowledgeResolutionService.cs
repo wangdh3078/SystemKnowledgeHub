@@ -415,7 +415,7 @@ public sealed class KnowledgeResolutionService(KnowledgeHubDbContext dbContext, 
         if (!rollback)
         {
             var requiredType = target == KnowledgeStatus.Confirmed ? EvidenceType.HumanConfirmation : (EvidenceType?)null;
-            var evidence = dbContext.Evidence.AsNoTracking().Where(value => value.SubjectType == subjectType && value.SubjectId == subjectId);
+            var evidence = dbContext.Evidence.AsNoTracking().Where(SystemKnowledgeHub.Api.Features.Evidence.Application.EffectiveEvidence.Predicate).Where(value => value.SubjectType == subjectType && value.SubjectId == subjectId);
             if (!string.IsNullOrWhiteSpace(update.SubjectDetailKey)) evidence = evidence.Where(value => value.SubjectDetailKey == update.SubjectDetailKey);
             if (requiredType.HasValue) evidence = evidence.Where(value => value.EvidenceType == requiredType.Value);
             if (!await evidence.AnyAsync(cancellationToken))
@@ -430,7 +430,7 @@ public sealed class KnowledgeResolutionService(KnowledgeHubDbContext dbContext, 
     private async Task<bool> HasSupportingEvidence(long itemId, long resolutionId, CancellationToken cancellationToken)
     {
         var findingIds = await dbContext.Findings.AsNoTracking().Where(value => value.UnknownItemId == itemId).Select(value => value.Id).ToArrayAsync(cancellationToken);
-        return await dbContext.Evidence.AsNoTracking().AnyAsync(value =>
+        return await dbContext.Evidence.AsNoTracking().Where(SystemKnowledgeHub.Api.Features.Evidence.Application.EffectiveEvidence.Predicate).AnyAsync(value =>
             value.SubjectType == EvidenceSubjectType.UnknownItem && value.SubjectId == itemId
             || value.SubjectType == EvidenceSubjectType.Finding && findingIds.Contains(value.SubjectId)
             || value.SubjectType == EvidenceSubjectType.Resolution && value.SubjectId == resolutionId, cancellationToken);

@@ -30,6 +30,7 @@ const saving = ref(false)
 const conflict = ref(false)
 const reloadingDocument = ref(false)
 const subjectRevisionNumber = ref<number | null>(null)
+const replacesId = ref<number | null>(null)
 const errorMessage = ref<string | null>(null)
 const fieldErrors = reactive<Record<string, string>>({})
 const formRef = ref<FormInstance>()
@@ -67,6 +68,7 @@ watch(
   subject,
   (value) => {
     subjectRevisionNumber.value = value?.subjectRevisionNumber ?? null
+    replacesId.value = value?.replacesHumanConfirmationId ?? null
     conflict.value = false
   },
   { immediate: true },
@@ -129,6 +131,7 @@ async function save(): Promise<void> {
         ? {}
         : { subjectRevisionNumber: subjectRevisionNumber.value }),
       subjectDetailKey: subject.value.subjectDetailKey ?? null,
+      replacesHumanConfirmationId: replacesId.value,
       knowledgeRoleId: requiresRoleSelection.value ? form.knowledgeRoleId : null,
       confirmationMethod: form.confirmationMethod,
       confirmedAt,
@@ -185,6 +188,8 @@ async function reloadLatestDocument(): Promise<void> {
   try {
     const document = await getKnowledgeDocument(subject.value.subject.id)
     subjectRevisionNumber.value = document.currentRevisionNumber
+    if (document.currentRevisionNumber !== subject.value.replacementRevisionNumber)
+      replacesId.value = null
     conflict.value = false
     errorMessage.value = `已重新加载当前修订 ${document.currentRevisionNumber}，请再次明确确认最新内容。`
     window.dispatchEvent(
@@ -225,6 +230,13 @@ async function reloadLatestDocument(): Promise<void> {
         </div>
         <KnowledgeStatusBadge :status="subject.knowledgeStatus" />
       </section>
+      <p v-if="subject?.reconfirmationNote">
+        {{
+          replacesId === null
+            ? '本次为当前修订的新确认，不建立旧修订的替代链接。'
+            : subject.reconfirmationNote
+        }}
+      </p>
       <p v-if="subjectRevisionNumber !== null" class="human-confirmation-revision-context">
         本次人工确认将覆盖当前显示的修订 {{ subjectRevisionNumber }}。
       </p>

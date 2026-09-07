@@ -64,7 +64,10 @@ public sealed class CurrentProjectionHistoricalBoundaryApiTests : IClassFixture<
             Assert.True(detail.GetProperty("subjectIdentity").GetProperty("isDeleted").GetBoolean());
             Assert.False(detail.GetProperty("subjectIdentity").GetProperty("isNavigable").GetBoolean());
             Assert.Equal(JsonValueKind.Null, detail.GetProperty("subjectContext").ValueKind);
-            Assert.Empty(detail.GetProperty("availableActions").EnumerateArray());
+            if (id == confirmationId)
+                Assert.Equal(new[] { "WithdrawHumanConfirmation" }, detail.GetProperty("availableActions").EnumerateArray().Select(a => a.GetString()));
+            else
+                Assert.Empty(detail.GetProperty("availableActions").EnumerateArray());
         }
         var evidenceList = await GetJson($"/api/evidence?subjectType=KnowledgeDocument&subjectId={documentId}");
         Assert.True(evidenceList.GetProperty("subject").GetProperty("isDeleted").GetBoolean());

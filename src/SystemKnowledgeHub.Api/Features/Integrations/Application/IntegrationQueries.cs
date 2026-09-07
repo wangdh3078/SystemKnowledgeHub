@@ -34,9 +34,9 @@ public sealed class IntegrationQueries(KnowledgeHubDbContext dbContext, Relation
             if (otherType is KnowledgeTargetType.DatabaseSource or KnowledgeTargetType.DatabaseObject or KnowledgeTargetType.DatabaseColumn) data.Add(row);
         }
         var evidenceRows = await dbContext.Evidence.AsNoTracking().Where(item => item.SubjectType == EvidenceSubjectType.Integration && item.SubjectId == id)
-            .Select(item => new { item.Id, item.EvidenceType, item.SourceTitle, item.ProvidedAt }).ToArrayAsync(cancellationToken);
+            .Select(item => new { item.Id, item.EvidenceType, item.SourceTitle, item.ProvidedAt, item.WithdrawnAt }).ToArrayAsync(cancellationToken);
         var evidence = evidenceRows.OrderByDescending(item => item.ProvidedAt)
-            .Select(item => new IntegrationEvidenceResponse(item.Id, item.EvidenceType.ToString(), item.SourceTitle)).ToArray();
+            .Select(item => new IntegrationEvidenceResponse(item.Id, item.EvidenceType.ToString(), item.SourceTitle, item.WithdrawnAt != null)).ToArray();
         var unknownItems = await dbContext.UnknownItemTargets.AsNoTracking().Where(item => item.TargetType == KnowledgeTargetType.Integration && item.TargetId == id && item.UnknownItem.Status != UnknownItemStatus.Closed)
             .Select(item => new IntegrationUnknownItemResponse(item.UnknownItem.Id, item.UnknownItem.Question, item.UnknownItem.Status.ToString())).ToArrayAsync(cancellationToken);
         var participants = new[] { integration.SourceSystem?.Name, integration.TargetSystem?.Name }.Where(item => !string.IsNullOrWhiteSpace(item)).Distinct(StringComparer.OrdinalIgnoreCase).Cast<string>().ToArray();

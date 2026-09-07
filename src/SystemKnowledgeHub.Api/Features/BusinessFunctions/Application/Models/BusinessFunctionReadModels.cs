@@ -72,7 +72,7 @@ public sealed record IntegrationSummaryResponse(
     string Name,
     string RelationType);
 
-public sealed record EvidenceSummaryResponse(long Id, string EvidenceType, string SourceTitle);
+public sealed record EvidenceSummaryResponse(long Id, string EvidenceType, string SourceTitle, bool IsWithdrawn = false);
 
 public sealed record UnknownItemSummaryResponse(long Id, string Question, string Status);
 

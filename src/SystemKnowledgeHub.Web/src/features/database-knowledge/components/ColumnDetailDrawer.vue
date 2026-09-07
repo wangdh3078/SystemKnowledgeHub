@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { isEffectiveEvidence } from '../../evidence/api/evidenceContracts'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, toRef } from 'vue'
 import {
   Close,
@@ -236,7 +237,9 @@ const metadataRows = computed(() =>
 )
 const humanConfirmationCount = computed(
   () =>
-    detail.value?.evidence.filter((item) => item.evidenceType === 'HumanConfirmation').length ?? 0,
+    detail.value?.evidence.filter(
+      (item) => item.evidenceType === 'HumanConfirmation' && isEffectiveEvidence(item),
+    ).length ?? 0,
 )
 </script>
 
@@ -271,7 +274,7 @@ const humanConfirmationCount = computed(
         :title="`${detail.parent.qualifiedName}.${detail.databaseMetadata.columnName}`"
         :status="detail.businessKnowledge.knowledgeStatus"
         :concurrency-token="detail.concurrencyToken"
-        :evidence-count="detail.evidence.length"
+        :evidence-count="detail.evidence.filter(isEffectiveEvidence).length"
         :human-confirmation-count="humanConfirmationCount"
         :can-change="
           actorStore.canEdit && detail.availableActions.includes('ChangeKnowledgeStatus')
@@ -349,7 +352,10 @@ const humanConfirmationCount = computed(
               <el-icon><DocumentChecked /></el-icon>
               <div>
                 <small>{{ evidenceTypeLabel(item.evidenceType) }}</small
-                ><strong>{{ item.sourceTitle }}</strong>
+                ><strong
+                  >{{ item.sourceTitle
+                  }}<span v-if="!isEffectiveEvidence(item)"> · 已撤销</span></strong
+                >
                 <p>{{ item.supportReason }}</p>
               </div>
             </article>

@@ -1,3 +1,4 @@
+import { readWithdrawalFlag } from '../../evidence/api/evidenceContracts'
 import { isKnowledgeStatus, type KnowledgeStatus } from '../../../api/contracts/knowledge'
 import type { ActorContext } from '../../../app/stores/actor'
 
@@ -109,6 +110,7 @@ export interface BusinessFunctionDetailResponse {
   readonly evidence: readonly {
     readonly id: number
     readonly evidenceType: string
+    readonly isWithdrawn?: boolean
     readonly sourceTitle: string
   }[]
   readonly unknownItems: readonly {
@@ -235,7 +237,8 @@ function readKnowledgeStatus(value: unknown, field: string): KnowledgeStatus {
 
 function readRewriteStatus(value: unknown, field: string): RewriteStatus {
   const status = readString(value, field)
-  if (status === 'Keep' || status === 'Change' || status === 'Remove' || status === 'Unknown') return status
+  if (status === 'Keep' || status === 'Change' || status === 'Remove' || status === 'Unknown')
+    return status
   throw new Error(`${field} has an unsupported rewrite status`)
 }
 
@@ -247,9 +250,18 @@ function readSystemReference(value: unknown, field: string): SystemReference {
   }
 }
 
-function readUnknownItemStatus(value: unknown, field: string): 'Open' | 'Investigating' | 'ConclusionConfirmed' | 'Closed' {
+function readUnknownItemStatus(
+  value: unknown,
+  field: string,
+): 'Open' | 'Investigating' | 'ConclusionConfirmed' | 'Closed' {
   const status = readString(value, field)
-  if (status === 'Open' || status === 'Investigating' || status === 'ConclusionConfirmed' || status === 'Closed') return status
+  if (
+    status === 'Open' ||
+    status === 'Investigating' ||
+    status === 'ConclusionConfirmed' ||
+    status === 'Closed'
+  )
+    return status
   throw new Error(`${field} has an unsupported status`)
 }
 
@@ -268,7 +280,10 @@ export function decodeBusinessFunctionsList(value: unknown): BusinessFunctionsLi
         ruleCount: readInteger(item.ruleCount, `items[${index}].ruleCount`),
         unknownCount: readInteger(item.unknownCount, `items[${index}].unknownCount`),
         rewriteStatus: readRewriteStatus(item.rewriteStatus, `items[${index}].rewriteStatus`),
-        knowledgeStatus: readKnowledgeStatus(item.knowledgeStatus, `items[${index}].knowledgeStatus`),
+        knowledgeStatus: readKnowledgeStatus(
+          item.knowledgeStatus,
+          `items[${index}].knowledgeStatus`,
+        ),
         updatedAt: readString(item.updatedAt, `items[${index}].updatedAt`),
       }
     }),
@@ -325,17 +340,28 @@ export function decodeBusinessFunctionDetail(value: unknown): BusinessFunctionDe
     businessRules: readArray(root.businessRules, 'businessRules').map((value, index) => {
       const item = readObject(value, `businessRules[${index}]`)
       return {
-        relationshipId: readInteger(item.relationshipId, `businessRules[${index}].relationshipId`, 1),
+        relationshipId: readInteger(
+          item.relationshipId,
+          `businessRules[${index}].relationshipId`,
+          1,
+        ),
         id: readInteger(item.id, `businessRules[${index}].id`, 1),
         name: readString(item.name, `businessRules[${index}].name`),
-        knowledgeStatus: readKnowledgeStatus(item.knowledgeStatus, `businessRules[${index}].knowledgeStatus`),
+        knowledgeStatus: readKnowledgeStatus(
+          item.knowledgeStatus,
+          `businessRules[${index}].knowledgeStatus`,
+        ),
         evidenceCount: readInteger(item.evidenceCount, `businessRules[${index}].evidenceCount`),
       }
     }),
     integrations: readArray(root.integrations, 'integrations').map((value, index) => {
       const item = readObject(value, `integrations[${index}]`)
       return {
-        relationshipId: readInteger(item.relationshipId, `integrations[${index}].relationshipId`, 1),
+        relationshipId: readInteger(
+          item.relationshipId,
+          `integrations[${index}].relationshipId`,
+          1,
+        ),
         id: readInteger(item.id, `integrations[${index}].id`, 1),
         name: readString(item.name, `integrations[${index}].name`),
         relationType: readString(item.relationType, `integrations[${index}].relationType`),
@@ -347,6 +373,7 @@ export function decodeBusinessFunctionDetail(value: unknown): BusinessFunctionDe
         id: readInteger(item.id, `evidence[${index}].id`, 1),
         evidenceType: readString(item.evidenceType, `evidence[${index}].evidenceType`),
         sourceTitle: readString(item.sourceTitle, `evidence[${index}].sourceTitle`),
+        isWithdrawn: readWithdrawalFlag(item.isWithdrawn),
       }
     }),
     unknownItems: readArray(root.unknownItems, 'unknownItems').map((value, index) => {
@@ -358,13 +385,20 @@ export function decodeBusinessFunctionDetail(value: unknown): BusinessFunctionDe
       }
     }),
     contextRail: {
-      callers: readArray(contextRail.callers, 'contextRail.callers').map((value, index) => readString(value, `contextRail.callers[${index}]`)),
-      adjacentFunctions: readArray(contextRail.adjacentFunctions, 'contextRail.adjacentFunctions').map((value, index) => readString(value, `contextRail.adjacentFunctions[${index}]`)),
+      callers: readArray(contextRail.callers, 'contextRail.callers').map((value, index) =>
+        readString(value, `contextRail.callers[${index}]`),
+      ),
+      adjacentFunctions: readArray(
+        contextRail.adjacentFunctions,
+        'contextRail.adjacentFunctions',
+      ).map((value, index) => readString(value, `contextRail.adjacentFunctions[${index}]`)),
       integrationCount: readInteger(contextRail.integrationCount, 'contextRail.integrationCount'),
       openUnknownCount: readInteger(contextRail.openUnknownCount, 'contextRail.openUnknownCount'),
     },
     canDelete: readBoolean(root.canDelete, 'canDelete'),
-    availableActions: readArray(root.availableActions, 'availableActions').map((value, index) => readString(value, `availableActions[${index}]`)),
+    availableActions: readArray(root.availableActions, 'availableActions').map((value, index) =>
+      readString(value, `availableActions[${index}]`),
+    ),
   }
 }
 

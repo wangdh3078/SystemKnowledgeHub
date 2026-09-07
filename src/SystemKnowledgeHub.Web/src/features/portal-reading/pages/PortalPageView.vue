@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { ApiError } from '../../../api/errors/ApiError'
 import { parseSafeApiId } from '../../../api/contracts/id'
@@ -43,7 +43,11 @@ async function loadPage(): Promise<void> {
 }
 
 watch(pageId, () => void loadPage(), { immediate: true })
-onBeforeUnmount(() => request?.abort())
+onMounted(() => window.addEventListener('evidence:changed', loadPage))
+onBeforeUnmount(() => {
+  request?.abort()
+  window.removeEventListener('evidence:changed', loadPage)
+})
 </script>
 
 <template>

@@ -102,7 +102,7 @@ public sealed class UnknownItemQueries(
             .ToArrayAsync(cancellationToken);
         var evidence = ids.Length == 0
             ? []
-            : await dbContext.Evidence.AsNoTracking()
+            : await dbContext.Evidence.AsNoTracking().Where(SystemKnowledgeHub.Api.Features.Evidence.Application.EffectiveEvidence.Predicate)
                 .Where(item => (item.SubjectType == EvidenceSubjectType.UnknownItem && ids.Contains(item.SubjectId))
                     || (item.SubjectType == EvidenceSubjectType.Finding && findingIds.Select(finding => finding.Id).Contains(item.SubjectId))
                     || (item.SubjectType == EvidenceSubjectType.Resolution && resolutions.Select(resolution => resolution.Id).Contains(item.SubjectId)))
@@ -189,7 +189,7 @@ public sealed class UnknownItemQueries(
                 entry.Id,
                 new(entry.SubjectType.ToString(), entry.SubjectId),
                 entry.EvidenceType.ToString(),
-                entry.SourceTitle))
+                entry.SourceTitle, entry.WithdrawnAt != null))
             .ToArray();
 
         var targets = item.Targets.OrderByDescending(target => target.IsPrimary).ThenBy(target => target.Id)
@@ -217,7 +217,7 @@ public sealed class UnknownItemQueries(
             item.Resolution is null ? null : Resolution(item.Resolution),
             updates,
             item.Activities.OrderByDescending(activity => activity.OccurredAt).ThenByDescending(activity => activity.Id).Select(Activity).ToArray(),
-            new(impact, evidence.Length, item.Resolution is null ? 1 : updates.Count(update => update.Status == "Proposed")),
+            new(impact, evidenceEntities.Count(e => e.EvidenceType != EvidenceType.HumanConfirmation || e.WithdrawnAt == null), item.Resolution is null ? 1 : updates.Count(update => update.Status == "Proposed")),
             historicalOnly ? [] : Actions(item)), UnknownItemFailure.None);
 
         static string targetDisplay(IEnumerable<UnknownItemTarget> targets, UnknownTargetResponse target) =>

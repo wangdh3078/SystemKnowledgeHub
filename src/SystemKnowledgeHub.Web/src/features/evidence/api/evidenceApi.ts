@@ -2,6 +2,7 @@ import { apiClient } from '../../../api/client/apiClient'
 import { isSafeApiId } from '../../../api/contracts/id'
 import {
   decodeAddEvidence,
+  decodeWithdrawHumanConfirmation,
   decodeEvidenceDetail,
   decodeEvidenceList,
   type AddEvidenceRequest,
@@ -12,7 +13,10 @@ import {
   type UpdateEvidenceRequest,
 } from './evidenceContracts'
 
-export function getEvidenceDetail(id: number, signal?: AbortSignal): Promise<EvidenceDetailResponse> {
+export function getEvidenceDetail(
+  id: number,
+  signal?: AbortSignal,
+): Promise<EvidenceDetailResponse> {
   if (!isSafeApiId(id)) return Promise.reject(new RangeError('证据 ID 无效。'))
   return apiClient.get(`/evidence/${encodeURIComponent(String(id))}`, {
     signal,
@@ -26,17 +30,23 @@ export function getEvidenceList(
   signal?: AbortSignal,
 ): Promise<EvidenceListResponse> {
   if (!isSafeApiId(subjectId)) return Promise.reject(new RangeError('证据关联对象 ID 无效。'))
-  return apiClient.get(`/evidence?subjectType=${encodeURIComponent(subjectType)}&subjectId=${encodeURIComponent(String(subjectId))}`, {
-    signal,
-    decode: decodeEvidenceList,
-  })
+  return apiClient.get(
+    `/evidence?subjectType=${encodeURIComponent(subjectType)}&subjectId=${encodeURIComponent(String(subjectId))}`,
+    {
+      signal,
+      decode: decodeEvidenceList,
+    },
+  )
 }
 
 export function addEvidence(request: AddEvidenceRequest): Promise<AddEvidenceResponse> {
   return apiClient.post('/evidence', request, { decode: decodeAddEvidence })
 }
 
-export function updateEvidence(id: number, request: UpdateEvidenceRequest): Promise<EvidenceDetailResponse> {
+export function updateEvidence(
+  id: number,
+  request: UpdateEvidenceRequest,
+): Promise<EvidenceDetailResponse> {
   if (!isSafeApiId(id)) return Promise.reject(new RangeError('证据 ID 无效。'))
   return apiClient.put(`/evidence/${encodeURIComponent(String(id))}`, request, {
     decode: decodeEvidenceDetail,
@@ -47,4 +57,16 @@ export function addHumanConfirmation(
   request: AddHumanConfirmationRequest,
 ): Promise<AddEvidenceResponse> {
   return apiClient.post('/evidence/human-confirmations', request, { decode: decodeAddEvidence })
+}
+
+export function withdrawHumanConfirmation(
+  id: number,
+  request: { reason: string; concurrencyToken: string },
+): Promise<{ readonly id: number }> {
+  if (!isSafeApiId(id)) return Promise.reject(new RangeError('人工确认 ID 无效。'))
+  return apiClient.post(
+    `/evidence/human-confirmations/${encodeURIComponent(String(id))}/withdraw`,
+    request,
+    { decode: decodeWithdrawHumanConfirmation },
+  )
 }

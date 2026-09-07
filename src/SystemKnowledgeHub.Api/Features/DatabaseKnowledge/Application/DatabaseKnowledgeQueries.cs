@@ -307,7 +307,7 @@ public sealed class DatabaseKnowledgeQueries(
             .ToListAsync(cancellationToken);
 
         var columnIds = columnRows.Select(item => item.Id).ToArray();
-        var evidenceCounts = await dbContext.Evidence
+        var evidenceCounts = await dbContext.Evidence.Where(SystemKnowledgeHub.Api.Features.Evidence.Application.EffectiveEvidence.Predicate)
             .AsNoTracking()
             .Where(item => item.SubjectType == EvidenceSubjectType.DatabaseColumn && columnIds.Contains(item.SubjectId))
             .GroupBy(item => item.SubjectId)
@@ -464,7 +464,7 @@ public sealed class DatabaseKnowledgeQueries(
                 item.Id,
                 item.EvidenceType.ToString(),
                 item.SourceTitle,
-                item.SupportReason))
+                item.SupportReason, item.WithdrawnAt != null))
             .ToListAsync(cancellationToken);
 
         var relationRows = await dbContext.KnowledgeRelations

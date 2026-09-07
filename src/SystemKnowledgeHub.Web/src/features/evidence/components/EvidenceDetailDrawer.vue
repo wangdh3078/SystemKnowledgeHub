@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { Close, EditPen, Refresh, UserFilled } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { ApiError } from '../../../api/errors/ApiError'
@@ -10,7 +10,7 @@ import KnowledgeStatusBadge from '../../../components/data-display/KnowledgeStat
 import ErrorState from '../../../components/feedback/ErrorState.vue'
 import LoadingState from '../../../components/feedback/LoadingState.vue'
 import HistoricalTargetLabel from '../../../components/data-display/HistoricalTargetLabel.vue'
-import { getEvidenceDetail, updateEvidence } from '../api/evidenceApi'
+import { getEvidenceDetail, updateEvidence, withdrawHumanConfirmation } from '../api/evidenceApi'
 import {
   confirmationMethodLabels,
   confidenceLabels,
@@ -20,6 +20,9 @@ import {
   type EvidenceDetailResponse,
 } from '../api/evidenceContracts'
 
+import { getKnowledgeDocument } from '../../knowledge-documents/api/knowledgeDocumentsApi'
+import { documentTypeLabels } from '../../knowledge-documents/api/knowledgeDocumentContracts'
+
 const props = defineProps<{ evidenceId: number | null }>()
 const overlayStore = useOverlayStore()
 const actorStore = useActorStore()
@@ -27,6 +30,12 @@ const detail = ref<EvidenceDetailResponse | null>(null)
 const loading = ref(false)
 const saving = ref(false)
 const editing = ref(false)
+const withdrawing = ref(false)
+const withdrawalReason = ref('')
+const withdrawalError = ref<string | null>(null)
+let loadSequence = 0
+const lifecycle = computed(() => detail.value?.humanConfirmationLifecycle)
+const canWithdraw = computed(() => actorStore.canEdit && lifecycle.value?.status === 'Active')
 const errorMessage = ref<string | null>(null)
 const conflict = ref(false)
 const form = reactive({
@@ -78,7 +87,7 @@ function normalize(value: string): string | null {
 }
 
 function beginEdit(): void {
-  if (!detail.value) return
+  if (!detail.value || detail.value.evidenceType === 'HumanConfirmation') return
   form.sourceTitle = detail.value.sourceTitle
   form.sourceReference = detail.value.sourceReference ?? ''
   form.locatorJson = detail.value.sourceLocator
@@ -100,17 +109,99 @@ function beginEdit(): void {
 }
 
 async function load(): Promise<void> {
-  if (props.evidenceId === null) return
+  const id = props.evidenceId
+  const sequence = ++loadSequence
+  if (id === null) {
+    detail.value = null
+    return
+  }
   loading.value = true
   errorMessage.value = null
   try {
-    detail.value = await getEvidenceDetail(props.evidenceId)
+    const response = await getEvidenceDetail(id)
+    if (sequence !== loadSequence || props.evidenceId !== id) return
+    detail.value = response
     editing.value = false
     conflict.value = false
   } catch (error: unknown) {
-    errorMessage.value = error instanceof Error ? error.message : '证据详情加载失败。'
+    if (sequence === loadSequence)
+      errorMessage.value = error instanceof Error ? error.message : '证据详情加载失败。'
   } finally {
-    loading.value = false
+    if (sequence === loadSequence) loading.value = false
+  }
+}
+
+async function withdraw(): Promise<void> {
+  const current = detail.value
+  if (!current || !canWithdraw.value || saving.value) return
+  const reason = withdrawalReason.value.trim()
+  if (!reason || reason.length > 1000) {
+    withdrawalError.value = '撤销原因须为 1～1000 个字符。'
+    return
+  }
+  saving.value = true
+  withdrawalError.value = null
+  try {
+    await withdrawHumanConfirmation(current.id, {
+      reason,
+      concurrencyToken: current.concurrencyToken,
+    })
+    window.dispatchEvent(new CustomEvent('evidence:changed'))
+    window.dispatchEvent(
+      new CustomEvent('human-confirmation:changed', { detail: { subject: current.subject } }),
+    )
+    if (props.evidenceId !== current.id) return
+    withdrawing.value = false
+    await load()
+    ElMessage.success('人工确认已撤销；原确认记录已保留，知识状态未改变。')
+  } catch (error: unknown) {
+    if (props.evidenceId !== current.id) return
+    withdrawalError.value = error instanceof Error ? error.message : '撤销确认失败。'
+    conflict.value = error instanceof ApiError && error.status === 409
+  } finally {
+    saving.value = false
+  }
+}
+
+async function reconfirm(): Promise<void> {
+  const current = detail.value
+  if (
+    !current?.subjectContext ||
+    subjectDeleted.value ||
+    !actorStore.canEdit ||
+    lifecycle.value?.replacedByHumanConfirmationId
+  )
+    return
+  try {
+    const currentDocument =
+      current.subject.type === 'KnowledgeDocument'
+        ? await getKnowledgeDocument(current.subject.id)
+        : null
+    const revision = currentDocument?.currentRevisionNumber
+    if (props.evidenceId !== current.id) return
+    const linked =
+      revision === undefined || revision === current.knowledgeDocumentRevisionNumberSnapshot
+    overlayStore.openDrawer({
+      kind: 'human-confirmation',
+      id: current.subject.id,
+      mode: 'create',
+      payload: {
+        subject: current.subject,
+        title: currentDocument
+          ? `${documentTypeLabels[currentDocument.documentType]} · ${currentDocument.title}`
+          : current.subjectContext.title,
+        knowledgeStatus: current.subjectContext.knowledgeStatus,
+        subjectDetailKey: current.subjectDetailKey,
+        subjectRevisionNumber: revision,
+        replacesHumanConfirmationId: linked ? current.id : null,
+        replacementRevisionNumber: current.knowledgeDocumentRevisionNumberSnapshot,
+        reconfirmationNote: linked
+          ? '本次新确认将明确替代已撤销记录，原记录保持不变。'
+          : '本次为当前修订的新确认，不建立旧修订的替代链接。',
+      },
+    })
+  } catch (error: unknown) {
+    errorMessage.value = error instanceof Error ? error.message : '无法读取当前确认目标。'
   }
 }
 
@@ -196,13 +287,56 @@ function openHumanConfirmation(): void {
 
 watch(
   () => props.evidenceId,
-  () => void load(),
+  () => {
+    detail.value = null
+    withdrawing.value = false
+    withdrawalReason.value = ''
+    void load()
+  },
 )
 onMounted(() => void load())
+onUnmounted(() => {
+  loadSequence++
+})
 </script>
 
 <template>
   <div class="evidence-drawer">
+    <el-dialog
+      v-model="withdrawing"
+      title="撤销确认"
+      width="min(560px, calc(100vw - 32px))"
+      append-to-body
+      :close-on-click-modal="false"
+      :close-on-press-escape="!saving"
+      :show-close="!saving"
+    >
+      <p>原确认内容将保留为历史记录，撤销后不再计入当前支持依据。知识状态不会自动改变。</p>
+      <el-form label-position="top" @submit.prevent="withdraw"
+        ><el-form-item label="撤销原因" required :error="withdrawalError ?? undefined"
+          ><el-input
+            v-model="withdrawalReason"
+            type="textarea"
+            :rows="4"
+            maxlength="1000"
+            show-word-limit /></el-form-item
+      ></el-form>
+      <template #footer
+        ><el-button :disabled="saving" @click="withdrawing = false">取消</el-button
+        ><el-button
+          v-if="conflict"
+          @click="
+            () => {
+              load()
+              withdrawing = false
+            }
+          "
+          >重新加载</el-button
+        ><el-button type="danger" :loading="saving" :disabled="conflict" @click="withdraw"
+          >确认撤销</el-button
+        ></template
+      >
+    </el-dialog>
     <LoadingState v-if="loading && !detail" message="正在读取证据详情…" />
     <ErrorState
       v-else-if="errorMessage && !detail"
@@ -249,12 +383,81 @@ onMounted(() => void load())
         />
       </section>
 
+      <section v-if="lifecycle" class="evidence-detail-section">
+        <h3>{{ lifecycle.status === 'Withdrawn' ? '已撤销' : '有效人工确认' }}</h3>
+        <dl v-if="lifecycle.status === 'Withdrawn'" class="evidence-facts">
+          <div>
+            <dt>撤销时间</dt>
+            <dd>{{ lifecycle.withdrawnAt ? formatDateTime(lifecycle.withdrawnAt) : '—' }}</dd>
+          </div>
+          <div>
+            <dt>撤销人</dt>
+            <dd>{{ lifecycle.withdrawnByDisplayName }}</dd>
+          </div>
+          <div>
+            <dt>撤销原因</dt>
+            <dd class="withdrawal-reason">{{ lifecycle.withdrawalReason }}</dd>
+          </div>
+        </dl>
+        <p v-if="lifecycle.replacesHumanConfirmationId">
+          替代记录：<el-button
+            link
+            @click="
+              overlayStore.openDrawer({
+                kind: 'evidence',
+                id: lifecycle.replacesHumanConfirmationId,
+                mode: 'read',
+              })
+            "
+            >查看原确认</el-button
+          >
+        </p>
+        <p v-if="lifecycle.replacedByHumanConfirmationId">
+          已有替代确认：<el-button
+            link
+            @click="
+              overlayStore.openDrawer({
+                kind: 'evidence',
+                id: lifecycle.replacedByHumanConfirmationId,
+                mode: 'read',
+              })
+            "
+            >查看新确认</el-button
+          >
+        </p>
+        <el-button
+          v-if="canWithdraw"
+          type="danger"
+          plain
+          @click="
+            () => {
+              withdrawing = true
+              withdrawalError = null
+            }
+          "
+          >撤销确认</el-button
+        >
+        <el-button
+          v-if="
+            actorStore.canEdit &&
+            lifecycle.status === 'Withdrawn' &&
+            !subjectDeleted &&
+            !lifecycle.replacedByHumanConfirmationId
+          "
+          @click="reconfirm"
+          >重新确认</el-button
+        >
+      </section>
       <template v-if="!editing">
         <section class="evidence-detail-section">
           <div class="evidence-detail-section__heading">
             <h3>来源</h3>
             <el-button
-              v-if="!subjectDeleted && detail.availableActions.includes('UpdateEvidence')"
+              v-if="
+                detail.evidenceType !== 'HumanConfirmation' &&
+                !subjectDeleted &&
+                detail.availableActions.includes('UpdateEvidence')
+              "
               text
               type="primary"
               :icon="EditPen"
@@ -433,3 +636,10 @@ onMounted(() => void load())
 </template>
 
 <style src="../evidence.css"></style>
+
+<style scoped>
+.withdrawal-reason {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+</style>

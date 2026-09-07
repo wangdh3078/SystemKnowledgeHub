@@ -649,11 +649,18 @@ function message(reason: unknown, fallback: string): string {
 }
 
 onBeforeRouteLeave(async () => await confirmDiscard())
+function refreshEvidencePreview(): void {
+  if (previewOpen.value) void showPreview()
+}
 onMounted(() => {
+  window.addEventListener('evidence:changed', refreshEvidencePreview)
   window.addEventListener('beforeunload', beforeUnload)
   void loadAll()
 })
-onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
+onBeforeUnmount(() => {
+  window.removeEventListener('beforeunload', beforeUnload)
+  window.removeEventListener('evidence:changed', refreshEvidencePreview)
+})
 </script>
 
 <template>

@@ -345,7 +345,7 @@ public sealed class PortalB04ProjectionService(
         CancellationToken cancellationToken)
     {
         var ids = subjectIds.Distinct().ToArray();
-        return await dbContext.Evidence.AsNoTracking()
+        return await dbContext.Evidence.AsNoTracking().Where(SystemKnowledgeHub.Api.Features.Evidence.Application.EffectiveEvidence.Predicate)
             .Where(item => item.SubjectType == subjectType && ids.Contains(item.SubjectId))
             .GroupBy(item => item.SubjectId)
             .Select(group => new EvidenceAggregate(group.Key, group.Count(),

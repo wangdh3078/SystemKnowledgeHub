@@ -26,7 +26,9 @@ export const confirmationMethods = [
 export type ConfirmationMethod = (typeof confirmationMethods)[number]['value']
 
 export const confirmationMethodLabels: Readonly<Record<ConfirmationMethod, string>> =
-  Object.fromEntries(confirmationMethods.map((method) => [method.value, method.label])) as Readonly<Record<ConfirmationMethod, string>>
+  Object.fromEntries(confirmationMethods.map((method) => [method.value, method.label])) as Readonly<
+    Record<ConfirmationMethod, string>
+  >
 
 export const evidenceTypeLabels: Readonly<Record<EvidenceType, string>> = {
   CodeReference: '代码引用',
@@ -64,6 +66,9 @@ export interface EvidenceSubjectPayload {
   readonly knowledgeStatus: KnowledgeStatus
   readonly subjectDetailKey?: string | null
   readonly subjectRevisionNumber?: number
+  readonly replacesHumanConfirmationId?: number | null
+  readonly replacementRevisionNumber?: number | null
+  readonly reconfirmationNote?: string
 }
 
 export interface PersonSnapshotInput {
@@ -77,6 +82,7 @@ export interface PersonSnapshotInput {
 }
 
 export interface EvidenceDetailResponse {
+  readonly humanConfirmationLifecycle?: HumanConfirmationLifecycle | null
   readonly id: number
   readonly concurrencyToken: string
   readonly evidenceType: EvidenceType
@@ -99,6 +105,7 @@ export interface EvidenceDetailResponse {
 }
 
 export interface EvidenceListItemResponse {
+  readonly humanConfirmationLifecycle?: HumanConfirmationLifecycle | null
   readonly id: number
   readonly evidenceType: EvidenceType
   readonly knowledgeDocumentRevisionNumberSnapshot: number | null
@@ -141,6 +148,7 @@ export interface UpdateEvidenceRequest {
 }
 
 export interface AddHumanConfirmationRequest {
+  readonly replacesHumanConfirmationId?: number | null
   readonly subject: EvidenceTarget
   readonly subjectRevisionNumber?: number
   readonly subjectDetailKey: string | null
@@ -238,22 +246,26 @@ function readPerson(value: unknown, field: string): PersonSnapshotInput {
 
 export function isEvidenceSubjectPayload(value: unknown): value is EvidenceSubjectPayload {
   if (!isObject(value) || !isObject(value.subject)) return false
-  return typeof value.title === 'string'
-    && isKnowledgeStatus(value.knowledgeStatus)
-    && typeof value.subject.type === 'string'
-    && typeof value.subject.id === 'number'
-    && Number.isSafeInteger(value.subject.id)
-    && value.subject.id > 0
-    && (value.subjectRevisionNumber === undefined
-      || (typeof value.subjectRevisionNumber === 'number'
-        && Number.isSafeInteger(value.subjectRevisionNumber)
-        && value.subjectRevisionNumber > 0))
+  return (
+    typeof value.title === 'string' &&
+    isKnowledgeStatus(value.knowledgeStatus) &&
+    typeof value.subject.type === 'string' &&
+    typeof value.subject.id === 'number' &&
+    Number.isSafeInteger(value.subject.id) &&
+    value.subject.id > 0 &&
+    (value.subjectRevisionNumber === undefined ||
+      (typeof value.subjectRevisionNumber === 'number' &&
+        Number.isSafeInteger(value.subjectRevisionNumber) &&
+        value.subjectRevisionNumber > 0))
+  )
 }
 
 export function decodeEvidenceDetail(value: unknown): EvidenceDetailResponse {
   const root = readObject(value, 'evidenceDetail')
-  const context = root.subjectContext === null ? null : readObject(root.subjectContext, 'subjectContext')
-  const sourceLocator = root.sourceLocator === null ? null : readObject(root.sourceLocator, 'sourceLocator')
+  const context =
+    root.subjectContext === null ? null : readObject(root.subjectContext, 'subjectContext')
+  const sourceLocator =
+    root.sourceLocator === null ? null : readObject(root.sourceLocator, 'sourceLocator')
   if (!Array.isArray(root.availableActions)) throw new Error('availableActions must be an array')
   return {
     id: readId(root.id, 'id'),
@@ -273,11 +285,17 @@ export function decodeEvidenceDetail(value: unknown): EvidenceDetailResponse {
     supportReason: readString(root.supportReason, 'supportReason'),
     confidence: readConfidence(root.confidence, 'confidence'),
     provider: readPerson(root.provider, 'provider'),
-    subjectContext: context === null ? null : {
-      title: readString(context.title, 'subjectContext.title'),
-      knowledgeStatus: readStatus(context.knowledgeStatus, 'subjectContext.knowledgeStatus'),
-    },
-    availableActions: root.availableActions.map((item, index) => readString(item, `availableActions[${index}]`)),
+    humanConfirmationLifecycle: decodeHumanConfirmationLifecycle(root.humanConfirmationLifecycle),
+    subjectContext:
+      context === null
+        ? null
+        : {
+            title: readString(context.title, 'subjectContext.title'),
+            knowledgeStatus: readStatus(context.knowledgeStatus, 'subjectContext.knowledgeStatus'),
+          },
+    availableActions: root.availableActions.map((item, index) =>
+      readString(item, `availableActions[${index}]`),
+    ),
   }
 }
 
@@ -296,11 +314,20 @@ export function decodeEvidenceList(value: unknown): EvidenceListResponse {
           `items[${index}].knowledgeDocumentRevisionNumberSnapshot`,
         ),
         sourceTitle: readString(item.sourceTitle, `items[${index}].sourceTitle`),
-        sourceReference: readNullableString(item.sourceReference, `items[${index}].sourceReference`),
-        sourceLocator: item.sourceLocator === null ? null : readObject(item.sourceLocator, `items[${index}].sourceLocator`),
+        sourceReference: readNullableString(
+          item.sourceReference,
+          `items[${index}].sourceReference`,
+        ),
+        sourceLocator:
+          item.sourceLocator === null
+            ? null
+            : readObject(item.sourceLocator, `items[${index}].sourceLocator`),
         summary: readNullableString(item.summary, `items[${index}].summary`),
         supportReason: readString(item.supportReason, `items[${index}].supportReason`),
         provider: readPerson(item.provider, `items[${index}].provider`),
+        humanConfirmationLifecycle: decodeHumanConfirmationLifecycle(
+          item.humanConfirmationLifecycle,
+        ),
       }
     }),
   }
@@ -336,20 +363,90 @@ export function decodeAddEvidence(value: unknown): AddEvidenceResponse {
   }
 }
 
-export function getHumanConfirmationMethod(detail: EvidenceDetailResponse): ConfirmationMethod | null {
+export function getHumanConfirmationMethod(
+  detail: EvidenceDetailResponse,
+): ConfirmationMethod | null {
   if (detail.evidenceType !== 'HumanConfirmation') return null
   const locatorMethod = detail.sourceLocator?.confirmationMethod
   const value = typeof locatorMethod === 'string' ? locatorMethod : detail.provider.source
   return confirmationMethods.some((method) => method.value === value)
-    ? value as ConfirmationMethod
+    ? (value as ConfirmationMethod)
     : null
 }
 
-export function getHumanConfirmationListMethod(item: EvidenceListItemResponse): ConfirmationMethod | null {
+export function getHumanConfirmationListMethod(
+  item: EvidenceListItemResponse,
+): ConfirmationMethod | null {
   if (item.evidenceType !== 'HumanConfirmation') return null
   const locatorMethod = item.sourceLocator?.confirmationMethod
   const value = typeof locatorMethod === 'string' ? locatorMethod : item.provider.source
   return confirmationMethods.some((method) => method.value === value)
-    ? value as ConfirmationMethod
+    ? (value as ConfirmationMethod)
     : null
+}
+
+export interface HumanConfirmationLifecycle {
+  readonly status: 'Active' | 'Withdrawn'
+  readonly withdrawnAt: string | null
+  readonly withdrawnByDisplayName: string | null
+  readonly withdrawalReason: string | null
+  readonly replacesHumanConfirmationId: number | null
+  readonly replacedByHumanConfirmationId: number | null
+}
+export function decodeHumanConfirmationLifecycle(
+  value: unknown,
+): HumanConfirmationLifecycle | null {
+  if (value === null || value === undefined) return null
+  const item = readObject(value, 'humanConfirmationLifecycle')
+  if (item.status !== 'Active' && item.status !== 'Withdrawn')
+    throw new Error('Unsupported confirmation status')
+  const result: HumanConfirmationLifecycle = {
+    status: item.status,
+    withdrawnAt: readNullableString(item.withdrawnAt, 'withdrawnAt'),
+    withdrawnByDisplayName: readNullableString(
+      item.withdrawnByDisplayName,
+      'withdrawnByDisplayName',
+    ),
+    withdrawalReason: readNullableString(item.withdrawalReason, 'withdrawalReason'),
+    replacesHumanConfirmationId: readNullableRevisionNumber(
+      item.replacesHumanConfirmationId,
+      'replacesHumanConfirmationId',
+    ),
+    replacedByHumanConfirmationId: readNullableRevisionNumber(
+      item.replacedByHumanConfirmationId,
+      'replacedByHumanConfirmationId',
+    ),
+  }
+  const audit = [result.withdrawnAt, result.withdrawnByDisplayName, result.withdrawalReason]
+  if (
+    result.status === 'Active'
+      ? audit.some((v) => v !== null)
+      : audit.some((v) => v === null || !v.trim())
+  )
+    throw new Error('Inconsistent withdrawal audit')
+  return result
+}
+export function decodeWithdrawHumanConfirmation(value: unknown): { readonly id: number } {
+  const item = readObject(value, 'withdrawal')
+  if (
+    item.status !== 'Withdrawn' ||
+    item.evidenceType !== 'HumanConfirmation' ||
+    item.knowledgeStatusChanged !== false
+  )
+    throw new Error('Invalid withdrawal response')
+  readString(item.withdrawnAt, 'withdrawnAt')
+  readString(item.withdrawnByDisplayName, 'withdrawnByDisplayName')
+  readString(item.withdrawalReason, 'withdrawalReason')
+  readString(item.concurrencyToken, 'concurrencyToken')
+  return { id: readId(item.id, 'id') }
+}
+export function isEffectiveEvidence(item: {
+  readonly isWithdrawn?: boolean
+  readonly humanConfirmationLifecycle?: HumanConfirmationLifecycle | null
+}): boolean {
+  return item.isWithdrawn !== true && item.humanConfirmationLifecycle?.status !== 'Withdrawn'
+}
+export function readWithdrawalFlag(value: unknown): boolean {
+  if (value === undefined) return false
+  return readBoolean(value, 'isWithdrawn')
 }

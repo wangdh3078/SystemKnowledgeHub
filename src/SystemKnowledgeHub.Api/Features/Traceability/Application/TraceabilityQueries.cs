@@ -610,7 +610,7 @@ public sealed class TraceabilityQueries(KnowledgeHubDbContext dbContext)
         var documentRows = documents.DistinctBy(document => document.Id).ToArray();
         var documentIds = documentRows.Select(document => document.Id).ToArray();
         var relationIds = relationshipIds.Distinct().ToArray();
-        var aggregates = await dbContext.Evidence.AsNoTracking()
+        var aggregates = await dbContext.Evidence.AsNoTracking().Where(SystemKnowledgeHub.Api.Features.Evidence.Application.EffectiveEvidence.Predicate)
             .Where(evidence =>
                 evidence.SubjectType == EvidenceSubjectType.KnowledgeDocument
                     && documentIds.Contains(evidence.SubjectId)

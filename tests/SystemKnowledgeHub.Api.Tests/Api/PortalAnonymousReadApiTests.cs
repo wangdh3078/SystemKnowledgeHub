@@ -22,6 +22,28 @@ namespace SystemKnowledgeHub.Api.Tests.Api;
 
 public sealed class PortalAnonymousReadApiTests
 {
+    [Fact]
+    public async Task HC_withdrawal_updates_all_Portal_trust_and_preview_without_audit_leak()
+    {
+        using var f=new BootstrapWebApplicationFactory();var fixture=await SeedCompositePage(f);using var admin=f.CreateAuthenticatedClient();using var anonymous=f.CreateClient();
+        var confirmations=new List<JsonElement>();
+        foreach(var target in new[]{("BusinessFunction",fixture.FunctionId),("DatabaseObject",fixture.DatabaseObjectId),("KnowledgeDocument",fixture.DocumentId),("Integration",fixture.IntegrationId)})
+            confirmations.Add(await HumanConfirmationLifecycleApiTests.Add(admin,target.Item1,target.Item2,revision:target.Item1=="KnowledgeDocument"?1:null));
+        using(var scope=f.Services.CreateScope()){var db=scope.ServiceProvider.GetRequiredService<KnowledgeHubDbContext>();var old=await db.Evidence.SingleAsync(e=>e.SubjectType==EvidenceSubjectType.System&&e.SubjectId==fixture.SystemId);confirmations.Add(await admin.GetFromJsonAsync<JsonElement>($"/api/evidence/{old.Id}"));}
+        var before=await anonymous.GetFromJsonAsync<JsonElement>($"/api/portal/pages/{fixture.PageId}");
+        Assert.All(before.GetProperty("sections").EnumerateArray().Where(s=>s.GetProperty("content").GetProperty("kind").GetString()=="TrustSummary"),s=>Assert.Equal(1,s.GetProperty("content").GetProperty("humanConfirmationCount").GetInt32()));
+        foreach(var hc in confirmations){using var w=await HumanConfirmationLifecycleApiTests.Withdraw(admin,hc,"WITHDRAWAL_PRIVATE_CANARY");Assert.Equal(HttpStatusCode.OK,w.StatusCode);}
+        foreach(var route in new[]{$"/api/portal/pages/{fixture.PageId}",$"/api/admin/portal/pages/{fixture.PageId}/preview"})
+        {
+            using var response=await (route.Contains("admin")?admin:anonymous).GetAsync(route);Assert.Equal(HttpStatusCode.OK,response.StatusCode);var raw=await response.Content.ReadAsStringAsync();
+            foreach(var secret in new[]{"WITHDRAWAL_PRIVATE_CANARY","withdrawnAt","withdrawnBy","withdrawalReason","replacesHumanConfirmationId","replacedByHumanConfirmationId","providerUserId","providerName","Portal evidence provider"})Assert.DoesNotContain(secret,raw,StringComparison.OrdinalIgnoreCase);
+            var json=JsonSerializer.Deserialize<JsonElement>(raw);
+            if (route.Contains("admin")) json=json.GetProperty("page");
+            foreach(var section in json.GetProperty("sections").EnumerateArray().Where(s=>s.GetProperty("content").GetProperty("kind").GetString()=="TrustSummary"))
+            {var trust=section.GetProperty("content");Assert.Equal(0,trust.GetProperty("humanConfirmationCount").GetInt32());Assert.Equal(0,trust.GetProperty("evidenceCount").GetInt32());if(section.GetProperty("heading").GetString()=="Document trust")Assert.Equal("NoConfirmation",trust.GetProperty("confirmationCoverage").GetString());}
+        }
+    }
+
     [Theory]
     [InlineData("STATE_FLAG", "STATEXFLAG")]
     [InlineData("50%", "50ABC")]
@@ -387,6 +409,11 @@ public sealed class PortalAnonymousReadApiTests
             relationCount = await db.KnowledgeRelations.CountAsync();
         }
 
+        using var admin=factory.CreateAuthenticatedClient();long targetId;
+        using(var scope=factory.Services.CreateScope()) targetId=(await scope.ServiceProvider.GetRequiredService<KnowledgeHubDbContext>().PortalPages.SingleAsync(p=>p.Id==linkedPageId)).PrimaryTargetId;
+        var active=await HumanConfirmationLifecycleApiTests.Add(admin,"BusinessFunction",targetId);
+        var withdrawn=await HumanConfirmationLifecycleApiTests.Add(admin,"BusinessFunction",targetId);
+        using var w=await HumanConfirmationLifecycleApiTests.Withdraw(admin,withdrawn,"related historical");Assert.Equal(HttpStatusCode.OK,w.StatusCode);
         using var response = await factory.CreateClient().GetAsync($"/api/portal/pages/{fixture.PageId}");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
@@ -397,6 +424,9 @@ public sealed class PortalAnonymousReadApiTests
             group.GetProperty("relationType").GetString() == "References" && group.GetProperty("direction").GetString() == "Outgoing");
         var items = references.GetProperty("items").EnumerateArray().ToArray();
         Assert.Equal(20, items.Length);
+        var trusted=items.Single(item=>item.GetProperty("targetTitle").GetString()=="Related 00");
+        Assert.Equal(1,trusted.GetProperty("evidenceCount").GetInt32());Assert.Equal(1,trusted.GetProperty("humanConfirmationCount").GetInt32());
+
         Assert.Equal(items.Select(item => item.GetProperty("targetTitle").GetString()).Order(StringComparer.Ordinal),
             items.Select(item => item.GetProperty("targetTitle").GetString()));
         Assert.Equal(linkedPageId, items.Single(item => item.GetProperty("targetTitle").GetString() == "Related 00").GetProperty("portalPageId").GetInt64());
@@ -508,6 +538,12 @@ public sealed class PortalAnonymousReadApiTests
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             return JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         }
+        using var admin = factory.CreateAuthenticatedClient();
+        long rootId;
+        using(var scope=factory.Services.CreateScope()) rootId=(await scope.ServiceProvider.GetRequiredService<KnowledgeHubDbContext>().PortalPages.SingleAsync(p=>p.Id==requirementPageId)).PrimaryTargetId;
+        var activeHc=await HumanConfirmationLifecycleApiTests.Add(admin,"KnowledgeDocument",rootId,revision:1);
+        var withdrawnHc=await HumanConfirmationLifecycleApiTests.Add(admin,"KnowledgeDocument",rootId,revision:1);
+        using var withdrawnResponse=await HumanConfirmationLifecycleApiTests.Withdraw(admin,withdrawnHc,"PORTAL_TRACE_PRIVATE");Assert.Equal(HttpStatusCode.OK,withdrawnResponse.StatusCode);
         using var requirementJson = await Trace(requirementPageId);
         using var specificationJson = await Trace(specificationPageId);
         using var testJson = await Trace(testPageId);
@@ -522,6 +558,18 @@ public sealed class PortalAnonymousReadApiTests
         Assert.Contains(testTrace.GetProperty("paths").EnumerateArray(), path => path.GetProperty("kind").GetString() == "RequirementSpecification");
         Assert.Empty(requirementTrace.GetProperty("missingLinkCodes").EnumerateArray());
         Assert.Equal(2, requirementTrace.GetProperty("limits").GetProperty("maxDepth").GetInt32());
+        static IEnumerable<int> Counts(JsonElement element, string name)
+        {
+            if(element.ValueKind==JsonValueKind.Object) foreach(var property in element.EnumerateObject())
+            {if(property.Name==name)yield return property.Value.GetInt32();else foreach(var n in Counts(property.Value,name))yield return n;}
+            else if(element.ValueKind==JsonValueKind.Array) foreach(var item in element.EnumerateArray())foreach(var n in Counts(item,name))yield return n;
+        }
+        Assert.Contains(1,Counts(requirementTrace,"humanConfirmationCount"));
+        Assert.DoesNotContain(2,Counts(requirementTrace,"humanConfirmationCount"));
+        using var lastWithdrawal=await HumanConfirmationLifecycleApiTests.Withdraw(admin,activeHc,"PORTAL_TRACE_PRIVATE");Assert.Equal(HttpStatusCode.OK,lastWithdrawal.StatusCode);
+        using var after=await Trace(requirementPageId);Assert.All(Counts(after.RootElement,"humanConfirmationCount"),n=>Assert.Equal(0,n));
+        Assert.DoesNotContain("PORTAL_TRACE_PRIVATE",after.RootElement.GetRawText());
+
     }
 
     [Fact]

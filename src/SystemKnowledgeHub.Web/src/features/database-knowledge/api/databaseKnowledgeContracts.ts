@@ -1,3 +1,4 @@
+import { readWithdrawalFlag } from '../../evidence/api/evidenceContracts'
 import { isKnowledgeStatus, type KnowledgeStatus } from '../../../api/contracts/knowledge'
 import type { ActorContext } from '../../../app/stores/actor'
 
@@ -188,6 +189,7 @@ export interface DatabaseColumnDetailResponse {
   readonly evidence: readonly {
     readonly id: number
     readonly evidenceType: string
+    readonly isWithdrawn?: boolean
     readonly sourceTitle: string
     readonly supportReason: string
   }[]
@@ -636,6 +638,7 @@ export function decodeDatabaseColumnDetail(value: unknown): DatabaseColumnDetail
         id: readId(item.id, `evidence[${index}].id`),
         evidenceType: readString(item.evidenceType, `evidence[${index}].evidenceType`),
         sourceTitle: readString(item.sourceTitle, `evidence[${index}].sourceTitle`),
+        isWithdrawn: readWithdrawalFlag(item.isWithdrawn),
         supportReason: readString(item.supportReason, `evidence[${index}].supportReason`),
       }
     }),

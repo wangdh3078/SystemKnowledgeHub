@@ -186,6 +186,62 @@ changes do not automatically require new tests.
 For an end-to-end UI/API slice, perform one focused runtime check of the
 changed path when practical.
 
+### Test scope and count rules
+
+The default verification strategy is **minimum necessary verification**.
+Tests exist to prove the risks introduced by the current change, not to make
+a report look comprehensive.
+
+- Run only tests that directly cover the current change or a clear direct
+  regression risk.
+- Prefer existing focused tests. Do not add duplicate test cases when an
+  existing test already proves the required behavior.
+- Do not run the full backend test suite by default.
+- Do not run the full frontend test suite by default.
+- Do not run unrelated feature tests merely "for safety".
+- If unchanged behavior was already verified and the relevant code was not
+  changed again, do not repeat that verification.
+- If an unrelated existing test fails during an exploratory or broader run,
+  record it honestly through the existing gap mechanism when applicable;
+  do not expand the current task to fix it unless it blocks an actually
+  required verification gate.
+- Do not create new tests unless each new test maps to a specific risk
+  introduced or exposed by the current task.
+- The user's explicitly requested verification scope overrides broader
+  default or historical verification templates. Do not enlarge the test
+  matrix without an explicit task need.
+
+### Frontend and browser verification rules
+
+Frontend and browser verification must remain tightly scoped.
+
+- If the task does not modify frontend product code and does not create a
+  direct frontend regression risk, do not run browser/UI verification.
+- For local frontend changes, test only the affected page/component,
+  composable, API contract, or interaction needed to prove the change.
+- Do not run full Vitest by default.
+- Run type-check, lint, build, or formatting only when relevant to the
+  frontend files changed and to the repository's actual task gate.
+- When a real browser check is necessary, use **one default desktop browser
+  window size only**.
+- Do not test multiple viewport sizes, multiple screen resolutions, narrow
+  layouts, mobile layouts, tablet layouts, ultra-wide layouts, or responsive
+  breakpoints unless the user explicitly requests that verification.
+- Do not automatically test 1366x768, 1440x900, 1920x1080, or any other
+  viewport matrix.
+- **Never perform browser zoom validation.** Browser zoom values such as
+  125%, 150%, 175%, 200%, or any other zoom percentage are never a required
+  verification activity or PASS/FAIL gate.
+- Do not substitute an equivalent viewport size as a browser-zoom test, and
+  do not spend task time trying to manipulate browser zoom settings.
+- Do not add browser-size, responsive, mobile, or zoom checks to final
+  verification merely because an older report, template, accessibility
+  checklist, or previous task contained them.
+- A task may add non-default browser sizes or responsive checks only when
+  the user explicitly asks for them in the current task.
+- Browser verification should stop once the changed interaction works at
+  the default browser size and the task-specific risk is proven.
+
 If the repository documents an approved workaround/gate for a known test
 infrastructure issue, use that approved gate rather than inventing a new
 workaround.
@@ -238,6 +294,9 @@ When the current task requires a verification report:
 -   Clearly distinguish implementation/test status from delivery/push
     status.
 -   Record limitations honestly.
+-   Do not turn non-applicable browser-size, responsive, mobile, or zoom
+    checks into report gates. In particular, browser zoom is never a required
+    PASS/FAIL item.
 -   Do not claim a local smoke test proves a real Production deployment.
 -   Reuse existing Gap IDs for known issues; do not create duplicate
     gaps.

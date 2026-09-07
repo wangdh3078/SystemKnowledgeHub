@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { isEffectiveEvidence } from '../../evidence/api/evidenceContracts'
 import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Delete, DocumentChecked, UserFilled } from '@element-plus/icons-vue'
@@ -113,10 +114,16 @@ const evidenceSubject = computed<EvidenceSubjectPayload | null>(() =>
     : null,
 )
 const validEvidenceCount = computed(
-  () => evidence.value.filter((item) => item.sourceReference || item.sourceLocator).length,
+  () =>
+    evidence.value.filter(
+      (item) => isEffectiveEvidence(item) && (item.sourceReference || item.sourceLocator),
+    ).length,
 )
 const humanConfirmationCount = computed(
-  () => evidence.value.filter((item) => item.evidenceType === 'HumanConfirmation').length,
+  () =>
+    evidence.value.filter(
+      (item) => item.evidenceType === 'HumanConfirmation' && isEffectiveEvidence(item),
+    ).length,
 )
 const confirmationCoverageText = computed(() => {
   const coverage = data.value?.confirmationCoverage
@@ -919,13 +926,20 @@ onBeforeUnmount(() => {
           >
             <div class="knowledge-document-evidence__item-heading">
               <p class="knowledge-document-evidence__type">
-                类型：{{ evidenceTypeLabels[item.evidenceType] }}
+                类型：{{ evidenceTypeLabels[item.evidenceType]
+                }}<span v-if="!isEffectiveEvidence(item)"> · 已撤销</span>
               </p>
               <strong>{{
                 item.evidenceType === 'HumanConfirmation'
                   ? `人工确认 · ${item.provider.displayName}`
                   : item.sourceTitle
               }}</strong>
+              <el-button
+                link
+                type="primary"
+                @click="overlayStore.openDrawer({ kind: 'evidence', id: item.id, mode: 'read' })"
+                >查看记录</el-button
+              >
             </div>
             <dl
               v-if="item.evidenceType === 'HumanConfirmation'"

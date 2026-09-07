@@ -15,7 +15,7 @@ public sealed record BusinessRuleWriteResponse(long Id, BusinessRuleSystemRespon
     string ConcurrencyToken);
 public sealed record BusinessRuleHeaderResponse(string Name, string KnowledgeStatus);
 public sealed record BusinessRuleRelationshipResponse(long RelationshipId, long Id, string Name, string RelationType);
-public sealed record BusinessRuleEvidenceResponse(long Id, string EvidenceType, string SourceTitle);
+public sealed record BusinessRuleEvidenceResponse(long Id, string EvidenceType, string SourceTitle, bool IsWithdrawn = false);
 public sealed record BusinessRuleUnknownItemResponse(long Id, string Question, string Status);
 public sealed record BusinessRuleContextRailResponse(int RelationshipCount, int OpenUnknownCount);
 public sealed record BusinessRuleDetailResponse(long Id, BusinessRuleSystemResponse System, string ConcurrencyToken,

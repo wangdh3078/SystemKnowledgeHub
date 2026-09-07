@@ -154,6 +154,8 @@ PHASE-REV-VERIFY 的历史结果为 **PASS WITH FOLLOW-UPS**。本清单保留�
 - full ESLint 的 `unknownItemContracts.ts` empty interface。
 - Vite dev viewport override期间的 `ResizeObserver loop` warning；四个 required viewport仍完成且无功能失败。
 
+- HC-B01 supplemental full Vitest (2026-09-07): unchanged `productConsistencySurface.spec.ts` expects a closing tag with no newline; unchanged `AppTopBar.vue` contains the formatted newline. Unchanged `PortalLayout.spec.ts` expects the entire header text to exclude the existing Search control. Full result: 609 pass / 2 fail; affected feature gate is recorded separately in the HC-B01 report. These are pre-existing unrelated test assertions, not lifecycle failures; defer maintenance without changing product behavior.
+
 处理这些 baseline需单独批准，PHASE-REV Verification不顺手修改。
 
 ## REV-GAP-012 — B04 migration test scope drifts after Portal foundation
