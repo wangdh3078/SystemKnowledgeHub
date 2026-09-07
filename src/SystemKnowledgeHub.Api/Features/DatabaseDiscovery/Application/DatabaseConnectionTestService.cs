@@ -12,7 +12,8 @@ public sealed class DatabaseConnectionTestService(
     KnowledgeHubDbContext dbContext,
     ConcurrencyTokenCodec tokenCodec,
     IDatabaseConnectionSecretStore secretStore,
-    IEnumerable<IDatabaseConnectionTester> testers)
+    IEnumerable<IDatabaseConnectionTester> testers,
+    ILogger<DatabaseConnectionTestService> logger)
 {
     public async Task<DatabaseConnectionOperationResult<DatabaseConnectionTestResponse>> Test(
         long profileId,
@@ -117,8 +118,10 @@ public sealed class DatabaseConnectionTestService(
         {
             return DatabaseConnectionTestResult.Fail(DatabaseConnectionFailure.Cancelled, "数据库连接测试已取消。");
         }
-        catch
+        catch (Exception exception)
         {
+            DatabaseDiscoveryDiagnostics.Log(logger, exception, DiscoveryFailureStage.ConnectionTest,
+                "ConnectionFailed", profileId: start.ProfileId, providerType: start.ProviderType);
             return DatabaseConnectionTestResult.Fail(DatabaseConnectionFailure.ConnectionFailed, "数据库连接测试失败。");
         }
     }

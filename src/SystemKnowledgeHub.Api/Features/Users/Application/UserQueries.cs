@@ -42,11 +42,11 @@ public sealed class UserQueries(
 
         if (keyword is not null)
         {
-            var pattern = $"%{keyword}%";
+            var pattern = LikeLiteral.Contains(keyword);
             query = query.Where(user =>
-                EF.Functions.Like(user.DisplayName, pattern)
-                || (user.EmployeeNo != null && EF.Functions.Like(user.EmployeeNo, pattern))
-                || (user.Email != null && EF.Functions.Like(user.Email, pattern)));
+                EF.Functions.Like(user.DisplayName, pattern, LikeLiteral.EscapeCharacter)
+                || (user.EmployeeNo != null && EF.Functions.Like(user.EmployeeNo, pattern, LikeLiteral.EscapeCharacter))
+                || (user.Email != null && EF.Functions.Like(user.Email, pattern, LikeLiteral.EscapeCharacter)));
         }
 
         if (request.IsActive.HasValue)

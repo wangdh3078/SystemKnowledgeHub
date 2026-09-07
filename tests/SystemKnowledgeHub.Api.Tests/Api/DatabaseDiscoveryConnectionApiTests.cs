@@ -203,6 +203,11 @@ public sealed class DatabaseDiscoveryConnectionApiTests
         Assert.DoesNotContain("DESCRIPTION", failureJson, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("SELECT secret", failureJson, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain(canary, string.Join('|', factory.LogSink.Entries), StringComparison.Ordinal);
+        var diagnostic = Assert.Single(factory.LogSink.Entries.Where(entry => entry.Contains("DiagnosticCategory=")));
+        Assert.Contains("Stage=ConnectionTest", diagnostic);
+        Assert.Contains("UnexpectedProgramFailure", diagnostic);
+        Assert.Contains("System.InvalidOperationException", diagnostic);
+        Assert.DoesNotContain("SELECT secret", diagnostic);
 
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<KnowledgeHubDbContext>();

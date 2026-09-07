@@ -73,11 +73,11 @@ internal sealed class NpgsqlPostgreSqlDiscoveryCatalogReader(
         {
             throw PostgreSqlDiscoveryErrorMapper.Timeout();
         }
-        catch
+        catch (Exception exception)
         {
-            throw Failure(
+            throw new DatabaseDiscoveryProviderException(
                 connected ? "MetadataQueryFailed" : "ConnectionFailed",
-                connected ? "读取 PostgreSQL 目录元数据失败。" : "无法建立 PostgreSQL 连接。");
+                connected ? "读取 PostgreSQL 目录元数据失败。" : "无法建立 PostgreSQL 连接。", innerException: exception);
         }
     }
 
@@ -183,11 +183,11 @@ internal sealed class NpgsqlPostgreSqlDiscoveryCatalogReader(
         {
             throw LimitExceeded();
         }
-        catch
+        catch (Exception exception)
         {
-            throw Failure(
+            throw new DatabaseDiscoveryProviderException(
                 connected ? "MetadataQueryFailed" : "ConnectionFailed",
-                connected ? "读取 PostgreSQL 目录元数据失败。" : "无法建立 PostgreSQL 连接。");
+                connected ? "读取 PostgreSQL 目录元数据失败。" : "无法建立 PostgreSQL 连接。", innerException: exception);
         }
     }
 
@@ -605,19 +605,19 @@ internal static class PostgreSqlDiscoveryErrorMapper
             return new DatabaseDiscoveryProviderException(
                 "Cancelled",
                 "PostgreSQL 目录读取已取消。",
-                AllowlistedVendorCode(exception.SqlState));
+                AllowlistedVendorCode(exception.SqlState), exception);
         var code = MapCode(exception.SqlState, connected);
         return new DatabaseDiscoveryProviderException(
             code,
             Summary(code),
-            AllowlistedVendorCode(exception.SqlState));
+            AllowlistedVendorCode(exception.SqlState), exception);
     }
 
     public static DatabaseDiscoveryProviderException Map(NpgsqlException exception, bool connected)
     {
         var timeout = exception.InnerException is TimeoutException;
         var code = timeout ? "Timeout" : connected ? "MetadataQueryFailed" : "ConnectionFailed";
-        return new DatabaseDiscoveryProviderException(code, Summary(code));
+        return new DatabaseDiscoveryProviderException(code, Summary(code), innerException: exception);
     }
 
     public static string MapCode(string sqlState, bool connected)

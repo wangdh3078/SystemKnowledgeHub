@@ -63,11 +63,11 @@ internal sealed class OracleManagedDiscoveryCatalogReader(IOptions<DatabaseDisco
         {
             throw OracleDiscoveryErrorMapper.Map(exception, connected, cancellationToken);
         }
-        catch
+        catch (Exception exception)
         {
             throw new DatabaseDiscoveryProviderException(
                 connected ? "MetadataQueryFailed" : "ConnectionFailed",
-                connected ? "读取 Oracle 目录元数据失败。" : "无法建立 Oracle 连接。");
+                connected ? "读取 Oracle 目录元数据失败。" : "无法建立 Oracle 连接。", innerException: exception);
         }
     }
 
@@ -169,11 +169,11 @@ internal sealed class OracleManagedDiscoveryCatalogReader(IOptions<DatabaseDisco
             LimitExceeded();
             throw;
         }
-        catch
+        catch (Exception exception)
         {
             throw new DatabaseDiscoveryProviderException(
                 connected ? "MetadataQueryFailed" : "ConnectionFailed",
-                connected ? "读取 Oracle 目录元数据失败。" : "无法建立 Oracle 连接。");
+                connected ? "读取 Oracle 目录元数据失败。" : "无法建立 Oracle 连接。", innerException: exception);
         }
     }
 
@@ -558,7 +558,7 @@ internal static class OracleDiscoveryErrorMapper
         CancellationToken cancellationToken)
     {
         if (cancellationToken.IsCancellationRequested)
-            return new DatabaseDiscoveryProviderException("Cancelled", "Oracle 目录读取已取消。", AllowlistedVendorCode(exception.Number));
+            return new DatabaseDiscoveryProviderException("Cancelled", "Oracle 目录读取已取消。", AllowlistedVendorCode(exception.Number), exception);
         var code = MapCode(exception.Number, connected);
         var summary = code switch
         {
@@ -568,7 +568,7 @@ internal static class OracleDiscoveryErrorMapper
             "ConnectionFailed" => "无法建立 Oracle 连接。",
             _ => "读取 Oracle 目录元数据失败。",
         };
-        return new DatabaseDiscoveryProviderException(code, summary, AllowlistedVendorCode(exception.Number));
+        return new DatabaseDiscoveryProviderException(code, summary, AllowlistedVendorCode(exception.Number), exception);
     }
 
     public static string MapCode(int number, bool connected) => number switch

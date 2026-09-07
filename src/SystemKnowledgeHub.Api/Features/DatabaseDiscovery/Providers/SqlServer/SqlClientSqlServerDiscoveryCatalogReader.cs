@@ -64,15 +64,16 @@ internal sealed class SqlClientSqlServerDiscoveryCatalogReader(
         {
             throw SqlServerDiscoveryErrorMapper.Map(exception, connected, cancellationToken);
         }
-        catch (TimeoutException)
+        catch (TimeoutException exception)
         {
-            throw SqlServerDiscoveryErrorMapper.Timeout();
+            var safe = SqlServerDiscoveryErrorMapper.Timeout();
+            throw new DatabaseDiscoveryProviderException(safe.ErrorCode, safe.SafeSummary, safe.VendorCode, exception);
         }
-        catch
+        catch (Exception exception)
         {
-            throw Failure(
+            throw new DatabaseDiscoveryProviderException(
                 connected ? "MetadataQueryFailed" : "ConnectionFailed",
-                connected ? "读取 SQL Server 目录元数据失败。" : "无法建立 SQL Server 连接。");
+                connected ? "读取 SQL Server 目录元数据失败。" : "无法建立 SQL Server 连接。", innerException: exception);
         }
     }
 
@@ -161,19 +162,21 @@ internal sealed class SqlClientSqlServerDiscoveryCatalogReader(
         {
             throw SqlServerDiscoveryErrorMapper.Map(exception, connected, cancellationToken);
         }
-        catch (TimeoutException)
+        catch (TimeoutException exception)
         {
-            throw SqlServerDiscoveryErrorMapper.Timeout();
+            var safe = SqlServerDiscoveryErrorMapper.Timeout();
+            throw new DatabaseDiscoveryProviderException(safe.ErrorCode, safe.SafeSummary, safe.VendorCode, exception);
         }
-        catch (OverflowException)
+        catch (OverflowException exception)
         {
-            throw LimitExceeded();
+            var safe = LimitExceeded();
+            throw new DatabaseDiscoveryProviderException(safe.ErrorCode, safe.SafeSummary, safe.VendorCode, exception);
         }
-        catch
+        catch (Exception exception)
         {
-            throw Failure(
+            throw new DatabaseDiscoveryProviderException(
                 connected ? "MetadataQueryFailed" : "ConnectionFailed",
-                connected ? $"读取 SQL Server {safeStage}目录元数据失败。" : "无法建立 SQL Server 连接。");
+                connected ? $"读取 SQL Server {safeStage}目录元数据失败。" : "无法建立 SQL Server 连接。", innerException: exception);
         }
     }
 
@@ -531,12 +534,12 @@ internal static class SqlServerDiscoveryErrorMapper
             return new DatabaseDiscoveryProviderException(
                 "Cancelled",
                 "SQL Server 目录读取已取消。",
-                AllowlistedVendorCode(exception.Number));
+                AllowlistedVendorCode(exception.Number), exception);
         var code = MapCode(exception.Number, connected);
         return new DatabaseDiscoveryProviderException(
             code,
             Summary(code),
-            AllowlistedVendorCode(exception.Number));
+            AllowlistedVendorCode(exception.Number), exception);
     }
 
     public static DatabaseConnectionFailure MapConnectionFailure(int number, bool connected) =>

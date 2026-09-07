@@ -18,6 +18,79 @@ public sealed class DatabaseDiscoveryRunApiTests
 {
     private static readonly JsonSerializerOptions JsonOptions = CreateJsonOptions();
 
+    [Theory]
+    [InlineData("auth", "AuthenticationFailed", "KnownProviderFailure", "DatabaseDiscoveryProviderException")]
+    [InlineData("privilege", "InsufficientPrivilege", "KnownProviderFailure", "DatabaseDiscoveryProviderException")]
+    [InlineData("timeout", "Timeout", "KnownProviderFailure", "DatabaseDiscoveryProviderException")]
+    [InlineData("wrapped", "MetadataQueryFailed", "UnexpectedProgramFailure", "InvalidOperationException")]
+    [InlineData("program", "MetadataQueryFailed", "UnexpectedProgramFailure", "InvalidOperationException")]
+    [InlineData("environment", "MetadataQueryFailed", "EnvironmentFailure", "IOException")]
+    [InlineData("concurrency", "SnapshotPersistenceFailed", "PersistenceConcurrency", "DbUpdateConcurrencyException")]
+    [InlineData("persistence", "SnapshotPersistenceFailed", "PersistenceFailure", "DbUpdateException")]
+    [InlineData("constraint", "SnapshotPersistenceFailed", "PersistenceConstraint", "DbUpdateException")]
+    public async Task Failure_diagnostics_keep_stage_and_cause_without_canary_leakage(
+        string kind, string code, string category, string exceptionType)
+    {
+        const string canary = "PASSWORD_CANARY_DO_NOT_LOG SERVER_RAW_ERROR_CANARY SELECT_SECRET_CANARY Data Source=private;Password=private";
+        Exception failure = kind switch
+        {
+            "auth" => new DatabaseDiscoveryProviderException("AuthenticationFailed", canary, "ORA-01017"),
+            "privilege" => new DatabaseDiscoveryProviderException("InsufficientPrivilege", canary, "SQLSTATE-42501"),
+            "timeout" => new DatabaseDiscoveryProviderException("Timeout", canary, "MSSQL-2"),
+            "wrapped" => new DatabaseDiscoveryProviderException("MetadataQueryFailed", canary, canary, new InvalidOperationException(canary)),
+            "environment" => new IOException(canary),
+            "concurrency" => new DbUpdateConcurrencyException(canary),
+            "persistence" => new DbUpdateException(canary),
+            "constraint" => new DbUpdateException(canary, new Microsoft.Data.Sqlite.SqliteException(canary, 19)),
+            _ => new InvalidOperationException(canary),
+        };
+        using var factory = new DatabaseDiscoveryWebApplicationFactory();
+        var persistence = code == "SnapshotPersistenceFailed";
+        if (persistence) factory.SaveInterceptor = new SnapshotFailure(failure);
+        else factory.DiscoveryProvider.Handler = (_, _, _) => throw failure;
+        using var admin = factory.CreateAuthenticatedClient();
+        var profile = await SetSecret(admin, await CreateProfile(factory, admin), "PASSWORD_CANARY_DO_NOT_LOG");
+        var run = await WaitForTerminal(admin, (await Trigger(admin, profile)).Id);
+        Assert.Equal(DatabaseDiscoveryRunStatus.Failed, run.Status);
+        Assert.Equal(code, run.ErrorCode);
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<KnowledgeHubDbContext>();
+        var stored = await db.DatabaseDiscoveryRuns.AsNoTracking().SingleAsync(r => r.Id == run.Id);
+        Assert.Equal(0, await db.DatabaseDiscoverySnapshots.CountAsync());
+        Assert.Equal(0, await db.DatabaseDiscoveryDifferences.CountAsync());
+        var api = JsonSerializer.Serialize(run, JsonOptions);
+        var fields = string.Join('|', stored.ErrorSummary, stored.SafeErrorMetadataJson);
+        var logs = string.Join('|', factory.LogSink.Entries);
+        foreach (var marker in new[] { "PASSWORD_CANARY_DO_NOT_LOG", "SERVER_RAW_ERROR_CANARY", "SELECT_SECRET_CANARY", "Data Source=private" })
+        {
+            Assert.DoesNotContain(marker, api);
+            Assert.DoesNotContain(marker, fields);
+            Assert.DoesNotContain(marker, logs);
+        }
+        var diagnostic = factory.LogSink.Entries.Single(entry => entry.Contains("DiagnosticCategory="));
+        Assert.Contains("RunId=" + run.Id, diagnostic);
+        Assert.Contains("Stage=" + (persistence ? "SnapshotPersistence" : "MetadataDiscovery"), diagnostic);
+        Assert.Contains("DiagnosticCategory=" + category, diagnostic);
+        Assert.Contains(exceptionType, diagnostic);
+        Assert.Contains("HResult=", diagnostic);
+        Assert.Contains("ProfileId=" + profile.Id, diagnostic);
+    }
+
+    private sealed class SnapshotFailure(Exception failure) : Microsoft.EntityFrameworkCore.Diagnostics.SaveChangesInterceptor
+    {
+        private bool thrown;
+        public override ValueTask<Microsoft.EntityFrameworkCore.Diagnostics.InterceptionResult<int>> SavingChangesAsync(
+            Microsoft.EntityFrameworkCore.Diagnostics.DbContextEventData eventData,
+            Microsoft.EntityFrameworkCore.Diagnostics.InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (!thrown && eventData.Context!.ChangeTracker.Entries<DatabaseDiscoverySnapshot>().Any(e => e.State == EntityState.Added))
+            { thrown = true; throw failure; }
+            return ValueTask.FromResult(result);
+        }
+    }
+
+
     [Fact]
     public async Task Durable_worker_completes_first_and_changed_snapshots_with_sanitized_viewer_reads()
     {

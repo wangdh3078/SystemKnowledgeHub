@@ -8,7 +8,7 @@ using SystemKnowledgeHub.Api.Features.DatabaseDiscovery.Domain;
 
 namespace SystemKnowledgeHub.Api.Features.DatabaseDiscovery.Providers.SqlServer;
 
-internal sealed class SqlServerConnectionTester(ISqlServerConnectionProbe probe) : IDatabaseConnectionTester
+internal sealed class SqlServerConnectionTester(ISqlServerConnectionProbe probe, ILogger<SqlServerConnectionTester>? logger = null) : IDatabaseConnectionTester
 {
     public DatabaseProviderType ProviderType => DatabaseProviderType.SqlServer;
 
@@ -54,25 +54,29 @@ internal sealed class SqlServerConnectionTester(ISqlServerConnectionProbe probe)
         }
         catch (SqlServerProbeException exception)
         {
+            DatabaseDiscoveryDiagnostics.Log(logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<SqlServerConnectionTester>.Instance, exception, DiscoveryFailureStage.ConnectionTest, exception.Failure.ToString(), profileId: connection.ProfileId, providerType: ProviderType, vendorCode: exception.VendorCode, knownProvider: true);
             return DatabaseConnectionTestResult.Fail(
                 exception.Failure,
                 SqlServerDiscoveryErrorMapper.ConnectionSummary(exception.Failure),
                 exception.VendorCode);
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException exception) when (cancellationToken.IsCancellationRequested)
         {
+            DatabaseDiscoveryDiagnostics.Log(logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<SqlServerConnectionTester>.Instance, exception, DiscoveryFailureStage.ConnectionTest, cancellationToken.IsCancellationRequested ? "Cancelled" : "Timeout", profileId: connection.ProfileId, providerType: ProviderType);
             return DatabaseConnectionTestResult.Fail(
                 DatabaseConnectionFailure.Cancelled,
                 "SQL Server 连接测试已取消。");
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException exception)
         {
+            DatabaseDiscoveryDiagnostics.Log(logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<SqlServerConnectionTester>.Instance, exception, DiscoveryFailureStage.ConnectionTest, cancellationToken.IsCancellationRequested ? "Cancelled" : "Timeout", profileId: connection.ProfileId, providerType: ProviderType);
             return DatabaseConnectionTestResult.Fail(
                 DatabaseConnectionFailure.Timeout,
                 "SQL Server 连接测试超时。");
         }
-        catch
+        catch (Exception exception)
         {
+            DatabaseDiscoveryDiagnostics.Log(logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<SqlServerConnectionTester>.Instance, exception, DiscoveryFailureStage.ConnectionTest, "ConnectionFailed", profileId: connection.ProfileId, providerType: ProviderType);
             return DatabaseConnectionTestResult.Fail(
                 DatabaseConnectionFailure.ConnectionFailed,
                 "SQL Server 连接测试失败。");

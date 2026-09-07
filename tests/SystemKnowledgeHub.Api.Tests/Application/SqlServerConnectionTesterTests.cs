@@ -9,6 +9,26 @@ namespace SystemKnowledgeHub.Api.Tests.Application;
 
 public sealed class SqlServerConnectionTesterTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Unexpected_connection_failure_keeps_safe_internal_diagnostics(bool environment)
+    {
+        const string canary = "PASSWORD_CANARY_DO_NOT_LOG SERVER_RAW_ERROR_CANARY SELECT_SECRET_CANARY";
+        var logger = new SystemKnowledgeHub.Api.Tests.TestSupport.SafeDiagnosticLogger<SqlServerConnectionTester>();
+        Exception failure = environment ? new IOException(canary) : new InvalidOperationException(canary);
+        var tester = new SqlServerConnectionTester(new DelegateProbe((_, _) => throw failure), logger);
+        var result = await tester.TestConnectionAsync(Connection("password"), CancellationToken.None);
+        Assert.Equal(DatabaseConnectionFailure.ConnectionFailed, result.Failure);
+        Assert.DoesNotContain(canary, System.Text.Json.JsonSerializer.Serialize(result));
+        var entry = Assert.Single(logger.Entries);
+        Assert.Contains("Stage=ConnectionTest", entry);
+        Assert.Contains(environment ? "EnvironmentFailure" : "UnexpectedProgramFailure", entry);
+        Assert.Contains(failure.GetType().FullName!, entry);
+        Assert.Contains("ProfileId=1", entry);
+        Assert.DoesNotContain(canary, entry);
+    }
+
     [Fact]
     public void SqlClient_probe_uses_typed_fixed_connection_security_and_configured_timeout()
     {

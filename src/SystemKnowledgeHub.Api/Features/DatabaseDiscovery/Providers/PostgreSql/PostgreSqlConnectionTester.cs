@@ -8,7 +8,7 @@ using SystemKnowledgeHub.Api.Features.DatabaseDiscovery.Domain;
 
 namespace SystemKnowledgeHub.Api.Features.DatabaseDiscovery.Providers.PostgreSql;
 
-internal sealed class PostgreSqlConnectionTester(IPostgreSqlConnectionProbe probe) : IDatabaseConnectionTester
+internal sealed class PostgreSqlConnectionTester(IPostgreSqlConnectionProbe probe, ILogger<PostgreSqlConnectionTester>? logger = null) : IDatabaseConnectionTester
 {
     private const int SupportedServerMajorVersion = 18;
 
@@ -60,25 +60,29 @@ internal sealed class PostgreSqlConnectionTester(IPostgreSqlConnectionProbe prob
         }
         catch (PostgreSqlProbeException exception)
         {
+            DatabaseDiscoveryDiagnostics.Log(logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<PostgreSqlConnectionTester>.Instance, exception, DiscoveryFailureStage.ConnectionTest, exception.Failure.ToString(), profileId: connection.ProfileId, providerType: ProviderType, vendorCode: exception.VendorCode, knownProvider: true);
             return DatabaseConnectionTestResult.Fail(
                 exception.Failure,
                 SafeSummary(exception.Failure),
                 exception.VendorCode);
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException exception) when (cancellationToken.IsCancellationRequested)
         {
+            DatabaseDiscoveryDiagnostics.Log(logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<PostgreSqlConnectionTester>.Instance, exception, DiscoveryFailureStage.ConnectionTest, cancellationToken.IsCancellationRequested ? "Cancelled" : "Timeout", profileId: connection.ProfileId, providerType: ProviderType);
             return DatabaseConnectionTestResult.Fail(
                 DatabaseConnectionFailure.Cancelled,
                 "PostgreSQL 连接测试已取消。");
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException exception)
         {
+            DatabaseDiscoveryDiagnostics.Log(logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<PostgreSqlConnectionTester>.Instance, exception, DiscoveryFailureStage.ConnectionTest, cancellationToken.IsCancellationRequested ? "Cancelled" : "Timeout", profileId: connection.ProfileId, providerType: ProviderType);
             return DatabaseConnectionTestResult.Fail(
                 DatabaseConnectionFailure.Timeout,
                 "PostgreSQL 连接测试超时。");
         }
-        catch
+        catch (Exception exception)
         {
+            DatabaseDiscoveryDiagnostics.Log(logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<PostgreSqlConnectionTester>.Instance, exception, DiscoveryFailureStage.ConnectionTest, "ConnectionFailed", profileId: connection.ProfileId, providerType: ProviderType);
             return DatabaseConnectionTestResult.Fail(
                 DatabaseConnectionFailure.ConnectionFailed,
                 "PostgreSQL 连接测试失败。");

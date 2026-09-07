@@ -1,3 +1,4 @@
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using System.Data;
 using SystemKnowledgeHub.Api.Features.Relationships.Domain;
@@ -22,19 +23,26 @@ public sealed class SearchQueries(KnowledgeHubDbContext dbContext)
             return new SearchKnowledgeQueryResult(null, errors);
         }
 
-        var pattern = $"%{query}%";
+        SearchSqlOrdering.Register((SqliteConnection)dbContext.Database.GetDbConnection());
+        var pattern = LikeLiteral.Contains(query!);
         var groups = new List<SearchResultGroup>();
         var total = 0;
 
         if (objectTypes.Contains("System"))
         {
-            var rows = await dbContext.Systems
+            var matches = dbContext.Systems
                 .AsNoTracking()
                 .Where(system =>
-                    EF.Functions.Like(system.Name, pattern)
-                    || EF.Functions.Like(system.DisplayName, pattern)
-                    || (system.Purpose != null && EF.Functions.Like(system.Purpose, pattern))
-                    || system.TechnologyTags.Any(tag => EF.Functions.Like(tag.Technology, pattern)))
+                    EF.Functions.Like(system.Name, pattern, LikeLiteral.EscapeCharacter)
+                    || EF.Functions.Like(system.DisplayName, pattern, LikeLiteral.EscapeCharacter)
+                    || (system.Purpose != null && EF.Functions.Like(system.Purpose, pattern, LikeLiteral.EscapeCharacter))
+                    || system.TechnologyTags.Any(tag => EF.Functions.Like(tag.Technology, pattern, LikeLiteral.EscapeCharacter)));
+            total += await matches.CountAsync(cancellationToken);
+            var rows = await matches
+                .OrderBy(system => SearchSqlOrdering.Rank(system.Name, system.Name, query!))
+                .ThenBy(system => EF.Functions.Collate(system.Name, SearchSqlOrdering.Collation))
+                .ThenBy(system => system.Id)
+                .Take(limitPerGroup)
                 .Select(system => new SearchResultItem(
                     system.Id,
                     system.Name,
@@ -44,20 +52,26 @@ public sealed class SearchQueries(KnowledgeHubDbContext dbContext)
                     null,
                     new SearchNavigation("System", system.Id, null, null), null, null, null))
                 .ToArrayAsync(cancellationToken);
-            total += rows.Length;
-            AddGroup(groups, "System", "系统", rows, query!, limitPerGroup);
+            AddGroup(groups, "System", "系统", rows);
         }
 
         if (objectTypes.Contains("BusinessFunction"))
         {
-            var rows = await dbContext.BusinessFunctions
+            var matches = dbContext.BusinessFunctions
                 .AsNoTracking()
+                .Where(item => !item.System.IsDeleted)
                 .Where(function =>
-                    EF.Functions.Like(function.Name, pattern)
-                    || (function.DisplayName != null && EF.Functions.Like(function.DisplayName, pattern))
-                    || (function.Purpose != null && EF.Functions.Like(function.Purpose, pattern))
-                    || (function.InputDescription != null && EF.Functions.Like(function.InputDescription, pattern))
-                    || (function.OutputDescription != null && EF.Functions.Like(function.OutputDescription, pattern)))
+                    EF.Functions.Like(function.Name, pattern, LikeLiteral.EscapeCharacter)
+                    || (function.DisplayName != null && EF.Functions.Like(function.DisplayName, pattern, LikeLiteral.EscapeCharacter))
+                    || (function.Purpose != null && EF.Functions.Like(function.Purpose, pattern, LikeLiteral.EscapeCharacter))
+                    || (function.InputDescription != null && EF.Functions.Like(function.InputDescription, pattern, LikeLiteral.EscapeCharacter))
+                    || (function.OutputDescription != null && EF.Functions.Like(function.OutputDescription, pattern, LikeLiteral.EscapeCharacter)));
+            total += await matches.CountAsync(cancellationToken);
+            var rows = await matches
+                .OrderBy(function => SearchSqlOrdering.Rank(function.Name, function.System.Name, query!))
+                .ThenBy(function => EF.Functions.Collate(function.Name, SearchSqlOrdering.Collation))
+                .ThenBy(function => function.Id)
+                .Take(limitPerGroup)
                 .Select(function => new SearchResultItem(
                     function.Id,
                     function.System.Name,
@@ -67,19 +81,25 @@ public sealed class SearchQueries(KnowledgeHubDbContext dbContext)
                     null,
                     new SearchNavigation("BusinessFunction", function.Id, null, null), null, null, null))
                 .ToArrayAsync(cancellationToken);
-            total += rows.Length;
-            AddGroup(groups, "BusinessFunction", "业务功能", rows, query!, limitPerGroup);
+            AddGroup(groups, "BusinessFunction", "业务功能", rows);
         }
 
         if (objectTypes.Contains("DatabaseObject"))
         {
-            var rows = await dbContext.DatabaseObjects
+            var matches = dbContext.DatabaseObjects
                 .AsNoTracking()
+                .Where(item => !item.DatabaseSource.IsDeleted && !item.DatabaseSource.System.IsDeleted)
                 .Where(item =>
-                    EF.Functions.Like(item.SchemaName, pattern)
-                    || EF.Functions.Like(item.ObjectName, pattern)
-                    || (item.BusinessDescription != null && EF.Functions.Like(item.BusinessDescription, pattern))
-                    || EF.Functions.Like(item.DatabaseSource.Name, pattern))
+                    EF.Functions.Like(item.SchemaName, pattern, LikeLiteral.EscapeCharacter)
+                    || EF.Functions.Like(item.ObjectName, pattern, LikeLiteral.EscapeCharacter)
+                    || (item.BusinessDescription != null && EF.Functions.Like(item.BusinessDescription, pattern, LikeLiteral.EscapeCharacter))
+                    || EF.Functions.Like(item.DatabaseSource.Name, pattern, LikeLiteral.EscapeCharacter));
+            total += await matches.CountAsync(cancellationToken);
+            var rows = await matches
+                .OrderBy(item => SearchSqlOrdering.Rank(item.SchemaName + "." + item.ObjectName, item.DatabaseSource.System.Name, query!))
+                .ThenBy(item => EF.Functions.Collate(item.SchemaName + "." + item.ObjectName, SearchSqlOrdering.Collation))
+                .ThenBy(item => item.Id)
+                .Take(limitPerGroup)
                 .Select(item => new SearchResultItem(
                     item.Id,
                     item.DatabaseSource.System.Name,
@@ -89,23 +109,29 @@ public sealed class SearchQueries(KnowledgeHubDbContext dbContext)
                     null,
                     new SearchNavigation("DatabaseObject", item.Id, null, null), null, null, null))
                 .ToArrayAsync(cancellationToken);
-            total += rows.Length;
-            AddGroup(groups, "DatabaseObject", "数据库对象", rows, query!, limitPerGroup);
+            AddGroup(groups, "DatabaseObject", "数据库对象", rows);
         }
 
         if (objectTypes.Contains("DatabaseColumn"))
         {
-            var rows = await dbContext.DatabaseColumns
+            var matches = dbContext.DatabaseColumns
                 .AsNoTracking()
+                .Where(item => !item.DatabaseObject.IsDeleted && !item.DatabaseObject.DatabaseSource.IsDeleted && !item.DatabaseObject.DatabaseSource.System.IsDeleted)
                 .Where(column =>
-                    EF.Functions.Like(column.ColumnName, pattern)
-                    || (column.BusinessDescription != null && EF.Functions.Like(column.BusinessDescription, pattern))
-                    || (column.DatabaseComment != null && EF.Functions.Like(column.DatabaseComment, pattern))
-                    || EF.Functions.Like(column.DatabaseObject.SchemaName, pattern)
-                    || EF.Functions.Like(column.DatabaseObject.ObjectName, pattern)
+                    EF.Functions.Like(column.ColumnName, pattern, LikeLiteral.EscapeCharacter)
+                    || (column.BusinessDescription != null && EF.Functions.Like(column.BusinessDescription, pattern, LikeLiteral.EscapeCharacter))
+                    || (column.DatabaseComment != null && EF.Functions.Like(column.DatabaseComment, pattern, LikeLiteral.EscapeCharacter))
+                    || EF.Functions.Like(column.DatabaseObject.SchemaName, pattern, LikeLiteral.EscapeCharacter)
+                    || EF.Functions.Like(column.DatabaseObject.ObjectName, pattern, LikeLiteral.EscapeCharacter)
                     || column.KnownValues.Any(value =>
-                        EF.Functions.Like(value.ValueText, pattern)
-                        || EF.Functions.Like(value.Meaning, pattern)))
+                        EF.Functions.Like(value.ValueText, pattern, LikeLiteral.EscapeCharacter)
+                        || EF.Functions.Like(value.Meaning, pattern, LikeLiteral.EscapeCharacter)));
+            total += await matches.CountAsync(cancellationToken);
+            var rows = await matches
+                .OrderBy(column => SearchSqlOrdering.Rank(column.DatabaseObject.SchemaName + "." + column.DatabaseObject.ObjectName + "." + column.ColumnName, column.DatabaseObject.DatabaseSource.System.Name, query!))
+                .ThenBy(column => EF.Functions.Collate(column.DatabaseObject.SchemaName + "." + column.DatabaseObject.ObjectName + "." + column.ColumnName, SearchSqlOrdering.Collation))
+                .ThenBy(column => column.Id)
+                .Take(limitPerGroup)
                 .Select(column => new SearchResultItem(
                     column.Id,
                     column.DatabaseObject.DatabaseSource.System.Name,
@@ -115,20 +141,26 @@ public sealed class SearchQueries(KnowledgeHubDbContext dbContext)
                     null,
                     new SearchNavigation("DatabaseObject", column.DatabaseObjectId, "DatabaseColumn", column.Id), null, null, null))
                 .ToArrayAsync(cancellationToken);
-            total += rows.Length;
-            AddGroup(groups, "DatabaseColumn", "字段", rows, query!, limitPerGroup);
+            AddGroup(groups, "DatabaseColumn", "字段", rows);
         }
 
         if (objectTypes.Contains("BusinessRule"))
         {
-            var rows = await dbContext.BusinessRules
+            var matches = dbContext.BusinessRules
                 .AsNoTracking()
+                .Where(item => !item.System.IsDeleted)
                 .Where(rule =>
-                    EF.Functions.Like(rule.Name, pattern)
-                    || EF.Functions.Like(rule.Description, pattern)
-                    || (rule.ConditionText != null && EF.Functions.Like(rule.ConditionText, pattern))
-                    || (rule.ResultText != null && EF.Functions.Like(rule.ResultText, pattern))
-                    || (rule.InputDataJson != null && EF.Functions.Like(rule.InputDataJson, pattern)))
+                    EF.Functions.Like(rule.Name, pattern, LikeLiteral.EscapeCharacter)
+                    || EF.Functions.Like(rule.Description, pattern, LikeLiteral.EscapeCharacter)
+                    || (rule.ConditionText != null && EF.Functions.Like(rule.ConditionText, pattern, LikeLiteral.EscapeCharacter))
+                    || (rule.ResultText != null && EF.Functions.Like(rule.ResultText, pattern, LikeLiteral.EscapeCharacter))
+                    || (rule.InputDataJson != null && EF.Functions.Like(rule.InputDataJson, pattern, LikeLiteral.EscapeCharacter)));
+            total += await matches.CountAsync(cancellationToken);
+            var rows = await matches
+                .OrderBy(rule => SearchSqlOrdering.Rank(rule.Name, rule.System.Name, query!))
+                .ThenBy(rule => EF.Functions.Collate(rule.Name, SearchSqlOrdering.Collation))
+                .ThenBy(rule => rule.Id)
+                .Take(limitPerGroup)
                 .Select(rule => new SearchResultItem(
                     rule.Id,
                     rule.System.Name,
@@ -138,22 +170,27 @@ public sealed class SearchQueries(KnowledgeHubDbContext dbContext)
                     null,
                     new SearchNavigation("BusinessRule", rule.Id, null, null), null, null, null))
                 .ToArrayAsync(cancellationToken);
-            total += rows.Length;
-            AddGroup(groups, "BusinessRule", "业务规则", rows, query!, limitPerGroup);
+            AddGroup(groups, "BusinessRule", "业务规则", rows);
         }
 
         if (objectTypes.Contains("Integration"))
         {
-            var rows = await dbContext.Integrations
+            var matches = dbContext.Integrations
                 .AsNoTracking()
                 .Where(integration =>
-                    EF.Functions.Like(integration.Name, pattern)
-                    || EF.Functions.Like(integration.SourcePartyName, pattern)
-                    || EF.Functions.Like(integration.TargetPartyName, pattern)
-                    || (integration.Purpose != null && EF.Functions.Like(integration.Purpose, pattern))
-                    || (integration.TopicOrQueue != null && EF.Functions.Like(integration.TopicOrQueue, pattern))
-                    || (integration.EndpointDisplay != null && EF.Functions.Like(integration.EndpointDisplay, pattern))
-                    || (integration.EndpointJson != null && EF.Functions.Like(integration.EndpointJson, pattern)))
+                    EF.Functions.Like(integration.Name, pattern, LikeLiteral.EscapeCharacter)
+                    || EF.Functions.Like(integration.SourcePartyName, pattern, LikeLiteral.EscapeCharacter)
+                    || EF.Functions.Like(integration.TargetPartyName, pattern, LikeLiteral.EscapeCharacter)
+                    || (integration.Purpose != null && EF.Functions.Like(integration.Purpose, pattern, LikeLiteral.EscapeCharacter))
+                    || (integration.TopicOrQueue != null && EF.Functions.Like(integration.TopicOrQueue, pattern, LikeLiteral.EscapeCharacter))
+                    || (integration.EndpointDisplay != null && EF.Functions.Like(integration.EndpointDisplay, pattern, LikeLiteral.EscapeCharacter))
+                    || (integration.EndpointJson != null && EF.Functions.Like(integration.EndpointJson, pattern, LikeLiteral.EscapeCharacter)));
+            total += await matches.CountAsync(cancellationToken);
+            var rows = await matches
+                .OrderBy(integration => SearchSqlOrdering.Rank(integration.Name, integration.SourceSystem != null && integration.TargetSystem != null ? integration.SourceSystem.Name + " → " + integration.TargetSystem.Name : integration.SourceSystem != null ? integration.SourceSystem.Name : integration.TargetSystem != null ? integration.TargetSystem.Name : integration.SourcePartyName + " → " + integration.TargetPartyName, query!))
+                .ThenBy(integration => EF.Functions.Collate(integration.Name, SearchSqlOrdering.Collation))
+                .ThenBy(integration => integration.Id)
+                .Take(limitPerGroup)
                 .Select(integration => new IntegrationSearchRow(
                     integration.Id,
                     integration.Name,
@@ -176,18 +213,24 @@ public sealed class SearchQueries(KnowledgeHubDbContext dbContext)
                 row.KnowledgeStatus,
                 null,
                 new SearchNavigation("Integration", row.Id, null, null), null, null, null)).ToArray();
-            total += items.Length;
-            AddGroup(groups, "Integration", "集成关系", items, query!, limitPerGroup);
+            AddGroup(groups, "Integration", "集成关系", items);
         }
 
         if (objectTypes.Contains("UnknownItem"))
         {
-            var rows = await dbContext.UnknownItems
+            var matches = dbContext.UnknownItems
                 .AsNoTracking()
+                .Where(item => !item.System.IsDeleted)
                 .Where(item =>
-                    EF.Functions.Like(item.Question, pattern)
-                    || (item.Context != null && EF.Functions.Like(item.Context, pattern))
-                    || item.Targets.Any(target => EF.Functions.Like(target.DisplaySnapshot, pattern)))
+                    EF.Functions.Like(item.Question, pattern, LikeLiteral.EscapeCharacter)
+                    || (item.Context != null && EF.Functions.Like(item.Context, pattern, LikeLiteral.EscapeCharacter))
+                    || item.Targets.Any(target => EF.Functions.Like(target.DisplaySnapshot, pattern, LikeLiteral.EscapeCharacter)));
+            total += await matches.CountAsync(cancellationToken);
+            var rows = await matches
+                .OrderBy(item => SearchSqlOrdering.Rank(item.Question, item.System.Name, query!))
+                .ThenBy(item => EF.Functions.Collate(item.Question, SearchSqlOrdering.Collation))
+                .ThenBy(item => item.Id)
+                .Take(limitPerGroup)
                 .Select(item => new SearchResultItem(
                     item.Id,
                     item.System.Name,
@@ -197,15 +240,14 @@ public sealed class SearchQueries(KnowledgeHubDbContext dbContext)
                     item.Status.ToString(),
                     new SearchNavigation("UnknownItem", item.Id, null, null), null, null, null))
                 .ToArrayAsync(cancellationToken);
-            total += rows.Length;
-            AddGroup(groups, "UnknownItem", "待确认事项", rows, query!, limitPerGroup);
+            AddGroup(groups, "UnknownItem", "待确认事项", rows);
         }
 
         if (objectTypes.Contains("KnowledgeDocument"))
         {
             var rows = await SearchKnowledgeDocuments(query!, limitPerGroup, cancellationToken);
             total += await CountKnowledgeDocuments(query!, cancellationToken);
-            AddGroup(groups, "KnowledgeDocument", "知识内容", rows, query!, limitPerGroup);
+            AddGroup(groups, "KnowledgeDocument", "知识内容", rows);
         }
 
         return new SearchKnowledgeQueryResult(
@@ -254,29 +296,13 @@ public sealed class SearchQueries(KnowledgeHubDbContext dbContext)
         ICollection<SearchResultGroup> groups,
         string objectType,
         string label,
-        IEnumerable<SearchResultItem> rows,
-        string query,
-        int limitPerGroup)
+        IEnumerable<SearchResultItem> rows)
     {
-        var items = objectType == "KnowledgeDocument"
-            ? rows.Take(limitPerGroup).ToArray()
-            : rows
-                .OrderBy(item => SearchRank(item, query))
-                .ThenBy(item => item.Title, StringComparer.OrdinalIgnoreCase)
-                .Take(limitPerGroup)
-                .ToArray();
+        var items = rows.ToArray();
         if (items.Length > 0)
         {
             groups.Add(new SearchResultGroup(objectType, label, items));
         }
-    }
-
-    private static int SearchRank(SearchResultItem item, string query)
-    {
-        if (item.Title.Equals(query, StringComparison.OrdinalIgnoreCase)) return 0;
-        if (item.Title.StartsWith(query, StringComparison.OrdinalIgnoreCase)) return 1;
-        if (item.SystemContext.Equals(query, StringComparison.OrdinalIgnoreCase)) return 2;
-        return 3;
     }
 
     private static string BuildIntegrationSystemContext(IntegrationSearchRow row)

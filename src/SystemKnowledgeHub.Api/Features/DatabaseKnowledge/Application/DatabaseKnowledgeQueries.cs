@@ -163,14 +163,14 @@ public sealed class DatabaseKnowledgeQueries(
         var search = NormalizeOptional(request.Search);
         if (search is not null)
         {
-            var pattern = $"%{search}%";
+            var pattern = LikeLiteral.Contains(search);
             objectQuery = objectQuery.Where(item =>
-                EF.Functions.Like(item.ObjectName, pattern)
-                || (item.BusinessDescription != null && EF.Functions.Like(item.BusinessDescription, pattern))
+                EF.Functions.Like(item.ObjectName, pattern, LikeLiteral.EscapeCharacter)
+                || (item.BusinessDescription != null && EF.Functions.Like(item.BusinessDescription, pattern, LikeLiteral.EscapeCharacter))
                 || item.Columns.Any(column =>
-                    EF.Functions.Like(column.ColumnName, pattern)
+                    EF.Functions.Like(column.ColumnName, pattern, LikeLiteral.EscapeCharacter)
                     || (column.BusinessDescription != null
-                        && EF.Functions.Like(column.BusinessDescription, pattern))));
+                        && EF.Functions.Like(column.BusinessDescription, pattern, LikeLiteral.EscapeCharacter))));
         }
 
         var rows = await objectQuery
@@ -611,13 +611,13 @@ public sealed class DatabaseKnowledgeQueries(
             return [];
         }
 
-        var pattern = $"%{search}%";
+        var pattern = LikeLiteral.Contains(search);
         var matches = await dbContext.DatabaseColumns
             .AsNoTracking()
             .Where(column => objectIds.Contains(column.DatabaseObjectId)
-                && (EF.Functions.Like(column.ColumnName, pattern)
+                && (EF.Functions.Like(column.ColumnName, pattern, LikeLiteral.EscapeCharacter)
                     || (column.BusinessDescription != null
-                        && EF.Functions.Like(column.BusinessDescription, pattern))))
+                        && EF.Functions.Like(column.BusinessDescription, pattern, LikeLiteral.EscapeCharacter))))
             .OrderBy(column => column.OrdinalPosition)
             .Select(column => new
             {

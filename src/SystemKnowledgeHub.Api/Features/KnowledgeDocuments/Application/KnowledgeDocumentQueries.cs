@@ -38,9 +38,9 @@ public sealed class KnowledgeDocumentQueries(
         var search = NormalizeOptional(request.Query);
         if (search is not null)
         {
-            var pattern = $"%{search}%";
-            query = query.Where(item => EF.Functions.Like(item.Title, pattern)
-                || (item.Summary != null && EF.Functions.Like(item.Summary, pattern)));
+            var pattern = LikeLiteral.Contains(search);
+            query = query.Where(item => EF.Functions.Like(item.Title, pattern, LikeLiteral.EscapeCharacter)
+                || (item.Summary != null && EF.Functions.Like(item.Summary, pattern, LikeLiteral.EscapeCharacter)));
         }
         if (documentType.HasValue) query = query.Where(item => item.DocumentType == documentType.Value);
         if (lifecycleStatus.HasValue)

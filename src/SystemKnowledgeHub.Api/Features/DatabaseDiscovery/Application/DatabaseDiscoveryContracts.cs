@@ -20,7 +20,8 @@ public interface IDatabaseDiscoveryProvider
 public sealed class DatabaseDiscoveryProviderException(
     string errorCode,
     string safeSummary,
-    string? vendorCode = null) : Exception
+    string? vendorCode = null,
+    Exception? innerException = null) : Exception("Database discovery provider failure.", innerException)
 {
     public string ErrorCode { get; } = errorCode;
     public string SafeSummary { get; } = safeSummary;

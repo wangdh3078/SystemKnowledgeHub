@@ -1,3 +1,4 @@
+using System.Net.Http.Json;
 using System.Net;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -21,6 +22,27 @@ namespace SystemKnowledgeHub.Api.Tests.Api;
 
 public sealed class PortalAnonymousReadApiTests
 {
+    [Theory]
+    [InlineData("STATE_FLAG", "STATEXFLAG")]
+    [InlineData("50%", "50ABC")]
+    [InlineData("A_B%C", "AXBXXC")]
+    [InlineData("A\\B", "AB")]
+    public async Task Portal_search_treats_special_characters_literally(string literal, string decoy)
+    {
+        using var factory = new BootstrapWebApplicationFactory();
+        var fixture = await SeedCompositePage(factory);
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<KnowledgeHubDbContext>();
+        var page = await db.PortalPages.SingleAsync(p => p.Id == fixture.PageId);
+        page.Title = decoy; await db.SaveChangesAsync();
+        using var client = factory.CreateClient();
+        using var missing = await client.GetAsync($"/api/portal/search?q={Uri.EscapeDataString(literal)}");
+        Assert.Equal(0, (await missing.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("total").GetInt32());
+        page.Title = "prefix" + literal + "suffix"; await db.SaveChangesAsync();
+        using var found = await client.GetAsync($"/api/portal/search?q={Uri.EscapeDataString(literal)}");
+        Assert.Equal(1, (await found.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("total").GetInt32());
+    }
+
     [Fact]
     public async Task Anonymous_tree_and_page_resolve_all_targets_and_only_allowlisted_projection_fields()
     {

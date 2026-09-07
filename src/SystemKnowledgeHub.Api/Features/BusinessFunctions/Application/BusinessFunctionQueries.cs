@@ -45,11 +45,11 @@ public sealed class BusinessFunctionQueries(
 
         if (search is not null)
         {
-            var pattern = $"%{search}%";
+            var pattern = LikeLiteral.Contains(search);
             query = query.Where(function =>
-                EF.Functions.Like(function.Name, pattern)
-                || (function.DisplayName != null && EF.Functions.Like(function.DisplayName, pattern))
-                || (function.Purpose != null && EF.Functions.Like(function.Purpose, pattern)));
+                EF.Functions.Like(function.Name, pattern, LikeLiteral.EscapeCharacter)
+                || (function.DisplayName != null && EF.Functions.Like(function.DisplayName, pattern, LikeLiteral.EscapeCharacter))
+                || (function.Purpose != null && EF.Functions.Like(function.Purpose, pattern, LikeLiteral.EscapeCharacter)));
         }
 
         if (functionType is not null)

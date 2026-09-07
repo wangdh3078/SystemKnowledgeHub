@@ -22,12 +22,13 @@ public sealed class DatabaseDiscoveryWorker(
         await readiness.WaitAsync(stoppingToken);
         while (!stoppingToken.IsCancellationRequested)
         {
+            ClaimedDatabaseDiscoveryRun? claim = null;
             try
             {
                 await using var scope = scopeFactory.CreateAsyncScope();
                 var processor = scope.ServiceProvider.GetRequiredService<DatabaseDiscoveryRunProcessor>();
                 await processor.RecoverExpiredRuns(stoppingToken);
-                var claim = await processor.ClaimNext(ownerId, stoppingToken);
+                claim = await processor.ClaimNext(ownerId, stoppingToken);
                 if (claim is null)
                 {
                     await Task.Delay(settings.QueuePollIntervalMilliseconds, stoppingToken);
@@ -39,9 +40,9 @@ public sealed class DatabaseDiscoveryWorker(
             {
                 return;
             }
-            catch
+            catch (Exception exception)
             {
-                logger.LogError("Database Discovery worker loop failed; queued SQLite rows remain authoritative.");
+                DatabaseDiscoveryDiagnostics.Log(logger, exception, DiscoveryFailureStage.WorkerLoop, "MetadataQueryFailed", claim?.RunId);
                 await Task.Delay(settings.QueuePollIntervalMilliseconds, stoppingToken);
             }
         }
@@ -163,9 +164,17 @@ public sealed class DatabaseDiscoveryRunProcessor(
 
     public async Task Process(ClaimedDatabaseDiscoveryRun claim, CancellationToken stoppingToken)
     {
-        var work = await LoadWork(claim, stoppingToken);
+        DiscoveryWork work;
+        try { work = await LoadWork(claim, stoppingToken); }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { return; }
+        catch (Exception exception)
+        {
+            DatabaseDiscoveryDiagnostics.Log(logger, exception, DiscoveryFailureStage.LoadWork, "MetadataQueryFailed", claim.RunId);
+            throw;
+        }
         if (work.FailureCode is not null)
         {
+            DatabaseDiscoveryDiagnostics.Log(logger, null, DiscoveryFailureStage.LoadWork, work.FailureCode, claim.RunId);
             await Fail(claim, work.FailureCode, work.FailureSummary!, stoppingToken);
             return;
         }
@@ -174,6 +183,7 @@ public sealed class DatabaseDiscoveryRunProcessor(
         var matchingProviders = providers.Where(item => item.ProviderType == connection.ProviderType).Take(2).ToArray();
         if (matchingProviders.Length != 1)
         {
+            DatabaseDiscoveryDiagnostics.Log(logger, null, DiscoveryFailureStage.CapabilityDetection, "ProviderUnavailable", claim.RunId, work.ProfileId, connection.ProviderType);
             await Fail(claim, "ProviderUnavailable", "当前 Provider 尚未提供发现实现。", stoppingToken);
             return;
         }
@@ -183,19 +193,24 @@ public sealed class DatabaseDiscoveryRunProcessor(
         operation.CancelAfter(TimeSpan.FromSeconds(settings.OverallTimeoutSeconds));
         using var monitorStop = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
         var monitor = MonitorLease(claim, operation, monitorStop.Token);
+        var stage = DiscoveryFailureStage.CapabilityDetection;
         try
         {
             var capabilities = await provider.DetectCapabilitiesAsync(connection, operation.Token);
             var request = new DatabaseDiscoveryRequest(work.IncludedSchemas!, settings.Limits);
+            stage = DiscoveryFailureStage.MetadataDiscovery;
             var providerSnapshot = await provider.DiscoverAsync(connection, request, capabilities, operation.Token);
             var snapshot = providerSnapshot with { Capabilities = capabilities.Capabilities };
+            stage = DiscoveryFailureStage.CanonicalPreparation;
             var prepared = canonical.Prepare(snapshot, connection, settings.Limits);
             if (!prepared.Succeeded)
             {
+                DatabaseDiscoveryDiagnostics.Log(logger, null, stage, prepared.ErrorCode!, claim.RunId, work.ProfileId, connection.ProviderType);
                 await Fail(claim, prepared.ErrorCode!, prepared.ErrorSummary!, stoppingToken);
                 return;
             }
 
+            stage = DiscoveryFailureStage.DifferenceCalculation;
             var baselineRow = await dbContext.DatabaseDiscoverySnapshots.AsNoTracking()
                 .Where(item => item.ProfileId == work.ProfileId && item.ScopeFingerprint == prepared.ScopeFingerprint)
                 .OrderByDescending(item => item.Id)
@@ -205,17 +220,20 @@ public sealed class DatabaseDiscoveryRunProcessor(
             var difference = diffService.Compare(baseline, prepared.Snapshot!);
             if (!difference.Succeeded)
             {
+                DatabaseDiscoveryDiagnostics.Log(logger, null, stage, difference.ErrorCode!, claim.RunId, work.ProfileId, connection.ProviderType);
                 await Fail(claim, difference.ErrorCode!, difference.ErrorSummary!, stoppingToken);
                 return;
             }
 
             try
             {
+                stage = DiscoveryFailureStage.SnapshotPersistence;
                 var finalized = await FinalizeSucceeded(
                     claim, work, prepared, baselineRow?.Id, difference, stoppingToken);
                 if (!finalized)
                 {
-                    logger.LogWarning("Database Discovery Run {RunId} could not finalize against its current lease and baseline.", claim.RunId);
+                    DatabaseDiscoveryDiagnostics.Log(logger, null, DiscoveryFailureStage.Finalize, "ConcurrencyConflict", claim.RunId, work.ProfileId, connection.ProviderType);
+                    stage = DiscoveryFailureStage.Finalize;
                     var cancellationRequested = await IsCancellationRequested(claim, CancellationToken.None);
                     await FailInNewScope(
                         claim,
@@ -224,15 +242,17 @@ public sealed class DatabaseDiscoveryRunProcessor(
                         CancellationToken.None);
                 }
             }
-            catch
+            catch (Exception exception)
             {
+                DatabaseDiscoveryDiagnostics.Log(logger, exception, stage, "SnapshotPersistenceFailed", claim.RunId, work.ProfileId, connection.ProviderType);
                 await FailInNewScope(claim, "SnapshotPersistenceFailed", "发现快照持久化失败。", stoppingToken);
             }
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException exception)
         {
             if (stoppingToken.IsCancellationRequested) return;
             var cancellationRequested = await IsCancellationRequested(claim, CancellationToken.None);
+            DatabaseDiscoveryDiagnostics.Log(logger, exception, stage, cancellationRequested ? "Cancelled" : "Timeout", claim.RunId, work.ProfileId, connection.ProviderType);
             await FailInNewScope(
                 claim,
                 cancellationRequested ? "Cancelled" : "Timeout",
@@ -241,6 +261,7 @@ public sealed class DatabaseDiscoveryRunProcessor(
         }
         catch (DatabaseDiscoveryProviderException exception)
         {
+            DatabaseDiscoveryDiagnostics.Log(logger, exception, stage, exception.ErrorCode, claim.RunId, work.ProfileId, connection.ProviderType);
             await FailInNewScope(
                 claim,
                 exception.ErrorCode,
@@ -248,14 +269,21 @@ public sealed class DatabaseDiscoveryRunProcessor(
                 stoppingToken,
                 exception.VendorCode);
         }
-        catch
+        catch (Exception exception)
         {
+            DatabaseDiscoveryDiagnostics.Log(logger, exception, stage, "MetadataQueryFailed", claim.RunId, work.ProfileId, connection.ProviderType);
             await FailInNewScope(claim, "MetadataQueryFailed", "读取数据库结构元数据失败。", stoppingToken);
         }
         finally
         {
             monitorStop.Cancel();
-            try { await monitor; } catch (OperationCanceledException) { }
+            try { await monitor; }
+            catch (OperationCanceledException) when (monitorStop.IsCancellationRequested) { }
+            catch (Exception exception)
+            {
+                DatabaseDiscoveryDiagnostics.Log(logger, exception, DiscoveryFailureStage.LeaseMonitor, "MetadataQueryFailed", claim.RunId, work.ProfileId, connection.ProviderType);
+                throw;
+            }
         }
     }
 
@@ -583,6 +611,18 @@ public sealed class DatabaseDiscoveryTerminalWriter(
         string summary,
         CancellationToken cancellationToken,
         string? vendorCode = null)
+    {
+        try { await FailCore(claim, errorCode, cancellationToken, vendorCode); }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (Exception exception)
+        {
+            DatabaseDiscoveryDiagnostics.Log(logger, exception, DiscoveryFailureStage.Finalize, errorCode, claim.RunId, vendorCode: vendorCode);
+            throw;
+        }
+    }
+
+    private async Task FailCore(ClaimedDatabaseDiscoveryRun claim, string errorCode,
+        CancellationToken cancellationToken, string? vendorCode)
     {
         var now = DateTimeOffset.UtcNow;
         await using var transaction = await SqliteImmediateTransaction.BeginAsync(dbContext, cancellationToken);

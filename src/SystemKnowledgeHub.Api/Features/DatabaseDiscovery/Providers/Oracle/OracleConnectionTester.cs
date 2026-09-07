@@ -8,7 +8,7 @@ using SystemKnowledgeHub.Api.Features.DatabaseDiscovery.Domain;
 
 namespace SystemKnowledgeHub.Api.Features.DatabaseDiscovery.Providers.Oracle;
 
-internal sealed class OracleConnectionTester(IOracleConnectionProbe probe) : IDatabaseConnectionTester
+internal sealed class OracleConnectionTester(IOracleConnectionProbe probe, ILogger<OracleConnectionTester>? logger = null) : IDatabaseConnectionTester
 {
     public DatabaseProviderType ProviderType => DatabaseProviderType.Oracle;
 
@@ -57,18 +57,22 @@ internal sealed class OracleConnectionTester(IOracleConnectionProbe probe) : IDa
         }
         catch (OracleProbeException exception)
         {
+            DatabaseDiscoveryDiagnostics.Log(logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<OracleConnectionTester>.Instance, exception, DiscoveryFailureStage.ConnectionTest, exception.Failure.ToString(), profileId: connection.ProfileId, providerType: ProviderType, vendorCode: exception.VendorCode, knownProvider: true);
             return DatabaseConnectionTestResult.Fail(exception.Failure, SafeSummary(exception.Failure), exception.VendorCode);
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException exception) when (cancellationToken.IsCancellationRequested)
         {
+            DatabaseDiscoveryDiagnostics.Log(logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<OracleConnectionTester>.Instance, exception, DiscoveryFailureStage.ConnectionTest, cancellationToken.IsCancellationRequested ? "Cancelled" : "Timeout", profileId: connection.ProfileId, providerType: ProviderType);
             return DatabaseConnectionTestResult.Fail(DatabaseConnectionFailure.Cancelled, "Oracle 连接测试已取消。");
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException exception)
         {
+            DatabaseDiscoveryDiagnostics.Log(logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<OracleConnectionTester>.Instance, exception, DiscoveryFailureStage.ConnectionTest, cancellationToken.IsCancellationRequested ? "Cancelled" : "Timeout", profileId: connection.ProfileId, providerType: ProviderType);
             return DatabaseConnectionTestResult.Fail(DatabaseConnectionFailure.Timeout, "Oracle 连接测试超时。");
         }
-        catch
+        catch (Exception exception)
         {
+            DatabaseDiscoveryDiagnostics.Log(logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<OracleConnectionTester>.Instance, exception, DiscoveryFailureStage.ConnectionTest, "ConnectionFailed", profileId: connection.ProfileId, providerType: ProviderType);
             return DatabaseConnectionTestResult.Fail(DatabaseConnectionFailure.ConnectionFailed, "Oracle 连接测试失败。");
         }
     }

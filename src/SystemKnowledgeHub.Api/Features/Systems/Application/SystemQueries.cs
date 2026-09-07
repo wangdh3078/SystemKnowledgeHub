@@ -37,11 +37,11 @@ public sealed class SystemQueries(
 
         if (search is not null)
         {
-            var pattern = $"%{search}%";
+            var pattern = LikeLiteral.Contains(search);
             query = query.Where(system =>
-                EF.Functions.Like(system.Name, pattern)
-                || EF.Functions.Like(system.DisplayName, pattern)
-                || (system.Purpose != null && EF.Functions.Like(system.Purpose, pattern)));
+                EF.Functions.Like(system.Name, pattern, LikeLiteral.EscapeCharacter)
+                || EF.Functions.Like(system.DisplayName, pattern, LikeLiteral.EscapeCharacter)
+                || (system.Purpose != null && EF.Functions.Like(system.Purpose, pattern, LikeLiteral.EscapeCharacter)));
         }
 
         if (lifecycle.HasValue)

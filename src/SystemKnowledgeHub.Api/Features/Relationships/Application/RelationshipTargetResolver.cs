@@ -71,13 +71,13 @@ public sealed class RelationshipTargetResolver(KnowledgeHubDbContext dbContext)
         CancellationToken cancellationToken)
     {
         var normalized = query?.Trim();
-        var pattern = string.IsNullOrWhiteSpace(normalized) ? null : $"%{normalized}%";
+        var pattern = string.IsNullOrWhiteSpace(normalized) ? null : LikeLiteral.Contains(normalized);
         var results = new List<TargetPreviewResponse>();
 
         if (allowedTypes.Contains(KnowledgeTargetType.System))
         {
             results.AddRange(await dbContext.Systems.AsNoTracking()
-                .Where(item => (!systemId.HasValue || item.Id == systemId.Value) && (pattern == null || EF.Functions.Like(item.Name, pattern) || EF.Functions.Like(item.DisplayName, pattern)))
+                .Where(item => (!systemId.HasValue || item.Id == systemId.Value) && (pattern == null || EF.Functions.Like(item.Name, pattern, LikeLiteral.EscapeCharacter) || EF.Functions.Like(item.DisplayName, pattern, LikeLiteral.EscapeCharacter)))
                 .Select(item => new TargetPreviewResponse(
                     new TargetReferenceResponse("System", item.Id),
                     new[] { new SystemContextResponse(item.Id, item.Name) }, item.Name, "系统", item.Purpose, item.KnowledgeStatus.ToString()))
@@ -86,7 +86,7 @@ public sealed class RelationshipTargetResolver(KnowledgeHubDbContext dbContext)
         if (allowedTypes.Contains(KnowledgeTargetType.DatabaseSource))
         {
             results.AddRange(await dbContext.DatabaseSources.AsNoTracking()
-                .Where(item => (!systemId.HasValue || item.SystemId == systemId.Value) && (pattern == null || EF.Functions.Like(item.Name, pattern)))
+                .Where(item => (!systemId.HasValue || item.SystemId == systemId.Value) && (pattern == null || EF.Functions.Like(item.Name, pattern, LikeLiteral.EscapeCharacter)))
                 .Select(item => new TargetPreviewResponse(
                     new TargetReferenceResponse("DatabaseSource", item.Id),
                     new[] { new SystemContextResponse(item.System.Id, item.System.Name) },
@@ -96,7 +96,7 @@ public sealed class RelationshipTargetResolver(KnowledgeHubDbContext dbContext)
         if (allowedTypes.Contains(KnowledgeTargetType.BusinessFunction))
         {
             results.AddRange(await dbContext.BusinessFunctions.AsNoTracking()
-                .Where(item => (!systemId.HasValue || item.SystemId == systemId.Value) && (pattern == null || EF.Functions.Like(item.Name, pattern) || (item.Purpose != null && EF.Functions.Like(item.Purpose, pattern))))
+                .Where(item => (!systemId.HasValue || item.SystemId == systemId.Value) && (pattern == null || EF.Functions.Like(item.Name, pattern, LikeLiteral.EscapeCharacter) || (item.Purpose != null && EF.Functions.Like(item.Purpose, pattern, LikeLiteral.EscapeCharacter))))
                 .Select(item => new TargetPreviewResponse(
                     new TargetReferenceResponse("BusinessFunction", item.Id),
                     new[] { new SystemContextResponse(item.System.Id, item.System.Name) }, item.Name, "业务功能", item.Purpose, item.KnowledgeStatus.ToString()))
@@ -106,7 +106,7 @@ public sealed class RelationshipTargetResolver(KnowledgeHubDbContext dbContext)
         {
             results.AddRange(await dbContext.DatabaseObjects.AsNoTracking()
                 .Where(item => (!systemId.HasValue || item.DatabaseSource.SystemId == systemId.Value)
-                    && (pattern == null || EF.Functions.Like(item.ObjectName, pattern) || EF.Functions.Like(item.SchemaName + "." + item.ObjectName, pattern) || (item.BusinessDescription != null && EF.Functions.Like(item.BusinessDescription, pattern))))
+                    && (pattern == null || EF.Functions.Like(item.ObjectName, pattern, LikeLiteral.EscapeCharacter) || EF.Functions.Like(item.SchemaName + "." + item.ObjectName, pattern, LikeLiteral.EscapeCharacter) || (item.BusinessDescription != null && EF.Functions.Like(item.BusinessDescription, pattern, LikeLiteral.EscapeCharacter))))
                 .Select(item => new TargetPreviewResponse(
                     new TargetReferenceResponse("DatabaseObject", item.Id),
                     new[] { new SystemContextResponse(item.DatabaseSource.System.Id, item.DatabaseSource.System.Name) },
@@ -117,7 +117,7 @@ public sealed class RelationshipTargetResolver(KnowledgeHubDbContext dbContext)
         {
             results.AddRange(await dbContext.DatabaseColumns.AsNoTracking()
                 .Where(item => (!systemId.HasValue || item.DatabaseObject.DatabaseSource.SystemId == systemId.Value)
-                    && (pattern == null || EF.Functions.Like(item.ColumnName, pattern) || EF.Functions.Like(item.DatabaseObject.ObjectName + "." + item.ColumnName, pattern) || (item.BusinessDescription != null && EF.Functions.Like(item.BusinessDescription, pattern))))
+                    && (pattern == null || EF.Functions.Like(item.ColumnName, pattern, LikeLiteral.EscapeCharacter) || EF.Functions.Like(item.DatabaseObject.ObjectName + "." + item.ColumnName, pattern, LikeLiteral.EscapeCharacter) || (item.BusinessDescription != null && EF.Functions.Like(item.BusinessDescription, pattern, LikeLiteral.EscapeCharacter))))
                 .Select(item => new TargetPreviewResponse(
                     new TargetReferenceResponse("DatabaseColumn", item.Id),
                     new[] { new SystemContextResponse(item.DatabaseObject.DatabaseSource.System.Id, item.DatabaseObject.DatabaseSource.System.Name) },
@@ -129,7 +129,7 @@ public sealed class RelationshipTargetResolver(KnowledgeHubDbContext dbContext)
         {
             results.AddRange(await dbContext.BusinessRules.AsNoTracking()
                 .Where(item => (!systemId.HasValue || item.SystemId == systemId.Value)
-                    && (pattern == null || EF.Functions.Like(item.Name, pattern) || EF.Functions.Like(item.Description, pattern)))
+                    && (pattern == null || EF.Functions.Like(item.Name, pattern, LikeLiteral.EscapeCharacter) || EF.Functions.Like(item.Description, pattern, LikeLiteral.EscapeCharacter)))
                 .Select(item => new TargetPreviewResponse(
                     new TargetReferenceResponse("BusinessRule", item.Id),
                     new[] { new SystemContextResponse(item.System.Id, item.System.Name) },
@@ -141,7 +141,7 @@ public sealed class RelationshipTargetResolver(KnowledgeHubDbContext dbContext)
             var integrations = await dbContext.Integrations.AsNoTracking()
                 .Include(item => item.SourceSystem).Include(item => item.TargetSystem)
                 .Where(item => !systemId.HasValue || item.SourceSystemId == systemId.Value || item.TargetSystemId == systemId.Value)
-                .Where(item => pattern == null || EF.Functions.Like(item.Name, pattern) || (item.Purpose != null && EF.Functions.Like(item.Purpose, pattern)))
+                .Where(item => pattern == null || EF.Functions.Like(item.Name, pattern, LikeLiteral.EscapeCharacter) || (item.Purpose != null && EF.Functions.Like(item.Purpose, pattern, LikeLiteral.EscapeCharacter)))
                 .ToArrayAsync(cancellationToken);
             results.AddRange(integrations.Select(item => new TargetPreviewResponse(
                 new TargetReferenceResponse("Integration", item.Id), IntegrationSystems(item), item.Name, "集成关系", item.Purpose, item.KnowledgeStatus.ToString())));
@@ -155,8 +155,8 @@ public sealed class RelationshipTargetResolver(KnowledgeHubDbContext dbContext)
                 documents = documents.Where(item => allowedDocumentTypes.Contains(item.DocumentType));
             }
             results.AddRange(await documents
-                .Where(item => pattern == null || EF.Functions.Like(item.Title, pattern)
-                    || (item.Summary != null && EF.Functions.Like(item.Summary, pattern)))
+                .Where(item => pattern == null || EF.Functions.Like(item.Title, pattern, LikeLiteral.EscapeCharacter)
+                    || (item.Summary != null && EF.Functions.Like(item.Summary, pattern, LikeLiteral.EscapeCharacter)))
                 .Select(item => new TargetPreviewResponse(
                     new TargetReferenceResponse("KnowledgeDocument", item.Id), Array.Empty<SystemContextResponse>(),
                     item.Title, "知识文档 · " + item.DocumentType, item.Summary, item.KnowledgeStatus.ToString()))

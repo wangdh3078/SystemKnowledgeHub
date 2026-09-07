@@ -53,10 +53,10 @@ public sealed class UnknownItemQueries(
         }
         if (!string.IsNullOrWhiteSpace(request.Keyword))
         {
-            var pattern = $"%{request.Keyword.Trim()}%";
-            query = query.Where(item => EF.Functions.Like(item.Question, pattern)
-                || (item.Context != null && EF.Functions.Like(item.Context, pattern))
-                || item.Targets.Any(target => EF.Functions.Like(target.DisplaySnapshot, pattern)));
+            var pattern = LikeLiteral.Contains(request.Keyword.Trim());
+            query = query.Where(item => EF.Functions.Like(item.Question, pattern, LikeLiteral.EscapeCharacter)
+                || (item.Context != null && EF.Functions.Like(item.Context, pattern, LikeLiteral.EscapeCharacter))
+                || item.Targets.Any(target => EF.Functions.Like(target.DisplaySnapshot, pattern, LikeLiteral.EscapeCharacter)));
         }
 
         var candidates = await query

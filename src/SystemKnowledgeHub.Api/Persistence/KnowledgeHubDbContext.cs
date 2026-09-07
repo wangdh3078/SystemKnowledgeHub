@@ -83,6 +83,9 @@ public sealed class KnowledgeHubDbContext(DbContextOptions<KnowledgeHubDbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(KnowledgeHubDbContext).Assembly);
+        modelBuilder.HasDbFunction(typeof(SystemKnowledgeHub.Api.Features.Search.Application.SearchSqlOrdering)
+            .GetMethod(nameof(SystemKnowledgeHub.Api.Features.Search.Application.SearchSqlOrdering.Rank))!)
+            .HasName("search_rank");
     }
 
     private void EnforceImmutableAttachmentReferences()

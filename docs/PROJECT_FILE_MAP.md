@@ -160,7 +160,12 @@
 | `src/SystemKnowledgeHub.Api/Features/Search/Application/SearchQueries.cs`、`Models/SearchModels.cs` | 以只读 EF Projection 实现 Q02 的七类知识对象分组搜索、受控类型筛选、每组限制和字段 Drawer 导航意图。 | Search / VS-13 | 直接读取 canonical tables，不创建 Search Domain、实体或独立事实来源。 |
 | `src/SystemKnowledgeHub.Api/Features/Search/Api/SearchController.cs` | 暴露唯一 `GET /api/search` 并返回冻结的分组搜索 Contract。 | Search / VS-13 | 保持参数校验和 API 错误语义集中在具体 Controller。 |
 
-Search 第一版采用 SQLite 受限 `LIKE` 投影；未创建 FTS5 virtual table 或 Migration。
+当前七类 structured Search 使用 literal LIKE、独立 COUNT 和数据库内 rank/title/Id 排序后 LIMIT；KnowledgeDocument 复用 KC-B06 已有 FTS。STABILITY-R02 不新增 Migration。
+
+| 新增路径 | 职责 | Feature | 边界 |
+| --- | --- | --- | --- |
+| `src/SystemKnowledgeHub.Api/Persistence/LikeLiteral.cs` | 统一转义用户 literal LIKE 输入。 | STABILITY-R02 | 参数化且显式 ESCAPE。 |
+| `src/SystemKnowledgeHub.Api/Features/Search/Application/SearchSqlOrdering.cs` | 注册连接级 rank function 和 Unicode ordinal collation，在 SQLite LIMIT 前执行。 | STABILITY-R02 | 保留既有排序，无 schema。 |
 
 ### 1.13 Dashboard — VS-14
 
@@ -688,3 +693,12 @@ Search 第一版采用 SQLite 受限 `LIKE` 投影；未创建 FTS5 virtual tabl
 共 **1** 项；本次未删除或重构。
 
 1. **Bootstrap 诊断表面仍保留但已退出正式导航。** `BootstrapController.cs`、`bootstrapApi.ts`、`FoundationView.vue` 及相应测试职责明确，VS-14 已将 `/`、品牌入口与 Sidebar 总览切换到 Dashboard；后续应确认该未导航诊断页是否继续保留为开发健康检查。当前保留不影响正式产品入口。
+
+### STABILITY-R02 implementation and verification
+
+| 路径 | 职责 | 边界 |
+| --- | --- | --- |
+| `src/SystemKnowledgeHub.Api/Features/DatabaseDiscovery/Application/DatabaseDiscoveryDiagnostics.cs` | 闭集阶段和异常分类，输出安全 structured diagnostics。 | 不记录异常对象、消息、SQL、连接或 Secret。 |
+| `tests/SystemKnowledgeHub.Api.Tests/Api/SearchHardeningApiTests.cs` | literal/rank/current/边界回归和 520+ fixture SQL LIMIT 证据。 | 保持 uncapped Total。 |
+| `tests/SystemKnowledgeHub.Api.Tests/Application/DatabaseDiscoveryDiagnosticsTests.cs`、`TestSupport/SafeDiagnosticLogger.cs` | 阶段、cause、canary 与安全日志断言；现有 Run/Connection/Provider 测试同步扩展。 | 不用真实数据库 Secret。 |
+| `docs/reports/STABILITY_R02_SEARCH_BOUNDED_QUERY_DISCOVERY_DIAGNOSTICS_VERIFICATION_REPORT.md` | #7/#8/#9 实现、回归、DBSAFE 和清理证据。 | 原始 #1–#9 CLOSED；HC-A01 READY。 |
