@@ -9,6 +9,7 @@ namespace SystemKnowledgeHub.Api.Tests.Persistence;
 public sealed class DatabaseDiscoverySyncMigrationTests
 {
     private const string PreviousMigration = "20260830030122_AddDatabaseDiscoveryRunSnapshotDiffFoundation";
+    private const string TargetMigration = "20260831170031_AddManualDiscoverySyncFoundation";
 
     [Fact]
     public async Task B04_migration_preserves_legacy_rows_backfills_technical_identity_and_adds_typed_sync_tables()
@@ -45,7 +46,7 @@ public sealed class DatabaseDiscoverySyncMigrationTests
         Assert.True(objectCount > 0);
         Assert.True(columnCount > 0);
 
-        await migrator.MigrateAsync();
+        await migrator.MigrateAsync(TargetMigration);
 
         Assert.Equal(objectCount, await Scalar(connection, "SELECT count(*) FROM database_objects;"));
         Assert.Equal(columnCount, await Scalar(connection, "SELECT count(*) FROM database_columns;"));
