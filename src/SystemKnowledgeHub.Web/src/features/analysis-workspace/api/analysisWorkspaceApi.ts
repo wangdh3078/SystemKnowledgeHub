@@ -20,6 +20,9 @@ const mutation = { decode: decodeAnalysisMutation }
 export const getAnalysisTree = () => apiClient.get('/analysis/tree', { decode: decodeAnalysisTree })
 export const createAnalysisFolder = (request: CreateFolder) =>
   apiClient.post('/analysis/folders', request, mutation)
+export const addAnalysisPlacement = (
+  request: TreeWrite & { readonly parentId: number | null; readonly knowledgeDocumentId: number },
+) => apiClient.post('/analysis/document-placements', request, mutation)
 export const createAnalysisDocument = (
   request: CreateFolder & { readonly documentType: 'DesignNote' | 'KnowledgeArticle' },
 ) => apiClient.post('/analysis/documents', request, mutation)

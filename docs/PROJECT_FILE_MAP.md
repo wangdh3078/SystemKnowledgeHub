@@ -534,19 +534,28 @@
 
 以上 `...` 均指 `src/SystemKnowledgeHub.Web/src/`。
 
-### 2.21 Analysis Workspace authoring — ANALYSIS-B02
+### 2.21 Analysis Workspace authoring / organization — ANALYSIS-B02/B03
 
-以下 `...` 指 `src/SystemKnowledgeHub.Web/src/`。B02 只新增前端组织工作区，不增加 Analysis 正文、后端产品代码、Portal 功能或已有文档选择器。
+以下 `...` 指 `src/SystemKnowledgeHub.Web/src/`。B02 建立前端组织与共享文档编写工作区；B03 补齐已有文档加入、本地标题过滤和只读 Portal handoff。正文仍归 canonical KnowledgeDocument，两阶段均未增加后端产品代码。
 
 | 路径 | 一句话职责 | Feature / Vertical Slice | 为什么需要 |
 | --- | --- | --- | --- |
 | `.../features/analysis-workspace/api/analysisWorkspaceContracts.ts` | 严格解码节点、availability、tokens、完整树拓扑及 mutation 回应。 | Analysis / B02 | 在组织状态进入 UI 前 fail closed，拒绝重复/循环/非法引用和泄露旧标题的不可用投影。 |
-| `.../features/analysis-workspace/api/analysisWorkspaceApi.ts` | 通过既有 native-fetch apiClient 消费 B01 的八类组织操作。 | Analysis / B02 | 保留 node/tree token 和原子 create 合同，不调用 B03 existing-placement 创建。 |
-| `.../features/analysis-workspace/pages/AnalysisWorkspaceView.vue` | 提供 Element Plus Tree、路由选择、目录动作、既有 DialogHost 内容和共享文档面板编排。 | Analysis / B02 | 在 navigation guard 通过后才切换文档；409 只刷新组织快照，保留正文缓冲区。 |
+| `.../features/analysis-workspace/api/analysisWorkspaceApi.ts` | 通过既有 native-fetch apiClient 消费 B01 组织 API，包括加入已有 placement。 | Analysis / B02/B03 | 保留 node/tree token 和原子 create 合同；existing placement 不复制文档。 |
+| `.../features/analysis-workspace/pages/AnalysisWorkspaceView.vue` | 提供 Tree、标题/祖先过滤、已有文档加入与定位、目录动作、DialogHost 和共享文档面板。 | Analysis / B02/B03 | 过滤保持完整快照且禁用 reorder；dirty guard 保护选择与 Administrator Published handoff，409 不重放。 |
 | `.../features/analysis-workspace/styles/analysisWorkspace.css` | 定义 310px 目录与文档两栏、选中/键盘焦点及组织表单样式。 | Analysis / B02 | 使用共享 tokens 和现有控件，不增加树/编辑器/overlay 框架。 |
 | `.../features/knowledge-documents/components/KnowledgeDocumentDetailPanel.vue` | 接受 documentId，集中原有阅读、编辑、save、lifecycle、Markdown、附件、修订、Evidence/HC/关系/status 与 Trace/Impact。 | KnowledgeDocument / B02 | 原详情与工作区共享唯一实现，公开 requestLeave/finishEdit，并防止旧异步响应覆盖新选择。 |
 | `.../features/knowledge-documents/pages/KnowledgeDocumentDetailView.vue` | 解析原详情 route.params.id，并将 route leave/update guard 委托给共享面板。 | KnowledgeDocument / B02 | 保留原 URL、breadcrumb、query history 和完整 authoring 功能。 |
 | `.../app/router/routes.ts`、`navigation.ts`、`layouts/DialogHost.vue` | 接入两个 authenticated Analysis route、Viewer+ 菜单和现有单 Dialog 宿主。 | Analysis / B02 | 菜单位于“知识内容”之后、“待确认事项”之前；无第二 overlay store。 |
+
+B03 新增以下具体职责：
+
+| 文件 | 为什么存在 | 层 / Scope | 关键关系 |
+| --- | --- | --- | --- |
+| `.../features/analysis-workspace/components/ExistingDocumentPicker.vue` | 分页搜索七类 current 文档、显式归档、显示 placement 状态并发出加入/定位意图。 | Analysis / B03 | 复用 KnowledgeDocument list 与完整 tree，不创建候选 API。 |
+| `.../features/portal-management/api/resolveKnowledgeDocumentHandoff.ts` | 通过 current document 和既有 Portal target 分页重新解析 canonical ID / Published 状态。 | Portal / B03 handoff | 全程 GET；标题仅作 server search hint，实际身份必须核对。 |
+| `.../features/portal-management/pages/PortalManagementView.vue` | 首次进入时验证安全 query，并在原未保存新建页面表单预选主对象。 | Portal / B03 handoff | 不覆盖当前未保存内容，不改变普通入口或隐式写入 Portal。 |
+| `.../features/analysis-workspace/components/ExistingDocumentPicker.spec.ts`、`.../features/portal-management/pages/PortalManagementHandoff.spec.ts` | 覆盖候选分页/类型/归档/去重与 handoff 重验/异步/query/无写入。 | Focused frontend / B03 | 工作区集成、过滤和 B02 回归继续位于 AnalysisWorkspaceView.spec.ts。 |
 
 现有 Evidence、HumanConfirmation、Relationship 与 KnowledgeStatus overlays 的变更事件携带真实 subject；关系事件还携带另一端，供当前文档过滤相关刷新。原 feature 的 API 和业务能力不复制到 Analysis。
 

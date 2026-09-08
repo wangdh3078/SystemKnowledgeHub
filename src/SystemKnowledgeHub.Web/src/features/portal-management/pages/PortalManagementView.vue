@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
-import { onBeforeRouteLeave } from 'vue-router'
+import { onBeforeRouteLeave, useRoute } from 'vue-router'
+import { isSafeApiId } from '../../../api/contracts/id'
+import { resolveKnowledgeDocumentHandoff } from '../api/resolveKnowledgeDocumentHandoff'
 import {
   ArrowDown,
   DocumentAdd,
@@ -132,6 +134,42 @@ const newPage = reactive({
   target: null as PortalTargetSummary | null,
   parentId: null as number | null,
 })
+const route = useRoute()
+const handoffController = new AbortController()
+const handoffError = ref('')
+async function acceptInitialHandoff(): Promise<void> {
+  if (route.query.targetType !== 'KnowledgeDocument') return
+  const rawId = route.query.targetId
+  const id = typeof rawId === 'string' && /^[1-9]\d*$/.test(rawId) ? Number(rawId) : 0
+  const reject = () => {
+    handoffError.value = '无法使用该知识文档作为门户目标'
+  }
+  if (!isSafeApiId(id)) {
+    reject()
+    return
+  }
+  try {
+    const target = await resolveKnowledgeDocumentHandoff(id, handoffController.signal)
+    if (handoffController.signal.aborted) return
+    if (!target) {
+      reject()
+      return
+    }
+    // Intake runs once on mount. Never replace composition or a form opened while resolving.
+    if (
+      dirty.value ||
+      selectedPage.value ||
+      pageDialogOpen.value ||
+      pickerOpen.value ||
+      saving.value
+    )
+      return
+    openNewPage()
+    newPage.target = target
+  } catch {
+    if (!handoffController.signal.aborted) reject()
+  }
+}
 const sectionDraft = reactive<EditableSection>({
   id: null,
   heading: '',
@@ -656,8 +694,10 @@ onMounted(() => {
   window.addEventListener('evidence:changed', refreshEvidencePreview)
   window.addEventListener('beforeunload', beforeUnload)
   void loadAll()
+  void acceptInitialHandoff()
 })
 onBeforeUnmount(() => {
+  handoffController.abort()
   window.removeEventListener('beforeunload', beforeUnload)
   window.removeEventListener('evidence:changed', refreshEvidencePreview)
 })
@@ -665,6 +705,7 @@ onBeforeUnmount(() => {
 
 <template>
   <main class="portal-management skh-page">
+    <p v-if="handoffError" role="alert">{{ handoffError }}</p>
     <header class="portal-management__header skh-page-header">
       <div>
         <nav>管理 / 知识门户管理</nav>

@@ -7,6 +7,7 @@ import { useActorStore } from '../../../app/stores/actor'
 import { useOverlayStore } from '../../../app/stores/overlays'
 import { ApiError } from '../../../api/errors/ApiError'
 import KnowledgeDocumentDetailPanel from '../../knowledge-documents/components/KnowledgeDocumentDetailPanel.vue'
+import ExistingDocumentPicker from '../components/ExistingDocumentPicker.vue'
 import {
   documentTypeLabels,
   lifecycleLabels,
@@ -53,9 +54,36 @@ const children = (parentId: number | null): AnalysisNode[] =>
 interface TreeItem extends AnalysisNode {
   children: TreeItem[]
 }
+const filter = ref('')
+const filterActive = computed(() => filter.value.trim().length > 0)
+const visibleIds = computed(() => {
+  const items = tree.value?.items ?? []
+  const query = filter.value.trim().toLowerCase()
+  const byId = new Map(items.map((item) => [item.id, item]))
+  const visible = new Set<number>()
+  for (const item of items) {
+    const safeTitle = item.availability === 'Unavailable' ? '文档不可用' : item.title
+    if (query && !safeTitle.toLowerCase().includes(query)) continue
+    let current: AnalysisNode | undefined = item
+    while (current && !visible.has(current.id)) {
+      visible.add(current.id)
+      current = current.parentId === null ? undefined : byId.get(current.parentId)
+    }
+  }
+  return visible
+})
 const treeItems = computed(() => {
   const entries = new Map<number, TreeItem>(
-    (tree.value?.items ?? []).map((item) => [item.id, { ...item, children: [] }]),
+    (tree.value?.items ?? [])
+      .filter((item) => visibleIds.value.has(item.id))
+      .map((item) => [
+        item.id,
+        {
+          ...item,
+          title: item.availability === 'Unavailable' ? '文档不可用' : item.title,
+          children: [],
+        },
+      ]),
   )
   const roots: TreeItem[] = []
   for (const item of entries.values()) {
@@ -170,7 +198,7 @@ function documentUnavailable(documentId: number): void {
     activeDocumentId.value = null
   }
 }
-type DialogAction = 'folder' | 'document' | 'rename' | 'move'
+type DialogAction = 'folder' | 'document' | 'rename' | 'move' | 'existing'
 const action = ref<DialogAction>('folder')
 const dialogNode = ref<AnalysisNode | null>(null)
 const title = ref('')
@@ -180,9 +208,13 @@ const formError = ref('')
 const dialogOpen = computed(() => overlays.currentDialog?.kind === 'analysis-organization')
 const dialogTitle = computed(
   () =>
-    ({ folder: '新建目录', document: '新建分析文档', rename: '重命名目录', move: '移动节点' })[
-      action.value
-    ],
+    ({
+      folder: '新建目录',
+      document: '新建分析文档',
+      rename: '重命名目录',
+      move: '移动节点',
+      existing: '加入已有文档',
+    })[action.value],
 )
 function path(nodeId: number | null): string {
   const names: string[] = []
@@ -256,6 +288,7 @@ async function mutate(
   }
 }
 async function submitDialog(): Promise<void> {
+  if (action.value === 'existing') return
   if (!writable.value || !tree.value) return
   const titleLimit = action.value === 'document' ? 300 : 200
   if (action.value !== 'move' && (!title.value.trim() || title.value.trim().length > titleLimit)) {
@@ -299,7 +332,7 @@ async function submitDialog(): Promise<void> {
   ElMessage.success('分析目录已更新。')
 }
 async function reorder(direction: -1 | 1): Promise<void> {
-  if (!writable.value || !selected.value || !tree.value) return
+  if (filterActive.value || !writable.value || !selected.value || !tree.value) return
   const ordered = [...siblings.value]
   const from = siblingIndex.value
   const to = from + direction
@@ -339,6 +372,55 @@ async function removeSelected(): Promise<void> {
   panel.value?.finishEdit()
   await router.push(target(node.parentId))
 }
+async function addExisting(knowledgeDocumentId: number): Promise<void> {
+  if (
+    !writable.value ||
+    !tree.value ||
+    tree.value.items.some((item) => item.knowledgeDocumentId === knowledgeDocumentId)
+  )
+    return
+  if (!(await requestLeave())) return
+  const response = await mutate(() =>
+    api.addAnalysisPlacement({
+      knowledgeDocumentId,
+      parentId: parent.value || null,
+      treeConcurrencyToken: tree.value!.treeConcurrencyToken,
+    }),
+  )
+  if (!response?.node) {
+    formError.value = message.value
+    return
+  }
+  overlays.closeDialog()
+  panel.value?.finishEdit()
+  autoEditNodeId.value = null
+  await router.push(target(response.node.id))
+}
+async function locateExisting(node: AnalysisNode): Promise<void> {
+  await selectNode(node)
+  if (selectedId.value === node.id) {
+    overlays.closeDialog()
+    filter.value = ''
+  }
+}
+const canHandoff = computed(
+  () =>
+    actor.isAdministrator &&
+    selected.value?.nodeType === 'Document' &&
+    selected.value.availability === 'Available' &&
+    selected.value.lifecycleStatus === 'Published' &&
+    !activeUnavailable.value,
+)
+async function handoff(): Promise<void> {
+  if (!canHandoff.value || busy.value) return
+  await router.push({
+    path: '/portal-management',
+    query: {
+      targetType: 'KnowledgeDocument',
+      targetId: String(selected.value!.knowledgeDocumentId),
+    },
+  })
+}
 onMounted(() => {
   void loadTree()
 })
@@ -364,6 +446,23 @@ onBeforeUnmount(() => {
           >新建分析文档</el-button
         >
       </div>
+      <el-button
+        v-if="actor.canEdit"
+        size="small"
+        :disabled="!writable"
+        @click="openDialog('existing')"
+        >加入已有文档</el-button
+      >
+      <el-input
+        v-model="filter"
+        clearable
+        aria-label="筛选目录和文档标题"
+        placeholder="筛选目录和文档标题"
+      />
+      <p v-if="filterActive && tree && !treeError && treeItems.length === 0">
+        未找到匹配的目录或文档
+      </p>
+      <p v-if="filterActive && selected && !visibleIds.has(selected.id)">当前选中项已被筛选隐藏</p>
       <p v-if="loading" role="status">正在读取分析目录…</p>
       <p v-if="treeError" class="analysis-error" role="alert">{{ treeError }}</p>
       <p v-else-if="tree && tree.items.length === 0">暂无分析内容</p>
@@ -411,13 +510,13 @@ onBeforeUnmount(() => {
         <el-button :disabled="!writable" @click="openDialog('move')">移动</el-button>
         <el-button
           v-if="selected.availability === 'Available'"
-          :disabled="!writable || siblingIndex <= 0"
+          :disabled="filterActive || !writable || siblingIndex <= 0"
           @click="reorder(-1)"
           >上移</el-button
         >
         <el-button
           v-if="selected.availability === 'Available'"
-          :disabled="!writable || siblingIndex >= siblings.length - 1"
+          :disabled="filterActive || !writable || siblingIndex >= siblings.length - 1"
           @click="reorder(1)"
           >下移</el-button
         >
@@ -429,6 +528,19 @@ onBeforeUnmount(() => {
           >{{ selected.nodeType === 'Folder' ? '删除空目录' : '从分析目录移除' }}</el-button
         >
       </div>
+      <p v-if="filterActive && actor.canEdit">清除筛选后可调整顺序</p>
+      <el-button v-if="canHandoff" :disabled="busy" @click="handoff"
+        >在知识门户管理中使用</el-button
+      >
+      <p
+        v-if="
+          actor.isAdministrator &&
+          selected?.availability === 'Available' &&
+          selected.lifecycleStatus === 'Draft'
+        "
+      >
+        请先发布知识文档。
+      </p>
       <section v-if="activeUnavailable" class="analysis-welcome">
         <h1>文档不可用</h1>
         <p>该知识文档当前已不可读取，你仍可以移动或从分析目录移除此位置。</p>
@@ -469,7 +581,7 @@ onBeforeUnmount(() => {
         <h2>{{ dialogTitle }}</h2>
         <el-form label-position="top" @submit.prevent="submitDialog">
           <el-form-item
-            v-if="action !== 'move'"
+            v-if="action !== 'move' && action !== 'existing'"
             :label="action === 'document' ? '标题' : '目录名称'"
             required
             ><el-input
@@ -492,10 +604,22 @@ onBeforeUnmount(() => {
                 :value="folder.id" /></el-select
           ></el-form-item>
           <p v-else>所在位置：{{ path(dialogNode?.parentId ?? null) }}</p>
+          <ExistingDocumentPicker
+            v-if="action === 'existing'"
+            :nodes="tree?.items ?? []"
+            :disabled="!writable"
+            @select="addExisting"
+            @locate="locateExisting"
+          />
           <p v-if="formError" class="analysis-error" role="alert">{{ formError }}</p>
           <footer>
             <el-button :disabled="busy" @click="overlays.closeDialog">取消</el-button
-            ><el-button type="primary" :disabled="!writable" :loading="busy" @click="submitDialog"
+            ><el-button
+              v-if="action !== 'existing'"
+              type="primary"
+              :disabled="!writable"
+              :loading="busy"
+              @click="submitDialog"
               >确认</el-button
             >
           </footer>

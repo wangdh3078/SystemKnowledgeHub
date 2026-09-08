@@ -9,10 +9,16 @@ import { navigationItems } from '../../../app/router/navigation'
 import { ApiError } from '../../../api/errors/ApiError'
 import * as api from '../api/analysisWorkspaceApi'
 import type { AnalysisNode, AnalysisTree } from '../api/analysisWorkspaceContracts'
+import ExistingDocumentPicker from '../components/ExistingDocumentPicker.vue'
+import { getKnowledgeDocuments } from '../../knowledge-documents/api/knowledgeDocumentsApi'
+vi.mock('../../knowledge-documents/api/knowledgeDocumentsApi', () => ({
+  getKnowledgeDocuments: vi.fn(),
+}))
 
 enableAutoUnmount(afterEach)
 const state = vi.hoisted(() => ({
   canEdit: true,
+  isAdministrator: false,
   allowLeave: true,
   requestLeave: vi.fn(),
   mounted: vi.fn(),
@@ -37,6 +43,7 @@ vi.mock('../api/analysisWorkspaceApi', () => ({
   getAnalysisTree: vi.fn(),
   createAnalysisFolder: vi.fn(),
   createAnalysisDocument: vi.fn(),
+  addAnalysisPlacement: vi.fn(),
   renameAnalysisFolder: vi.fn(),
   moveAnalysisNode: vi.fn(),
   reorderAnalysisChildren: vi.fn(),
@@ -126,6 +133,8 @@ const tree: AnalysisTree = { items: [folder, docA, docB], treeConcurrencyToken: 
 beforeEach(() => {
   vi.clearAllMocks()
   state.canEdit = true
+  state.isAdministrator = false
+  vi.mocked(getKnowledgeDocuments).mockResolvedValue({ items: [], page: 1, pageSize: 20, total: 0 })
   state.allowLeave = true
   overlays.currentDialog = null
   document.body.innerHTML = '<div id="dialog-feature-content"></div>'
@@ -145,6 +154,7 @@ async function setup(path = '/analysis') {
         (route) => route.name === 'analysis-workspace' || route.name === 'analysis-workspace-node',
       ),
       { path: '/outside', component: { template: '<p>外部页面</p>' } },
+      { path: '/portal-management', component: { template: '<p>门户管理</p>' } },
     ],
   })
   await router.push(path)
@@ -496,5 +506,169 @@ describe('Analysis authoring workspace', () => {
     state.allowLeave = false
     await router.push('/analysis/nodes/30')
     expect(router.currentRoute.value.params.nodeId).toBe('20')
+  })
+})
+
+describe('B03 placement, title filter and handoff', () => {
+  it('filters literal titles with ancestors, without changing dirty selection or remounting', async () => {
+    vi.mocked(api.getAnalysisTree).mockResolvedValue({
+      ...tree,
+      items: [folder, { ...docA, title: 'Lot %/_ Track' }, docB],
+    })
+    const { wrapper, router } = await setup('/analysis/nodes/20')
+    await wrapper.get('[aria-label="测试正文"]').setValue('未保存')
+    const filter = wrapper.get('input[aria-label="筛选目录和文档标题"]')
+    const mounted = state.mounted.mock.calls.length
+    await filter.setValue('  LOT %/_  ')
+    expect(wrapper.findAll('.analysis-tree-row').map((node) => node.text())).toEqual([
+      'MES 分析',
+      'Lot %/_ Track设计说明 · 草稿',
+    ])
+    expect(button(wrapper, '下移').attributes('disabled')).toBeDefined()
+    await button(wrapper, '下移').trigger('click')
+    expect(api.reorderAnalysisChildren).not.toHaveBeenCalled()
+    await filter.setValue('MES')
+    expect(wrapper.findAll('.analysis-tree-row')).toHaveLength(1)
+    expect(wrapper.text()).toContain('当前选中项已被筛选隐藏')
+    await filter.setValue('没有匹配')
+    expect(wrapper.text()).toContain('未找到匹配的目录或文档')
+    expect(router.currentRoute.value.params.nodeId).toBe('20')
+    expect((wrapper.get('[aria-label="测试正文"]').element as HTMLInputElement).value).toBe(
+      '未保存',
+    )
+    expect(state.requestLeave).not.toHaveBeenCalled()
+    expect(state.mounted).toHaveBeenCalledTimes(mounted)
+    await filter.setValue('   ')
+    expect(wrapper.findAll('.analysis-tree-row')).toHaveLength(3)
+  })
+  it('never filters unavailable nodes by stale titles', async () => {
+    vi.mocked(api.getAnalysisTree).mockResolvedValue({
+      ...tree,
+      items: [
+        folder,
+        {
+          ...docA,
+          availability: 'Unavailable',
+          title: '删除前标题',
+          documentType: null,
+          lifecycleStatus: null,
+        },
+      ],
+    })
+    const { wrapper } = await setup()
+    const filter = wrapper.get('input[aria-label="筛选目录和文档标题"]')
+    await filter.setValue('删除前标题')
+    expect(wrapper.findAll('.analysis-tree-row')).toHaveLength(0)
+    await filter.setValue('文档不可用')
+    expect(wrapper.findAll('.analysis-tree-row')).toHaveLength(2)
+    expect(wrapper.text()).not.toContain('删除前标题')
+  })
+  it.each(['/analysis', '/analysis/nodes/10', '/analysis/nodes/20'])(
+    'places existing documents in context and opens read mode: %s',
+    async (path) => {
+      const { wrapper, router } = await setup(path)
+      const parentId = path === '/analysis' ? null : 10
+      const placed = {
+        ...docA,
+        id: 40,
+        knowledgeDocumentId: 303,
+        parentId,
+        sortOrder: parentId === null ? 1 : 2,
+      }
+      vi.mocked(api.addAnalysisPlacement).mockResolvedValue({
+        ...tree,
+        items: [...tree.items, placed],
+        treeConcurrencyToken: nextToken,
+        node: placed,
+      })
+      await button(wrapper, '加入已有文档').trigger('click')
+      await flushPromises()
+      wrapper.findComponent(ExistingDocumentPicker).vm.$emit('select', 303)
+      await flushPromises()
+      expect(api.addAnalysisPlacement).toHaveBeenCalledWith({
+        parentId,
+        knowledgeDocumentId: 303,
+        treeConcurrencyToken: token,
+      })
+      expect(api.getAnalysisTree).toHaveBeenCalledTimes(1)
+      expect(router.currentRoute.value.params.nodeId).toBe('40')
+      expect(wrapper.text()).toContain('文档 303 阅读')
+      expect(api.createAnalysisDocument).not.toHaveBeenCalled()
+    },
+  )
+  it.each([409, 422])('keeps placement input and reports %s without replay', async (status) => {
+    vi.mocked(api.addAnalysisPlacement).mockRejectedValue(
+      new ApiError(status, {
+        code: 'validation_error',
+        message: '该文档已在分析目录中。',
+        fieldErrors: null,
+        details: null,
+      }),
+    )
+    const { wrapper } = await setup('/analysis/nodes/10')
+    await button(wrapper, '加入已有文档').trigger('click')
+    await flushPromises()
+    wrapper.findComponent(ExistingDocumentPicker).vm.$emit('select', 303)
+    await flushPromises()
+    expect(api.addAnalysisPlacement).toHaveBeenCalledTimes(1)
+    expect(api.getAnalysisTree).toHaveBeenCalledTimes(status === 409 ? 2 : 1)
+    expect(document.querySelector('.analysis-dialog')?.textContent).toContain(
+      status === 409 ? '已刷新最新目录' : '该文档已在分析目录中。',
+    )
+  })
+  it('rejects duplicate submission and locates the full-tree placement', async () => {
+    const { wrapper, router } = await setup()
+    await button(wrapper, '加入已有文档').trigger('click')
+    await flushPromises()
+    wrapper.findComponent(ExistingDocumentPicker).vm.$emit('select', 101)
+    await flushPromises()
+    expect(api.addAnalysisPlacement).not.toHaveBeenCalled()
+    wrapper.findComponent(ExistingDocumentPicker).vm.$emit('locate', docA)
+    await flushPromises()
+    expect(router.currentRoute.value.params.nodeId).toBe('20')
+  })
+  it.each(['Draft', 'Archived', 'Unavailable', 'Editor', 'Viewer'])(
+    'does not hand off %s',
+    async (kind) => {
+      state.isAdministrator = !['Editor', 'Viewer'].includes(kind)
+      state.canEdit = kind !== 'Viewer'
+      const node = {
+        ...docA,
+        lifecycleStatus:
+          kind === 'Archived'
+            ? ('Archived' as const)
+            : kind === 'Draft'
+              ? ('Draft' as const)
+              : ('Published' as const),
+        availability: kind === 'Unavailable' ? ('Unavailable' as const) : ('Available' as const),
+      }
+      vi.mocked(api.getAnalysisTree).mockResolvedValue({ ...tree, items: [folder, node] })
+      const { wrapper } = await setup('/analysis/nodes/20')
+      expect(wrapper.text()).not.toContain('在知识门户管理中使用')
+      if (kind === 'Draft') expect(wrapper.text()).toContain('请先发布知识文档。')
+      if (kind === 'Viewer') expect(wrapper.text()).not.toContain('加入已有文档')
+    },
+  )
+  it('guards dirty handoff then navigates using canonical document identity', async () => {
+    state.isAdministrator = true
+    vi.mocked(api.getAnalysisTree).mockResolvedValue({
+      ...tree,
+      items: [folder, { ...docA, lifecycleStatus: 'Published' }],
+    })
+    const { wrapper, router } = await setup('/analysis/nodes/20')
+    await wrapper.get('[aria-label="测试正文"]').setValue('未保存')
+    state.allowLeave = false
+    await button(wrapper, '在知识门户管理中使用').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.params.nodeId).toBe('20')
+    expect((wrapper.get('[aria-label="测试正文"]').element as HTMLInputElement).value).toBe(
+      '未保存',
+    )
+    state.allowLeave = true
+    await button(wrapper, '在知识门户管理中使用').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.fullPath).toBe(
+      '/portal-management?targetType=KnowledgeDocument&targetId=101',
+    )
   })
 })

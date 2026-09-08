@@ -115,3 +115,17 @@
   gap: var(--space-2);
   margin-top: var(--space-5);
 }
+.analysis-candidates table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+.analysis-candidates th,
+.analysis-candidates td {
+  padding: 6px;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+  overflow-wrap: anywhere;
+}
+.analysis-candidates > .el-select {
+  margin-top: 8px;
+}
