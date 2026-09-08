@@ -92,7 +92,7 @@ async function search(): Promise<void> {
 async function save():Promise<void>{
   if(!source.value||!selected.value||!relationType.value||saving.value)return
   saving.value=true;errorMessage.value=null
-  try{const created=await addRelationship({source:source.value.source,relationType:relationType.value,target:selected.value.target,description:description.value.trim()||null});window.dispatchEvent(new CustomEvent('relationship:changed'));ElMessage.success('关系已保存，知识状态保持“未知”。');overlayStore.openDrawer({kind:'relationship',id:created.id,mode:'read'})}
+  const requestedSource = source.value.source; const requestedTarget = selected.value.target; try{const created=await addRelationship({source:source.value.source,relationType:relationType.value,target:selected.value.target,description:description.value.trim()||null});window.dispatchEvent(new CustomEvent('relationship:changed', { detail: { subject: requestedSource, relatedSubject: requestedTarget } }));ElMessage.success('关系已保存，知识状态保持“未知”。');overlayStore.openDrawer({kind:'relationship',id:created.id,mode:'read'})}
   catch(error:unknown){errorMessage.value=error instanceof ApiError?error.message:error instanceof Error?error.message:'关系保存失败。'}finally{saving.value=false}
 }
 watch([documentSource, sourceDocumentType],()=>{relationType.value=null;targetType.value=null;selected.value=null},{immediate:true})

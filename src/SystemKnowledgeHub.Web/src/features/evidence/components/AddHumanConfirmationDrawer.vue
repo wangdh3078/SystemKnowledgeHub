@@ -140,7 +140,7 @@ async function save(): Promise<void> {
       sourceNote: normalize(form.sourceNote),
     })
     ElMessage.success('人工确认已记录；知识状态仍需单独推进。')
-    window.dispatchEvent(new CustomEvent('evidence:changed'))
+    window.dispatchEvent(new CustomEvent('evidence:changed', { detail: { subject: created.subject } }))
     window.dispatchEvent(
       new CustomEvent('human-confirmation:changed', {
         detail: { subject: created.subject },

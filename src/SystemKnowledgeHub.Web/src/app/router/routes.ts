@@ -1,4 +1,5 @@
 import type { RouteRecordRaw } from 'vue-router'
+import AnalysisWorkspaceView from '../../features/analysis-workspace/pages/AnalysisWorkspaceView.vue'
 import FoundationView from '../../features/bootstrap/pages/FoundationView.vue'
 import DashboardView from '../../features/dashboard/pages/DashboardView.vue'
 import BusinessFunctionDetailView from '../../features/business-functions/pages/BusinessFunctionDetailView.vue'
@@ -31,6 +32,28 @@ import PortalSearchView from '../../features/portal-reading/pages/PortalSearchVi
 import PortalNotFoundView from '../../features/portal-reading/pages/PortalNotFoundView.vue'
 
 export const routes: readonly RouteRecordRaw[] = [
+  {
+    path: '/analysis',
+    name: 'analysis-workspace',
+    component: AnalysisWorkspaceView,
+    meta: {
+      title: '分析文档',
+      layout: 'app-shell',
+      navigationKey: 'analysis',
+      hasContextRail: false,
+    },
+  },
+  {
+    path: '/analysis/nodes/:nodeId',
+    name: 'analysis-workspace-node',
+    component: AnalysisWorkspaceView,
+    meta: {
+      title: '分析文档',
+      layout: 'app-shell',
+      navigationKey: 'analysis',
+      hasContextRail: false,
+    },
+  },
   {
     path: '/',
     redirect: { name: 'dashboard' },

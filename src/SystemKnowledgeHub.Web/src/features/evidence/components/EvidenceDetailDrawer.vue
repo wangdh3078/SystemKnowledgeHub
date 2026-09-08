@@ -146,7 +146,7 @@ async function withdraw(): Promise<void> {
       reason,
       concurrencyToken: current.concurrencyToken,
     })
-    window.dispatchEvent(new CustomEvent('evidence:changed'))
+    window.dispatchEvent(new CustomEvent('evidence:changed', { detail: { subject: current.subject } }))
     window.dispatchEvent(
       new CustomEvent('human-confirmation:changed', { detail: { subject: current.subject } }),
     )
@@ -261,7 +261,7 @@ async function save(): Promise<void> {
     })
     editing.value = false
     ElMessage.success('证据已更新；支持对象与知识状态均未改变。')
-    window.dispatchEvent(new CustomEvent('evidence:changed'))
+    window.dispatchEvent(new CustomEvent('evidence:changed', { detail: { subject: detail.value.subject } }))
   } catch (error: unknown) {
     conflict.value = error instanceof ApiError && error.status === 409
     errorMessage.value = error instanceof Error ? error.message : '证据更新失败。'

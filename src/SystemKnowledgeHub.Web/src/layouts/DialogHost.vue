@@ -11,6 +11,7 @@ import { overlayScrollPreserver as scrollPreserver } from './overlayScrollPreser
 const overlayStore = useOverlayStore()
 const hasFeatureDialog = computed(
   () =>
+    overlayStore.currentDialog?.kind === 'analysis-organization' ||
     overlayStore.currentDialog?.kind === 'create-knowledge-object' ||
     overlayStore.currentDialog?.kind === 'database-discovery-connection-profile' ||
     overlayStore.currentDialog?.kind === 'database-discovery-connection-secret' ||

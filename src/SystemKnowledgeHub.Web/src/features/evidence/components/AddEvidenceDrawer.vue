@@ -140,13 +140,13 @@ async function save(): Promise<void> {
           concurrencyToken: investigation.value.concurrencyToken,
         })
       ElMessage.success('证据已保存；知识状态保持不变。')
-      window.dispatchEvent(new CustomEvent('evidence:changed'))
+      window.dispatchEvent(new CustomEvent('evidence:changed', { detail: { subject: request.subject } }))
       window.dispatchEvent(new CustomEvent('unknown-item:changed'))
       overlayStore.closeDrawer()
     } else {
       const created = await addEvidence(request)
       ElMessage.success('证据已保存；知识状态保持不变。')
-      window.dispatchEvent(new CustomEvent('evidence:changed'))
+      window.dispatchEvent(new CustomEvent('evidence:changed', { detail: { subject: request.subject } }))
       overlayStore.openDrawer({ kind: 'evidence', id: created.id, mode: 'read' })
     }
   } catch (error: unknown) {

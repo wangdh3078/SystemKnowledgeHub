@@ -37,6 +37,7 @@ watch(payload, () => {
 async function submit(): Promise<void> {
   if (!payload.value || !requirementMet.value || submitting.value) return
   submitting.value = true
+  const current = payload.value
   errorMessage.value = null
   conflict.value = false
   try {
@@ -47,7 +48,7 @@ async function submit(): Promise<void> {
       concurrencyToken: payload.value.concurrencyToken,
     })
     overlayStore.closeDialog()
-    window.dispatchEvent(new Event('knowledge-status:changed'))
+    window.dispatchEvent(new CustomEvent('knowledge-status:changed', { detail: { subject: current.target } }))
   } catch (error: unknown) {
     if (error instanceof ApiError) {
       conflict.value = error.status === 409
@@ -63,8 +64,9 @@ async function submit(): Promise<void> {
 }
 
 function reload(): void {
+  const current = payload.value
   overlayStore.closeDialog()
-  window.dispatchEvent(new Event('knowledge-status:changed'))
+  if (current) window.dispatchEvent(new CustomEvent('knowledge-status:changed', { detail: { subject: current.target } }))
 }
 </script>
 

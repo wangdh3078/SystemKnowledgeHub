@@ -1,0 +1,117 @@
+.analysis-workspace {
+  display: grid;
+  grid-template-columns: 310px minmax(0, 1fr);
+  min-height: calc(100vh - var(--topbar-height));
+  background: var(--color-surface);
+}
+.analysis-tree {
+  padding: var(--space-4);
+  border-right: 1px solid var(--color-border);
+  min-width: 0;
+}
+.analysis-tree > header,
+.analysis-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.analysis-tree > header {
+  justify-content: space-between;
+  margin-bottom: var(--space-4);
+}
+.analysis-root {
+  border: 0;
+  background: none;
+  padding: var(--space-1);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--color-ink);
+}
+.analysis-actions .el-button + .el-button {
+  margin-left: 0;
+}
+.analysis-tree .el-tree {
+  margin-top: var(--space-4);
+}
+.analysis-tree .el-tree-node__content {
+  height: auto;
+  min-height: 36px;
+}
+.analysis-tree-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  width: 100%;
+  padding: var(--space-2) var(--space-1);
+  border-radius: var(--radius-sm);
+}
+.analysis-tree-row.is-selected {
+  background: var(--color-selected);
+  color: var(--color-primary);
+}
+.analysis-tree-row__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.analysis-tree-row__text > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.analysis-tree-row small {
+  color: var(--color-muted);
+  font-size: 11px;
+}
+.analysis-tree .el-tree-node:focus-visible > .el-tree-node__content,
+.analysis-root:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+.analysis-content {
+  min-width: 0;
+}
+.analysis-organization {
+  padding: var(--space-4) var(--skh-page-padding-inline);
+  border-bottom: 1px solid var(--color-border);
+}
+.analysis-welcome {
+  padding: var(--skh-page-padding-block-start) var(--skh-page-padding-inline);
+}
+.analysis-welcome h1 {
+  font-size: var(--skh-page-title-size);
+  color: var(--color-ink);
+}
+.analysis-welcome p,
+.analysis-tree > p {
+  color: var(--color-muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.analysis-error {
+  color: var(--status-danger) !important;
+}
+.analysis-notice {
+  margin: 0;
+  padding: var(--space-3) var(--skh-page-padding-inline);
+  background: var(--color-primary-soft);
+}
+.analysis-dialog {
+  padding: var(--space-6);
+}
+.analysis-dialog h2 {
+  margin: 0 0 var(--space-5);
+  font-size: 20px;
+}
+.analysis-dialog .el-select {
+  width: 100%;
+}
+.analysis-dialog footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-5);
+}

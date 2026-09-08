@@ -1,10 +1,12 @@
-import { defineComponent, h } from 'vue'
+import { defineComponent, h, reactive } from 'vue'
+import { onBeforeRouteUpdate } from 'vue-router'
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ApiError } from '../../../api/errors/ApiError'
 import type { KnowledgeDocumentDetail } from '../api/knowledgeDocumentContracts'
 import KnowledgeDocumentDetailView from './KnowledgeDocumentDetailView.vue'
+import KnowledgeDocumentDetailPanel from '../components/KnowledgeDocumentDetailPanel.vue'
 import {
   getKnowledgeDocument,
   getKnowledgeDocumentRevision,
@@ -35,6 +37,7 @@ const overlayState = vi.hoisted(() => ({ openDrawer: vi.fn(), openDialog: vi.fn(
 const routerState = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }))
 const traceState = vi.hoisted(() => ({ refresh: vi.fn(), mounted: vi.fn() }))
 const impactState = vi.hoisted(() => ({ refresh: vi.fn(), mounted: vi.fn() }))
+const routeState = vi.hoisted(() => ({ params: { id: '1' }, query: {} }))
 
 vi.mock('vue', async (importOriginal) => {
   const actual = await importOriginal<typeof import('vue')>()
@@ -126,7 +129,8 @@ vi.mock('vue', async (importOriginal) => {
 })
 vi.mock('vue-router', () => ({
   onBeforeRouteLeave: vi.fn(),
-  useRoute: () => ({ params: { id: '1' } }),
+  onBeforeRouteUpdate: vi.fn(),
+  useRoute: () => reactive(routeState),
   useRouter: () => routerState,
 }))
 vi.mock('element-plus', () => ({
@@ -256,6 +260,7 @@ function button(wrapper: ReturnType<typeof mountView>, label: string) {
 
 describe('KnowledgeDocumentDetailView editing', () => {
   beforeEach(() => {
+    reactive(routeState).params.id = '1'
     actorState.canEdit = true
     vi.mocked(getKnowledgeDocument).mockReset()
     vi.mocked(updateKnowledgeDocumentContent).mockReset()
@@ -1073,7 +1078,11 @@ describe('KnowledgeDocumentDetailView editing', () => {
       await flushPromises()
       expect(wrapper.text()).toContain(initialText)
 
-      window.dispatchEvent(new CustomEvent('evidence:changed'))
+      window.dispatchEvent(
+        new CustomEvent('evidence:changed', {
+          detail: { subject: { type: 'KnowledgeDocument', id: 1 } },
+        }),
+      )
       window.dispatchEvent(
         new CustomEvent('human-confirmation:changed', {
           detail: { subject: { type: 'KnowledgeDocument', id: 1 } },
@@ -1118,7 +1127,11 @@ describe('KnowledgeDocumentDetailView editing', () => {
         detail: { subject: { type: 'KnowledgeDocument', id: 1 } },
       }),
     )
-    window.dispatchEvent(new CustomEvent('knowledge-status:changed'))
+    window.dispatchEvent(
+      new CustomEvent('knowledge-status:changed', {
+        detail: { subject: { type: 'KnowledgeDocument', id: 1 } },
+      }),
+    )
     newerRequest.resolve?.({
       ...detail,
       currentRevisionNumber: 3,
@@ -1182,14 +1195,26 @@ describe('KnowledgeDocumentDetailView editing', () => {
     ])
     expect(traceState.mounted).toHaveBeenCalledTimes(1)
     expect(impactState.mounted).toHaveBeenCalledTimes(1)
-    window.dispatchEvent(new CustomEvent('relationship:changed'))
-    window.dispatchEvent(new CustomEvent('evidence:changed'))
+    window.dispatchEvent(
+      new CustomEvent('relationship:changed', {
+        detail: { subject: { type: 'KnowledgeDocument', id: 1 } },
+      }),
+    )
+    window.dispatchEvent(
+      new CustomEvent('evidence:changed', {
+        detail: { subject: { type: 'KnowledgeDocument', id: 1 } },
+      }),
+    )
     window.dispatchEvent(
       new CustomEvent('human-confirmation:changed', {
         detail: { subject: { type: 'KnowledgeDocument', id: 1 } },
       }),
     )
-    window.dispatchEvent(new CustomEvent('knowledge-status:changed'))
+    window.dispatchEvent(
+      new CustomEvent('knowledge-status:changed', {
+        detail: { subject: { type: 'KnowledgeDocument', id: 1 } },
+      }),
+    )
     await flushPromises()
     expect(traceState.refresh).toHaveBeenCalledTimes(4)
     expect(impactState.refresh).toHaveBeenCalledTimes(1)
@@ -1241,7 +1266,11 @@ describe('KnowledgeDocumentDetailView editing', () => {
     expect(impactState.refresh).toHaveBeenCalledTimes(1)
     expect(wrapper.text()).not.toContain('TRACE TestCase T')
 
-    window.dispatchEvent(new CustomEvent('relationship:changed'))
+    window.dispatchEvent(
+      new CustomEvent('relationship:changed', {
+        detail: { subject: { type: 'KnowledgeDocument', id: 1 } },
+      }),
+    )
     await flushPromises()
 
     expect(getRelatedKnowledge).toHaveBeenCalledTimes(3)
@@ -1276,5 +1305,194 @@ describe('KnowledgeDocumentDetailView editing', () => {
     expect(wrapper.text()).toContain('恢复后的标题')
     expect(wrapper.text()).toContain('内容在最近一次确认后已修改')
     expect(wrapper.text()).not.toContain('返回当前内容')
+  })
+})
+
+describe('shared document selection protection', () => {
+  beforeEach(() => {
+    reactive(routeState).params.id = '1'
+    actorState.canEdit = true
+    vi.mocked(getKnowledgeDocument)
+      .mockReset()
+      .mockImplementation(async (id) => ({ ...detail, id, title: `文档 ${id}` }))
+    vi.mocked(getRelatedKnowledge).mockReset().mockResolvedValue([])
+    vi.mocked(getEvidenceList).mockReset().mockResolvedValue({ items: [] })
+    vi.mocked(ElMessageBox.confirm).mockReset()
+    vi.mocked(updateKnowledgeDocumentContent).mockReset()
+  })
+
+  it('asks before same-route parameter changes and preserves the original buffer when cancelled', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    await button(wrapper, '编辑')!.trigger('click')
+    await button(wrapper, '修改正文')!.trigger('click')
+    const guard = vi.mocked(onBeforeRouteUpdate).mock.calls.at(-1)![0] as (
+      ...args: unknown[]
+    ) => Promise<boolean>
+    vi.mocked(ElMessageBox.confirm).mockRejectedValueOnce('cancel')
+    expect(await guard({ params: { id: '2' }, query: {} }, routeState)).toBe(false)
+    expect(wrapper.text()).toContain('文档 1')
+    expect(wrapper.text()).toContain('未保存')
+    expect(getKnowledgeDocument).toHaveBeenCalledTimes(1)
+    vi.mocked(ElMessageBox.confirm).mockResolvedValueOnce(undefined as never)
+    expect(await guard({ params: { id: '2' }, query: {} }, routeState)).toBe(true)
+    reactive(routeState).params.id = '2'
+    await flushPromises()
+    expect(wrapper.text()).toContain('文档 2')
+    expect(wrapper.text()).not.toContain('未保存')
+  })
+
+  it('uses the stronger upload confirmation for a same-route switch', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    await button(wrapper, '编辑')!.trigger('click')
+    await button(wrapper, '开始图片上传')!.trigger('click')
+    vi.mocked(ElMessageBox.confirm).mockRejectedValueOnce('cancel')
+    const guard = vi.mocked(onBeforeRouteUpdate).mock.calls.at(-1)![0] as (
+      ...args: unknown[]
+    ) => Promise<boolean>
+    expect(await guard({ params: { id: '2' }, query: {} }, routeState)).toBe(false)
+    expect(ElMessageBox.confirm).toHaveBeenCalledWith(
+      expect.stringContaining('附件仍在上传'),
+      '确认离开编辑',
+      expect.any(Object),
+    )
+    expect(wrapper.text()).toContain('文档 1')
+  })
+
+  it('ignores late A detail, relation and evidence responses after B has loaded', async () => {
+    let finishDetail!: (value: KnowledgeDocumentDetail) => void
+    let finishRelations!: (value: Awaited<ReturnType<typeof getRelatedKnowledge>>) => void
+    let finishEvidence!: (value: Awaited<ReturnType<typeof getEvidenceList>>) => void
+    vi.mocked(getKnowledgeDocument).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishDetail = resolve
+        }),
+    )
+    vi.mocked(getRelatedKnowledge).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishRelations = resolve
+        }),
+    )
+    vi.mocked(getEvidenceList).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishEvidence = resolve
+        }),
+    )
+    const wrapper = mountView()
+    reactive(routeState).params.id = '2'
+    await flushPromises()
+    finishDetail({ ...detail, title: '旧 A 正文' })
+    finishRelations([
+      {
+        id: 9,
+        direction: 'Outgoing',
+        relationType: 'AppliesTo',
+        related: { type: 'System', id: 3 },
+        title: '旧 A 关系',
+        objectTypeLabel: '系统',
+      },
+    ])
+    finishEvidence({
+      items: [
+        {
+          id: 9,
+          evidenceType: 'ExistingDocument',
+          knowledgeDocumentRevisionNumberSnapshot: null,
+          sourceTitle: '旧 A 证据',
+          sourceReference: 'A',
+          sourceLocator: null,
+          summary: null,
+          supportReason: 'A',
+          provider: {
+            displayName: 'A',
+            roleOrIdentity: 'A',
+            occurredAt: '2026-09-08T00:00:00Z',
+            team: null,
+            externalUserKey: null,
+            source: null,
+            note: null,
+          },
+        },
+      ],
+    })
+    await flushPromises()
+    expect(wrapper.text()).toContain('文档 2')
+    expect(wrapper.text()).not.toContain('旧 A')
+    const calls = vi.mocked(getKnowledgeDocument).mock.calls.length
+    window.dispatchEvent(
+      new CustomEvent('knowledge-status:changed', {
+        detail: { subject: { type: 'KnowledgeDocument', id: 1 } },
+      }),
+    )
+    window.dispatchEvent(
+      new CustomEvent('relationship:changed', {
+        detail: { subject: { type: 'KnowledgeDocument', id: 1 } },
+      }),
+    )
+    window.dispatchEvent(
+      new CustomEvent('evidence:changed', {
+        detail: { subject: { type: 'KnowledgeDocument', id: 1 } },
+      }),
+    )
+    await flushPromises()
+    expect(getKnowledgeDocument).toHaveBeenCalledTimes(calls)
+    expect(getRelatedKnowledge).toHaveBeenCalledTimes(2)
+    expect(getEvidenceList).toHaveBeenCalledTimes(2)
+  })
+
+  it('binds an in-flight save to A and does not overwrite B with its completion', async () => {
+    let complete!: (value: KnowledgeDocumentDetail) => void
+    vi.mocked(updateKnowledgeDocumentContent).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          complete = resolve
+        }),
+    )
+    const wrapper = mountView()
+    await flushPromises()
+    await button(wrapper, '编辑')!.trigger('click')
+    await button(wrapper, '修改正文')!.trigger('click')
+    await button(wrapper, '保存')!.trigger('click')
+    expect(updateKnowledgeDocumentContent).toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({ concurrencyToken: 'token-1' }),
+    )
+    reactive(routeState).params.id = '2'
+    await flushPromises()
+    complete({ ...detail, title: '旧 A 保存完成' })
+    await flushPromises()
+    expect(wrapper.text()).toContain('文档 2')
+    expect(wrapper.text()).not.toContain('旧 A 保存完成')
+  })
+  it('keeps a newly unavailable buffer guarded while suppressing background reads and shortcut saves', async () => {
+    vi.mocked(getKnowledgeDocument).mockResolvedValue({ ...detail, documentType: 'Requirement' })
+    traceState.refresh.mockClear()
+    const wrapper = mount(KnowledgeDocumentDetailPanel, {
+      props: { documentId: 1, autoEdit: true },
+      global: { components },
+    })
+    await flushPromises()
+    await wrapper
+      .findAll('button')
+      .find((item) => item.text() === '修改正文')!
+      .trigger('click')
+    await wrapper.setProps({ unavailable: true })
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 's', ctrlKey: true }))
+    window.dispatchEvent(
+      new CustomEvent('human-confirmation:changed', {
+        detail: { subject: { type: 'KnowledgeDocument', id: 1 } },
+      }),
+    )
+    await flushPromises()
+    expect(updateKnowledgeDocumentContent).not.toHaveBeenCalled()
+    expect(getKnowledgeDocument).toHaveBeenCalledTimes(1)
+    expect(traceState.refresh).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('未保存')
+    vi.mocked(ElMessageBox.confirm).mockRejectedValueOnce('cancel')
+    expect(await wrapper.vm.requestLeave()).toBe(false)
   })
 })

@@ -71,6 +71,7 @@ async function load() {
 }
 async function saveDescription() {
   if (!actorStore.canEdit || !detail.value || saving.value) return
+  const current = detail.value
   saving.value = true
   errorMessage.value = null
   try {
@@ -84,7 +85,7 @@ async function saveDescription() {
       concurrencyToken: result.concurrencyToken,
     }
     editing.value = false
-    window.dispatchEvent(new CustomEvent('relationship:changed'))
+    window.dispatchEvent(new CustomEvent('relationship:changed', { detail: { subject: current.source.target, relatedSubject: current.target.target } }))
     ElMessage.success('关系说明已更新。')
   } catch (e: unknown) {
     conflict.value = e instanceof ApiError && e.status === 409
@@ -102,6 +103,7 @@ async function changeStatus() {
     saving.value
   )
     return
+  const current = detail.value
   saving.value = true
   errorMessage.value = null
   try {
@@ -111,7 +113,7 @@ async function changeStatus() {
       concurrencyToken: detail.value.concurrencyToken,
     })
     await load()
-    window.dispatchEvent(new CustomEvent('relationship:changed'))
+    window.dispatchEvent(new CustomEvent('relationship:changed', { detail: { subject: current.source.target, relatedSubject: current.target.target } }))
     ElMessage.success('关系知识状态已明确推进。')
   } catch (e: unknown) {
     conflict.value = e instanceof ApiError && e.status === 409

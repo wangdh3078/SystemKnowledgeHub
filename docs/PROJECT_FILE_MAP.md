@@ -492,7 +492,7 @@
 | `.../features/knowledge-documents/api/traceabilityApi.ts` | 校验 JavaScript-safe ID，并通过 shared `apiClient` 调用 trace endpoint。 | Traceability / TRACE-B01 | 复用既有 HTTP/error/decoder 约定，不增加 schema library 或 Feature-local fetch。 |
 | `.../features/knowledge-documents/api/impactContracts.ts`、`impactApi.ts` | 定义/解码封闭 Impact path、meaning、target、pagination contract，并通过 shared `apiClient` 调用 bounded endpoint。 | Traceability / TRACE-B03 | 前端 fail-closed 消费 server-owned semantics，不从 generic edges 推理或自行排序/分页。 |
 | `.../features/knowledge-documents/components/ImpactContextSection.vue` | 在 KnowledgeDocument Detail 内独立加载、分组、分页和导航 bounded review context，并处理空态、错误、竞态与 refresh。 | Traceability / TRACE-B03 | 在 Traceability 后、Relationships 前提供可解释上下文，不新增 route/drawer 或 blast-radius 表述。 |
-| `.../features/knowledge-documents/pages/KnowledgeDocumentDetailView.vue` | 通过既有 `relationship:changed` 协调 Relationships、Traceability 与 Impact 的 authoritative refresh。 | Traceability / TRACE-B02 / TRACE-B03 | 关系 mutation 后无需硬刷新即可保持三个读取面 current，且不创建第二写入路径。 |
+| `.../features/knowledge-documents/components/KnowledgeDocumentDetailPanel.vue` | 在共享文档面板内通过绑定对象的 `relationship:changed` 协调 Relationships、Traceability 与 Impact 的 authoritative refresh。 | Traceability / TRACE-B02 / TRACE-B03 / ANALYSIS-B02 | 原详情与分析工作区共用同一读取/编辑逻辑，旧对象事件不刷新新选择。 |
 
 以上 `...` 均指 `src/SystemKnowledgeHub.Web/src/`；TRACE-B01 未增加 Vue component、CSS、route 或可见产品交互。
 
@@ -533,6 +533,22 @@
 | `.../layouts/PortalLayout.vue`、`features/portal-reading/portal-reading.css`、`App.vue`、`app/router/index.ts`、`routes.ts` | 在 SecurityGate/Current User bootstrap 前选择独立 Portal shell，提供全局搜索、桌面可折叠目录与窄屏可键盘关闭 overlay。 | Internal Knowledge Portal / PORTAL-B03 + PORTAL-B04 | 保持 Portal anonymous/read-only 与 Admin Shell/登录/管理导航隔离，并为搜索/复杂投影维持统一阅读布局。 |
 
 以上 `...` 均指 `src/SystemKnowledgeHub.Web/src/`。
+
+### 2.21 Analysis Workspace authoring — ANALYSIS-B02
+
+以下 `...` 指 `src/SystemKnowledgeHub.Web/src/`。B02 只新增前端组织工作区，不增加 Analysis 正文、后端产品代码、Portal 功能或已有文档选择器。
+
+| 路径 | 一句话职责 | Feature / Vertical Slice | 为什么需要 |
+| --- | --- | --- | --- |
+| `.../features/analysis-workspace/api/analysisWorkspaceContracts.ts` | 严格解码节点、availability、tokens、完整树拓扑及 mutation 回应。 | Analysis / B02 | 在组织状态进入 UI 前 fail closed，拒绝重复/循环/非法引用和泄露旧标题的不可用投影。 |
+| `.../features/analysis-workspace/api/analysisWorkspaceApi.ts` | 通过既有 native-fetch apiClient 消费 B01 的八类组织操作。 | Analysis / B02 | 保留 node/tree token 和原子 create 合同，不调用 B03 existing-placement 创建。 |
+| `.../features/analysis-workspace/pages/AnalysisWorkspaceView.vue` | 提供 Element Plus Tree、路由选择、目录动作、既有 DialogHost 内容和共享文档面板编排。 | Analysis / B02 | 在 navigation guard 通过后才切换文档；409 只刷新组织快照，保留正文缓冲区。 |
+| `.../features/analysis-workspace/styles/analysisWorkspace.css` | 定义 310px 目录与文档两栏、选中/键盘焦点及组织表单样式。 | Analysis / B02 | 使用共享 tokens 和现有控件，不增加树/编辑器/overlay 框架。 |
+| `.../features/knowledge-documents/components/KnowledgeDocumentDetailPanel.vue` | 接受 documentId，集中原有阅读、编辑、save、lifecycle、Markdown、附件、修订、Evidence/HC/关系/status 与 Trace/Impact。 | KnowledgeDocument / B02 | 原详情与工作区共享唯一实现，公开 requestLeave/finishEdit，并防止旧异步响应覆盖新选择。 |
+| `.../features/knowledge-documents/pages/KnowledgeDocumentDetailView.vue` | 解析原详情 route.params.id，并将 route leave/update guard 委托给共享面板。 | KnowledgeDocument / B02 | 保留原 URL、breadcrumb、query history 和完整 authoring 功能。 |
+| `.../app/router/routes.ts`、`navigation.ts`、`layouts/DialogHost.vue` | 接入两个 authenticated Analysis route、Viewer+ 菜单和现有单 Dialog 宿主。 | Analysis / B02 | 菜单位于“知识内容”之后、“待确认事项”之前；无第二 overlay store。 |
+
+现有 Evidence、HumanConfirmation、Relationship 与 KnowledgeStatus overlays 的变更事件携带真实 subject；关系事件还携带另一端，供当前文档过滤相关刷新。原 feature 的 API 和业务能力不复制到 Analysis。
 
 ## 3. Tests
 
@@ -601,6 +617,7 @@
 | `.../src/features/database-knowledge/api/*.spec.ts` | 验证 contract decoder 和安全 ID。 | DatabaseKnowledge / VS-01 | 保护前端 frozen contract 边界。 |
 | `.../src/features/database-knowledge/composables/*.spec.ts` | 验证对象/字段加载与 Drawer descriptor。 | DatabaseKnowledge / VS-01 | 保护页面关键交互状态。 |
 | `.../src/components/data-display/KnowledgeStatusBadge.spec.ts` | 验证 KnowledgeStatus 的冻结中文标签映射。 | Shared knowledge UI / VS-01 | 防止英文 wire value 被直接显示或中文术语漂移。 |
+| `.../src/features/analysis-workspace/api/analysisWorkspaceApi.spec.ts`、`pages/AnalysisWorkspaceView.spec.ts` | 验证严格 B01 DTO/API、树/路由/权限、组织动作、创建自动编辑、dirty guard、409/不可用状态与标题同步。 | Analysis / B02 | 覆盖新增前端组织边界；shared Detail 的参数切换/上传/晚响应回归位于原 `KnowledgeDocumentDetailView.spec.ts`。 |
 | `.../src/features/knowledge-documents/api/traceabilityContracts.spec.ts` | 覆盖三个 discriminated root、coverage/trust/lineage/truncation 及非法 enum / malformed payload fail-closed。 | Traceability / TRACE-B01 | 在 TRACE UI 之前冻结并验证严格前端读取边界。 |
 | `.../src/features/knowledge-documents/api/impactContracts.spec.ts` | 覆盖全部 Impact pathKind/meaning/target、path consistency、pagination 与 malformed payload fail-closed。 | Traceability / TRACE-B03 | 保护 strict runtime decoder 与闭集 contract。 |
 | `.../src/features/knowledge-documents/components/ImpactContextSection.spec.ts`、`pages/KnowledgeDocumentDetailView.spec.ts` | 覆盖三类 root 文案、空/错/重试、分页、导航、竞态、关系 mutation refresh 与详情层级。 | Traceability / TRACE-B03 | 证明独立状态、authoritative refresh 和 UI placement 不回归 B02/R06。 |
@@ -640,6 +657,7 @@
 | `AGENTS.md` | 定义 Coding Agent 的强制架构、范围和验证规则。 | Repository governance | 防止后续 Slice 破坏冻结规格或过度设计。 |
 | `docs/design/ANALYSIS_A01_ANALYSIS_WORKSPACE_ARCHITECTURE_DECISION.md` | 冻结单根组织、canonical 文档复用、树并发与 Portal 分离边界。 | Analysis / A01 | 为后续实现提供唯一 authority。 |
 | `docs/reports/ANALYSIS_B01_PERSISTENCE_TREE_API_FOUNDATION_VERIFICATION_REPORT.md` | 记录后端 schema/API、原子创建、竞争/保全测试、DBSAFE 与 B02 readiness。 | Analysis / B01 | 维护 B01 实际完成与验证证据。 |
+| `docs/reports/ANALYSIS_B02_WORKSPACE_UI_DOCUMENT_REUSE_VERIFICATION_REPORT.md` | 记录共享文档面板与工作区 UI、focused frontend、隔离浏览器、数据保护、清理和交付状态。 | Analysis / B02 | 维护本次 authoring 完成及 B03 readiness 证据。 |
 | `README.md` | 提供产品目标、技术栈和当前开发方式概览。 | Repository documentation | 新参与者的入口说明。 |
 | `docs/PROJECT_FILE_MAP.md` | 说明主要仓库文件职责与文档归档位置。 | Repository documentation | 让后续任务能定位设计、规格、标准和验证历史。 |
 | `docs/PRODUCTION_DEPLOYMENT_GUIDE.md` | 说明配置归属、环境覆盖、typed validation、Serilog、持久路径、Secret、runtime capability 与 Production 运维边界。 | Deployment / INFRA-CONFIG-R01 | 让部署方安全覆盖可调参数且不会把通用默认、生产占位或代码不变量混为一谈。 |

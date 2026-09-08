@@ -18,6 +18,7 @@ export type NavigationKey =
   | 'business-functions'
   | 'database'
   | 'knowledge-documents'
+  | 'analysis'
   | 'unknown-items'
   | 'portal-management'
   | 'users'
@@ -36,6 +37,7 @@ export interface NavigationItem {
     | 'business-functions-list'
     | 'database-objects-list'
     | 'knowledge-documents-list'
+    | 'analysis-workspace'
     | 'unknown-items-list'
     | 'portal-management'
     | 'users-management'
@@ -74,6 +76,13 @@ export const navigationItems: readonly NavigationItem[] = [
     icon: Document,
     enabled: true,
     routeName: 'knowledge-documents-list',
+  },
+  {
+    key: 'analysis',
+    label: '分析文档',
+    icon: Files,
+    enabled: true,
+    routeName: 'analysis-workspace',
   },
   {
     key: 'unknown-items',
