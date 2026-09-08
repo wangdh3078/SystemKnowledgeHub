@@ -4,6 +4,8 @@ This index is repository navigation metadata. It does not replace the authority 
 
 | Path | Role / Purpose | Status / Authority | Related Area | Update Trigger |
 | --- | --- | --- | --- | --- |
+| `docs/design/ANALYSIS_A01_ANALYSIS_WORKSPACE_ARCHITECTURE_DECISION.md` | Single-root AnalysisNode organization, canonical KnowledgeDocument reuse, lifecycle/types/permissions, atomic creation, tree concurrency, search/filter and explicit Portal handoff | Frozen Design Decision — Approved | Analysis Workspace / ANALYSIS-A01 | Explicit Analysis architecture amendment or B01 implementation evidence revealing a contract conflict |
+| `docs/reports/ANALYSIS_A01_ANALYSIS_WORKSPACE_ARCHITECTURE_DECISION_REPORT.md` | Static authority/implementation compatibility review, 26 unique decisions, documentation/data protection and B01 readiness; no product implementation | Architecture Decision Report — PASS | Analysis Workspace / ANALYSIS-A01 | Decision reverification, approved boundary change or delivery status change |
 | `docs/specifications/System_Knowledge_Hub_MVP_Final_UI_Inventory.md` | Canonical Route/Drawer/state and Golden UI asset inventory | Frozen Source | Product UI | Only an explicitly approved frozen-specification change |
 | `docs/specifications/System_Knowledge_Hub_MVP_Design_Baseline.md` | Frozen product layout, terminology, responsibility, and responsive rules | Frozen Source | Product UI | Only an explicitly approved frozen-specification change |
 | `docs/design/SYSTEM_UI_COMPONENT_AND_INTERACTION_BASELINE.md` | Executable semantic component, layout, interaction, feedback, and accessibility baseline | Design Baseline | Cross-cutting frontend / UI Foundation | New UI pattern, approved exception, or shared token/pattern change |
