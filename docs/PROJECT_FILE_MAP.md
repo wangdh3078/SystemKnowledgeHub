@@ -1,6 +1,6 @@
 # System Knowledge Hub — Project File Map
 
-本文件描述当前仓库中主要目录和文件的职责。范围为 Bootstrap 基础设施、**VS-01～VS-15**、UX 稳定化、Post-MVP **U01～U04**、**INFRA-CONFIG-R01** 运行时配置基础、PORTAL-B01～B04 以及 Database Discovery Oracle/PostgreSQL/SQL Server Provider；不把 `bin/`、`obj/`、`node_modules/`、`dist/`、lock 文件、运行时 SQLite 数据、普通 Migration 生成文件逐项列入。
+本文件描述当前仓库中主要目录和文件的职责。范围为 Bootstrap 基础设施、**VS-01～VS-15**、UX 稳定化、Post-MVP **U01～U04**、**INFRA-CONFIG-R01** 运行时配置基础、PORTAL-B01～B04、ANALYSIS-B01 以及 Database Discovery Oracle/PostgreSQL/SQL Server Provider；不把 `bin/`、`obj/`、`node_modules/`、`dist/`、lock 文件、运行时 SQLite 数据、普通 Migration 生成文件逐项列入。
 
 ## Documentation placement
 
@@ -242,6 +242,21 @@
 | `.../Application/DatabaseDiscoveryContracts.cs` | 提供默认关闭的 typed `SqlServerTrustServerCertificate` 部署开关。 | Database Discovery configuration / DBDISC-SQLSERVER-B01 | 生产默认验证证书链，且不把证书信任降级暴露为用户 Profile 字段。 |
 
 以上 `...` 均指 `src/SystemKnowledgeHub.Api/Features/DatabaseDiscovery/`。
+
+### 1.19 Analysis Workspace — ANALYSIS-B01
+
+以下 `...` 指 `src/SystemKnowledgeHub.Api/Features/AnalysisWorkspace/`，仅为后端组织基础，不包含工作区 UI。
+
+| 路径 | 一句话职责 | Feature / Vertical Slice | 为什么需要 |
+| --- | --- | --- | --- |
+| `.../Domain/AnalysisNode.cs` | 九字段 Folder/Document organization entity 与闭合类型；无实体 root、正文或发布状态。 | Analysis / B01 | 用单一表组织已有 KnowledgeDocument。 |
+| `.../Persistence/AnalysisNodeConfiguration.cs` | 映射 analysis_nodes、shape/safe-id/version CHECK、两条 RESTRICT FK 和三种 partial unique 索引。 | Analysis / B01 | 保证同级顺序与单文档单 placement，保留 canonical 数据。 |
+| `.../Application/AnalysisTreeState.cs` | 定义 10 层/2000 节点界限、全树完整性与确定性 SHA-256 组织 token。 | Analysis / B01 | 有界完整读取并防止 stale root/ancestor/sibling 操作。 |
+| `.../Application/AnalysisWorkspaceService.cs` | 实现明确 Folder/placement/move/reorder/remove 和外层事务内 canonical Create 组合。 | Analysis / B01 | 复用正文/revision/FTS，原子维护组织与安全投影。 |
+| `.../Application/Models/AnalysisModels.cs`、`.../Api/Contracts/AnalysisRequests.cs` | 定义 metadata-only response、明确写请求与本 feature 预期错误。 | Analysis / B01 | 不复制正文 API 或引入 generic CRUD。 |
+| `.../Api/AnalysisController.cs` | 暴露 Viewer 默认授权读取、Editor mutation 与既有 ApiErrorResponse 映射。 | Analysis / B01 | 保留 CurrentUser、antiforgery 和 canonical actor 边界。 |
+
+`KnowledgeHubDbContext.AnalysisNodes`、Program 的 service 注册及 additive migration `20260908130346_AddAnalysisWorkspaceTreeFoundation` 完成接入；普通 EF 生成文件按本地图规则不逐项展开。
 
 ## 2. Frontend
 
@@ -525,6 +540,9 @@
 
 | 路径 | 一句话职责 | Feature / Vertical Slice | 为什么需要 |
 | --- | --- | --- | --- |
+| `.../Api/AnalysisWorkspaceApiTests.cs` | 验证树、权限/antiforgery、目录/placement、depth/capacity/order、安全投影与原子创建回滚。 | Analysis / B01 | 用 focused HTTP/真实 SQLite 覆盖新增后端合同。 |
+| `.../Api/AnalysisWorkspaceConcurrencyTests.cs`、`.../TestSupport/AnalysisWorkspaceTestSupport.cs` | 独立 HTTP/SQLite connections 的受控写竞争、fixture 与全表保全比较。 | Analysis / B01 | 证明 stale 快照拒绝、canonical delete 两种顺序及无知识副作用。 |
+| `.../Persistence/AnalysisWorkspacePersistenceTests.cs` | 验证 fresh constraints、明确 pre-Analysis upgrade/Down 与已填充知识/Portal rows 保全。 | Analysis / B01 | 保证 additive schema 和 organization-only removal。 |
 | `tests/SystemKnowledgeHub.Api.Tests/SystemKnowledgeHub.Api.Tests.csproj` | 定义 xUnit、WebApplicationFactory 和真实 SQLite 测试项目。 | Test foundation | 让 API/Persistence 集成测试引用正式后端。 |
 | `.../TestSupport/BootstrapWebApplicationFactory.cs` | 创建共享打开的 SQLite in-memory Host，执行 Migration/有限 seed，并隔离附件与 Serilog File 路径。 | Test foundation / VS-01 + INFRA-CONFIG-R01 | 多 HTTP/DbContext 请求共享真实关系数据库，同时不向仓库运行目录写附件或日志。 |
 | `.../Api/BootstrapApiTests.cs` | 验证临时 Bootstrap status endpoint。 | Implementation Bootstrap | 防止基础诊断链路失效。 |
@@ -620,6 +638,8 @@
 | 路径 | 一句话职责 | Feature / Vertical Slice | 为什么需要 |
 | --- | --- | --- | --- |
 | `AGENTS.md` | 定义 Coding Agent 的强制架构、范围和验证规则。 | Repository governance | 防止后续 Slice 破坏冻结规格或过度设计。 |
+| `docs/design/ANALYSIS_A01_ANALYSIS_WORKSPACE_ARCHITECTURE_DECISION.md` | 冻结单根组织、canonical 文档复用、树并发与 Portal 分离边界。 | Analysis / A01 | 为后续实现提供唯一 authority。 |
+| `docs/reports/ANALYSIS_B01_PERSISTENCE_TREE_API_FOUNDATION_VERIFICATION_REPORT.md` | 记录后端 schema/API、原子创建、竞争/保全测试、DBSAFE 与 B02 readiness。 | Analysis / B01 | 维护 B01 实际完成与验证证据。 |
 | `README.md` | 提供产品目标、技术栈和当前开发方式概览。 | Repository documentation | 新参与者的入口说明。 |
 | `docs/PROJECT_FILE_MAP.md` | 说明主要仓库文件职责与文档归档位置。 | Repository documentation | 让后续任务能定位设计、规格、标准和验证历史。 |
 | `docs/PRODUCTION_DEPLOYMENT_GUIDE.md` | 说明配置归属、环境覆盖、typed validation、Serilog、持久路径、Secret、runtime capability 与 Production 运维边界。 | Deployment / INFRA-CONFIG-R01 | 让部署方安全覆盖可调参数且不会把通用默认、生产占位或代码不变量混为一谈。 |

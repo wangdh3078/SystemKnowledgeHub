@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using SystemKnowledgeHub.Api.Features.AnalysisWorkspace.Domain;
 using SystemKnowledgeHub.Api.Features.BusinessFunctions.Domain;
 using SystemKnowledgeHub.Api.Features.Attachments.Domain;
 using SystemKnowledgeHub.Api.Features.BusinessRules.Domain;
@@ -19,6 +20,7 @@ namespace SystemKnowledgeHub.Api.Persistence;
 public sealed class KnowledgeHubDbContext(DbContextOptions<KnowledgeHubDbContext> options)
     : DbContext(options)
 {
+    public DbSet<AnalysisNode> AnalysisNodes => Set<AnalysisNode>();
     public DbSet<KnowledgeSystem> Systems => Set<KnowledgeSystem>();
     public DbSet<BusinessFunction> BusinessFunctions => Set<BusinessFunction>();
     public DbSet<BusinessRule> BusinessRules => Set<BusinessRule>();
