@@ -45,6 +45,17 @@ using SystemKnowledgeHub.Api.Shared.Configuration;
 using SystemKnowledgeHub.Api.Shared.Security;
 
 var builder = WebApplication.CreateBuilder(args);
+SystemKnowledgeHub.Api.DeveloperSupport.Demo.DemoRuntime? demoRuntime = null;
+if (args.FirstOrDefault() == "seed-demo-data" || builder.Configuration.GetValue<bool>("Demo:Enabled"))
+{
+    try { demoRuntime = SystemKnowledgeHub.Api.DeveloperSupport.Demo.DemoRuntime.Validate(builder.Configuration, builder.Environment); }
+    catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or IOException)
+    {
+        Console.Error.WriteLine(exception.Message);
+        Environment.ExitCode = 1;
+        return;
+    }
+}
 
 string? runtimeBindingError;
 if (!TryBindRuntimeOptions(
@@ -515,6 +526,12 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
+if (args.FirstOrDefault() == "seed-demo-data")
+{
+    Environment.ExitCode = await SystemKnowledgeHub.Api.DeveloperSupport.Demo.DemoDatasetCommand.RunAsync(app.Services, demoRuntime!, args);
+    return;
+}
+
 if (BootstrapAdministratorCommand.IsRequested(args))
 {
     Environment.ExitCode = await BootstrapAdministratorCommand.RunAsync(args, app.Services, oidc);
@@ -545,7 +562,7 @@ if (app.Environment.IsEnvironment(IsolatedRuntimeStorageGuard.VerificationEnviro
     await dbContext.Database.MigrateAsync();
 }
 
-if (app.Environment.IsDevelopment())
+if (app.Environment.IsDevelopment() && demoRuntime is null)
 {
     await DatabaseKnowledgeDevelopmentData.InitializeAsync(app.Services);
     await using var scope = app.Services.CreateAsyncScope();

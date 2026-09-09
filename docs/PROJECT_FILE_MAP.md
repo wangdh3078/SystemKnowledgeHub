@@ -32,6 +32,23 @@
 
 `src/SystemKnowledgeHub.Api/Persistence/Migrations/` 保存 EF Core Migration 和 Model Snapshot；它们是已实现 Slice 物理 Schema 的演进记录，但普通生成文件不在本地图中逐项说明。
 
+### 1.1.1 Persistent Demo developer support — DEMO-DATA-R01
+
+| 路径 | 一句话职责 | Feature / Vertical Slice | 为什么需要 |
+| --- | --- | --- | --- |
+| `src/SystemKnowledgeHub.Api/DeveloperSupport/Demo/DemoRuntime.cs` | 在任何存储初始化前验证 Development、显式 Demo mode、仓库外根和独立 SQLite/附件/keys/log 路径。 | Developer support / DEMO-DATA-R01 | 显式 Demo 不得回落到仓库数据库或 Production。 |
+| `src/SystemKnowledgeHub.Api/DeveloperSupport/Demo/DemoDataset.cs` | `seed-demo-data` 命令、manifest/sentinel/初始化锁、canonical master 数据与内部验证摘要。 | Developer support / DEMO-DATA-R01 | 确定生成、拒绝不完整状态且重复运行保留人工修改；不是 production seed。 |
+| `src/SystemKnowledgeHub.Api/DeveloperSupport/Demo/DemoKnowledge.cs` | 通过现有用例建立文档/修订/附件/关系/证据/HC/状态和 Analysis placement。 | Developer support / DEMO-DATA-R01 | 保留真实领域不变量，供长期人工观察。 |
+| `src/SystemKnowledgeHub.Api/DeveloperSupport/Demo/DemoWorkflows.cs` | canonical UnknownItem 调查更新链及 Portal 编排/发布代表数据。 | Developer support / DEMO-DATA-R01 | 不伪造状态或 publication transition。 |
+| `src/SystemKnowledgeHub.Api/DeveloperSupport/Demo/DemoAssets.cs` | 无敏感内容的固定小 PNG/PDF 字节。 | Developer support / DEMO-DATA-R01 | 附件上传到仓库外持久存储，不提交 runtime 文件。 |
+| `scripts/demo/demo-common.ps1` | 三个脚本的根目录保护、隔离环境配置及安全 stdin 命令调用。 | Developer tooling / DEMO-DATA-R01 | 共享具体安全边界，避免配置漂移。 |
+| `scripts/demo/init-demo.ps1` | 显式 seed 和用户隐藏输入后的既有管理员 bootstrap。 | Developer tooling / DEMO-DATA-R01 | 首次初始化，不硬编码凭据。 |
+| `scripts/demo/run-demo.ps1` | 使用现有 Demo DB 启动 API/Vite，记录并只清理自己的进程。 | Developer tooling / DEMO-DATA-R01 | 日常保留全部人工数据。 |
+| `scripts/demo/reset-demo.ps1` | 安全核对及明确确认后删除指定 Demo 并重新 init。 | Developer tooling / DEMO-DATA-R01 | 唯一显式恢复初始 Demo 的入口。 |
+| `tests/SystemKnowledgeHub.Api.Tests/DeveloperSupport/DemoRuntimeTests.cs` | 仅验证 Demo 环境和路径 guard，不打开仓库 DB。 | Focused tests / DEMO-DATA-R01 | 覆盖本任务新引入的隔离风险。 |
+
+操作说明见 `docs/DEMO_DATA_GUIDE.md`。默认持久数据根位于 `%LOCALAPPDATA%\SystemKnowledgeHub\demo`，属于用户，不属于普通验收清理对象。
+
 ### 1.2 Bootstrap feature
 
 | 路径 | 一句话职责 | Feature / Vertical Slice | 为什么需要 |
