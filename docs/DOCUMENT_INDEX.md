@@ -4,6 +4,7 @@ This index is repository navigation metadata. It does not replace the authority 
 
 | Path | Role / Purpose | Status / Authority | Related Area | Update Trigger |
 | --- | --- | --- | --- | --- |
+| `docs/reports/ANALYSIS_FINAL_VERIFICATION_REPORT.md` | 当前 authoritative HEAD 的最小集成闭环、复用/聚焦证据、canonical 单一事实、Portal 分离、数据保护及清理；关闭 Analysis Workspace v1 | Final Verification Report — PASS; ANALYSIS WORKSPACE V1 COMPLETE | Analysis Workspace / ANALYSIS-VERIFY | Workspace regression, approved boundary change or final acceptance status change |
 | `docs/reports/UI_MANUAL_R01_VISUAL_CONSISTENCY_CORRECTION_REPORT.md` | 六项人工验收 UI 一致性修正、聚焦前端检查、默认浏览器和持久 Demo 数据保护证据 | Verification Report — PASS / COMPLETE | Frontend presentation / UI-MANUAL-R01 | Affected presentation regression or verification status change |
 | `docs/DEMO_DATA_GUIDE.md` | 持久隔离 Demo 的初始化、启动、停止、显式重置、数据保留及用户逐页人工检查指引 | Maintained Guide | Developer support / DEMO-DATA-R01 | Demo scripts, dataset version, paths or supported manual inspection flow change |
 | `docs/reports/DEMO_DATA_R01_PERSISTENT_MANUAL_ACCEPTANCE_DATASET_REPORT.md` | Canonical Demo dataset、工具路径/环境保护、幂等与人工修改保留、浏览器抽查及用户数据保护证据 | Verification Report — PASS / COMPLETE; ready for user manual inspection | Persistent Demo / DEMO-DATA-R01 | Demo tooling regression or delivery status change |
