@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ArrowRight, Connection, Document, QuestionFilled } from '@element-plus/icons-vue'
+import { Connection, Document, QuestionFilled } from '@element-plus/icons-vue'
 import type { DatabaseObjectDetailResponse } from '../api/databaseKnowledgeContracts'
 
 defineProps<{
@@ -44,23 +44,27 @@ const relationLabels: Readonly<Record<string, string>> = {
 
     <section class="rail-section">
       <div class="rail-section__title">
-        <h3><el-icon><Document /></el-icon>相关业务规则</h3>
+        <h3>
+          <el-icon><Document /></el-icon>相关业务规则
+        </h3>
         <span class="rail-count">{{ detail.contextRail.relatedRuleCount }}</span>
-        <el-icon class="rail-section__arrow"><ArrowRight /></el-icon>
       </div>
     </section>
 
     <section class="rail-section">
       <div class="rail-section__title">
-        <h3><el-icon><Connection /></el-icon>集成关系</h3>
+        <h3>
+          <el-icon><Connection /></el-icon>集成关系
+        </h3>
         <span class="rail-count">{{ detail.contextRail.integrationCount }}</span>
-        <el-icon class="rail-section__arrow"><ArrowRight /></el-icon>
       </div>
     </section>
 
     <section class="rail-section rail-section--open">
       <div class="rail-section__title">
-        <h3><el-icon><QuestionFilled /></el-icon>开放待确认事项</h3>
+        <h3>
+          <el-icon><QuestionFilled /></el-icon>开放待确认事项
+        </h3>
         <span class="rail-count">{{ detail.contextRail.openUnknownCount }}</span>
       </div>
       <div class="rail-empty rail-empty--quiet">

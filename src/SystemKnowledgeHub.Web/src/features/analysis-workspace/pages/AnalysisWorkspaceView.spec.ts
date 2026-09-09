@@ -510,6 +510,30 @@ describe('Analysis authoring workspace', () => {
 })
 
 describe('B03 placement, title filter and handoff', () => {
+  it('groups native default-size controls with one primary create and a secondary handoff', async () => {
+    state.isAdministrator = true
+    vi.mocked(api.getAnalysisTree).mockResolvedValue({
+      ...tree,
+      items: [folder, { ...docA, lifecycleStatus: 'Published' }, docB],
+    })
+    const { wrapper } = await setup('/analysis/nodes/20')
+    const creation = wrapper.get('.analysis-tree > .analysis-actions')
+    expect(creation.findAll('button').map((item) => item.text())).toEqual([
+      '新建目录',
+      '新建分析文档',
+      '加入已有文档',
+    ])
+    expect(creation.findAll('.el-button--primary').map((item) => item.text())).toEqual([
+      '新建分析文档',
+    ])
+    expect(creation.find('.el-button--small').exists()).toBe(false)
+    const organization = wrapper.get('.analysis-organization')
+    expect(organization.get('.el-button--danger.is-plain').text()).toBe('从分析目录移除')
+    expect(button(wrapper, '在知识门户管理中使用').classes()).not.toContain('el-button--primary')
+    expect(organization.text()).toContain('在知识门户管理中使用')
+    expect(button(wrapper, '上移').attributes('disabled')).toBeDefined()
+  })
+
   it('filters literal titles with ancestors, without changing dirty selection or remounting', async () => {
     vi.mocked(api.getAnalysisTree).mockResolvedValue({
       ...tree,

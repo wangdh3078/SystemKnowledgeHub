@@ -729,6 +729,10 @@ describe('KnowledgeDocumentDetailView editing', () => {
     expect(wrapper.text()).toContain('摘要')
     expect(wrapper.text()).toContain('支持理由')
     expect(wrapper.text()).toContain('提供者')
+    const recordHeader = wrapper.get('.knowledge-document-evidence__item-heading')
+    expect(recordHeader.get('button').text()).toBe('查看记录')
+    await recordHeader.get('button').trigger('click')
+    expect(overlayState.openDrawer).toHaveBeenCalledWith({ kind: 'evidence', id: 41, mode: 'read' })
     await button(wrapper, '添加证据')?.trigger('click')
     expect(overlayState.openDrawer).toHaveBeenCalledWith({
       kind: 'add-evidence',

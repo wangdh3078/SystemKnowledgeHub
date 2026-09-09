@@ -143,6 +143,7 @@ watch(
           <el-form-item label="估算行数（可选）" :error="estimatedRowsError ?? undefined"
             ><el-input-number
               v-model="form.estimatedRows"
+              class="database-object-estimated-rows"
               :controls="false"
               placeholder="未维护"
               aria-label="估算行数（可选）"
@@ -183,5 +184,8 @@ watch(
 .database-object-edit-drawer__body :deep(.el-select),
 .database-object-edit-drawer__body :deep(.el-input-number) {
   width: 100%;
+}
+.database-object-estimated-rows :deep(.el-input__inner) {
+  text-align: left;
 }
 </style>

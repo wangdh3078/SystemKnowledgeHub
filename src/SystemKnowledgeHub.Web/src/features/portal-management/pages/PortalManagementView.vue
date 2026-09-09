@@ -724,61 +724,65 @@ onBeforeUnmount(() => {
     <p v-if="error" class="portal-inline-error" role="alert">{{ error }}</p>
     <section v-loading="loading" class="portal-workbench" aria-label="知识门户编排工作台">
       <aside class="portal-tree-panel">
-        <header>
-          <div>
-            <strong>Portal 页面树</strong><small>{{ tree?.total ?? 0 }} 个节点</small>
-          </div>
-        </header>
-        <el-tree
-          v-if="treeItems.length"
-          :data="treeItems"
-          node-key="nodeId"
-          default-expand-all
-          highlight-current
-          :expand-on-click-node="false"
-          @node-click="selectTreeNode"
-        >
-          <template #default="{ data }">
-            <div
-              class="portal-tree-node"
-              :class="{ 'portal-tree-node--broken': !data.health.isHealthy }"
-            >
-              <el-icon><Folder v-if="data.nodeKind === 'Folder'" /><Document v-else /></el-icon>
-              <span class="portal-tree-node__title">{{ data.title }}</span>
-              <span
-                class="portal-state"
-                :class="data.isPublished ? 'portal-state--published' : ''"
-                >{{ data.isPublished ? '已发布' : '未发布' }}</span
-              >
-              <el-dropdown trigger="click" @command="handleNodeCommand($event, data)">
-                <el-button text :icon="MoreFilled" aria-label="节点更多操作" @click.stop />
-                <template #dropdown
-                  ><el-dropdown-menu>
-                    <el-dropdown-item command="edit" :disabled="data.isPublished"
-                      >重命名 / 移动</el-dropdown-item
-                    >
-                    <el-dropdown-item command="up" :disabled="data.isPublished"
-                      >上移</el-dropdown-item
-                    >
-                    <el-dropdown-item command="down" :disabled="data.isPublished"
-                      >下移</el-dropdown-item
-                    >
-                    <el-dropdown-item :command="data.isPublished ? 'unpublish' : 'publish'">{{
-                      data.isPublished ? '取消发布' : '发布'
-                    }}</el-dropdown-item>
-                    <el-dropdown-item command="delete" divided :disabled="data.isPublished"
-                      >移除</el-dropdown-item
-                    >
-                  </el-dropdown-menu></template
-                >
-              </el-dropdown>
+        <section class="portal-tree-region" aria-label="Portal 页面树">
+          <header>
+            <div>
+              <strong>Portal 页面树</strong><small>{{ tree?.total ?? 0 }} 个节点</small>
             </div>
-          </template>
-        </el-tree>
-        <div v-else class="portal-tree-empty">
-          <p>尚未建立 Portal 页面树</p>
-          <el-button type="primary" link @click="openNewFolder">先创建目录</el-button>
-        </div>
+          </header>
+          <div class="portal-tree-scroll">
+            <el-tree
+              v-if="treeItems.length"
+              :data="treeItems"
+              node-key="nodeId"
+              default-expand-all
+              highlight-current
+              :expand-on-click-node="false"
+              @node-click="selectTreeNode"
+            >
+              <template #default="{ data }">
+                <div
+                  class="portal-tree-node"
+                  :class="{ 'portal-tree-node--broken': !data.health.isHealthy }"
+                >
+                  <el-icon><Folder v-if="data.nodeKind === 'Folder'" /><Document v-else /></el-icon>
+                  <span class="portal-tree-node__title">{{ data.title }}</span>
+                  <span
+                    class="portal-state"
+                    :class="data.isPublished ? 'portal-state--published' : ''"
+                    >{{ data.isPublished ? '已发布' : '未发布' }}</span
+                  >
+                  <el-dropdown trigger="click" @command="handleNodeCommand($event, data)">
+                    <el-button text :icon="MoreFilled" aria-label="节点更多操作" @click.stop />
+                    <template #dropdown
+                      ><el-dropdown-menu>
+                        <el-dropdown-item command="edit" :disabled="data.isPublished"
+                          >重命名 / 移动</el-dropdown-item
+                        >
+                        <el-dropdown-item command="up" :disabled="data.isPublished"
+                          >上移</el-dropdown-item
+                        >
+                        <el-dropdown-item command="down" :disabled="data.isPublished"
+                          >下移</el-dropdown-item
+                        >
+                        <el-dropdown-item :command="data.isPublished ? 'unpublish' : 'publish'">{{
+                          data.isPublished ? '取消发布' : '发布'
+                        }}</el-dropdown-item>
+                        <el-dropdown-item command="delete" divided :disabled="data.isPublished"
+                          >移除</el-dropdown-item
+                        >
+                      </el-dropdown-menu></template
+                    >
+                  </el-dropdown>
+                </div>
+              </template>
+            </el-tree>
+            <div v-else class="portal-tree-empty">
+              <p>尚未建立 Portal 页面树</p>
+              <el-button type="primary" link @click="openNewFolder">先创建目录</el-button>
+            </div>
+          </div>
+        </section>
         <section class="portal-page-library" aria-label="门户页面库">
           <header>
             <strong>页面库</strong><span>{{ pages?.total ?? 0 }}</span>
@@ -801,18 +805,20 @@ onBeforeUnmount(() => {
               }
             "
           />
-          <button
-            v-for="page in pages?.items ?? []"
-            :key="page.id"
-            type="button"
-            class="portal-page-library__item"
-            @click="selectPage(page.id)"
-          >
-            <span>{{ page.title }}</span
-            ><small
-              >{{ targetLabels[page.primaryTarget.type] }} · {{ page.primaryTarget.title }}</small
+          <div class="portal-page-library__list">
+            <button
+              v-for="page in pages?.items ?? []"
+              :key="page.id"
+              type="button"
+              class="portal-page-library__item"
+              @click="selectPage(page.id)"
             >
-          </button>
+              <span>{{ page.title }}</span
+              ><small
+                >{{ targetLabels[page.primaryTarget.type] }} · {{ page.primaryTarget.title }}</small
+              >
+            </button>
+          </div>
           <SkhPagination
             :total="pages?.total ?? 0"
             :current-page="pageNumber"

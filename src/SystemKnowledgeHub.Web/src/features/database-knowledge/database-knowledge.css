@@ -484,11 +484,6 @@
   font-weight: 700;
 }
 
-.rail-section__arrow {
-  margin-left: auto;
-  color: var(--color-muted);
-}
-
 .rail-list article {
   padding: 13px 0;
   border-bottom: 1px solid #edf0f4;

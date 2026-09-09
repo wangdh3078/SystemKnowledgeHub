@@ -32,6 +32,9 @@
 .analysis-actions .el-button + .el-button {
   margin-left: 0;
 }
+.analysis-tree > .analysis-actions {
+  margin-bottom: var(--space-3);
+}
 .analysis-tree .el-tree {
   margin-top: var(--space-4);
 }

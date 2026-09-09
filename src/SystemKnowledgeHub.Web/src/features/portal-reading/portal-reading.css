@@ -1,6 +1,8 @@
 @import '../knowledge-documents/markdown/knowledge-markdown-theme.css';
 
 .portal-layout {
+  --portal-page-gutter: clamp(var(--space-6), 2.5vw, var(--space-8));
+  --portal-prose-width: 1120px;
   width: 100%;
   min-width: 0;
   height: 100vh;
@@ -323,18 +325,16 @@
 .portal-home,
 .portal-page,
 .portal-feedback {
-  width: min(1160px, calc(100% - 64px));
-  margin: 0 auto;
+  width: min(var(--content-max-width), calc(100% - 2 * var(--portal-page-gutter)));
+  margin-inline: var(--portal-page-gutter);
 }
 
 .portal-home {
-  width: min(1200px, calc(100% - 48px));
-  margin: 0 24px;
   padding: 20px 0 32px;
 }
 
 .portal-home__hero {
-  max-width: 820px;
+  max-width: var(--portal-prose-width);
   padding-bottom: 14px;
   border-bottom: 1px solid var(--color-border);
 }
@@ -384,16 +384,14 @@
 }
 
 .portal-category-list {
-  width: fit-content;
-  max-width: 100%;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 6px;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+  gap: var(--space-2);
 }
 
 .portal-category-list a,
 .portal-category-list li > div {
   display: grid;
-  grid-template-columns: 18px minmax(0, auto) auto;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
   min-height: 38px;
   align-items: center;
   padding: 8px 12px;
@@ -411,8 +409,12 @@
 }
 
 .portal-recent-list {
-  max-width: 860px;
   grid-template-columns: minmax(0, 1fr);
+}
+
+.portal-recent-list a > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .portal-recent-list a {
@@ -492,7 +494,6 @@
 }
 
 .portal-page__header {
-  max-width: 940px;
   padding: 28px 0 34px;
   border-bottom: 1px solid var(--color-border);
 }
@@ -507,7 +508,7 @@
 }
 
 .portal-reading-section {
-  max-width: 1100px;
+  min-width: 0;
   padding: 38px 0 4px;
 }
 
@@ -524,9 +525,8 @@
 }
 
 .portal-summary,
-.portal-document-body,
-.portal-definition-grid {
-  max-width: 940px;
+.portal-document-body {
+  max-width: var(--portal-prose-width);
 }
 
 .portal-summary h3 {
@@ -548,7 +548,7 @@
 }
 
 .portal-document-body .knowledge-document-markdown {
-  max-width: 940px;
+  max-width: 100%;
   color: var(--color-text);
   font-size: 15px;
   line-height: 1.8;
@@ -748,6 +748,7 @@
   .portal-page,
   .portal-feedback {
     width: min(100% - 36px, 760px);
+    margin-inline: 18px;
   }
 
   .portal-home,

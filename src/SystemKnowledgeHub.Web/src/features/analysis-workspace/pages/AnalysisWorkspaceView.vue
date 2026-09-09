@@ -436,23 +436,15 @@ onBeforeUnmount(() => {
     <aside class="analysis-tree" aria-label="分析目录">
       <header>
         <button class="analysis-root" @click="router.push(target(null))">分析文档</button
-        ><el-button :disabled="loading || busy" size="small" @click="loadTree">刷新</el-button>
+        ><el-button :disabled="loading || busy" @click="loadTree">刷新</el-button>
       </header>
       <div v-if="actor.canEdit" class="analysis-actions">
-        <el-button size="small" :disabled="!writable" @click="openDialog('folder')"
-          >新建目录</el-button
-        >
-        <el-button size="small" type="primary" :disabled="!writable" @click="openDialog('document')"
+        <el-button :disabled="!writable" @click="openDialog('folder')">新建目录</el-button>
+        <el-button type="primary" :disabled="!writable" @click="openDialog('document')"
           >新建分析文档</el-button
         >
+        <el-button :disabled="!writable" @click="openDialog('existing')">加入已有文档</el-button>
       </div>
-      <el-button
-        v-if="actor.canEdit"
-        size="small"
-        :disabled="!writable"
-        @click="openDialog('existing')"
-        >加入已有文档</el-button
-      >
       <el-input
         v-model="filter"
         clearable
@@ -521,17 +513,19 @@ onBeforeUnmount(() => {
           >下移</el-button
         >
         <el-button
+          type="danger"
+          plain
           :disabled="
             !writable || (selected.nodeType === 'Folder' && children(selected.id).length > 0)
           "
           @click="removeSelected"
           >{{ selected.nodeType === 'Folder' ? '删除空目录' : '从分析目录移除' }}</el-button
         >
+        <el-button v-if="canHandoff" :disabled="busy" @click="handoff"
+          >在知识门户管理中使用</el-button
+        >
       </div>
       <p v-if="filterActive && actor.canEdit">清除筛选后可调整顺序</p>
-      <el-button v-if="canHandoff" :disabled="busy" @click="handoff"
-        >在知识门户管理中使用</el-button
-      >
       <p
         v-if="
           actor.isAdministrator &&
